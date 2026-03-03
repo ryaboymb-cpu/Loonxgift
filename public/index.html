@@ -1,9 +1,67 @@
 <!DOCTYPE html>
-<html>
+<html lang="ru">
 <head>
-  <title>WORKING</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Crash Game</title>
+
+<style>
+body{
+    margin:0;
+    background:#0f0f1a;
+    color:white;
+    font-family:Arial;
+    text-align:center;
+}
+
+h1{
+    margin-top:20px;
+}
+
+#game{
+    margin-top:40px;
+}
+
+#multiplier{
+    font-size:60px;
+    margin:20px 0;
+}
+
+button{
+    padding:12px 25px;
+    margin:10px;
+    border:none;
+    border-radius:8px;
+    font-size:16px;
+    cursor:pointer;
+}
+
+#betBtn{background:#00c853;color:white;}
+#cashoutBtn{background:#ff1744;color:white;}
+
+#balance{
+    margin-top:15px;
+    font-size:18px;
+}
+</style>
 </head>
-<body style="background:black;color:white;text-align:center;margin-top:100px;">
-  <h1>САЙТ РАБОТАЕТ 🚀</h1>
+<body>
+
+<h1>🚀 CRASH</h1>
+
+<div id="balance">Баланс: 1000</div>
+
+<div id="game">
+    <div id="multiplier">1.00x</div>
+
+    <input type="number" id="betAmount" placeholder="Ставка" value="100">
+
+    <br>
+
+    <button id="betBtn">Сделать ставку</button>
+    <button id="cashoutBtn" disabled>Забрать</button>
+</div>
+
+<script src="crash.js"></script>
 </body>
 </html>
