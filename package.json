@@ -11,6 +11,15 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
-    "express": "^5.2.1"
-  }
+    "express": "^5.2.1",
+    "pg": "^8.19.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ryaboymb-cpu/loonxgift.git"
+  },
+  "bugs": {
+    "url": "https://github.com/ryaboymb-cpu/loonxgift/issues"
+  },
+  "homepage": "https://github.com/ryaboymb-cpu/loonxgift#readme"
 }
