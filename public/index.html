@@ -1,66 +1,182 @@
+const express = require("express");
+const app = express();
+
+const PORT = process.env.PORT || 3000;
+
+app.get("/", (req, res) => {
+res.send(`
 <!DOCTYPE html>
 <html>
 <head>
-    <title>LoonxGift Crash</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <style>
-        body {
-            background: #0f172a;
-            color: white;
-            text-align: center;
-            font-family: Arial;
-        }
-        h1 {
-            color: #22d3ee;
-        }
-        #multiplier {
-            font-size: 50px;
-            margin: 20px;
-        }
-        button {
-            padding: 15px 30px;
-            font-size: 18px;
-            border: none;
-            background: #22d3ee;
-            color: black;
-            border-radius: 10px;
-        }
-        input {
-            padding: 10px;
-            font-size: 18px;
-            width: 100px;
-            text-align: center;
-        }
-    </style>
+<meta charset="UTF-8">
+<title>LoonxGift</title>
+<style>
+body {
+  margin:0;
+  background:#050510;
+  color:white;
+  font-family:Arial;
+  overflow:hidden;
+  text-align:center;
+}
+canvas {
+  position:fixed;
+  top:0;
+  left:0;
+  z-index:-1;
+}
+.container {
+  padding-top:30px;
+}
+.multiplier {
+  font-size:60px;
+  font-weight:bold;
+  margin:20px;
+  text-shadow:0 0 20px #00ffcc;
+}
+.timer {
+  font-size:18px;
+  opacity:0.8;
+}
+.rocket {
+  font-size:60px;
+  position:relative;
+  transition: transform 0.05s linear;
+}
+.explosion {
+  font-size:80px;
+  animation: boom 0.5s ease-out;
+}
+@keyframes boom {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.5); }
+  100% { transform: scale(0); opacity:0; }
+}
+button {
+  padding:12px 25px;
+  border:none;
+  border-radius:12px;
+  font-size:16px;
+  margin:8px;
+  background:#1e293b;
+  color:white;
+}
+button:hover {
+  background:#334155;
+}
+</style>
 </head>
+
 <body>
 
-<h1>LoonxGift 🚀</h1>
+<canvas id="stars"></canvas>
 
-<div id="multiplier">1.00x</div>
+<div class="container">
+  <h2>🚀 LoonxGift</h2>
+  <div class="timer" id="timer"></div>
+  <div class="multiplier" id="multiplier">1.00x</div>
+  <div id="rocket" class="rocket">🚀</div>
+</div>
 
-<input type="number" id="bet" value="0.5" min="0.5" step="0.1">
-<br><br>
-<button onclick="placeBet()">Сделать ставку</button>
+<audio id="launchSound" src="https://assets.mixkit.co/active_storage/sfx/212/212-preview.mp3"></audio>
+<audio id="boomSound" src="https://assets.mixkit.co/active_storage/sfx/284/284-preview.mp3"></audio>
 
 <script>
-async function updateGame() {
-    const res = await fetch("/game");
-    const data = await res.json();
-    document.getElementById("multiplier").innerText = data.multiplier + "x";
+// ====== ЗВЁЗДНОЕ НЕБО ======
+const canvas = document.getElementById("stars");
+const ctx = canvas.getContext("2d");
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+
+let stars = [];
+for(let i=0;i<200;i++){
+  stars.push({
+    x:Math.random()*canvas.width,
+    y:Math.random()*canvas.height,
+    r:Math.random()*2,
+    speed:Math.random()*0.5+0.2
+  });
 }
 
-setInterval(updateGame, 1000);
+function animateStars(){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  ctx.fillStyle="white";
+  stars.forEach(s=>{
+    s.y+=s.speed;
+    if(s.y>canvas.height) s.y=0;
+    ctx.beginPath();
+    ctx.arc(s.x,s.y,s.r,0,Math.PI*2);
+    ctx.fill();
+  });
+  requestAnimationFrame(animateStars);
+}
+animateStars();
 
-function placeBet() {
-    let bet = document.getElementById("bet").value;
-    if (bet < 0.5) {
-        alert("Минимальный депозит 0.5 TON");
-        return;
+// ====== ИГРА ======
+let bettingTime = 15;
+let flyingTime = 30;
+let multiplier = 1;
+let rocket = document.getElementById("rocket");
+let multiplierEl = document.getElementById("multiplier");
+let timerEl = document.getElementById("timer");
+let launchSound = document.getElementById("launchSound");
+let boomSound = document.getElementById("boomSound");
+let flyInterval;
+
+function startBetting(){
+  multiplier = 1;
+  rocket.className="rocket";
+  rocket.innerHTML="🚀";
+  multiplierEl.innerText="1.00x";
+
+  let time=bettingTime;
+  timerEl.innerText="Ставки: "+time+" сек";
+
+  let betInterval=setInterval(()=>{
+    time--;
+    timerEl.innerText="Ставки: "+time+" сек";
+    if(time<=0){
+      clearInterval(betInterval);
+      startFlying();
     }
-    alert("Ставка принята: " + bet + " TON");
+  },1000);
 }
+
+function startFlying(){
+  launchSound.play();
+  let time=flyingTime;
+  timerEl.innerText="Полет: "+time+" сек";
+
+  flyInterval=setInterval(()=>{
+    time--;
+    multiplier+=0.03 + Math.random()*0.02;
+
+    multiplierEl.innerText=multiplier.toFixed(2)+"x";
+    rocket.style.transform="translateY(" + (-multiplier*6) + "px)";
+
+    if(time<=0){
+      explode();
+    }
+  },100);
+}
+
+function explode(){
+  clearInterval(flyInterval);
+  boomSound.play();
+  rocket.className="explosion";
+  rocket.innerHTML="💥";
+  timerEl.innerText="Раунд завершен";
+  setTimeout(startBetting,3000);
+}
+
+startBetting();
 </script>
 
 </body>
 </html>
+`);
+});
+
+app.listen(PORT, () => {
+  console.log("Server running on port " + PORT);
+});
