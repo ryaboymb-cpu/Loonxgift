@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>LoonxGift Crash</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body {
+            background: #0f172a;
+            color: white;
+            text-align: center;
+            font-family: Arial;
+        }
+        h1 {
+            color: #22d3ee;
+        }
+        #multiplier {
+            font-size: 50px;
+            margin: 20px;
+        }
+        button {
+            padding: 15px 30px;
+            font-size: 18px;
+            border: none;
+            background: #22d3ee;
+            color: black;
+            border-radius: 10px;
+        }
+        input {
+            padding: 10px;
+            font-size: 18px;
+            width: 100px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+
+<h1>LoonxGift 🚀</h1>
+
+<div id="multiplier">1.00x</div>
+
+<input type="number" id="bet" value="0.5" min="0.5" step="0.1">
+<br><br>
+<button onclick="placeBet()">Сделать ставку</button>
+
+<script>
+async function updateGame() {
+    const res = await fetch("/game");
+    const data = await res.json();
+    document.getElementById("multiplier").innerText = data.multiplier + "x";
+}
+
+setInterval(updateGame, 1000);
+
+function placeBet() {
+    let bet = document.getElementById("bet").value;
+    if (bet < 0.5) {
+        alert("Минимальный депозит 0.5 TON");
+        return;
+    }
+    alert("Ставка принята: " + bet + " TON");
+}
+</script>
+
+</body>
+</html>
