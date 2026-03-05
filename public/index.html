@@ -1,6 +1,5 @@
 <!DOCTYPE html>
 <html>
-
 <head>
 
 <meta charset="UTF-8">
@@ -8,73 +7,45 @@
 
 <link rel="stylesheet" href="style.css">
 
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+
 </head>
 
 <body>
 
-<div class="topbar">
+<div class="app">
 
-<div class="logo">
-Loonx Gifts
-</div>
-
-<div class="balance">
-Balance: <span id="balance">0</span>
-</div>
-
-</div>
-
-
-<div class="history" id="history"></div>
-
-
-<div class="crash-container">
-
-<canvas id="graph"></canvas>
-
-<div class="multiplier" id="multiplier">
-1.00x
-</div>
-
-</div>
-
-
-<div class="controls">
-
-<input id="betAmount" placeholder="Bet amount">
-
-<button class="bet-btn" onclick="placeBet()">
-BET
-</button>
-
-<button class="cash-btn" onclick="cashout()">
-CASHOUT
-</button>
-
-</div>
-
+<h1 class="logo">Loonx Gifts</h1>
 
 <div class="menu">
 
-<button>
+<button class="game" id="crashBtn">
 <img src="img/crash.png">
+Crash
 </button>
 
-<button>
+<button class="game">
 <img src="img/mines.png">
+Mines
 </button>
 
-<button>
+<button class="game">
 <img src="img/wheel.png">
+Wheel
 </button>
 
-<button>
-<img src="img/profile.png">
+<button class="game">
+<img src="img/gifts.png">
+Gifts
 </button>
 
 </div>
 
-<script src="crash.js"></script>
+<div id="gameContainer"></div>
+
+</div>
+
+<script src="app.js"></script>
 
 </body>
 </html>
