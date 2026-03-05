@@ -1,28 +1,30 @@
-let multi=1
-let running=false
-let crash=0
+const socket = io()
+
+socket.on("online",(count)=>{
+
+document.getElementById("onlineCount").innerText = count
+
+})
 
 setTimeout(()=>{
 
-openScreen("games")
+document.getElementById("loader").style.display="none"
+document.getElementById("app").classList.remove("hidden")
 
-},8000)
+},4000)
+
 
 function openScreen(id){
 
-document.querySelectorAll(".screen").forEach(s=>{
-
-s.classList.remove("active")
-
-})
+document.querySelectorAll(".screen").forEach(s=>s.classList.remove("active"))
 
 document.getElementById(id).classList.add("active")
 
 }
 
-function openRocket(){
+function openCrash(){
 
-openScreen("rocket")
+openScreen("crash")
 
 }
 
@@ -32,33 +34,26 @@ openScreen("mines")
 
 }
 
+
 function startCrash(){
 
-if(running) return
+let multi=1
 
-running=true
+let rocket=document.getElementById("rocket")
 
-multi=1
+rocket.style.transform="translateY(-300px)"
 
-crash=(Math.random()*5)+1.5
+let interval=setInterval(()=>{
 
-let rocket=document.getElementById("rocketImg")
+multi+=0.1
 
-let game=setInterval(()=>{
+document.getElementById("multiplier").innerText = multi.toFixed(2)+"x"
 
-multi+=0.05
+if(Math.random()<0.03){
 
-document.getElementById("multi").innerText=multi.toFixed(2)+"x"
+clearInterval(interval)
 
-rocket.style.transform="translateY(-"+multi*10+"px)"
-
-if(multi>=crash){
-
-clearInterval(game)
-
-document.getElementById("multi").innerText="CRASH"
-
-running=false
+rocket.style.transform="translateY(0)"
 
 }
 
@@ -66,36 +61,40 @@ running=false
 
 }
 
-function cashout(){
 
-if(!running)return
-
-running=false
-
-alert("Win "+multi.toFixed(2)+"x")
-
-}
-
-function startMines(){
-
-let grid=document.getElementById("mineGrid")
-
-grid.innerHTML=""
+const grid=document.getElementById("mineGrid")
 
 for(let i=0;i<25;i++){
 
-let cell=document.createElement("button")
+let cell=document.createElement("div")
 
-cell.innerText="?"
+cell.className="cell"
 
 cell.onclick=()=>{
 
-cell.innerText="💎"
+if(Math.random()<0.2){
+
+cell.style.background="red"
+
+}else{
+
+cell.style.background="green"
+
+}
 
 }
 
 grid.appendChild(cell)
 
 }
+
+
+const tg = window.Telegram.WebApp
+
+tg.expand()
+
+if(tg.initDataUnsafe.user){
+
+document.getElementById("tgUser").innerText = tg.initDataUnsafe.user.username
 
 }
