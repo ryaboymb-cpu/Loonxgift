@@ -1,97 +1,121 @@
 <!DOCTYPE html>
 <html>
+
 <head>
 
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 
 <title>Loonx Gifts</title>
 
 <link rel="stylesheet" href="style.css">
 
-<script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+
+<script src="/socket.io/socket.io.js"></script>
+
+<script src="https://unpkg.com/@tonconnect/ui@2.0.0/dist/tonconnect-ui.min.js"></script>
 
 </head>
 
 <body>
 
-<div id="loading" class="screen active">
 
-<center>
+<div id="loader">
 
-<img src="img/coin.png" class="coin">
+<img src="/assets/coin.png" class="coin">
 
-<h2>Loonx Gifts</h2>
-
-Loading...
-
-</center>
+<div class="loadText">Loonx Gifts</div>
 
 </div>
 
-<div id="games" class="screen">
 
-<div class="header">Games</div>
+<div id="app" class="hidden">
 
-<div class="game-card" onclick="openRocket()">
 
-🚀 Rocket
+<header>
 
-</div>
+<img src="/assets/logo.png" class="logo">
 
-<div class="game-card" onclick="openMines()">
+<div class="balanceBox">
 
-💣 Mines
+<button id="demoBtn">DEMO</button>
 
-</div>
+<span id="balance">1000</span>
 
-</div>
-
-<div id="rocket" class="screen">
-
-<div class="header">Rocket Crash</div>
-
-<div class="multiplier" id="multi">1.00x</div>
-
-<center>
-
-<img src="img/rocket.png" id="rocketImg" class="rocket">
-
-</center>
-
-<center>
-
-<input id="bet" value="1">
-
-<button onclick="startCrash()">Bet</button>
-
-<button onclick="cashout()">Cashout</button>
-
-</center>
+<button id="realBtn">REAL</button>
 
 </div>
 
-<div id="mines" class="screen">
+<div class="online">
 
-<div class="header">Mines</div>
+<span class="dot"></span>
 
-<center>
+<span id="onlineCount">0</span>
 
-<input id="mineBet" value="1">
+</div>
 
-<button onclick="startMines()">Start</button>
+</header>
 
-</center>
+
+<main>
+
+
+<section id="games" class="screen active">
+
+<div class="gameCard" onclick="openCrash()">
+
+<img src="/assets/rocket.png">
+
+<div>Rocket</div>
+
+</div>
+
+<div class="gameCard" onclick="openMines()">
+
+<img src="/assets/mine.png">
+
+<div>Mines</div>
+
+</div>
+
+</section>
+
+
+<section id="crash" class="screen">
+
+<div id="history"></div>
+
+<div class="multiplier" id="multiplier">1.00x</div>
+
+<img src="/assets/rocket.png" id="rocket">
+
+<button class="betBtn" onclick="startCrash()">BET</button>
+
+</section>
+
+
+<section id="mines" class="screen">
 
 <div id="mineGrid"></div>
 
-</div>
+</section>
 
-<div id="info" class="screen">
 
-<div class="header">Info</div>
+<section id="profile" class="screen">
 
-<div style="padding:20px">
+<h2>Profile</h2>
+
+<div id="tgUser"></div>
+
+<button id="ton-connect">Connect TON</button>
+
+</section>
+
+
+<section id="info" class="screen">
+
+<p>
 
 Channel and promo  
 <a href="https://t.me/Loonxnews">@Loonxnews</a>
@@ -106,43 +130,30 @@ Support
 Bugs  
 <a href="https://t.me/MsgP2P">@MsgP2P</a>
 
-</div>
+</p>
+
+</section>
+
+
+</main>
+
+
+<nav>
+
+<button onclick="openScreen('games')">Games</button>
+
+<button onclick="openScreen('profile')">Profile</button>
+
+<button onclick="openScreen('info')">Info</button>
+
+</nav>
+
 
 </div>
 
-<div id="profile" class="screen">
-
-<div class="header">Profile</div>
-
-<center>
-
-ID: <span id="uid"></span>
-
-<br><br>
-
-Demo balance
-
-<div id="demoBal"></div>
-
-Real balance
-
-<div id="realBal"></div>
-
-</center>
-
-</div>
-
-<div class="bottom">
-
-<div class="nav" onclick="openScreen('games')">Games</div>
-
-<div class="nav" onclick="openScreen('profile')">Profile</div>
-
-<div class="nav" onclick="openScreen('info')">Info</div>
-
-</div>
 
 <script src="app.js"></script>
 
 </body>
+
 </html>
