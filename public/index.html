@@ -3,21 +3,78 @@
 
 <head>
 
-<title>Loonx Casino</title>
+<meta charset="UTF-8">
+<title>Loonx Gifts</title>
+
 <link rel="stylesheet" href="style.css">
 
 </head>
 
 <body>
 
-<h1>Loonx Crash</h1>
+<div class="topbar">
 
-<div id="multiplier">1.00x</div>
+<div class="logo">
+Loonx Gifts
+</div>
 
-<button onclick="playCrash()">PLAY</button>
+<div class="balance">
+Balance: <span id="balance">0</span>
+</div>
+
+</div>
+
+
+<div class="history" id="history"></div>
+
+
+<div class="crash-container">
+
+<canvas id="graph"></canvas>
+
+<div class="multiplier" id="multiplier">
+1.00x
+</div>
+
+</div>
+
+
+<div class="controls">
+
+<input id="betAmount" placeholder="Bet amount">
+
+<button class="bet-btn" onclick="placeBet()">
+BET
+</button>
+
+<button class="cash-btn" onclick="cashout()">
+CASHOUT
+</button>
+
+</div>
+
+
+<div class="menu">
+
+<button>
+<img src="img/crash.png">
+</button>
+
+<button>
+<img src="img/mines.png">
+</button>
+
+<button>
+<img src="img/wheel.png">
+</button>
+
+<button>
+<img src="img/profile.png">
+</button>
+
+</div>
 
 <script src="crash.js"></script>
 
 </body>
-
 </html>
