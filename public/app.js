@@ -1,31 +1,101 @@
-const tg = window.Telegram.WebApp
+let multi=1
+let running=false
+let crash=0
 
-tg.expand()
+setTimeout(()=>{
 
-const user = tg.initDataUnsafe.user
+openScreen("games")
 
-async function login(){
+},8000)
 
-const res = await fetch("/api/login",{
+function openScreen(id){
 
-method:"POST",
-headers:{
-"Content-Type":"application/json"
-},
+document.querySelectorAll(".screen").forEach(s=>{
 
-body:JSON.stringify({
-
-telegramId:user.id,
-username:user.username
+s.classList.remove("active")
 
 })
 
-})
-
-const data = await res.json()
-
-console.log("user",data)
+document.getElementById(id).classList.add("active")
 
 }
 
-login()
+function openRocket(){
+
+openScreen("rocket")
+
+}
+
+function openMines(){
+
+openScreen("mines")
+
+}
+
+function startCrash(){
+
+if(running) return
+
+running=true
+
+multi=1
+
+crash=(Math.random()*5)+1.5
+
+let rocket=document.getElementById("rocketImg")
+
+let game=setInterval(()=>{
+
+multi+=0.05
+
+document.getElementById("multi").innerText=multi.toFixed(2)+"x"
+
+rocket.style.transform="translateY(-"+multi*10+"px)"
+
+if(multi>=crash){
+
+clearInterval(game)
+
+document.getElementById("multi").innerText="CRASH"
+
+running=false
+
+}
+
+},100)
+
+}
+
+function cashout(){
+
+if(!running)return
+
+running=false
+
+alert("Win "+multi.toFixed(2)+"x")
+
+}
+
+function startMines(){
+
+let grid=document.getElementById("mineGrid")
+
+grid.innerHTML=""
+
+for(let i=0;i<25;i++){
+
+let cell=document.createElement("button")
+
+cell.innerText="?"
+
+cell.onclick=()=>{
+
+cell.innerText="💎"
+
+}
+
+grid.appendChild(cell)
+
+}
+
+}
