@@ -2,6 +2,7 @@ const express = require("express")
 const http = require("http")
 const { Server } = require("socket.io")
 const mongoose = require("mongoose")
+const axios = require("axios")
 require("dotenv").config()
 
 const app = express()
@@ -14,38 +15,43 @@ cors:{origin:"*"}
 app.use(express.json())
 app.use(express.static("public"))
 
-/*
+/* ======================
 MONGODB
-*/
+====================== */
 
 mongoose.connect(process.env.MONGO_URI)
-.then(()=>console.log("MongoDB connected"))
-.catch(err=>console.log("Mongo error:",err))
+.then(()=>console.log("Mongo connected"))
+.catch(err=>console.log(err))
 
-/*
+/* ======================
 USER MODEL
-*/
+====================== */
 
 const User = mongoose.model("User",{
 
 telegramId:String,
 username:String,
 
-balanceReal:{
+balanceTON:{
 type:Number,
 default:0
 },
 
 balanceDemo:{
 type:Number,
-default:1000
+default:100
+},
+
+promoUsed:{
+type:Boolean,
+default:false
 }
 
 })
 
-/*
-ONLINE SYSTEM
-*/
+/* ======================
+ONLINE USERS
+====================== */
 
 let online = 0
 
@@ -65,23 +71,21 @@ io.emit("online",online)
 
 })
 
-/*
-AUTH TELEGRAM
-*/
+/* ======================
+TELEGRAM AUTH
+====================== */
 
 app.post("/api/auth",async(req,res)=>{
 
-const {telegramId,username} = req.body
+const {telegramId,username}=req.body
 
-let user = await User.findOne({telegramId})
+let user=await User.findOne({telegramId})
 
 if(!user){
 
-user = await User.create({
-
+user=await User.create({
 telegramId,
 username
-
 })
 
 }
@@ -90,102 +94,101 @@ res.json(user)
 
 })
 
-/*
-GET BALANCE
-*/
+/* ======================
+BALANCE
+====================== */
 
 app.get("/api/balance/:id",async(req,res)=>{
 
-const user = await User.findOne({telegramId:req.params.id})
+const user=await User.findOne({telegramId:req.params.id})
 
 res.json({
 
-real:user.balanceReal,
+ton:user.balanceTON,
 demo:user.balanceDemo
 
 })
 
 })
 
-/*
-CRASH GAME
-*/
+/* ======================
+TON DEPOSIT CHECK
+====================== */
 
-function generateCrash(){
+app.post("/api/checkDeposit",async(req,res)=>{
 
-let r = Math.random()
+const {telegramId}=req.body
 
-let crash = (1/(1-r))
+try{
 
-return Math.min(crash,10)
+const response = await axios.get(
+`https://tonapi.io/v2/blockchain/accounts/${process.env.PROJECT_WALLET}/transactions`,
+{
+headers:{
+Authorization:`Bearer ${process.env.TON_API_KEY}`
+}
+}
+)
+
+const txs=response.data.transactions
+
+let user=await User.findOne({telegramId})
+
+let deposit=0
+
+txs.forEach(tx=>{
+
+if(tx.in_msg){
+
+deposit+=tx.in_msg.value/1000000000
 
 }
 
-app.get("/api/crash",async(req,res)=>{
-
-const multiplier = generateCrash()
-
-res.json({multiplier})
-
 })
 
-/*
-MINES GAME
-*/
+if(deposit>0){
 
-app.post("/api/mines",async(req,res)=>{
+user.balanceTON+=deposit
 
-const {bet} = req.body
+await user.save()
 
-let mine = Math.random()<0.2
-
-if(mine){
-
-res.json({result:"lose"})
-
-}else{
+}
 
 res.json({
-
-result:"win",
-
-multiplier:1.3
-
+ton:user.balanceTON
 })
+
+}catch(e){
+
+res.json({error:true})
 
 }
 
 })
 
-/*
-BET SYSTEM
-*/
+/* ======================
+BET
+====================== */
 
 app.post("/api/bet",async(req,res)=>{
 
-const {telegramId,amount,type} = req.body
+const {telegramId,amount,mode}=req.body
 
-const user = await User.findOne({telegramId})
+const user=await User.findOne({telegramId})
 
-if(type==="demo"){
+if(mode==="demo"){
 
-if(user.balanceDemo<amount){
+if(user.balanceDemo<amount)
+return res.json({error:"balance"})
 
-return res.json({error:"no balance"})
-
-}
-
-user.balanceDemo -= amount
+user.balanceDemo-=amount
 
 }else{
 
-if(user.balanceReal<amount){
+if(user.balanceTON<amount)
+return res.json({error:"balance"})
 
-return res.json({error:"no balance"})
-
-}
-
-user.balanceReal -= amount
+user.balanceTON-=amount
 
 }
 
@@ -193,52 +196,154 @@ await user.save()
 
 res.json({
 
-demo:user.balanceDemo,
-real:user.balanceReal
+ton:user.balanceTON,
+demo:user.balanceDemo
 
 })
 
 })
 
-/*
-WIN SYSTEM
-*/
+/* ======================
+WIN
+====================== */
 
 app.post("/api/win",async(req,res)=>{
 
-const {telegramId,amount,type} = req.body
+const {telegramId,amount,mode}=req.body
 
-const user = await User.findOne({telegramId})
+const user=await User.findOne({telegramId})
 
-if(type==="demo"){
-
-user.balanceDemo += amount
-
-}else{
-
-user.balanceReal += amount
-
-}
+if(mode==="demo")
+user.balanceDemo+=amount
+else
+user.balanceTON+=amount
 
 await user.save()
 
 res.json({
 
-demo:user.balanceDemo,
-real:user.balanceReal
+ton:user.balanceTON,
+demo:user.balanceDemo
 
 })
 
 })
 
-/*
-START SERVER
-*/
+/* ======================
+PROMO
+====================== */
 
-const PORT = process.env.PORT || 3000
+app.post("/api/promo",async(req,res)=>{
+
+const {telegramId,code}=req.body
+
+const user=await User.findOne({telegramId})
+
+if(user.promoUsed)
+return res.json({error:"used"})
+
+if(code!=="LOONX")
+return res.json({error:"invalid"})
+
+user.balanceTON+=0.1
+user.promoUsed=true
+
+await user.save()
+
+res.json({
+
+ton:user.balanceTON
+
+})
+
+})
+
+/* ======================
+CRASH ENGINE
+====================== */
+
+let crashMultiplier=1
+let crashPoint=1
+let crashActive=false
+
+function generateCrash(){
+
+let r=Math.random()
+
+return Math.min((1/(1-r)),20)
+
+}
+
+function startCrash(){
+
+crashMultiplier=1
+crashActive=true
+crashPoint=generateCrash()
+
+io.emit("crash_start")
+
+const interval=setInterval(()=>{
+
+crashMultiplier+=0.02
+
+io.emit("crash_tick",crashMultiplier)
+
+if(crashMultiplier>=crashPoint){
+
+crashActive=false
+
+io.emit("crash_end",crashMultiplier)
+
+clearInterval(interval)
+
+setTimeout(startCrash,4000)
+
+}
+
+},100)
+
+}
+
+startCrash()
+
+/* ======================
+MINES
+====================== */
+
+app.post("/api/mines/start",(req,res)=>{
+
+const grid=[]
+
+for(let i=0;i<25;i++){
+
+grid.push(Math.random()<0.2)
+
+}
+
+res.json({grid})
+
+})
+
+/* ======================
+ADMIN
+====================== */
+
+app.get("/admin/users",async(req,res)=>{
+
+const users=await User.find().limit(100)
+
+res.json(users)
+
+})
+
+/* ======================
+SERVER
+====================== */
+
+const PORT=process.env.PORT||3000
 
 server.listen(PORT,()=>{
 
-console.log("Loonx Gifts server running")
+console.log("Loonx Gifts running")
 
 })
