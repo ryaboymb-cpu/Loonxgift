@@ -1,32 +1,12 @@
 {
-  "name": "loonxgift",
-  "version": "1.0.0",
-  "description": "",
-  "main": "server.js",
-  "scripts": {
-    "start": "node server.js"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "type": "commonjs",
-  "dependencies": {
-    "axios": "^1.13.6",
-    "bcryptjs": "^3.0.3",
-    "body-parser": "^2.2.2",
-    "cors": "^2.8.6",
-    "dotenv": "^17.3.1",
-    "express": "^5.2.1",
-    "jsonwebtoken": "^9.0.3",
-    "mongoose": "^9.2.4",
-    "pg": "^8.19.0"
-  },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/ryaboymb-cpu/loonxgift.git"
-  },
-  "bugs": {
-    "url": "https://github.com/ryaboymb-cpu/loonxgift/issues"
-  },
-  "homepage": "https://github.com/ryaboymb-cpu/loonxgift#readme"
+"name":"loonxgift",
+"version":"1.0.0",
+"main":"server.js",
+"scripts":{
+"start":"node server.js"
+},
+"dependencies":{
+"cors":"^2.8.5",
+"express":"^4.18.2"
+}
 }
