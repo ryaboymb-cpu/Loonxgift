@@ -3,45 +3,142 @@
 <head>
 
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+
 <title>Loonx Gifts</title>
 
 <link rel="stylesheet" href="style.css">
 
-<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
 
 </head>
 
 <body>
 
-<div class="app">
+<div id="loading" class="screen active">
 
-<h1 class="logo">Loonx Gifts</h1>
+<center>
 
-<div class="menu">
+<img src="img/coin.png" class="coin">
 
-<button class="game" id="crashBtn">
-<img src="img/crash.png">
-Crash
-</button>
+<h2>Loonx Gifts</h2>
 
-<button class="game">
-<img src="img/mines.png">
-Mines
-</button>
+Loading...
 
-<button class="game">
-<img src="img/wheel.png">
-Wheel
-</button>
-
-<button class="game">
-<img src="img/gifts.png">
-Gifts
-</button>
+</center>
 
 </div>
 
-<div id="gameContainer"></div>
+<div id="games" class="screen">
+
+<div class="header">Games</div>
+
+<div class="game-card" onclick="openRocket()">
+
+🚀 Rocket
+
+</div>
+
+<div class="game-card" onclick="openMines()">
+
+💣 Mines
+
+</div>
+
+</div>
+
+<div id="rocket" class="screen">
+
+<div class="header">Rocket Crash</div>
+
+<div class="multiplier" id="multi">1.00x</div>
+
+<center>
+
+<img src="img/rocket.png" id="rocketImg" class="rocket">
+
+</center>
+
+<center>
+
+<input id="bet" value="1">
+
+<button onclick="startCrash()">Bet</button>
+
+<button onclick="cashout()">Cashout</button>
+
+</center>
+
+</div>
+
+<div id="mines" class="screen">
+
+<div class="header">Mines</div>
+
+<center>
+
+<input id="mineBet" value="1">
+
+<button onclick="startMines()">Start</button>
+
+</center>
+
+<div id="mineGrid"></div>
+
+</div>
+
+<div id="info" class="screen">
+
+<div class="header">Info</div>
+
+<div style="padding:20px">
+
+Channel and promo  
+<a href="https://t.me/Loonxnews">@Loonxnews</a>
+
+<br><br>
+
+Support  
+<a href="https://t.me/LoonxGift_Support">@LoonxGift_Support</a>
+
+<br><br>
+
+Bugs  
+<a href="https://t.me/MsgP2P">@MsgP2P</a>
+
+</div>
+
+</div>
+
+<div id="profile" class="screen">
+
+<div class="header">Profile</div>
+
+<center>
+
+ID: <span id="uid"></span>
+
+<br><br>
+
+Demo balance
+
+<div id="demoBal"></div>
+
+Real balance
+
+<div id="realBal"></div>
+
+</center>
+
+</div>
+
+<div class="bottom">
+
+<div class="nav" onclick="openScreen('games')">Games</div>
+
+<div class="nav" onclick="openScreen('profile')">Profile</div>
+
+<div class="nav" onclick="openScreen('info')">Info</div>
 
 </div>
 
