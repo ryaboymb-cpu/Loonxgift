@@ -1,89 +1,38 @@
 const express = require("express")
+const http = require("http")
+const {Server} = require("socket.io")
 const mongoose = require("mongoose")
-const bodyParser = require("body-parser")
+require("dotenv").config()
 
 const app = express()
+const server = http.createServer(app)
+const io = new Server(server)
 
-app.use(express.json())
-app.use(bodyParser.json())
 app.use(express.static("public"))
+app.use(express.json())
 
 mongoose.connect(process.env.MONGO_URI)
 
-const User = mongoose.model("User",{
-
-telegramId:String,
-balanceDemo:{type:Number,default:1000},
-balanceReal:{type:Number,default:0},
-gamesPlayed:{type:Number,default:0},
-profit:{type:Number,default:0}
-
-})
-
 let online = 0
 
-app.get("/api/online",(req,res)=>{
-res.json({online})
-})
+io.on("connection",(socket)=>{
 
-app.post("/api/join",(req,res)=>{
 online++
-res.json({ok:true})
-})
 
-app.post("/api/leave",(req,res)=>{
-if(online>0) online--
-res.json({ok:true})
-})
+io.emit("online",online)
 
-app.post("/api/user",async(req,res)=>{
+socket.on("disconnect",()=>{
 
-let id=req.body.id
+online--
 
-let user=await User.findOne({telegramId:id})
-
-if(!user){
-
-user=new User({telegramId:id})
-
-await user.save()
-
-}
-
-res.json(user)
-
-})
-
-app.post("/api/balance",async(req,res)=>{
-
-let id=req.body.id
-
-let user=await User.findOne({telegramId:id})
-
-res.json({
-
-demo:user.balanceDemo,
-real:user.balanceReal
+io.emit("online",online)
 
 })
 
 })
 
-app.post("/api/update",async(req,res)=>{
+server.listen(3000,()=>{
 
-let {id,demo,real}=req.body
+console.log("Server started")
 
-let user=await User.findOne({telegramId:id})
-
-user.balanceDemo=demo
-user.balanceReal=real
-
-await user.save()
-
-res.json({ok:true})
-
-})
-
-app.listen(3000,()=>{
-console.log("server started")
 })
