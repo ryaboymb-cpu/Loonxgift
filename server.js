@@ -2,78 +2,51 @@ const express = require("express")
 const http = require("http")
 const { Server } = require("socket.io")
 const mongoose = require("mongoose")
-const axios = require("axios")
 require("dotenv").config()
 
 const app = express()
 const server = http.createServer(app)
 
-const io = new Server(server,{
-cors:{origin:"*"}
-})
+const io = new Server(server,{cors:{origin:"*"}})
 
 app.use(express.json())
 app.use(express.static("public"))
 
-/* ======================
-MONGODB
-====================== */
-
 mongoose.connect(process.env.MONGO_URI)
-.then(()=>console.log("Mongo connected"))
-.catch(err=>console.log(err))
 
-/* ======================
-USER MODEL
-====================== */
+/* USER */
 
 const User = mongoose.model("User",{
 
 telegramId:String,
 username:String,
 
-balanceTON:{
-type:Number,
-default:0
-},
+balanceTON:{type:Number,default:0},
+balanceDemo:{type:Number,default:100},
 
-balanceDemo:{
-type:Number,
-default:100
-},
-
-promoUsed:{
-type:Boolean,
-default:false
-}
+promoUsed:{type:Boolean,default:false}
 
 })
 
-/* ======================
-ONLINE USERS
-====================== */
+/* ONLINE */
 
-let online = 0
+let online=0
 
 io.on("connection",(socket)=>{
 
 online++
-
 io.emit("online",online)
 
 socket.on("disconnect",()=>{
 
 online--
-
 io.emit("online",online)
 
 })
 
 })
 
-/* ======================
-TELEGRAM AUTH
-====================== */
+/* AUTH */
 
 app.post("/api/auth",async(req,res)=>{
 
@@ -83,10 +56,7 @@ let user=await User.findOne({telegramId})
 
 if(!user){
 
-user=await User.create({
-telegramId,
-username
-})
+user=await User.create({telegramId,username})
 
 }
 
@@ -94,177 +64,104 @@ res.json(user)
 
 })
 
-/* ======================
-BALANCE
-====================== */
+/* BALANCE */
 
 app.get("/api/balance/:id",async(req,res)=>{
 
-const user=await User.findOne({telegramId:req.params.id})
+const u=await User.findOne({telegramId:req.params.id})
 
 res.json({
 
-ton:user.balanceTON,
-demo:user.balanceDemo
+ton:u.balanceTON,
+demo:u.balanceDemo
 
 })
 
 })
 
-/* ======================
-TON DEPOSIT CHECK
-====================== */
-
-app.post("/api/checkDeposit",async(req,res)=>{
-
-const {telegramId}=req.body
-
-try{
-
-const response = await axios.get(
-`https://tonapi.io/v2/blockchain/accounts/${process.env.PROJECT_WALLET}/transactions`,
-{
-headers:{
-Authorization:`Bearer ${process.env.TON_API_KEY}`
-}
-}
-)
-
-const txs=response.data.transactions
-
-let user=await User.findOne({telegramId})
-
-let deposit=0
-
-txs.forEach(tx=>{
-
-if(tx.in_msg){
-
-deposit+=tx.in_msg.value/1000000000
-
-}
-
-})
-
-if(deposit>0){
-
-user.balanceTON+=deposit
-
-await user.save()
-
-}
-
-res.json({
-ton:user.balanceTON
-})
-
-}catch(e){
-
-res.json({error:true})
-
-}
-
-})
-
-/* ======================
-BET
-====================== */
+/* BET */
 
 app.post("/api/bet",async(req,res)=>{
 
 const {telegramId,amount,mode}=req.body
 
-const user=await User.findOne({telegramId})
+const u=await User.findOne({telegramId})
 
 if(mode==="demo"){
 
-if(user.balanceDemo<amount)
-return res.json({error:"balance"})
+if(u.balanceDemo<amount) return res.json({error:true})
 
-user.balanceDemo-=amount
+u.balanceDemo-=amount
 
 }else{
 
-if(user.balanceTON<amount)
-return res.json({error:"balance"})
+if(u.balanceTON<amount) return res.json({error:true})
 
-user.balanceTON-=amount
+u.balanceTON-=amount
 
 }
 
-await user.save()
+await u.save()
 
 res.json({
 
-ton:user.balanceTON,
-demo:user.balanceDemo
+ton:u.balanceTON,
+demo:u.balanceDemo
 
 })
 
 })
 
-/* ======================
-WIN
-====================== */
+/* WIN */
 
 app.post("/api/win",async(req,res)=>{
 
 const {telegramId,amount,mode}=req.body
 
-const user=await User.findOne({telegramId})
+const u=await User.findOne({telegramId})
 
 if(mode==="demo")
-user.balanceDemo+=amount
+u.balanceDemo+=amount
 else
-user.balanceTON+=amount
+u.balanceTON+=amount
 
-await user.save()
+await u.save()
 
 res.json({
 
-ton:user.balanceTON,
-demo:user.balanceDemo
+ton:u.balanceTON,
+demo:u.balanceDemo
 
 })
 
 })
 
-/* ======================
-PROMO
-====================== */
+/* PROMO */
 
 app.post("/api/promo",async(req,res)=>{
 
 const {telegramId,code}=req.body
 
-const user=await User.findOne({telegramId})
+const u=await User.findOne({telegramId})
 
-if(user.promoUsed)
-return res.json({error:"used"})
+if(u.promoUsed) return res.json({error:"used"})
 
-if(code!=="LOONX")
-return res.json({error:"invalid"})
+if(code!=="LOONX") return res.json({error:"invalid"})
 
-user.balanceTON+=0.1
-user.promoUsed=true
+u.balanceTON+=0.1
+u.promoUsed=true
 
-await user.save()
+await u.save()
 
-res.json({
-
-ton:user.balanceTON
+res.json({ton:u.balanceTON})
 
 })
 
-})
+/* CRASH ENGINE */
 
-/* ======================
-CRASH ENGINE
-====================== */
-
-let crashMultiplier=1
+let multiplier=1
 let crashPoint=1
-let crashActive=false
+let playing=false
 
 function generateCrash(){
 
@@ -274,29 +171,30 @@ return Math.min((1/(1-r)),20)
 
 }
 
-function startCrash(){
+function startRound(){
 
-crashMultiplier=1
-crashActive=true
+multiplier=1
 crashPoint=generateCrash()
 
 io.emit("crash_start")
 
-const interval=setInterval(()=>{
+playing=true
 
-crashMultiplier+=0.02
+const game=setInterval(()=>{
 
-io.emit("crash_tick",crashMultiplier)
+multiplier+=0.02
 
-if(crashMultiplier>=crashPoint){
+io.emit("crash_tick",multiplier)
 
-crashActive=false
+if(multiplier>=crashPoint){
 
-io.emit("crash_end",crashMultiplier)
+io.emit("crash_end",multiplier)
 
-clearInterval(interval)
+clearInterval(game)
 
-setTimeout(startCrash,4000)
+playing=false
+
+setTimeout(startRound,4000)
 
 }
 
@@ -304,15 +202,13 @@ setTimeout(startCrash,4000)
 
 }
 
-startCrash()
+startRound()
 
-/* ======================
-MINES
-====================== */
+/* MINES */
 
 app.post("/api/mines/start",(req,res)=>{
 
-const grid=[]
+let grid=[]
 
 for(let i=0;i<25;i++){
 
@@ -324,21 +220,17 @@ res.json({grid})
 
 })
 
-/* ======================
-ADMIN
-====================== */
+/* ADMIN */
 
 app.get("/admin/users",async(req,res)=>{
 
-const users=await User.find().limit(100)
+const users=await User.find()
 
 res.json(users)
 
 })
 
-/* ======================
-SERVER
-====================== */
+/* SERVER */
 
 const PORT=process.env.PORT||3000
 
