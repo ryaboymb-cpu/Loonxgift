@@ -1,5 +1,5 @@
 :root { --neon: #00e5ff; --bg: #0b0e26; --panel: #161c4d; }
-body { margin: 0; background: var(--bg); color: white; font-family: sans-serif; overflow: hidden; }
+body { margin: 0; background: var(--bg); color: white; font-family: sans-serif; overflow: hidden; user-select: none; }
 .hidden { display: none !important; }
 
 /* Splash Screen */
@@ -8,23 +8,35 @@ body { margin: 0; background: var(--bg); color: white; font-family: sans-serif; 
 .loader-content { position: relative; z-index: 10; }
 .pulse-logo { width: 120px; border-radius: 50%; animation: pulse 1.5s infinite; }
 .progress-bar { width: 200px; height: 6px; background: #333; border-radius: 3px; margin: 20px auto; overflow: hidden; }
-.progress-fill { width: 0%; height: 100%; background: var(--neon); animation: fill 3s forwards; }
+.progress-fill { width: 0%; height: 100%; background: var(--neon); animation: fill 2s forwards; }
 
-/* App UI */
-.header { display: flex; justify-content: space-between; padding: 15px; background: rgba(22, 28, 77, 0.8); backdrop-filter: blur(10px); }
-.mini-ava { width: 30px; border-radius: 50%; vertical-align: middle; margin-right: 8px; }
-.ton-icon { width: 20px; vertical-align: middle; }
+/* Header & UI */
+.header { display: flex; justify-content: space-between; align-items: center; padding: 10px 15px; background: rgba(22, 28, 77, 0.9); border-bottom: 1px solid rgba(0,229,255,0.2); }
+.user-info { display: flex; align-items: center; gap: 10px; }
+.mini-ava { width: 35px; height: 35px; border-radius: 50%; border: 2px solid var(--neon); }
+.ton-icon { width: 20px; vertical-align: middle; margin-left: 5px; }
+.balance-container { display: flex; align-items: center; gap: 8px; }
+
+/* Balance Mode Badge */
+.mode-badge { padding: 3px 8px; border-radius: 10px; font-size: 10px; font-weight: bold; cursor: pointer; border: 1px solid transparent; transition: 0.3s; }
+.mode-badge.demo { background: rgba(255, 255, 255, 0.1); color: white; border-color: #fff; }
+.mode-badge.real { background: rgba(74, 222, 128, 0.2); color: #4ade80; border-color: #4ade80; box-shadow: 0 0 8px rgba(74, 222, 128, 0.5); }
+
+/* Navigation */
 .navbar { position: fixed; bottom: 0; width: 100%; height: 70px; display: flex; justify-content: space-around; background: #070a1f; border-top: 1px solid #222; }
-.nav-btn { background: none; border: none; color: #555; font-weight: bold; }
+.nav-btn { background: none; border: none; color: #555; font-weight: bold; flex: 1; transition: 0.3s; }
 .nav-btn.active { color: var(--neon); text-shadow: 0 0 10px var(--neon); }
 
 /* Modals */
 .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.9); display: flex; align-items: center; justify-content: center; z-index: 1000; }
 .modal-box { background: var(--panel); padding: 30px; border-radius: 20px; border: 1px solid var(--neon); text-align: center; }
-input { width: 100%; padding: 12px; margin: 15px 0; border-radius: 8px; border: none; background: #000; color: #fff; text-align: center; }
-button { padding: 10px 20px; border-radius: 8px; border: none; background: var(--neon); font-weight: bold; cursor: pointer; }
-.cancel { background: #ff4444; margin-top: 10px; color: white; }
+input { width: 100%; padding: 12px; margin: 15px 0; border-radius: 8px; border: none; background: #000; color: #fff; text-align: center; box-sizing: border-box; }
+button { padding: 12px 20px; border-radius: 8px; border: none; background: var(--neon); font-weight: bold; cursor: pointer; color: #000; }
+.cancel { background: #ff4444; color: white; margin-top: 10px; }
 
+/* Animations */
 @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } }
 @keyframes fill { to { width: 100%; } }
 .fade-out { opacity: 0; pointer-events: none; transition: 0.5s; }
+.fade-in { animation: fadeIn 0.4s ease-out; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
