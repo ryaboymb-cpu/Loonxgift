@@ -10,76 +10,116 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body>
+    <div class="stars-bg"></div>
+    <div class="stars-bg stars-bg2"></div>
+    <div class="stars-bg stars-bg3"></div>
+
+    <div id="splash-screen">
+        <div class="loader-content">
+            <img src="img/2657-Photoroom.png" alt="Loonx" class="pulse-logo neon-glow">
+            <div class="progress-bar"><div class="progress-fill"></div></div>
+            <p class="neon-text-blue">LOONX LOADING...</p>
+        </div>
+    </div>
+
     <header class="header">
         <div class="logo-area">
-            <img src="img/2657-Photoroom.png" alt="Logo" class="main-logo" onerror="this.src='https://via.placeholder.com/40'">
+            <img src="img/2657-Photoroom.png" alt="Logo" class="main-logo neon-glow">
             <div class="app-title">
-                <h1>Loonx Gifts</h1>
+                <h1 class="neon-text-blue">Loonx Gifts</h1>
                 <span>CASINO GAMES</span>
             </div>
         </div>
         <div class="balance-area">
-            <div class="balance-badge">
+            <div class="balance-badge neon-box">
                 <span id="header-balance">0.00</span>
-                <i class="fa-brands fa-telegram" style="color:#00a8ff; margin-left: 5px;"></i>
+                <img src="img/free-icon-currency-15208522.png" style="width:16px; margin-left:5px;">
             </div>
-            <button class="add-btn" onclick="app.switchTab('wallet')">+</button>
+            <button class="add-btn neon-box" onclick="app.switchTab('wallet')">+</button>
         </div>
     </header>
 
     <main id="main-content">
         <section id="tab-games" class="tab-page active">
-            <h2 class="page-title">Игры <br><span>Выбери игру и начни выигрывать TON</span></h2>
+            <h2 class="page-title neon-text-blue">Игры <br><span>Выбери игру и начни выигрывать TON</span></h2>
             
             <div class="games-list">
-                <div class="game-card" onclick="alert('Бро, бэкенд игры Crash еще в разработке!')">
-                    <div class="game-icon crash-bg"><i class="fa-solid fa-rocket"></i></div>
+                <div class="game-card neon-box" onclick="alert('Бро, бэкенд Crash в разработке!')">
+                    <img src="img/2768-Photoroom.png" class="game-img">
                     <div class="game-info">
                         <h3>Ракета <span class="tag hot">HOT</span></h3>
-                        <p>Следи за ракетой и забери до краша!</p>
-                        <span class="online-count"><span class="dot green"></span> 124 онлайн</span>
+                        <p>Успей забрать до краша!</p>
+                        <span class="online-count"><span class="dot blue"></span> 124 онлайн</span>
                     </div>
                     <i class="fa-solid fa-chevron-right arrow"></i>
                 </div>
 
-                <div class="game-card" onclick="alert('Бро, бэкенд игры Мины еще в разработке!')">
-                    <div class="game-icon mines-bg"><i class="fa-solid fa-bomb"></i></div>
+                <div class="game-card neon-box" onclick="alert('Бро, бэкенд Mines в разработке!')">
+                    <img src="img/round-black-bomb-realistic-style.png" class="game-img">
                     <div class="game-info">
                         <h3>Мины <span class="tag new">NEW</span></h3>
-                        <p>Открывай клетки, избегай мин!</p>
-                        <span class="online-count"><span class="dot green"></span> 89 онлайн</span>
+                        <p>Обходи бомбы и лутай TON!</p>
+                        <span class="online-count"><span class="dot blue"></span> 89 онлайн</span>
                     </div>
                     <i class="fa-solid fa-chevron-right arrow"></i>
+                </div>
+
+                <div class="game-card locked" onclick="alert('Рулетка откроется в следующем обновлении!')">
+                    <img src="img/red-3d-question-mark-transpare.png" class="game-img">
+                    <div class="game-info">
+                        <h3>Рулетка <span class="tag dev">СКОРО</span></h3>
+                        <p>В разработке...</p>
+                    </div>
+                    <i class="fa-solid fa-lock arrow" style="color:#5a6673"></i>
                 </div>
             </div>
         </section>
 
         <section id="tab-wallet" class="tab-page">
-            <h2 class="page-title">Кошелёк <br><span>Управляй своим балансом</span></h2>
+            <h2 class="page-title neon-text-blue">Кошелёк <br><span>Управляй своим балансом</span></h2>
             
-            <div class="wallet-card">
+            <div class="wallet-card neon-box">
                 <p class="subtitle">ДОСТУПНЫЙ БАЛАНС</p>
                 <div class="big-balance">
-                    <i class="fa-brands fa-telegram" style="color:#00a8ff; font-size: 28px;"></i>
-                    <h2>0.0000 <span>TON</span></h2>
+                    <img src="img/free-icon-currency-15208522.png" style="width:30px;">
+                    <h2 class="neon-text-blue">0.0000 <span>TON</span></h2>
                 </div>
                 
                 <div class="stats-row">
-                    <div class="stat-box"><span>ДЕПОЗИТЫ</span><b style="color:#00ff66">0.00</b></div>
+                    <div class="stat-box"><span>ДЕПОЗИТЫ</span><b style="color:#00a8ff">0.00</b></div>
                     <div class="stat-box"><span>ВЫИГРАНО</span><b style="color:#00a8ff">0.00</b></div>
-                    <div class="stat-box"><span>ПРОФИТ</span><b style="color:#00ff66">+0.00</b></div>
+                    <div class="stat-box"><span>ПРОФИТ</span><b style="color:#00a8ff">+0.00</b></div>
                 </div>
 
-                <div id="ton-connect-btn" class="connect-wrap"></div>
+                <div class="wallet-actions">
+                    <div id="ton-connect-btn" class="connect-wrap"></div>
+                    <button class="withdraw-btn neon-box" onclick="alert('Вывод средств скоро будет доступен!')">ВЫВОД</button>
+                </div>
             </div>
         </section>
 
         <section id="tab-profile" class="tab-page">
-            <div class="profile-card">
-                <img id="user-avatar" src="https://via.placeholder.com/60" class="profile-avatar">
+            <div class="profile-card neon-box">
+                <img id="user-avatar" src="img/2657-Photoroom.png" class="profile-avatar neon-glow">
                 <div class="profile-info">
-                    <h3 id="user-name">Игрок</h3>
+                    <h3 id="user-name" class="neon-text-blue">Игрок</h3>
                     <p id="user-id">ID: Загрузка...</p>
+                </div>
+            </div>
+
+            <div class="history-section neon-box">
+                <h3 class="neon-text-blue" style="margin-bottom: 15px; font-size: 16px;">Последние игры</h3>
+                <div class="history-item">
+                    <div class="hi-left"><img src="img/2768-Photoroom.png" width="20"> <span>Ракета</span></div>
+                    <div class="hi-right win">+2.50 TON</div>
+                </div>
+                <div class="history-item">
+                    <div class="hi-left"><img src="img/round-black-bomb-realistic-style.png" width="20"> <span>Мины</span></div>
+                    <div class="hi-right lose">-1.00 TON</div>
+                </div>
+                <div class="history-item">
+                    <div class="hi-left"><img src="img/2768-Photoroom.png" width="20"> <span>Ракета</span></div>
+                    <div class="hi-right lose">-0.50 TON</div>
                 </div>
             </div>
         </section>
