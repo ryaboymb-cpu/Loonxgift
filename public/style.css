@@ -1,34 +1,65 @@
-:root { --neon: #00e5ff; --bg: #0b0e26; }
-body { margin: 0; background: var(--bg); color: white; font-family: sans-serif; overflow: hidden; }
-.hidden { display: none !important; }
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
 
-/* Splash */
-#splash-screen { position: fixed; inset: 0; z-index: 9999; display: flex; align-items: center; justify-content: center; }
-.splash-bg { position: absolute; inset: 0; background-size: cover; filter: brightness(0.4); }
-.pulse-logo { width: 100px; border-radius: 50%; animation: pulse 1.5s infinite; position: relative; }
-.progress-bar { width: 200px; height: 4px; background: #222; margin: 20px auto; border-radius: 2px; overflow: hidden; position: relative; }
-.progress-fill { width: 0%; height: 100%; background: var(--neon); animation: fill 2.5s forwards; }
+* { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', sans-serif; -webkit-tap-highlight-color: transparent; }
 
-/* Header */
-.header { display: flex; justify-content: space-between; align-items: center; padding: 10px 15px; background: #161c4d; border-bottom: 1px solid #222; }
-.user-info { display: flex; align-items: center; gap: 10px; }
-.mini-ava { width: 38px; height: 38px; border-radius: 50%; border: 2px solid var(--neon); }
-.mode-badge { font-size: 10px; padding: 2px 6px; border-radius: 8px; cursor: pointer; text-align: center; border: 1px solid #555; }
-.mode-badge.demo { background: #333; }
-.mode-badge.real { background: #4ade80; color: #000; border-color: #4ade80; }
-.ton-icon { width: 18px; margin-left: 4px; }
+body { background: #0a0e17; color: #ffffff; overflow-x: hidden; padding-bottom: 80px; }
 
-/* Nav */
-.navbar { position: fixed; bottom: 0; width: 100%; height: 65px; display: flex; background: #070a1f; border-top: 1px solid #222; }
-.nav-btn { flex: 1; background: none; border: none; color: #666; font-weight: bold; font-size: 12px; }
-.nav-btn.active { color: var(--neon); }
+/* Шапка */
+.header { display: flex; justify-content: space-between; align-items: center; padding: 15px 20px; background: rgba(10, 14, 23, 0.95); position: sticky; top: 0; z-index: 100; border-bottom: 1px solid #1c2333; }
+.logo-area { display: flex; align-items: center; gap: 10px; }
+.main-logo { width: 36px; height: 36px; border-radius: 50%; border: 2px solid #00ff66; }
+.app-title h1 { font-size: 16px; font-weight: 800; }
+.app-title span { font-size: 10px; color: #8a96a3; letter-spacing: 1px; }
 
-/* Modal */
-.modal { position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 10000; display: flex; align-items: center; justify-content: center; }
-.modal-box { background: #161c4d; padding: 25px; border-radius: 20px; border: 1px solid var(--neon); text-align: center; }
+.balance-area { display: flex; align-items: center; gap: 8px; }
+.balance-badge { background: #151a27; padding: 6px 12px; border-radius: 12px; border: 1px solid #1c2333; font-weight: 600; font-size: 14px; display: flex; align-items: center; }
+.add-btn { background: #1c2333; color: white; border: none; width: 32px; height: 32px; border-radius: 10px; font-size: 18px; cursor: pointer; }
 
-@keyframes pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.1); } }
-@keyframes fill { to { width: 100%; } }
-.fade-out { opacity: 0; transition: 0.6s; pointer-events: none; }
-.fade-in { animation: fadeIn 0.4s forwards; }
+/* Контент */
+#main-content { padding: 20px; }
+.tab-page { display: none; animation: fadeIn 0.3s ease; }
+.tab-page.active { display: block; }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+.page-title { font-size: 24px; font-weight: 800; margin-bottom: 20px; line-height: 1.2; }
+.page-title span { font-size: 12px; color: #8a96a3; font-weight: 400; }
+
+/* Карточки игр */
+.games-list { display: flex; flex-direction: column; gap: 15px; }
+.game-card { background: #131824; border-radius: 16px; padding: 15px; display: flex; align-items: center; gap: 15px; cursor: pointer; border: 1px solid #1c2333; transition: 0.2s; }
+.game-card:active { transform: scale(0.98); }
+.game-icon { width: 50px; height: 50px; border-radius: 12px; display: flex; justify-content: center; align-items: center; font-size: 24px; }
+.crash-bg { background: linear-gradient(135deg, #ff4b2b, #ff416c); }
+.mines-bg { background: linear-gradient(135deg, #11998e, #38ef7d); }
+
+.game-info { flex: 1; }
+.game-info h3 { font-size: 16px; margin-bottom: 4px; display: flex; align-items: center; gap: 8px; }
+.tag { font-size: 9px; padding: 2px 6px; border-radius: 6px; font-weight: bold; }
+.tag.hot { background: rgba(255, 75, 43, 0.2); color: #ff4b2b; }
+.tag.new { background: rgba(56, 239, 125, 0.2); color: #38ef7d; }
+.game-info p { font-size: 11px; color: #8a96a3; margin-bottom: 6px; }
+.online-count { font-size: 10px; color: #5a6673; display: flex; align-items: center; gap: 4px; }
+.dot.green { width: 6px; height: 6px; background: #00ff66; border-radius: 50%; box-shadow: 0 0 5px #00ff66; }
+.arrow { color: #5a6673; }
+
+/* Кошелек */
+.wallet-card { background: linear-gradient(180deg, #182033 0%, #111622 100%); border-radius: 20px; padding: 20px; text-align: center; border: 1px solid #232d42; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+.subtitle { font-size: 10px; color: #8a96a3; letter-spacing: 1px; margin-bottom: 10px; }
+.big-balance { display: flex; justify-content: center; align-items: center; gap: 10px; margin-bottom: 25px; }
+.big-balance h2 { font-size: 36px; font-weight: 800; }
+.big-balance span { font-size: 16px; color: #8a96a3; }
+
+.stats-row { display: flex; justify-content: space-between; background: #0c1018; border-radius: 12px; padding: 15px; margin-bottom: 20px; }
+.stat-box { display: flex; flex-direction: column; gap: 5px; }
+.stat-box span { font-size: 9px; color: #5a6673; }
+.stat-box b { font-size: 14px; }
+
+/* Профиль */
+.profile-card { background: #131824; border-radius: 20px; padding: 20px; display: flex; align-items: center; gap: 15px; border: 1px solid #1c2333; }
+.profile-avatar { width: 60px; height: 60px; border-radius: 50%; border: 2px solid #00a8ff; }
+
+/* Нижняя навигация */
+.bottom-nav { position: fixed; bottom: 0; left: 0; right: 0; height: 70px; background: #0f141e; display: flex; justify-content: space-around; align-items: center; border-top: 1px solid #1c2333; padding-bottom: 15px; }
+.nav-item { background: none; border: none; color: #5a6673; display: flex; flex-direction: column; align-items: center; gap: 5px; font-size: 10px; font-weight: 600; cursor: pointer; transition: 0.3s; width: 60px; }
+.nav-item i { font-size: 20px; }
+.nav-item.active { color: #00ff66; }
