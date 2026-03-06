@@ -1,38 +1,55 @@
 const TMA = {
     infoClicks: 0,
-    
+
     init() {
-        // Логика 5 кликов на Инфо
-        document.getElementById('info-btn').addEventListener('click', () => {
+        // Симуляция загрузки (3 секунды)
+        setTimeout(() => {
+            document.getElementById('splash-screen').classList.add('fade-out');
+            document.getElementById('main-app').classList.remove('hidden');
+            this.loadPage('main_menu');
+        }, 3000);
+
+        // Механика 5 кликов по Инфо
+        document.getElementById('info-btn').addEventListener('click', (e) => {
             this.infoClicks++;
             if (this.infoClicks >= 5) {
                 this.infoClicks = 0;
-                this.adminLogin();
+                this.toggleModal(true);
+            } else {
+                this.loadPage('info', e.target);
             }
             setTimeout(() => { this.infoClicks = 0; }, 2000);
         });
-        this.loadPage('main_menu');
     },
 
-    async loadPage(name) {
-        const res = await fetch(`pages/${name}.html`);
-        document.getElementById('content').innerHTML = await res.text();
+    async loadPage(pageName, btn = null) {
+        if (btn) {
+            document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+        }
+        const res = await fetch(`pages/${pageName}.html`);
+        document.getElementById('content-area').innerHTML = await res.text();
     },
 
-    async adminLogin() {
-        const pin = prompt("Введите ADMIN_PASSWORD (7788):");
-        const res = await fetch('/api/admin-auth', {
+    toggleModal(show) {
+        document.getElementById('admin-modal').classList.toggle('hidden', !show);
+    },
+
+    async checkAdmin() {
+        const pass = document.getElementById('admin-pass').value;
+        const res = await fetch('/api/verify-admin', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ code: pin })
+            body: JSON.stringify({ password: pass })
         });
         const data = await res.json();
         if (data.success) {
+            this.toggleModal(false);
             this.loadPage('admin_panel');
         } else {
-            alert("Ошибочка, бро!");
+            alert('Неверный код!');
         }
     }
 };
 
-window.onload = () => TMA.init();
+TMA.init();
