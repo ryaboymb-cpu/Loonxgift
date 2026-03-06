@@ -1,0 +1,70 @@
+<div class="fade-in" style="padding: 20px; text-align: center; padding-bottom: 100px;">
+    <h2 style="color: #ff3d00;">CRASH</h2>
+    
+    <div style="background: #0b0e26; border: 2px solid #ff3d00; border-radius: 15px; height: 180px; display: flex; align-items: center; justify-content: center; margin-bottom: 20px; position: relative; overflow: hidden; box-shadow: inset 0 0 20px rgba(255, 61, 0, 0.2);">
+        <img src="assets/images/2677.jpg" style="position: absolute; opacity: 0.2; width: 100%; height: 100%; object-fit: cover;">
+        <div id="crash-multiplier" style="font-size: 54px; font-weight: bold; color: white; position: relative; z-index: 10;">1.00x</div>
+    </div>
+
+    <input type="number" id="crash-bet" placeholder="Ставка (TON)" style="width: 100%; padding: 15px; border-radius: 10px; margin-bottom: 15px; font-size: 18px; text-align: center;">
+    
+    <button id="crash-btn" onclick="playCrash()" style="width: 100%; padding: 15px; background: #ff3d00; color: white; font-size: 20px; font-weight: bold; border: none; border-radius: 10px; cursor: pointer;">СТАВКА</button>
+</div>
+
+<script>
+    var crashInterval;
+    var isPlaying = false;
+    var multiplier = 1.00;
+    var currentBet = 0;
+
+    function playCrash() {
+        const btn = document.getElementById('crash-btn');
+        const multDisplay = document.getElementById('crash-multiplier');
+        
+        if (isPlaying) {
+            // Игрок нажал ЗАБРАТЬ
+            clearInterval(crashInterval);
+            isPlaying = false;
+            multDisplay.style.color = '#4ade80';
+            btn.innerText = 'СТАВКА';
+            btn.style.background = '#ff3d00';
+            
+            const winAmount = currentBet * multiplier;
+            TMA.addWin(winAmount); // Зачисляем выигрыш на баланс
+            alert(`Успех! Ты забрал ${winAmount.toFixed(2)} TON`);
+            return;
+        }
+
+        // Игрок делает СТАВКУ
+        currentBet = parseFloat(document.getElementById('crash-bet').value);
+        if (!currentBet) return alert('Введи ставку!');
+        
+        // Списываем ставку с баланса (если денег нет - функция вернет false)
+        if (!TMA.placeBet(currentBet)) return;
+
+        isPlaying = true;
+        multiplier = 1.00;
+        multDisplay.style.color = 'white';
+        btn.innerText = 'ЗАБРАТЬ';
+        btn.style.background = '#4ade80';
+
+        // Генерируем случайную точку краша (от 1.1 до 5.0)
+        const crashPoint = (Math.random() * 4 + 1.1).toFixed(2);
+
+        crashInterval = setInterval(() => {
+            multiplier += 0.01;
+            multDisplay.innerText = multiplier.toFixed(2) + 'x';
+
+            if (multiplier >= crashPoint) {
+                // ИГРА СГОРЕЛА
+                clearInterval(crashInterval);
+                isPlaying = false;
+                multDisplay.style.color = 'red';
+                multDisplay.innerText = 'CRASHED @ ' + multiplier.toFixed(2) + 'x';
+                btn.innerText = 'СТАВКА';
+                btn.style.background = '#ff3d00';
+                currentBet = 0; // Деньги сгорели
+            }
+        }, 30);
+    }
+</script>
