@@ -9,23 +9,23 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Данные из твоих ENV
 const PORT = process.env.PORT || 3000;
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '7788';
 const MONGO_URI = process.env.MONGO_URI;
 
 if (MONGO_URI) {
-    mongoose.connect(MONGO_URI).then(() => console.log('✅ DB Connected'));
+    mongoose.connect(MONGO_URI).then(() => console.log('✅ MongoDB Connected'));
 }
 
-// API для проверки админа
-app.post('/api/verify-admin', (req, res) => {
-    const { password } = req.body;
-    if (password === ADMIN_PASSWORD) {
-        res.json({ success: true });
-    } else {
-        res.status(401).json({ success: false });
-    }
+// Заглушка: получение реального баланса юзера из базы
+app.get('/api/user-balance', (req, res) => {
+    res.json({ realBalance: 0.00 }); // У нового юзера 0 реальных TON
 });
 
-app.listen(PORT, () => console.log(`🚀 Server on port ${PORT}`));
+app.post('/api/verify-admin', (req, res) => {
+    const { password } = req.body;
+    if (password === ADMIN_PASSWORD) res.json({ success: true });
+    else res.status(401).json({ success: false });
+});
+
+app.listen(PORT, () => console.log(`🚀 Сервер запущен на порту ${PORT}`));
