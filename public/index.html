@@ -2,28 +2,49 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Loonx Gifts</title>
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-    <div id="app">
-        <header class="tma-header">
-            <img src="assets/images/2676.jpg" class="logo">
-            <div class="balance-container">
-                <span id="balance">0.00</span> <b>TON</b>
+    <div id="splash-screen">
+        <div class="splash-bg" style="background-image: url('assets/images/2654.jpg');"></div>
+        <div class="loader-content">
+            <img src="assets/images/2676.jpg" class="pulse-logo">
+            <div class="progress-bar"><div class="progress-fill"></div></div>
+            <p>ЗАГРУЗКА ЛУНТИКА...</p>
+        </div>
+    </div>
+
+    <div id="main-app" class="hidden">
+        <header class="header">
+            <div class="user-info">
+                <img src="assets/images/2595.jpg" class="mini-ava">
+                <span>ИГРОК</span>
+            </div>
+            <div class="wallet-info">
+                <span id="balance">10.50</span> <img src="assets/images/2669.jpg" class="ton-icon">
             </div>
         </header>
 
-        <main id="content">
-            </main>
+        <main id="content-area"></main>
 
-        <nav class="hotbar">
-            <button onclick="TMA.loadPage('main_menu')">ИГРЫ</button>
-            <button id="info-btn">ИНФО</button>
-            <button onclick="alert('Wallet Coming Soon')">КОШЕЛЕК</button>
+        <nav class="navbar">
+            <button class="nav-btn active" onclick="TMA.loadPage('main_menu', this)">ИГРЫ</button>
+            <button class="nav-btn" id="info-btn">ИНФО</button>
+            <button class="nav-btn" onclick="alert('Кошелек в разработке')">КОШЕЛЕК</button>
         </nav>
     </div>
+
+    <div id="admin-modal" class="modal hidden">
+        <div class="modal-box">
+            <h3>ВХОД В ПАНЕЛЬ</h3>
+            <input type="password" id="admin-pass" placeholder="PIN-CODE">
+            <button onclick="TMA.checkAdmin()">ВОЙТИ</button>
+            <button onclick="TMA.toggleModal(false)" class="cancel">ОТМЕНА</button>
+        </div>
+    </div>
+
     <script src="script.js"></script>
 </body>
 </html>
