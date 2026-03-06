@@ -1,18 +1,15 @@
-<div class="admin-panel">
-    <h2 style="color: #00e5ff;">👑 CONTROL PANEL</h2>
-    
-    <div class="admin-block">
+<div class="admin-ui" style="padding: 20px;">
+    <h2 style="color: #00e5ff;">УПРАВЛЕНИЕ</h2>
+    <div style="background: #161c4d; padding: 15px; border-radius: 15px;">
         <h4>Промокоды</h4>
-        <input type="text" id="p-code" placeholder="Название">
-        <input type="number" id="p-sum" placeholder="Сумма TON">
-        <button onclick="alert('Промокод сохранен в Mongo!')">СОЗДАТЬ</button>
+        <input type="text" placeholder="Имя кода">
+        <input type="number" placeholder="Сумма">
+        <button style="width: 100%;">СОЗДАТЬ</button>
     </div>
-
-    <div class="admin-block">
+    <div style="margin-top: 20px; background: #161c4d; padding: 15px; border-radius: 15px;">
         <h4>Заявки на вывод</h4>
-        <div class="request">
-            <span>User #777: 10 TON</span>
-            <button onclick="alert('Выплачено!')">ОДОБРИТЬ</button>
+        <div style="border-bottom: 1px solid #333; padding: 10px 0;">
+            User ID: 99281 | 15.00 TON <button style="background: #4ade80;">ВЫВЕСТИ</button>
         </div>
     </div>
 </div>
