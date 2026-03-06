@@ -1,6 +1,5 @@
 require('dotenv').config();
 const express = require('express');
-const mongoose = require('mongoose');
 const path = require('path');
 const cors = require('cors');
 
@@ -11,21 +10,12 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 const PORT = process.env.PORT || 3000;
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '7788';
-const MONGO_URI = process.env.MONGO_URI;
 
-if (MONGO_URI) {
-    mongoose.connect(MONGO_URI).then(() => console.log('✅ MongoDB Connected'));
-}
-
-// Заглушка: получение реального баланса юзера из базы
-app.get('/api/user-balance', (req, res) => {
-    res.json({ realBalance: 0.00 }); // У нового юзера 0 реальных TON
-});
-
+// API для проверки админа
 app.post('/api/verify-admin', (req, res) => {
     const { password } = req.body;
-    if (password === ADMIN_PASSWORD) res.json({ success: true });
-    else res.status(401).json({ success: false });
+    if (password === ADMIN_PASSWORD) return res.json({ success: true });
+    res.status(401).json({ success: false });
 });
 
-app.listen(PORT, () => console.log(`🚀 Сервер запущен на порту ${PORT}`));
+app.listen(PORT, () => console.log(`🚀 Сервер на порту ${PORT}`));
