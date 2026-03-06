@@ -1,119 +1,90 @@
 const TMA = {
+    tg: window.Telegram.WebApp,
     infoClicks: 0,
-    isDemo: true, // По умолчанию демо-счет
+    isDemo: true,
     balances: { demo: 50.00, real: 0.00 },
-    tonConnectUI: null,
 
-    async init() {
+    init() {
+        this.tg.ready();
+        this.tg.expand();
+
+        // Подгружаем данные из ТГ
+        const user = this.tg.initDataUnsafe?.user;
+        if (user) {
+            if (user.photo_url) document.getElementById('user-avatar').src = user.photo_url;
+        }
+
         // Инициализация TonConnect
-        this.tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
+        new TON_CONNECT_UI.TonConnectUI({
             manifestUrl: 'https://raw.githubusercontent.com/ton-community/tutorials/main/03-client/test/public/tonconnect-manifest.json',
             buttonRootId: 'ton-connect-btn'
         });
 
-        // Загружаем реальный баланс с сервера
-        try {
-            const res = await fetch('/api/user-balance');
-            const data = await res.json();
-            this.balances.real = data.realBalance;
-        } catch(e) { console.log('Офлайн режим'); }
-
-        // Скрываем сплэш через 2 секунды
-        setTimeout(() => {
-            document.getElementById('splash-screen').classList.add('fade-out');
-            document.getElementById('main-app').classList.remove('hidden');
-            this.updateBalanceUI();
-            this.loadPage('main_menu');
-        }, 2000);
-
-        // Пасхалка: 5 кликов на ИНФО
-        document.getElementById('info-btn').addEventListener('click', (e) => {
+        // 5 кликов на ИНФО для админки
+        document.getElementById('info-trigger').addEventListener('click', (e) => {
             this.infoClicks++;
             if (this.infoClicks >= 5) {
                 this.infoClicks = 0;
-                this.toggleModal(true);
+                this.openModal();
             } else {
-                this.loadPage('info', e.target);
+                this.loadPage('info', e.currentTarget);
             }
             setTimeout(() => { this.infoClicks = 0; }, 2000);
         });
+
+        // Скрытие загрузки
+        setTimeout(() => {
+            document.getElementById('splash-screen').classList.add('fade-out');
+            document.getElementById('main-app').classList.remove('hidden');
+            this.loadPage('main_menu');
+        }, 2500);
     },
 
-    toggleBalanceMode() {
+    toggleBalance() {
         this.isDemo = !this.isDemo;
-        this.updateBalanceUI();
-    },
-
-    updateBalanceUI() {
-        const modeBtn = document.getElementById('balance-mode');
-        const amountDisplay = document.getElementById('balance-amount');
+        const btn = document.getElementById('balance-mode');
+        const amount = document.getElementById('balance-amount');
         
         if (this.isDemo) {
-            modeBtn.textContent = 'DEMO';
-            modeBtn.className = 'mode-badge demo';
-            amountDisplay.textContent = this.balances.demo.toFixed(2);
-            amountDisplay.style.color = '#fff';
+            btn.textContent = 'DEMO';
+            btn.className = 'mode-badge demo';
+            amount.textContent = this.balances.demo.toFixed(2);
         } else {
-            modeBtn.textContent = 'REAL';
-            modeBtn.className = 'mode-badge real';
-            amountDisplay.textContent = this.balances.real.toFixed(2);
-            amountDisplay.style.color = '#4ade80';
+            btn.textContent = 'REAL';
+            btn.className = 'mode-badge real';
+            amount.textContent = this.balances.real.toFixed(2);
         }
     },
 
-    // Метод для игр: проверка и списание ставки
-    placeBet(amount) {
-        if (amount <= 0) { alert('Ставка должна быть больше нуля!'); return false; }
-        const activeBalance = this.isDemo ? this.balances.demo : this.balances.real;
-        
-        if (activeBalance < amount) {
-            alert('Недостаточно средств на балансе!');
-            return false;
-        }
-        
-        if (this.isDemo) this.balances.demo -= amount;
-        else this.balances.real -= amount;
-        
-        this.updateBalanceUI();
-        return true;
-    },
-
-    // Метод для игр: зачисление выигрыша
-    addWin(amount) {
-        if (this.isDemo) this.balances.demo += amount;
-        else this.balances.real += amount;
-        this.updateBalanceUI();
-    },
-
-    async loadPage(pageName, btn = null) {
+    async loadPage(name, btn = null) {
         if (btn) {
             document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
         }
-        const res = await fetch(`pages/${pageName}.html`);
-        document.getElementById('content-area').innerHTML = await res.text();
-        
-        // Перезапуск скриптов внутри загруженной страницы (для Crash и Mines)
+        const res = await fetch(`pages/${name}.html`);
+        const html = await res.text();
+        document.getElementById('content-area').innerHTML = html;
+
+        // Запуск скриптов внутри страниц (для игр)
         const scripts = document.getElementById('content-area').getElementsByTagName('script');
-        for (let i = 0; i < scripts.length; i++) {
-            eval(scripts[i].innerText);
-        }
+        for (let s of scripts) eval(s.innerText);
     },
 
-    toggleModal(show) { document.getElementById('admin-modal').classList.toggle('hidden', !show); },
+    openModal() { document.getElementById('admin-modal').classList.remove('hidden'); },
+    closeModal() { document.getElementById('admin-modal').classList.add('hidden'); },
 
     async checkAdmin() {
         const pass = document.getElementById('admin-pass').value;
         const res = await fetch('/api/verify-admin', {
-            method: 'POST', headers: {'Content-Type': 'application/json'},
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({ password: pass })
         });
-        const data = await res.json();
-        if (data.success) {
-            this.toggleModal(false);
+        if (res.ok) {
+            this.closeModal();
             this.loadPage('admin_panel');
-        } else alert('Неверный код!');
+        } else alert('Wrong PIN');
     }
 };
 
-window.onload = () => TMA.init();
+TMA.init();
