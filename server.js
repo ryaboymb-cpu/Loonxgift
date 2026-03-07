@@ -13,25 +13,19 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Подключение к MongoDB
-mongoose.connect(process.env.MONGO_URI)
+mongoose.connect(process.env.MONGO_URI || 'mongodb://localhost:27017/loonx')
     .then(() => console.log('✅ MongoDB Connected'))
     .catch(err => console.error('❌ DB Error:', err));
 
-// Модели
 const User = mongoose.model('User', new mongoose.Schema({
     userId: String,
     realBalance: { type: Number, default: 0 },
     demoBalance: { type: Number, default: 100 },
-    games: { type: Number, default: 0 },
-    wins: { type: Number, default: 0 }
+    walletConnected: { type: Boolean, default: false }
 }));
 
 const Promo = mongoose.model('Promo', new mongoose.Schema({
     code: String, amount: Number, activations: Number, usedBy: [String]
-}));
-
-const Withdraw = mongoose.model('Withdraw', new mongoose.Schema({
-    userId: String, address: String, amount: Number, status: { type: String, default: 'pending' }
 }));
 
 // --- СИСТЕМА CRASH ---
@@ -55,9 +49,10 @@ function runCrash() {
 function startFlight() {
     crashState.status = 'flying';
     io.emit('crash_state', crashState);
-    const crashAt = Math.random() < 0.08 ? 1.00 : Math.min(20, (1 / (Math.random() * 0.96 + 0.04)).toFixed(2));
+    const crashAt = Math.random() < 0.08 ? 1.00 : Math.min(30, (1 / (Math.random() * 0.96 + 0.04)).toFixed(2));
+    
     let flightId = setInterval(() => {
-        crashState.multiplier += 0.01 + (crashState.multiplier * 0.005);
+        crashState.multiplier += 0.01 + (crashState.multiplier * 0.006);
         if (crashState.multiplier >= crashAt) {
             clearInterval(flightId);
             crashState.status = 'crashed';
@@ -67,7 +62,7 @@ function startFlight() {
         } else {
             io.emit('crash_tick', crashState.multiplier.toFixed(2));
         }
-    }, 70);
+    }, 80);
 }
 runCrash();
 
@@ -80,7 +75,7 @@ io.on('connection', (socket) => {
         if (crashState.status !== 'betting') return;
         const user = await User.findOne({ userId: data.userId });
         const bal = data.mode === 'real' ? user.realBalance : user.demoBalance;
-        if (bal >= data.amount && data.amount >= 0.5 && data.amount <= 20) {
+        if (bal >= data.amount && data.amount > 0) {
             if (data.mode === 'real') user.realBalance -= data.amount;
             else user.demoBalance -= data.amount;
             await user.save();
@@ -96,7 +91,6 @@ io.on('connection', (socket) => {
         const user = await User.findOne({ userId: bet.userId });
         if (bet.mode === 'real') user.realBalance += win;
         else user.demoBalance += win;
-        user.games++; user.wins++;
         await user.save();
         currentBets = currentBets.filter(b => b.id !== socket.id);
         socket.emit('win', { amount: win, real: user.realBalance, demo: user.demoBalance });
@@ -112,6 +106,16 @@ app.post('/api/init', async (req, res) => {
     res.json(u);
 });
 
+// Универсальный апдейт баланса (для Минера)
+app.post('/api/balance/update', async (req, res) => {
+    const { userId, mode, amount } = req.body;
+    const user = await User.findOne({ userId });
+    if (mode === 'real') user.realBalance += amount;
+    else user.demoBalance += amount;
+    await user.save();
+    res.json({ real: user.realBalance, demo: user.demoBalance });
+});
+
 app.post('/api/promo/use', async (req, res) => {
     const { userId, code } = req.body;
     const p = await Promo.findOne({ code });
@@ -123,9 +127,8 @@ app.post('/api/promo/use', async (req, res) => {
     res.json({ success: false });
 });
 
-// Admin API
 app.post('/api/admin/promo', async (req, res) => {
     await new Promo(req.body).save(); res.json({ ok: true });
 });
 
-server.listen(10000);
+server.listen(10000, () => console.log('Server running!'));
