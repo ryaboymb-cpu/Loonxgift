@@ -1,82 +1,22 @@
-@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Inter:wght@400;600&display=swap');
-
-* { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', sans-serif; -webkit-tap-highlight-color: transparent; }
-body { background: #04060b; color: #fff; overflow-x: hidden; padding-bottom: 80px; }
-
-/* Звёзды и Неон */
-.stars-container { position: fixed; width: 100%; height: 100%; z-index: -1; overflow: hidden; }
-.star { position: absolute; width: 2px; height: 2px; background: #fff; opacity: 0.5; animation: fall 5s linear infinite; }
-@keyframes fall { 0% { transform: translateY(-10vh) translateX(0); opacity: 0; } 10% { opacity: 1; } 90% { opacity: 1; } 100% { transform: translateY(110vh) translateX(-20vw); opacity: 0; } }
-.neon-text-blue { color: #00d2ff; text-shadow: 0 0 10px #00d2ff; font-family: 'Orbitron', sans-serif; }
-.neon-glow-blue { filter: drop-shadow(0 0 8px #00d2ff); }
-.neon-box { border: 1px solid rgba(0, 210, 255, 0.3); background: rgba(11, 17, 32, 0.7); backdrop-filter: blur(5px); box-shadow: 0 0 15px rgba(0, 210, 255, 0.1); border-radius: 15px; }
-
-/* Сплэш и Хедер */
-#splash-screen { position: fixed; inset: 0; background: #04060b; z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; transition: 0.5s; }
-.pulse-logo { width: 100px; animation: pulse 1.5s infinite; border-radius: 50%; border: 2px solid #00d2ff; margin-bottom: 20px; }
-.progress-bar { width: 200px; height: 4px; background: #111; border-radius: 2px; overflow: hidden; margin-bottom: 10px; }
-.progress-fill { width: 0%; height: 100%; background: #00d2ff; animation: fill 2s forwards; }
-@keyframes pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.1); box-shadow: 0 0 20px #00d2ff; } }
-@keyframes fill { to { width: 100%; } }
-.fade-out { opacity: 0; pointer-events: none; }
-
-.header { display: flex; justify-content: space-between; align-items: center; padding: 15px; border-bottom: 1px solid rgba(0,210,255,0.2); background: rgba(4,6,11,0.9); position: sticky; top: 0; z-index: 100; }
-.main-logo { width: 35px; height: 35px; border-radius: 50%; margin-right: 10px; }
-.app-title h1 { font-size: 14px; } .app-title span { font-size: 9px; color: #888; }
-.balance-switch { padding: 5px 10px; border-radius: 10px; display: flex; align-items: center; gap: 6px; cursor: pointer; }
-#balance-value { font-weight: bold; font-size: 15px; font-family: 'Orbitron'; }
-#balance-type { font-size: 8px; padding: 2px 4px; border-radius: 4px; font-weight: bold; }
-.type-demo { background: #444; color: #fff; } .type-real { background: #00d2ff; color: #000; box-shadow: 0 0 10px #00d2ff; }
-
-/* Контент и Карточки */
-#main-content { padding: 15px; }
-.tab-page { display: none; animation: fadeIn 0.4s; }
-.tab-page.active { display: block; }
-@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } }
-
-.games-grid { display: flex; flex-direction: column; gap: 12px; }
-.game-card { display: flex; align-items: center; padding: 12px; gap: 15px; cursor: pointer; }
-.game-card.locked { opacity: 0.5; filter: grayscale(1); }
-.game-img { width: 50px; height: 50px; object-fit: contain; }
-
-/* Профиль и Статистика */
-.profile-header { display: flex; align-items: center; padding: 15px; gap: 15px; margin-bottom: 15px; }
-.small-avatar { width: 50px; height: 50px; border-radius: 50%; border: 2px solid #00d2ff; }
-.stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
-.stat-box { padding: 15px 5px; text-align: center; display: flex; flex-direction: column; gap: 5px; }
-.stat-box span { font-size: 10px; color: #888; } .stat-box b { font-size: 16px; font-family: 'Orbitron'; }
-
-/* Кошелек и Инфо */
-.wallet-card { padding: 25px; text-align: center; }
-.wallet-card h2 { font-size: 32px; margin: 10px 0; }
-.withdraw-btn { background: transparent; color: #00d2ff; padding: 12px; border: none; width: 100%; border-radius: 10px; font-weight: bold; cursor: pointer; margin-top: 10px; }
-.info-container { padding: 20px; text-align: center; }
-.info-banner { width: 100%; border-radius: 15px; margin-bottom: 20px; border: 1px solid #00d2ff; }
-.social-links { display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px; }
-.s-link { text-decoration: none; color: #fff; background: rgba(255,255,255,0.05); padding: 12px; border-radius: 12px; text-align: left; }
-.s-link i { color: #00d2ff; margin-right: 10px; }
-.promo-section { display: flex; flex-direction: column; gap: 10px; }
-.promo-btn { padding: 12px; background: #00d2ff; color: #000; font-weight: bold; border: none; border-radius: 10px; }
-
-/* Модалки и Админка */
-.modal { position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 1000; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(5px); }
+body { background: #050810; color: white; font-family: sans-serif; margin: 0; overflow: hidden; }
+.neon-text { color: #00d2ff; text-shadow: 0 0 10px #00d2ff; }
 .hidden { display: none !important; }
-.modal-content { padding: 25px; width: 90%; max-width: 400px; text-align: center; }
-.admin-content { max-height: 80vh; overflow-y: auto; }
-.admin-section { background: rgba(0,0,0,0.5); padding: 15px; border-radius: 10px; margin-top: 15px; text-align: left; }
-.admin-section h3 { font-size: 12px; color: #888; margin-bottom: 10px; text-align: center; }
-.neon-input { width: 100%; padding: 12px; margin-bottom: 10px; background: #000; border: 1px solid #00d2ff; color: #fff; border-radius: 10px; outline: none; }
-.modal-btn { width: 100%; padding: 12px; background: #00d2ff; color: #000; font-weight: bold; border: none; border-radius: 10px; cursor: pointer; margin-bottom: 10px; }
-.modal-btn.cancel { background: transparent; color: #888; border: 1px solid #555; }
 
-/* Выводы Админ */
-.w-card { background: #111; padding: 10px; border-radius: 8px; margin-bottom: 10px; border: 1px solid #333; font-size: 11px; }
-.w-card b { color: #00d2ff; }
-.w-btns { display: flex; gap: 5px; margin-top: 8px; }
-.w-btn-yes { flex: 1; background: #00ff66; color: #000; border: none; padding: 5px; border-radius: 5px; font-weight: bold; }
-.w-btn-no { flex: 1; background: #ff4b2b; color: #fff; border: none; padding: 5px; border-radius: 5px; font-weight: bold; }
+/* Лоадер с утка-машет */
+#loader { position: fixed; inset: 0; background: #050810; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 1000; }
+.waving-duck { width: 140px; animation: wave 1.2s ease-in-out infinite; transform-origin: bottom center; }
+@keyframes wave { 0%, 100% { transform: rotate(-8deg); } 50% { transform: rotate(8deg); } }
 
-/* Нав */
-.bottom-nav { position: fixed; bottom: 0; width: 100%; height: 65px; background: rgba(4,6,11,0.95); display: flex; border-top: 1px solid rgba(0,210,255,0.2); backdrop-filter: blur(10px); }
-.nav-item { flex: 1; border: none; background: none; color: #555; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; transition: 0.3s; }
-.nav-item.active { color: #00d2ff; text-shadow: 0 0 10px #00d2ff; }
+/* Краш */
+.crash-sky { height: 220px; background: #0a0f1d; border-radius: 15px; position: relative; overflow: hidden; margin: 15px 0; border: 1px solid #1e293b; }
+#mult { position: absolute; width: 100%; text-align: center; top: 30%; font-size: 45px; font-weight: bold; color: #00d2ff; z-index: 10; }
+#rocket { position: absolute; width: 60px; bottom: 15px; left: 15px; transition: transform 0.1s linear; }
+
+/* Кнопки и инпуты */
+.neon-input { background: #1a2235; border: 1px solid #334155; color: white; padding: 10px; width: 100%; border-radius: 8px; margin: 5px 0; box-sizing: border-box; }
+.btn-main { background: #00d2ff; color: #000; border: none; padding: 12px; width: 100%; border-radius: 10px; font-weight: bold; cursor: pointer; }
+.btn-close { background: transparent; color: #64748b; border: none; margin-top: 10px; width: 100%; }
+
+/* Футер */
+.footer-nav { position: fixed; bottom: 0; width: 100%; height: 65px; background: #0a0f1d; display: flex; justify-content: space-around; border-top: 1px solid #1e293b; }
+.footer-nav button { background: none; border: none; font-size: 24px; }
