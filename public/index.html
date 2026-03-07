@@ -10,9 +10,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body>
-    <div class="stars-container">
-        <div class="star"></div><div class="star"></div><div class="star"></div><div class="star"></div><div class="star"></div>
-    </div>
+    <div class="stars-container"><div class="star"></div><div class="star"></div><div class="star"></div><div class="star"></div></div>
 
     <div id="splash-screen">
         <div class="loader-content">
@@ -25,10 +23,7 @@
     <header class="header">
         <div class="logo-area" onclick="app.adminClick()">
             <img src="img/2657-Photoroom.png" class="main-logo neon-glow-blue">
-            <div class="app-title">
-                <h1 class="neon-text-blue">Loonx Gifts</h1>
-                <span id="mode-label">DEMO MODE</span>
-            </div>
+            <div class="app-title"><h1 class="neon-text-blue">Loonx Gifts</h1><span id="mode-label">DEMO MODE</span></div>
         </div>
         <div class="balance-container">
             <div class="balance-switch neon-box" onclick="app.toggleBalance()">
@@ -41,7 +36,7 @@
 
     <main id="main-content">
         <section id="tab-games" class="tab-page active">
-            <h2 class="page-title neon-text-blue">Игры <br><span>Выигрывай TON прямо сейчас</span></h2>
+            <h2 class="page-title neon-text-blue">Игры</h2>
             <div class="games-grid">
                 <div class="game-card neon-box" onclick="alert('Crash в разработке')">
                     <img src="img/2768-Photoroom.png" class="game-img">
@@ -62,9 +57,9 @@
             <h2 class="page-title neon-text-blue">Кошелек</h2>
             <div class="wallet-card neon-box">
                 <p>ВАШ БАЛАНС (REAL)</p>
-                <h2 id="real-bal-display">0.0000 TON</h2>
-                <div id="ton-connect-btn"></div>
-                <button class="withdraw-btn neon-box" onclick="alert('Вывод от 5 TON')">ВЫВОД СРЕДСТВ</button>
+                <h2 id="wallet-real-balance" class="neon-text-blue">0.00 TON</h2>
+                <div id="ton-connect-btn" style="margin: 15px 0;"></div>
+                <button class="withdraw-btn neon-box" onclick="app.openWithdrawModal()">ВЫВОД СРЕДСТВ</button>
             </div>
         </section>
 
@@ -86,21 +81,57 @@
 
         <section id="tab-profile" class="tab-page">
             <div class="profile-header neon-box">
-                <img id="user-avatar" src="img/2657-Photoroom.png">
+                <img id="user-avatar" src="img/2657-Photoroom.png" class="small-avatar neon-glow-blue">
                 <div class="p-text">
                     <h3 id="user-name" class="neon-text-blue">Player</h3>
-                    <p id="user-id">ID: 000000</p>
+                    <p id="user-id">ID: Загрузка...</p>
                 </div>
+            </div>
+            <div class="stats-grid">
+                <div class="stat-box neon-box"><span>Всего игр</span><b id="stat-games">0</b></div>
+                <div class="stat-box neon-box"><span>Выиграно</span><b id="stat-wins" style="color:#00ff66;">0</b></div>
+                <div class="stat-box neon-box"><span>Проиграно</span><b id="stat-losses" style="color:#ff4b2b;">0</b></div>
             </div>
         </section>
     </main>
 
-    <div id="admin-panel" class="modal hidden">
+    <div id="admin-auth-modal" class="modal hidden">
         <div class="modal-content neon-box">
-            <h3>ADMIN PANEL</h3>
-            <input type="text" id="new-promo" placeholder="Новый промокод">
-            <button onclick="app.addPromo()">ДОБАВИТЬ</button>
-            <button onclick="app.closeAdmin()" class="close-btn">ЗАКРЫТЬ</button>
+            <h3 class="neon-text-blue">ВХОД В АДМИНКУ</h3>
+            <input type="password" id="admin-pass-input" placeholder="Пароль" class="neon-input">
+            <button onclick="app.verifyAdmin()" class="modal-btn">ВОЙТИ</button>
+            <button onclick="app.closeModal('admin-auth-modal')" class="modal-btn cancel">ОТМЕНА</button>
+        </div>
+    </div>
+
+    <div id="admin-panel" class="modal hidden">
+        <div class="modal-content admin-content neon-box">
+            <h2 class="neon-text-blue">ADMIN DASHBOARD</h2>
+            
+            <div class="admin-section">
+                <h3>Создать Промокод (REAL TON)</h3>
+                <input type="text" id="new-promo-code" placeholder="Название промокода" class="neon-input">
+                <input type="number" id="new-promo-acts" placeholder="Кол-во активаций" class="neon-input">
+                <input type="number" id="new-promo-amt" placeholder="Сумма (TON)" class="neon-input">
+                <button onclick="app.addPromo()" class="modal-btn">СОЗДАТЬ</button>
+            </div>
+
+            <div class="admin-section">
+                <h3>Заявки на вывод</h3>
+                <div id="admin-withdraw-list"></div>
+            </div>
+            <button onclick="app.closeModal('admin-panel')" class="modal-btn cancel" style="margin-top:20px;">ВЫХОД</button>
+        </div>
+    </div>
+
+    <div id="withdraw-modal" class="modal hidden">
+        <div class="modal-content neon-box">
+            <h3 class="neon-text-blue">ВЫВОД СРЕДСТВ</h3>
+            <p style="font-size: 10px; color: #888; margin-bottom: 15px;">Минимум 5 REAL TON</p>
+            <input type="text" id="withdraw-address" placeholder="Ваш TON кошелек (EQ...)" class="neon-input">
+            <input type="number" id="withdraw-amount" placeholder="Сумма вывода" class="neon-input">
+            <button onclick="app.requestWithdraw()" class="modal-btn">ОТПРАВИТЬ ЗАЯВКУ</button>
+            <button onclick="app.closeModal('withdraw-modal')" class="modal-btn cancel">ОТМЕНА</button>
         </div>
     </div>
 
