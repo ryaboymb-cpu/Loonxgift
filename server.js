@@ -132,3 +132,23 @@ app.post('/api/admin/promo', async (req, res) => {
 });
 
 server.listen(10000, () => console.log('Server running!'));
+// ... (твои конфиги сверху остаются)
+
+// ИСПРАВЛЕННАЯ МОДЕЛЬ ПОЛЬЗОВАТЕЛЯ
+const User = mongoose.model('User', new mongoose.Schema({
+    userId: String,
+    realBalance: { type: Number, default: 0 },
+    demoBalance: { type: Number, default: 100 },
+    // Убрали unique: true, чтобы не было ошибки из логов!
+    wallet: { type: String, default: null } 
+}));
+
+// ТВОЙ КОШЕЛЕК ДЛЯ ПРИЕМА (Константа)
+const PROJECT_WALLET = "UQCTqV9scQaZR0DHzOnMrOCCY7z3MIT0QfoNrtUDZiXHY1-K"; 
+
+// API для получения адреса кошелька проекта (чтобы юзеры знали куда платить)
+app.get('/api/project-wallet', (req, res) => {
+    res.json({ wallet: PROJECT_WALLET });
+});
+
+// ... (весь остальной код игр и сокетов идет дальше без изменений)
