@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Loonx Gifts</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
@@ -10,83 +10,148 @@
 </head>
 <body>
     <div id="loader">
-        <img src="img/2799.jpg" class="waving-duck">
-        <h2 class="neon-text">LOONX GIFTS</h2>
+        <img src="img/2793-Photoroom_edit_357020906251818.png" class="waving-duck">
+        <h2 class="neon-text">ЗАГРУЗКА LOONX...</h2>
     </div>
 
     <header>
         <div class="logo-box" onclick="app.checkAdmin()">
-            <img src="img/2657-Photoroom.png" width="40">
-            <span id="mode-text">DEMO</span>
+            <img src="img/2657-Photoroom.png" width="35">
+            <span>Loonx</span>
         </div>
         <div class="header-right">
             <div class="online-box"><div class="dot"></div><span id="online-num">0</span></div>
-            <div class="balance-pill" onclick="app.toggleMode()">
-                <span id="main-bal">0.00</span> <img src="img/free-icon-currency-15208522.png" width="14">
+            <div class="balance-pill glow-box" onclick="app.toggleMode()">
+                <span id="main-bal">0.00</span> 
+                <img src="img/free-icon-currency-15208522.png" width="16">
+                <span id="mode-badge">DEMO</span>
             </div>
         </div>
     </header>
 
     <main id="tabs">
         <section id="tab-games" class="tab active">
-            <div class="game-card" onclick="app.openModal('modal-crash')">
-                <img src="img/2768-Photoroom.png" width="60">
-                <h3>CRASH</h3>
+            <h2 class="section-title">Игры</h2>
+            <div class="game-card glow-box" onclick="app.openModal('modal-crash')">
+                <div class="game-icon"><img src="img/2768-Photoroom.png" width="60"></div>
+                <div class="game-info">
+                    <h3>Crash <span class="badge hot">HOT</span></h3>
+                    <p>Следи за ракетой и забери до краша!</p>
+                </div>
+                <div class="arrow">›</div>
             </div>
-            <div class="game-card" onclick="app.openModal('modal-mines')">
-                <img src="img/round-black-bomb-realistic-style.png" width="60">
-                <h3>MINES</h3>
+
+            <div class="game-card glow-box" onclick="app.openModal('modal-mines')">
+                <div class="game-icon"><img src="img/round-black-bomb-realistic-style.png" width="60"></div>
+                <div class="game-info">
+                    <h3>Mines <span class="badge new">NEW</span></h3>
+                    <p>Открывай клетки, избегай мин!</p>
+                </div>
+                <div class="arrow">›</div>
             </div>
         </section>
 
         <section id="tab-wallet" class="tab">
-            <div class="wallet-info neon-border">
-                <p>REAL BALANCE</p>
-                <h2 id="real-val">0.00 TON</h2>
-                <button class="btn-main" onclick="app.openModal('modal-withdraw')">ВЫВОД</button>
+            <h2 class="section-title">Кошелёк</h2>
+            <div class="wallet-card glow-box">
+                <p>ДОСТУПНЫЙ БАЛАНС</p>
+                <div class="big-bal">
+                    <img src="img/free-icon-currency-15208522.png" width="30">
+                    <h1 id="real-val">0.0000</h1> <span>TON</span>
+                </div>
+                <button class="btn-primary" onclick="app.connectWallet()" id="btn-connect">
+                    <img src="img/free-icon-currency-15208522.png" width="16"> Connect Wallet
+                </button>
+            </div>
+            
+            <h3 class="section-title" style="margin-top: 20px;">Вывод TON</h3>
+            <div class="glow-box p-15">
+                <input type="number" placeholder="Сумма вывода (Мин. 1 TON)" class="neon-input">
+                <button class="btn-secondary mt-10" onclick="playSound('click'); alert('Недостаточно средств')">Вывести</button>
             </div>
         </section>
 
         <section id="tab-info" class="tab">
-            <img src="img/2665.jpg" class="banner">
-            <div class="info-content">
-                <input type="text" id="promo-input" placeholder="Промокод" class="neon-input">
-                <button onclick="app.usePromo()" class="btn-main">АКТИВИРОВАТЬ</button>
-                <div class="links">
-                    <a href="https://t.me/Loonxnews">Канал</a>
-                    <a href="https://t.me/LoonxGift_Support">Поддержка</a>
+            <h2 class="section-title">Инфо и Промо</h2>
+            <div class="glow-box p-15 text-center">
+                <img src="img/2657-Photoroom.png" width="120" style="margin-bottom: 20px;">
+                <input type="text" id="promo-input" placeholder="Введите промокод" class="neon-input">
+                <button onclick="app.usePromo()" class="btn-primary mt-10">Активировать</button>
+                
+                <div class="links mt-20">
+                    <a href="https://t.me/Loonxnews" target="_blank" class="glow-box">✈️ Channel and promo</a>
+                    <a href="https://t.me/LoonxGift_Support" target="_blank" class="glow-box">🎧 Support</a>
                 </div>
             </div>
         </section>
     </main>
 
     <div id="modal-crash" class="modal hidden">
+        <div class="modal-header">
+            <h3>CRASH</h3>
+            <button onclick="app.closeModal('modal-crash')" class="btn-close">×</button>
+        </div>
         <div class="modal-content">
-            <div id="crash-info">ОЖИДАНИЕ...</div>
-            <div class="crash-sky">
-                <div id="mult">1.00x</div>
-                <img src="img/2768-Photoroom.png" id="rocket">
+            <div class="crash-sky glow-box">
+                <div id="crash-mult">1.00x</div>
+                <div id="crash-timer-text"></div>
+                <img src="img/2657-Photoroom.png" id="crash-rocket">
             </div>
-            <input type="number" id="bet-input" placeholder="Ставка 0.5 - 20" class="neon-input">
-            <button id="bet-btn" onclick="crash.action()" class="btn-main">СТАВКА</button>
-            <button onclick="app.closeModal('modal-crash')" class="btn-close">ЗАКРЫТЬ</button>
+            <div class="controls">
+                <input type="number" id="crash-bet" placeholder="Ставка" class="neon-input" value="1">
+                <button id="crash-btn" onclick="crashGame.action()" class="btn-primary mt-10">СТАВКА</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-mines" class="modal hidden">
+        <div class="modal-header">
+            <h3>MINES</h3>
+            <button onclick="app.closeModal('modal-mines')" class="btn-close">×</button>
+        </div>
+        <div class="modal-content">
+            <div class="mines-info flex-between mb-10">
+                <span>Множитель: <b id="mines-mult" class="text-neon">1.00x</b></span>
+                <span>Выигрыш: <b id="mines-win" class="text-green">0.00</b></span>
+            </div>
+            
+            <div id="mines-grid" class="mines-grid">
+                </div>
+            
+            <div class="controls mt-15">
+                <div class="flex-between gap-10">
+                    <input type="number" id="mines-bet" placeholder="Ставка" class="neon-input" value="1">
+                    <select id="mines-count" class="neon-input">
+                        <option value="3">3 Мины</option>
+                        <option value="5">5 Мин</option>
+                        <option value="10">10 Мин</option>
+                    </select>
+                </div>
+                <button id="mines-btn" onclick="minesGame.action()" class="btn-primary mt-10">ИГРАТЬ</button>
+            </div>
         </div>
     </div>
 
     <div id="modal-admin" class="modal hidden">
-        <div class="modal-content">
-            <h3>ADMIN PANEL</h3>
-            <input type="text" id="admin-promo-code" placeholder="Код" class="neon-input">
-            <input type="number" id="admin-promo-amt" placeholder="Сумма" class="neon-input">
-            <button onclick="app.addPromo()" class="btn-main">СОЗДАТЬ ПРОМО</button>
-            <button onclick="app.closeModal('modal-admin')" class="btn-close">ЗАКРЫТЬ</button>
+        <div class="modal-content text-center glow-box p-15">
+            <h3 class="text-neon mb-10">ADMIN PANEL</h3>
+            <input type="password" id="admin-pass" placeholder="PIN CODE (***)" class="neon-input text-center">
+            <button onclick="app.verifyAdmin()" class="btn-primary mt-10">ВХОД</button>
+            
+            <div id="admin-controls" class="hidden mt-20">
+                <hr style="border-color: #1e293b; margin: 15px 0;">
+                <input type="text" id="admin-promo-code" placeholder="Новый промокод" class="neon-input">
+                <input type="number" id="admin-promo-amt" placeholder="Сумма (TON)" class="neon-input mt-10">
+                <button onclick="app.addPromo()" class="btn-green mt-10">СОЗДАТЬ ПРОМО</button>
+            </div>
+            <button onclick="app.closeModal('modal-admin')" class="btn-secondary mt-10">ЗАКРЫТЬ</button>
         </div>
     </div>
 
     <nav class="footer-nav">
-        <button onclick="app.setTab('games')">🎮</button>
-        <button onclick="app.setTab('wallet')">💰</button>
-        <button onclick="app.setTab('info')">🎁</button>
+        <button class="nav-btn active" onclick="app.setTab('games')">🎮<br><span>Игры</span></button>
+        <button class="nav-btn" onclick="app.setTab('wallet')">💰<br><span>Кошелёк</span></button>
+        <button class="nav-btn" onclick="app.setTab('info')">🎁<br><span>Промо</span></button>
     </nav>
 
     <script src="script.js"></script>
