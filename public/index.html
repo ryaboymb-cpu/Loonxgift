@@ -1,145 +1,78 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html>
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Loonx Gifts</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    <script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="/socket.io/socket.io.js"></script>
 </head>
 <body>
-    <div class="stars-container"><div class="star"></div><div class="star"></div><div class="star"></div><div class="star"></div></div>
-
-    <div id="splash-screen">
-        <div class="loader-content">
-            <img src="img/2657-Photoroom.png" class="pulse-logo neon-glow-blue">
-            <div class="progress-bar"><div class="progress-fill"></div></div>
-            <p class="neon-text-blue">LOONX LOADING...</p>
-        </div>
+    <div id="loader">
+        <img src="img/2799.jpg" class="waving-duck">
+        <h2 class="neon-text">LOONX LOADING...</h2>
     </div>
 
-    <header class="header">
-        <div class="logo-area" onclick="app.adminClick()">
-            <img src="img/2657-Photoroom.png" class="main-logo neon-glow-blue">
-            <div class="app-title"><h1 class="neon-text-blue">Loonx Gifts</h1><span id="mode-label">DEMO MODE</span></div>
+    <header>
+        <div class="logo-box">
+            <img src="img/2657-Photoroom.png" width="40">
+            <span id="mode-text">DEMO</span>
         </div>
-        <div class="balance-container">
-            <div class="balance-switch neon-box" onclick="app.toggleBalance()">
-                <div id="balance-value">50.00</div>
-                <img src="img/free-icon-currency-15208522.png" width="14">
-                <div id="balance-type" class="type-demo">DEMO</div>
+        <div class="header-right">
+            <div class="online-box"><div class="dot"></div><span id="online-num">0</span></div>
+            <div class="balance-pill" onclick="app.toggleMode()">
+                <span id="main-bal">0.00</span> <img src="img/free-icon-currency-15208522.png" width="14">
             </div>
         </div>
     </header>
 
-    <main id="main-content">
-        <section id="tab-games" class="tab-page active">
-            <h2 class="page-title neon-text-blue">Игры</h2>
-            <div class="games-grid">
-                <div class="game-card neon-box" onclick="alert('Crash в разработке')">
-                    <img src="img/2768-Photoroom.png" class="game-img">
-                    <div class="gi"><h3>Crash</h3><p>Множитель до небес</p></div>
-                </div>
-                <div class="game-card neon-box" onclick="alert('Mines в разработке')">
-                    <img src="img/round-black-bomb-realistic-style.png" class="game-img">
-                    <div class="gi"><h3>Mines</h3><p>Найди сокровища</p></div>
-                </div>
-                <div class="game-card locked">
-                    <img src="img/red-3d-question-mark-transpare.png" class="game-img">
-                    <div class="gi"><h3>Roulette</h3><p>Скоро открытие</p></div>
-                </div>
+    <div id="tabs">
+        <section id="tab-games" class="tab active">
+            <div class="game-card" onclick="app.openModal('modal-crash')">
+                <img src="img/2768-Photoroom.png" width="60">
+                <h3>CRASH</h3>
+            </div>
+            <div class="game-card" onclick="app.openModal('modal-mines')">
+                <img src="img/round-black-bomb-realistic-style.png" width="60">
+                <h3>MINES</h3>
             </div>
         </section>
 
-        <section id="tab-wallet" class="tab-page">
-            <h2 class="page-title neon-text-blue">Кошелек</h2>
-            <div class="wallet-card neon-box">
-                <p>ВАШ БАЛАНС (REAL)</p>
-                <h2 id="wallet-real-balance" class="neon-text-blue">0.00 TON</h2>
-                <div id="ton-connect-btn" style="margin: 15px 0;"></div>
-                <button class="withdraw-btn neon-box" onclick="app.openWithdrawModal()">ВЫВОД СРЕДСТВ</button>
+        <section id="tab-wallet" class="tab">
+            <div class="wallet-info neon-border">
+                <p>REAL BALANCE</p>
+                <h2 id="real-val">0.00 TON</h2>
+                <button class="btn-main" onclick="alert('Минимальный вывод 5 TON')">ВЫВОД</button>
             </div>
         </section>
 
-        <section id="tab-info" class="tab-page">
-            <h2 class="page-title neon-text-blue">Инфо и Промо</h2>
-            <div class="info-container neon-box">
-                <img src="img/2665.jpg" class="info-banner" onerror="this.src='img/2657-Photoroom.png'">
-                <div class="social-links">
-                    <a href="https://t.me/Loonxnews" target="_blank" class="s-link"><i class="fa-brands fa-telegram"></i> Channel and promo</a>
-                    <a href="https://t.me/LoonxGift_Support" target="_blank" class="s-link"><i class="fa-solid fa-headset"></i> Support</a>
-                    <a href="https://t.me/MsgP2P" target="_blank" class="s-link"><i class="fa-solid fa-bug"></i> Bugs</a>
-                </div>
-                <div class="promo-section">
-                    <input type="text" id="promo-input" placeholder="Введите промокод..." class="neon-box">
-                    <button onclick="app.activatePromo()" class="promo-btn neon-box">АКТИВИРОВАТЬ</button>
-                </div>
+        <section id="tab-info" class="tab">
+            <img src="img/2665.jpg" class="banner">
+            <div class="links">
+                <a href="#">Channel</a>
+                <a href="#">Support</a>
             </div>
         </section>
+    </div>
 
-        <section id="tab-profile" class="tab-page">
-            <div class="profile-header neon-box">
-                <img id="user-avatar" src="img/2657-Photoroom.png" class="small-avatar neon-glow-blue">
-                <div class="p-text">
-                    <h3 id="user-name" class="neon-text-blue">Player</h3>
-                    <p id="user-id">ID: Загрузка...</p>
-                </div>
+    <div id="modal-crash" class="modal hidden">
+        <div class="modal-content">
+            <div id="crash-info">ОЖИДАНИЕ...</div>
+            <div class="crash-sky">
+                <div id="mult">1.00x</div>
+                <img src="img/2768-Photoroom.png" id="rocket">
             </div>
-            <div class="stats-grid">
-                <div class="stat-box neon-box"><span>Всего игр</span><b id="stat-games">0</b></div>
-                <div class="stat-box neon-box"><span>Выиграно</span><b id="stat-wins" style="color:#00ff66;">0</b></div>
-                <div class="stat-box neon-box"><span>Проиграно</span><b id="stat-losses" style="color:#ff4b2b;">0</b></div>
-            </div>
-        </section>
-    </main>
-
-    <div id="admin-auth-modal" class="modal hidden">
-        <div class="modal-content neon-box">
-            <h3 class="neon-text-blue">ВХОД В АДМИНКУ</h3>
-            <input type="password" id="admin-pass-input" placeholder="Пароль" class="neon-input">
-            <button onclick="app.verifyAdmin()" class="modal-btn">ВОЙТИ</button>
-            <button onclick="app.closeModal('admin-auth-modal')" class="modal-btn cancel">ОТМЕНА</button>
+            <input type="number" id="bet-input" placeholder="0.5 - 20 TON">
+            <button id="bet-btn" onclick="crash.action()" class="btn-main">СТАВКА</button>
+            <button onclick="app.closeModal('modal-crash')" class="btn-close">ЗАКРЫТЬ</button>
         </div>
     </div>
 
-    <div id="admin-panel" class="modal hidden">
-        <div class="modal-content admin-content neon-box">
-            <h2 class="neon-text-blue">ADMIN DASHBOARD</h2>
-            
-            <div class="admin-section">
-                <h3>Создать Промокод (REAL TON)</h3>
-                <input type="text" id="new-promo-code" placeholder="Название промокода" class="neon-input">
-                <input type="number" id="new-promo-acts" placeholder="Кол-во активаций" class="neon-input">
-                <input type="number" id="new-promo-amt" placeholder="Сумма (TON)" class="neon-input">
-                <button onclick="app.addPromo()" class="modal-btn">СОЗДАТЬ</button>
-            </div>
-
-            <div class="admin-section">
-                <h3>Заявки на вывод</h3>
-                <div id="admin-withdraw-list"></div>
-            </div>
-            <button onclick="app.closeModal('admin-panel')" class="modal-btn cancel" style="margin-top:20px;">ВЫХОД</button>
-        </div>
-    </div>
-
-    <div id="withdraw-modal" class="modal hidden">
-        <div class="modal-content neon-box">
-            <h3 class="neon-text-blue">ВЫВОД СРЕДСТВ</h3>
-            <p style="font-size: 10px; color: #888; margin-bottom: 15px;">Минимум 5 REAL TON</p>
-            <input type="text" id="withdraw-address" placeholder="Ваш TON кошелек (EQ...)" class="neon-input">
-            <input type="number" id="withdraw-amount" placeholder="Сумма вывода" class="neon-input">
-            <button onclick="app.requestWithdraw()" class="modal-btn">ОТПРАВИТЬ ЗАЯВКУ</button>
-            <button onclick="app.closeModal('withdraw-modal')" class="modal-btn cancel">ОТМЕНА</button>
-        </div>
-    </div>
-
-    <nav class="bottom-nav">
-        <button class="nav-item active" onclick="app.switchTab('games', this)"><i class="fa-solid fa-gamepad"></i><span>Игры</span></button>
-        <button class="nav-item" onclick="app.switchTab('wallet', this)"><i class="fa-solid fa-wallet"></i><span>Кошелек</span></button>
-        <button class="nav-item" onclick="app.switchTab('info', this)"><i class="fa-solid fa-gift"></i><span>Инфо</span></button>
-        <button class="nav-item" onclick="app.switchTab('profile', this)"><i class="fa-solid fa-user"></i><span>Профиль</span></button>
+    <nav class="footer-nav">
+        <button onclick="app.setTab('games')">🎮</button>
+        <button onclick="app.setTab('wallet')">💰</button>
+        <button onclick="app.setTab('info')">🎁</button>
     </nav>
 
     <script src="script.js"></script>
