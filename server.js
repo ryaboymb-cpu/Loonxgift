@@ -71,4 +71,71 @@ function startFlight() {
 runCrash();
 
 // --- API ROUTES ---
-app.post('/api/
+app.post('/api/init', async (req, res) => {
+    try {
+        let u = await User.findOne({ userId: req.body.userId });
+        if (!u) { u = new User({ userId: req.body.userId, demoBalance: 50 }); await u.save(); }
+        res.json(u);
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/balance/update', async (req, res) => {
+    const { userId, mode, amount, isWin, isLose } = req.body;
+    const user = await User.findOne({ userId });
+    if (mode === 'real') user.realBalance += amount;
+    else user.demoBalance += amount;
+    user.games++;
+    if (isWin) user.wins++;
+    if (isLose) user.losses++;
+    await user.save();
+    res.json({ real: user.realBalance, demo: user.demoBalance });
+});
+
+// Выплаты
+app.post('/api/withdraw', async (req, res) => {
+    const { userId, amount, wallet } = req.body;
+    const user = await User.findOne({ userId });
+    if (user.realBalance >= amount && amount >= 1) {
+        user.realBalance -= amount; await user.save();
+        await new Withdrawal({ userId, amount, wallet }).save();
+        res.json({ success: true, balance: user.realBalance });
+    } else {
+        res.json({ success: false, error: 'Insufficient funds or amount < 1 TON' });
+    }
+});
+
+// Промокоды
+app.post('/api/promo/use', async (req, res) => {
+    const { userId, code } = req.body;
+    const p = await Promo.findOne({ code });
+    if (p && p.activations > 0 && !p.usedBy.includes(userId)) {
+        p.activations--; p.usedBy.push(userId); await p.save();
+        const u = await User.findOne({ userId }); u.realBalance += p.amount; await u.save();
+        return res.json({ success: true, amount: p.amount });
+    }
+    res.json({ success: false });
+});
+
+// Админка
+app.get('/api/admin/withdrawals', async (req, res) => {
+    const w = await Withdrawal.find({ status: 'pending' });
+    res.json(w);
+});
+app.post('/api/admin/promo', async (req, res) => {
+    await new Promo(req.body).save(); res.json({ ok: true });
+});
+
+// Авто-Манифест TON
+app.get('/tonconnect-manifest.json', (req, res) => {
+    const host = req.get('host'); const protocol = req.protocol;
+    res.json({ "url": `${protocol}://${host}`, "name": "Loonx", "iconUrl": `${protocol}://${host}/img/2657-Photoroom.png` });
+});
+
+io.on('connection', (socket) => {
+    io.emit('online', io.engine.clientsCount);
+    socket.emit('crash_state', crashState);
+    socket.on('disconnect', () => io.emit('online', io.engine.clientsCount));
+});
+
+const PORT = process.env.PORT || 10000;
+server.listen(PORT, () => console.log(`🚀 Server on port ${PORT}`));
