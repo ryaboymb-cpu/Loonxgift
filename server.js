@@ -12,12 +12,12 @@ const io = new Server(server);
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Подключение к Mongo (Render возьмет из Environment Variables)
+// Подключение к MongoDB
 mongoose.connect(process.env.MONGO_URI)
-    .then(() => console.log('✅ База на связи'))
-    .catch(err => console.error('❌ Ошибка БД:', err));
+    .then(() => console.log('✅ MongoDB Connected'))
+    .catch(err => console.error('❌ DB Error:', err));
 
-// Модели данных
+// Модели
 const User = mongoose.model('User', new mongoose.Schema({
     userId: String,
     realBalance: { type: Number, default: 0 },
@@ -30,23 +30,23 @@ const Promo = mongoose.model('Promo', new mongoose.Schema({
     code: String, amount: Number, activations: Number, usedBy: [String]
 }));
 
-// ЛОГИКА CRASH (Общая для всех)
+const Withdraw = mongoose.model('Withdraw', new mongoose.Schema({
+    userId: String, address: String, amount: Number, status: { type: String, default: 'pending' }
+}));
+
+// --- СИСТЕМА CRASH ---
 let crashState = { status: 'betting', multiplier: 1.00, timer: 10 };
 let currentBets = []; 
 
-function runCrashSystem() {
-    // Фаза ставок
-    crashState.status = 'betting';
-    crashState.timer = 10;
-    crashState.multiplier = 1.00;
+function runCrash() {
+    crashState = { status: 'betting', multiplier: 1.00, timer: 10 };
     currentBets = [];
     io.emit('crash_state', crashState);
-
-    let countdown = setInterval(() => {
+    let timerId = setInterval(() => {
         crashState.timer--;
         io.emit('crash_timer', crashState.timer);
         if (crashState.timer <= 0) {
-            clearInterval(countdown);
+            clearInterval(timerId);
             startFlight();
         }
     }, 1000);
@@ -55,28 +55,23 @@ function runCrashSystem() {
 function startFlight() {
     crashState.status = 'flying';
     io.emit('crash_state', crashState);
-
-    // Математика: шанс моментального краша (RTP)
     const crashAt = Math.random() < 0.08 ? 1.00 : Math.min(20, (1 / (Math.random() * 0.96 + 0.04)).toFixed(2));
-
-    let flight = setInterval(() => {
+    let flightId = setInterval(() => {
         crashState.multiplier += 0.01 + (crashState.multiplier * 0.005);
-        
         if (crashState.multiplier >= crashAt) {
-            clearInterval(flight);
+            clearInterval(flightId);
             crashState.status = 'crashed';
             crashState.multiplier = crashAt;
             io.emit('crash_state', crashState);
-            setTimeout(runCrashSystem, 4000); // Пауза перед новым раундом
+            setTimeout(runCrash, 4000);
         } else {
             io.emit('crash_tick', crashState.multiplier.toFixed(2));
         }
     }, 70);
 }
+runCrash();
 
-runCrashSystem();
-
-// Сокеты (Онлайн и ставки)
+// --- SOCKETS ---
 io.on('connection', (socket) => {
     io.emit('online', io.engine.clientsCount);
     socket.emit('crash_state', crashState);
@@ -85,28 +80,24 @@ io.on('connection', (socket) => {
         if (crashState.status !== 'betting') return;
         const user = await User.findOne({ userId: data.userId });
         const bal = data.mode === 'real' ? user.realBalance : user.demoBalance;
-        
         if (bal >= data.amount && data.amount >= 0.5 && data.amount <= 20) {
             if (data.mode === 'real') user.realBalance -= data.amount;
             else user.demoBalance -= data.amount;
-            user.games++;
             await user.save();
             currentBets.push({ id: socket.id, ...data });
             socket.emit('update_bal', { real: user.realBalance, demo: user.demoBalance });
         }
     });
 
-    socket.on('cashout', async (data) => {
+    socket.on('cashout', async () => {
         const bet = currentBets.find(b => b.id === socket.id);
         if (!bet || crashState.status !== 'flying') return;
-        
         const win = bet.amount * crashState.multiplier;
         const user = await User.findOne({ userId: bet.userId });
         if (bet.mode === 'real') user.realBalance += win;
         else user.demoBalance += win;
-        user.wins++;
+        user.games++; user.wins++;
         await user.save();
-        
         currentBets = currentBets.filter(b => b.id !== socket.id);
         socket.emit('win', { amount: win, real: user.realBalance, demo: user.demoBalance });
     });
@@ -114,11 +105,27 @@ io.on('connection', (socket) => {
     socket.on('disconnect', () => io.emit('online', io.engine.clientsCount));
 });
 
-// API
+// --- API ROUTES ---
 app.post('/api/init', async (req, res) => {
     let u = await User.findOne({ userId: req.body.userId });
     if (!u) { u = new User({ userId: req.body.userId }); await u.save(); }
     res.json(u);
 });
 
-server.listen(10000, () => console.log('Server started'));
+app.post('/api/promo/use', async (req, res) => {
+    const { userId, code } = req.body;
+    const p = await Promo.findOne({ code });
+    if (p && p.activations > 0 && !p.usedBy.includes(userId)) {
+        p.activations--; p.usedBy.push(userId); await p.save();
+        const u = await User.findOne({ userId }); u.realBalance += p.amount; await u.save();
+        return res.json({ success: true, amount: p.amount });
+    }
+    res.json({ success: false });
+});
+
+// Admin API
+app.post('/api/admin/promo', async (req, res) => {
+    await new Promo(req.body).save(); res.json({ ok: true });
+});
+
+server.listen(10000);
