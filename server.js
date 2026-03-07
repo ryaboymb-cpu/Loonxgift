@@ -13,7 +13,7 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
 // ТВОЙ КОШЕЛЕК
-const PROJECT_WALLET = "UQAbc123...your_real_wallet"; 
+const PROJECT_WALLET = "UQCTqV9scQaZR0DHzOnMrOCCY7z3MIT0QfoNrtUDZiXHY1-K"; 
 
 // Подключение к MongoDB
 mongoose.connect(process.env.MONGO_URI)
