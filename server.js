@@ -1,88 +1,124 @@
+require('dotenv').config();
 const express = require('express');
+const http = require('http');
+const mongoose = require('mongoose');
+const { Server } = require('socket.io');
 const path = require('path');
-const cors = require('cors');
 
 const app = express();
-app.use(cors());
+const server = http.createServer(app);
+const io = new Server(server);
+
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Базы данных (в памяти)
-let promos = []; // { code, activations, amount, usedBy: [] }
-let withdrawals = []; // { id, userId, address, amount, status }
-let users = {}; // { userId: { realBalance: 0, games: 0, wins: 0, losses: 0 } }
+// Подключение к Mongo (Render возьмет из Environment Variables)
+mongoose.connect(process.env.MONGO_URI)
+    .then(() => console.log('✅ База на связи'))
+    .catch(err => console.error('❌ Ошибка БД:', err));
 
-const ADMIN_PASS = '7788';
+// Модели данных
+const User = mongoose.model('User', new mongoose.Schema({
+    userId: String,
+    realBalance: { type: Number, default: 0 },
+    demoBalance: { type: Number, default: 100 },
+    games: { type: Number, default: 0 },
+    wins: { type: Number, default: 0 }
+}));
 
-// Получить данные юзера
-app.post('/api/user', (req, res) => {
-    const { userId } = req.body;
-    if (!users[userId]) users[userId] = { realBalance: 0, games: 0, wins: 0, losses: 0 };
-    res.json(users[userId]);
+const Promo = mongoose.model('Promo', new mongoose.Schema({
+    code: String, amount: Number, activations: Number, usedBy: [String]
+}));
+
+// ЛОГИКА CRASH (Общая для всех)
+let crashState = { status: 'betting', multiplier: 1.00, timer: 10 };
+let currentBets = []; 
+
+function runCrashSystem() {
+    // Фаза ставок
+    crashState.status = 'betting';
+    crashState.timer = 10;
+    crashState.multiplier = 1.00;
+    currentBets = [];
+    io.emit('crash_state', crashState);
+
+    let countdown = setInterval(() => {
+        crashState.timer--;
+        io.emit('crash_timer', crashState.timer);
+        if (crashState.timer <= 0) {
+            clearInterval(countdown);
+            startFlight();
+        }
+    }, 1000);
+}
+
+function startFlight() {
+    crashState.status = 'flying';
+    io.emit('crash_state', crashState);
+
+    // Математика: шанс моментального краша (RTP)
+    const crashAt = Math.random() < 0.08 ? 1.00 : Math.min(20, (1 / (Math.random() * 0.96 + 0.04)).toFixed(2));
+
+    let flight = setInterval(() => {
+        crashState.multiplier += 0.01 + (crashState.multiplier * 0.005);
+        
+        if (crashState.multiplier >= crashAt) {
+            clearInterval(flight);
+            crashState.status = 'crashed';
+            crashState.multiplier = crashAt;
+            io.emit('crash_state', crashState);
+            setTimeout(runCrashSystem, 4000); // Пауза перед новым раундом
+        } else {
+            io.emit('crash_tick', crashState.multiplier.toFixed(2));
+        }
+    }, 70);
+}
+
+runCrashSystem();
+
+// Сокеты (Онлайн и ставки)
+io.on('connection', (socket) => {
+    io.emit('online', io.engine.clientsCount);
+    socket.emit('crash_state', crashState);
+
+    socket.on('place_bet', async (data) => {
+        if (crashState.status !== 'betting') return;
+        const user = await User.findOne({ userId: data.userId });
+        const bal = data.mode === 'real' ? user.realBalance : user.demoBalance;
+        
+        if (bal >= data.amount && data.amount >= 0.5 && data.amount <= 20) {
+            if (data.mode === 'real') user.realBalance -= data.amount;
+            else user.demoBalance -= data.amount;
+            user.games++;
+            await user.save();
+            currentBets.push({ id: socket.id, ...data });
+            socket.emit('update_bal', { real: user.realBalance, demo: user.demoBalance });
+        }
+    });
+
+    socket.on('cashout', async (data) => {
+        const bet = currentBets.find(b => b.id === socket.id);
+        if (!bet || crashState.status !== 'flying') return;
+        
+        const win = bet.amount * crashState.multiplier;
+        const user = await User.findOne({ userId: bet.userId });
+        if (bet.mode === 'real') user.realBalance += win;
+        else user.demoBalance += win;
+        user.wins++;
+        await user.save();
+        
+        currentBets = currentBets.filter(b => b.id !== socket.id);
+        socket.emit('win', { amount: win, real: user.realBalance, demo: user.demoBalance });
+    });
+
+    socket.on('disconnect', () => io.emit('online', io.engine.clientsCount));
 });
 
-// Проверка админа
-app.post('/api/admin/verify', (req, res) => {
-    if (req.body.password === ADMIN_PASS) res.json({ success: true });
-    else res.json({ success: false });
+// API
+app.post('/api/init', async (req, res) => {
+    let u = await User.findOne({ userId: req.body.userId });
+    if (!u) { u = new User({ userId: req.body.userId }); await u.save(); }
+    res.json(u);
 });
 
-// Добавить промокод
-app.post('/api/admin/promo', (req, res) => {
-    const { code, activations, amount } = req.body;
-    promos.push({ code: code.toUpperCase(), activations: Number(activations), amount: Number(amount), usedBy: [] });
-    res.json({ success: true });
-});
-
-// Активация промокода
-app.post('/api/promo/activate', (req, res) => {
-    const { userId, code } = req.body;
-    const promo = promos.find(p => p.code === code.toUpperCase());
-
-    if (!promo) return res.json({ success: false, message: 'Промокод не найден' });
-    if (promo.activations <= 0) return res.json({ success: false, message: 'Лимит активаций исчерпан' });
-    if (promo.usedBy.includes(userId)) return res.json({ success: false, message: 'Вы уже активировали этот код' });
-
-    // Успешная активация
-    promo.activations -= 1;
-    promo.usedBy.push(userId);
-    if (!users[userId]) users[userId] = { realBalance: 0, games: 0, wins: 0, losses: 0 };
-    users[userId].realBalance += promo.amount;
-
-    res.json({ success: true, amount: promo.amount, newBalance: users[userId].realBalance });
-});
-
-// Запрос на вывод
-app.post('/api/withdraw/request', (req, res) => {
-    const { userId, address, amount } = req.body;
-    const user = users[userId];
-
-    if (!user || user.realBalance < amount) return res.json({ success: false, message: 'Недостаточно средств' });
-    if (amount < 5) return res.json({ success: false, message: 'Минимальный вывод 5 TON' });
-
-    withdrawals.push({ id: Date.now(), userId, address, amount, status: 'pending', userBalance: user.realBalance });
-    res.json({ success: true });
-});
-
-// Получить список выводов (для админа)
-app.get('/api/admin/withdrawals', (req, res) => {
-    res.json(withdrawals.filter(w => w.status === 'pending'));
-});
-
-// Одобрить/Отклонить вывод
-app.post('/api/admin/withdraw/resolve', (req, res) => {
-    const { id, action } = req.body;
-    const request = withdrawals.find(w => w.id === id);
-    if (!request) return res.json({ success: false });
-
-    if (action === 'approve') {
-        users[request.userId].realBalance -= request.amount; // Списываем баланс
-        request.status = 'approved';
-    } else {
-        request.status = 'rejected';
-    }
-    res.json({ success: true });
-});
-
-const PORT = process.env.PORT || 10000;
-app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
+server.listen(10000, () => console.log('Server started'));
