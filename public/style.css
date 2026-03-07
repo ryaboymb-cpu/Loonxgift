@@ -1,88 +1,78 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Inter:wght@400;600&display=swap');
 
 * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', sans-serif; -webkit-tap-highlight-color: transparent; }
-body { background: #060913; color: #ffffff; overflow-x: hidden; padding-bottom: 80px; position: relative; }
+body { background: #04060b; color: #fff; overflow-x: hidden; padding-bottom: 80px; }
 
-/* Падающие звезды (Фон) */
-.stars-bg { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: -1; background: transparent; }
-.stars-bg::after { content: ""; position: absolute; top: -10px; left: 10%; width: 2px; height: 2px; background: white; box-shadow: 0 0 10px white, 0 0 20px #00a8ff; animation: fall 4s linear infinite; }
-.stars-bg2::after { left: 40%; animation-duration: 3s; animation-delay: 1s; }
-.stars-bg3::after { left: 80%; animation-duration: 5s; animation-delay: 2s; }
-@keyframes fall { 0% { transform: translateY(-10vh) translateX(0); opacity: 1; } 100% { transform: translateY(110vh) translateX(-20vw); opacity: 0; } }
+/* Звёзды */
+.stars-container { position: fixed; width: 100%; height: 100%; z-index: -1; overflow: hidden; }
+.star { position: absolute; width: 2px; height: 2px; background: #fff; opacity: 0.5; animation: fall 5s linear infinite; }
+@keyframes fall {
+    0% { transform: translateY(-10vh) translateX(0); opacity: 0; }
+    10% { opacity: 1; }
+    90% { opacity: 1; }
+    100% { transform: translateY(110vh) translateX(-20vw); opacity: 0; }
+}
+/* Разные задержки для звезд */
+.star:nth-child(1) { left: 20%; animation-duration: 4s; }
+.star:nth-child(2) { left: 50%; animation-duration: 6s; animation-delay: 1s; }
+.star:nth-child(3) { left: 80%; animation-duration: 3s; animation-delay: 2s; }
+.star:nth-child(4) { left: 15%; animation-duration: 7s; animation-delay: 0.5s; }
+.star:nth-child(5) { left: 70%; animation-duration: 5s; animation-delay: 1.5s; }
 
-/* Неоновые эффекты */
-.neon-text-blue { text-shadow: 0 0 10px rgba(0, 168, 255, 0.8); color: #fff; }
-.neon-glow { box-shadow: 0 0 15px rgba(0, 168, 255, 0.6); }
-.neon-box { border: 1px solid rgba(0, 168, 255, 0.3); box-shadow: inset 0 0 10px rgba(0, 168, 255, 0.1), 0 0 10px rgba(0, 168, 255, 0.2); }
+/* Неон */
+.neon-text-blue { color: #00d2ff; text-shadow: 0 0 10px #00d2ff, 0 0 20px #00d2ff; font-family: 'Orbitron', sans-serif; }
+.neon-glow-blue { filter: drop-shadow(0 0 8px #00d2ff); }
+.neon-box { border: 1px solid rgba(0, 210, 255, 0.3); background: rgba(11, 17, 32, 0.7); backdrop-filter: blur(5px); box-shadow: 0 0 15px rgba(0, 210, 255, 0.1); }
 
-/* Экран загрузки */
-#splash-screen { position: fixed; inset: 0; background: #060913; z-index: 9999; display: flex; align-items: center; justify-content: center; text-align: center; transition: 0.5s; }
-.pulse-logo { width: 100px; border-radius: 50%; animation: pulse 1.5s infinite; border: 2px solid #00a8ff; }
-.progress-bar { width: 200px; height: 4px; background: #1c2333; margin: 20px auto; border-radius: 2px; overflow: hidden; }
-.progress-fill { width: 0%; height: 100%; background: #00a8ff; box-shadow: 0 0 10px #00a8ff; animation: fill 2s forwards; }
-.fade-out { opacity: 0; pointer-events: none; }
-@keyframes pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.1); box-shadow: 0 0 25px #00a8ff; } }
-@keyframes fill { to { width: 100%; } }
+/* Хедер */
+.header { display: flex; justify-content: space-between; align-items: center; padding: 15px; border-bottom: 1px solid rgba(0,210,255,0.2); background: rgba(4,6,11,0.9); position: sticky; top: 0; z-index: 100; }
+.main-logo { width: 35px; height: 35px; border-radius: 50%; margin-right: 10px; }
+.app-title h1 { font-size: 14px; }
+.app-title span { font-size: 9px; color: #888; }
 
-/* Шапка */
-.header { display: flex; justify-content: space-between; align-items: center; padding: 15px 20px; background: rgba(6, 9, 19, 0.8); backdrop-filter: blur(10px); position: sticky; top: 0; z-index: 100; border-bottom: 1px solid rgba(0, 168, 255, 0.2); }
-.logo-area { display: flex; align-items: center; gap: 10px; }
-.main-logo { width: 36px; height: 36px; border-radius: 50%; border: 1px solid #00a8ff; }
-.app-title h1 { font-size: 16px; font-weight: 800; }
-.app-title span { font-size: 10px; color: #8a96a3; }
-.balance-area { display: flex; align-items: center; gap: 8px; }
-.balance-badge { background: #0b101e; padding: 6px 12px; border-radius: 12px; font-weight: 600; font-size: 14px; display: flex; align-items: center; }
-.add-btn { background: #0b101e; color: #00a8ff; border: none; width: 32px; height: 32px; border-radius: 10px; font-size: 18px; cursor: pointer; text-shadow: 0 0 5px #00a8ff; }
+/* Баланс Переключатель */
+.balance-switch { padding: 5px 10px; border-radius: 10px; display: flex; align-items: center; gap: 6px; cursor: pointer; transition: 0.3s; }
+.balance-switch:active { transform: scale(0.95); }
+#balance-value { font-weight: bold; font-size: 15px; font-family: 'Orbitron'; }
+#balance-type { font-size: 8px; padding: 2px 4px; border-radius: 4px; font-weight: bold; }
+.type-demo { background: #444; color: #fff; }
+.type-real { background: #00d2ff; color: #000; box-shadow: 0 0 10px #00d2ff; }
 
-/* Контент */
-#main-content { padding: 20px; }
-.tab-page { display: none; animation: fadeIn 0.3s ease; }
+/* Кнопки и Сетки */
+#main-content { padding: 15px; }
+.tab-page { display: none; animation: fadeIn 0.4s; }
 .tab-page.active { display: block; }
-@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-.page-title { font-size: 24px; font-weight: 800; margin-bottom: 20px; }
-.page-title span { font-size: 12px; color: #8a96a3; text-shadow: none; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } }
 
-/* Карточки игр */
-.games-list { display: flex; flex-direction: column; gap: 15px; }
-.game-card { background: rgba(11, 16, 30, 0.8); backdrop-filter: blur(5px); border-radius: 16px; padding: 15px; display: flex; align-items: center; gap: 15px; cursor: pointer; transition: 0.2s; }
-.game-card:active { transform: scale(0.98); }
-.game-card.locked { opacity: 0.6; filter: grayscale(0.8); }
-.game-img { width: 50px; height: 50px; border-radius: 12px; object-fit: contain; }
-.game-info { flex: 1; }
-.game-info h3 { font-size: 16px; margin-bottom: 4px; display: flex; align-items: center; gap: 8px; }
-.tag { font-size: 9px; padding: 2px 6px; border-radius: 6px; font-weight: bold; }
-.tag.hot { background: rgba(255, 75, 43, 0.2); color: #ff4b2b; }
-.tag.new { background: rgba(0, 168, 255, 0.2); color: #00a8ff; }
-.tag.dev { background: rgba(138, 150, 163, 0.2); color: #8a96a3; }
-.game-info p { font-size: 11px; color: #8a96a3; margin-bottom: 6px; }
-.online-count { font-size: 10px; color: #5a6673; display: flex; align-items: center; gap: 4px; }
-.dot.blue { width: 6px; height: 6px; background: #00a8ff; border-radius: 50%; box-shadow: 0 0 8px #00a8ff; }
+.games-grid { display: flex; flex-direction: column; gap: 12px; }
+.game-card { display: flex; align-items: center; padding: 12px; border-radius: 15px; gap: 15px; }
+.game-card.locked { opacity: 0.5; filter: grayscale(1); background: #111; border: 1px solid #333; }
+.game-img { width: 50px; height: 50px; object-fit: contain; }
+.gi h3 { font-size: 16px; margin-bottom: 4px; }
+.gi p { font-size: 11px; color: #888; }
 
-/* Кошелек */
-.wallet-card { background: rgba(11, 16, 30, 0.8); border-radius: 20px; padding: 20px; text-align: center; }
-.subtitle { font-size: 10px; color: #8a96a3; margin-bottom: 10px; }
-.big-balance { display: flex; justify-content: center; align-items: center; gap: 10px; margin-bottom: 25px; }
-.big-balance h2 { font-size: 36px; font-weight: 800; }
-.stats-row { display: flex; justify-content: space-between; background: rgba(0,0,0,0.3); border-radius: 12px; padding: 15px; margin-bottom: 20px; }
-.stat-box { display: flex; flex-direction: column; gap: 5px; }
-.stat-box span { font-size: 9px; color: #5a6673; }
-.stat-box b { font-size: 14px; text-shadow: 0 0 5px rgba(0, 168, 255, 0.5); }
-.wallet-actions { display: flex; gap: 10px; justify-content: center; }
-.withdraw-btn { background: transparent; color: #00a8ff; padding: 10px 20px; border-radius: 12px; font-weight: bold; cursor: pointer; flex: 1; }
-.connect-wrap { flex: 1; }
+/* Инфо */
+.info-container { padding: 20px; border-radius: 20px; text-align: center; }
+.info-banner { width: 100%; border-radius: 15px; margin-bottom: 20px; border: 1px solid #00d2ff; }
+.social-links { display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px; }
+.s-link { text-decoration: none; color: #fff; background: rgba(255,255,255,0.05); padding: 12px; border-radius: 12px; font-size: 14px; text-align: left; transition: 0.2s; }
+.s-link i { color: #00d2ff; margin-right: 10px; }
+.s-link:active { background: rgba(0,210,255,0.2); }
 
-/* Профиль */
-.profile-card { background: rgba(11, 16, 30, 0.8); border-radius: 20px; padding: 20px; display: flex; align-items: center; gap: 15px; margin-bottom: 20px; }
-.profile-avatar { width: 60px; height: 60px; border-radius: 50%; border: 2px solid #00a8ff; }
-.history-section { background: rgba(11, 16, 30, 0.8); border-radius: 20px; padding: 20px; }
-.history-item { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid rgba(0, 168, 255, 0.1); font-size: 14px; }
-.history-item:last-child { border-bottom: none; }
-.hi-left { display: flex; align-items: center; gap: 10px; }
-.hi-right.win { color: #00ff66; text-shadow: 0 0 5px rgba(0, 255, 102, 0.5); font-weight: bold; }
-.hi-right.lose { color: #ff4b2b; }
+/* Промо */
+.promo-section { display: flex; flex-direction: column; gap: 10px; }
+#promo-input { background: #000; border-radius: 10px; padding: 12px; color: #fff; text-align: center; outline: none; }
+.promo-btn { padding: 12px; border-radius: 10px; background: #00d2ff; color: #000; font-weight: bold; border: none; }
 
-/* Нижняя навигация */
-.bottom-nav { position: fixed; bottom: 0; left: 0; right: 0; height: 70px; background: rgba(6, 9, 19, 0.95); backdrop-filter: blur(10px); display: flex; justify-content: space-around; align-items: center; border-top: 1px solid rgba(0, 168, 255, 0.2); padding-bottom: 15px; }
-.nav-item { background: none; border: none; color: #5a6673; display: flex; flex-direction: column; align-items: center; gap: 5px; font-size: 10px; font-weight: 600; cursor: pointer; transition: 0.3s; width: 60px; }
-.nav-item i { font-size: 20px; }
-.nav-item.active { color: #00a8ff; text-shadow: 0 0 10px #00a8ff; }
+/* Нав */
+.bottom-nav { position: fixed; bottom: 0; width: 100%; height: 65px; background: rgba(4,6,11,0.95); display: flex; border-top: 1px solid rgba(0,210,255,0.2); backdrop-filter: blur(10px); }
+.nav-item { flex: 1; border: none; background: none; color: #555; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; transition: 0.3s; }
+.nav-item i { font-size: 18px; }
+.nav-item span { font-size: 10px; font-weight: bold; }
+.nav-item.active { color: #00d2ff; text-shadow: 0 0 10px #00d2ff; }
+
+/* Модалка */
+.modal { position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 1000; display: flex; align-items: center; justify-content: center; }
+.hidden { display: none !important; }
+.modal-content { padding: 30px; border-radius: 20px; text-align: center; }
+.modal-content input { margin: 15px 0; padding: 10px; width: 100%; border-radius: 8px; }
