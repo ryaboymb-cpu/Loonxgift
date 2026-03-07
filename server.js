@@ -14,47 +14,40 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// ПОДКЛЮЧЕНИЕ К MONGODB (Твой URI из Render .env)
 mongoose.connect(process.env.MONGO_URI || 'mongodb://localhost:27017/loonx')
     .then(() => console.log('✅ MongoDB Connected'))
     .catch(err => console.error('❌ DB Error:', err));
 
-// Схема пользователя (С ОБНОВЛЕННЫМ БАЛАНСОМ 50 ДЕМО)
 const User = mongoose.model('User', new mongoose.Schema({
     userId: String,
     realBalance: { type: Number, default: 0 },
-    demoBalance: { type: Number, default: 50 }, // Поставил 50
+    demoBalance: { type: Number, default: 50 },
     wins: { type: Number, default: 0 },
     losses: { type: Number, default: 0 },
     games: { type: Number, default: 0 },
-    wallet: { type: String, default: null, sparse: true } // Убрали unique
+    wallet: { type: String, default: null, sparse: true }
 }));
 
-const Promo = mongoose.model('Promo', new mongoose.Schema({
-    code: String, amount: Number, activations: Number, usedBy: [String]
+// Новая схема для выплат
+const Withdrawal = mongoose.model('Withdrawal', new mongoose.Schema({
+    userId: String,
+    wallet: String,
+    amount: Number,
+    status: { type: String, default: 'pending' }, // pending, approved, rejected
+    date: { type: Date, default: Date.now }
 }));
 
-// ТВОЙ КОШЕЛЕК ИЗ RENDER .ENV
-const PROJECT_WALLET = process.env.PROJECT_WALLET;
-
-// --- CRASH ENGINE (Мультиплеер) ---
+// --- CRASH ENGINE ---
 let crashState = { status: 'betting', multiplier: 1.00, timer: 10 };
-let currentBets = []; 
-
 function runCrash() {
     crashState = { status: 'betting', multiplier: 1.00, timer: 10 };
-    currentBets = [];
     io.emit('crash_state', crashState);
     let timerId = setInterval(() => {
         crashState.timer--;
         io.emit('crash_timer', crashState.timer);
-        if (crashState.timer <= 0) {
-            clearInterval(timerId);
-            startFlight();
-        }
+        if (crashState.timer <= 0) { clearInterval(timerId); startFlight(); }
     }, 1000);
 }
-
 function startFlight() {
     crashState.status = 'flying';
     io.emit('crash_state', crashState);
@@ -78,7 +71,6 @@ runCrash();
 app.post('/api/init', async (req, res) => {
     try {
         let u = await User.findOne({ userId: req.body.userId });
-        // Если юзер новый, создаем с 50 Демо
         if (!u) { u = new User({ userId: req.body.userId, demoBalance: 50 }); await u.save(); }
         res.json(u);
     } catch (e) { res.status(500).json({ error: e.message }); }
@@ -89,40 +81,44 @@ app.post('/api/balance/update', async (req, res) => {
     const user = await User.findOne({ userId });
     if (mode === 'real') user.realBalance += amount;
     else user.demoBalance += amount;
-    
     user.games++;
     if (isWin) user.wins++;
     if (isLose) user.losses++;
-    
     await user.save();
     res.json({ real: user.realBalance, demo: user.demoBalance });
 });
 
-app.post('/api/promo/use', async (req, res) => {
-    const { userId, code } = req.body;
-    const p = await Promo.findOne({ code });
-    if (p && p.activations > 0 && !p.usedBy.includes(userId)) {
-        p.activations--; p.usedBy.push(userId); await p.save();
-        const u = await User.findOne({ userId }); u.realBalance += p.amount; await u.save();
-        return res.json({ success: true, amount: p.amount });
+// Запрос на выплату
+app.post('/api/withdraw', async (req, res) => {
+    const { userId, amount, wallet } = req.body;
+    const user = await User.findOne({ userId });
+    if (user.realBalance >= amount && amount >= 1) {
+        user.realBalance -= amount;
+        await user.save();
+        await new Withdrawal({ userId, amount, wallet }).save();
+        res.json({ success: true, balance: user.realBalance });
+    } else {
+        res.json({ success: false, error: 'Недостаточно средств или сумма меньше 1 TON' });
     }
-    res.json({ success: false });
 });
 
-app.post('/api/admin/promo', async (req, res) => {
-    await new Promo(req.body).save(); res.json({ ok: true });
+// Админка: получить все выплаты
+app.get('/api/admin/withdrawals', async (req, res) => {
+    const w = await Withdrawal.find({ status: 'pending' });
+    res.json(w);
 });
 
-// МАНИФЕСТ ДЛЯ TON CONNECT
+// АВТО-МАНИФЕСТ TON (Берет твой текущий домен)
 app.get('/tonconnect-manifest.json', (req, res) => {
+    const host = req.get('host');
+    const protocol = req.protocol;
     res.json({
-        "url": "https://loonxgift.render.com", // Сюда подставь свой домен Render
+        "url": `${protocol}://${host}`,
         "name": "Loonx Gifts",
-        "iconUrl": "https://loonxgift.render.com/img/2657-Photoroom.png" // Ссылка на ракету для кошелька
+        "iconUrl": `${protocol}://${host}/img/2657-Photoroom.png`
     });
 });
 
-// --- SOCKETS ---
 io.on('connection', (socket) => {
     io.emit('online', io.engine.clientsCount);
     socket.emit('crash_state', crashState);
