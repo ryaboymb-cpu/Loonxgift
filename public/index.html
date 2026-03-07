@@ -10,134 +10,105 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body>
-    <div class="stars-bg"></div>
-    <div class="stars-bg stars-bg2"></div>
-    <div class="stars-bg stars-bg3"></div>
+    <div class="stars-container">
+        <div class="star"></div><div class="star"></div><div class="star"></div><div class="star"></div><div class="star"></div>
+    </div>
 
     <div id="splash-screen">
         <div class="loader-content">
-            <img src="img/2657-Photoroom.png" alt="Loonx" class="pulse-logo neon-glow">
+            <img src="img/2657-Photoroom.png" class="pulse-logo neon-glow-blue">
             <div class="progress-bar"><div class="progress-fill"></div></div>
             <p class="neon-text-blue">LOONX LOADING...</p>
         </div>
     </div>
 
     <header class="header">
-        <div class="logo-area">
-            <img src="img/2657-Photoroom.png" alt="Logo" class="main-logo neon-glow">
+        <div class="logo-area" onclick="app.adminClick()">
+            <img src="img/2657-Photoroom.png" class="main-logo neon-glow-blue">
             <div class="app-title">
                 <h1 class="neon-text-blue">Loonx Gifts</h1>
-                <span>CASINO GAMES</span>
+                <span id="mode-label">DEMO MODE</span>
             </div>
         </div>
-        <div class="balance-area">
-            <div class="balance-badge neon-box">
-                <span id="header-balance">0.00</span>
-                <img src="img/free-icon-currency-15208522.png" style="width:16px; margin-left:5px;">
+        <div class="balance-container">
+            <div class="balance-switch neon-box" onclick="app.toggleBalance()">
+                <div id="balance-value">50.00</div>
+                <img src="img/free-icon-currency-15208522.png" width="14">
+                <div id="balance-type" class="type-demo">DEMO</div>
             </div>
-            <button class="add-btn neon-box" onclick="app.switchTab('wallet')">+</button>
         </div>
     </header>
 
     <main id="main-content">
         <section id="tab-games" class="tab-page active">
-            <h2 class="page-title neon-text-blue">Игры <br><span>Выбери игру и начни выигрывать TON</span></h2>
-            
-            <div class="games-list">
-                <div class="game-card neon-box" onclick="alert('Бро, бэкенд Crash в разработке!')">
+            <h2 class="page-title neon-text-blue">Игры <br><span>Выигрывай TON прямо сейчас</span></h2>
+            <div class="games-grid">
+                <div class="game-card neon-box" onclick="alert('Crash в разработке')">
                     <img src="img/2768-Photoroom.png" class="game-img">
-                    <div class="game-info">
-                        <h3>Ракета <span class="tag hot">HOT</span></h3>
-                        <p>Успей забрать до краша!</p>
-                        <span class="online-count"><span class="dot blue"></span> 124 онлайн</span>
-                    </div>
-                    <i class="fa-solid fa-chevron-right arrow"></i>
+                    <div class="gi"><h3>Crash</h3><p>Множитель до небес</p></div>
                 </div>
-
-                <div class="game-card neon-box" onclick="alert('Бро, бэкенд Mines в разработке!')">
+                <div class="game-card neon-box" onclick="alert('Mines в разработке')">
                     <img src="img/round-black-bomb-realistic-style.png" class="game-img">
-                    <div class="game-info">
-                        <h3>Мины <span class="tag new">NEW</span></h3>
-                        <p>Обходи бомбы и лутай TON!</p>
-                        <span class="online-count"><span class="dot blue"></span> 89 онлайн</span>
-                    </div>
-                    <i class="fa-solid fa-chevron-right arrow"></i>
+                    <div class="gi"><h3>Mines</h3><p>Найди сокровища</p></div>
                 </div>
-
-                <div class="game-card locked" onclick="alert('Рулетка откроется в следующем обновлении!')">
+                <div class="game-card locked">
                     <img src="img/red-3d-question-mark-transpare.png" class="game-img">
-                    <div class="game-info">
-                        <h3>Рулетка <span class="tag dev">СКОРО</span></h3>
-                        <p>В разработке...</p>
-                    </div>
-                    <i class="fa-solid fa-lock arrow" style="color:#5a6673"></i>
+                    <div class="gi"><h3>Roulette</h3><p>Скоро открытие</p></div>
                 </div>
             </div>
         </section>
 
         <section id="tab-wallet" class="tab-page">
-            <h2 class="page-title neon-text-blue">Кошелёк <br><span>Управляй своим балансом</span></h2>
-            
+            <h2 class="page-title neon-text-blue">Кошелек</h2>
             <div class="wallet-card neon-box">
-                <p class="subtitle">ДОСТУПНЫЙ БАЛАНС</p>
-                <div class="big-balance">
-                    <img src="img/free-icon-currency-15208522.png" style="width:30px;">
-                    <h2 class="neon-text-blue">0.0000 <span>TON</span></h2>
-                </div>
-                
-                <div class="stats-row">
-                    <div class="stat-box"><span>ДЕПОЗИТЫ</span><b style="color:#00a8ff">0.00</b></div>
-                    <div class="stat-box"><span>ВЫИГРАНО</span><b style="color:#00a8ff">0.00</b></div>
-                    <div class="stat-box"><span>ПРОФИТ</span><b style="color:#00a8ff">+0.00</b></div>
-                </div>
+                <p>ВАШ БАЛАНС (REAL)</p>
+                <h2 id="real-bal-display">0.0000 TON</h2>
+                <div id="ton-connect-btn"></div>
+                <button class="withdraw-btn neon-box" onclick="alert('Вывод от 5 TON')">ВЫВОД СРЕДСТВ</button>
+            </div>
+        </section>
 
-                <div class="wallet-actions">
-                    <div id="ton-connect-btn" class="connect-wrap"></div>
-                    <button class="withdraw-btn neon-box" onclick="alert('Вывод средств скоро будет доступен!')">ВЫВОД</button>
+        <section id="tab-info" class="tab-page">
+            <h2 class="page-title neon-text-blue">Инфо и Промо</h2>
+            <div class="info-container neon-box">
+                <img src="img/2665.jpg" class="info-banner" onerror="this.src='img/2657-Photoroom.png'">
+                <div class="social-links">
+                    <a href="https://t.me/Loonxnews" target="_blank" class="s-link"><i class="fa-brands fa-telegram"></i> Channel and promo</a>
+                    <a href="https://t.me/LoonxGift_Support" target="_blank" class="s-link"><i class="fa-solid fa-headset"></i> Support</a>
+                    <a href="https://t.me/MsgP2P" target="_blank" class="s-link"><i class="fa-solid fa-bug"></i> Bugs</a>
+                </div>
+                <div class="promo-section">
+                    <input type="text" id="promo-input" placeholder="Введите промокод..." class="neon-box">
+                    <button onclick="app.activatePromo()" class="promo-btn neon-box">АКТИВИРОВАТЬ</button>
                 </div>
             </div>
         </section>
 
         <section id="tab-profile" class="tab-page">
-            <div class="profile-card neon-box">
-                <img id="user-avatar" src="img/2657-Photoroom.png" class="profile-avatar neon-glow">
-                <div class="profile-info">
-                    <h3 id="user-name" class="neon-text-blue">Игрок</h3>
-                    <p id="user-id">ID: Загрузка...</p>
-                </div>
-            </div>
-
-            <div class="history-section neon-box">
-                <h3 class="neon-text-blue" style="margin-bottom: 15px; font-size: 16px;">Последние игры</h3>
-                <div class="history-item">
-                    <div class="hi-left"><img src="img/2768-Photoroom.png" width="20"> <span>Ракета</span></div>
-                    <div class="hi-right win">+2.50 TON</div>
-                </div>
-                <div class="history-item">
-                    <div class="hi-left"><img src="img/round-black-bomb-realistic-style.png" width="20"> <span>Мины</span></div>
-                    <div class="hi-right lose">-1.00 TON</div>
-                </div>
-                <div class="history-item">
-                    <div class="hi-left"><img src="img/2768-Photoroom.png" width="20"> <span>Ракета</span></div>
-                    <div class="hi-right lose">-0.50 TON</div>
+            <div class="profile-header neon-box">
+                <img id="user-avatar" src="img/2657-Photoroom.png">
+                <div class="p-text">
+                    <h3 id="user-name" class="neon-text-blue">Player</h3>
+                    <p id="user-id">ID: 000000</p>
                 </div>
             </div>
         </section>
     </main>
 
+    <div id="admin-panel" class="modal hidden">
+        <div class="modal-content neon-box">
+            <h3>ADMIN PANEL</h3>
+            <input type="text" id="new-promo" placeholder="Новый промокод">
+            <button onclick="app.addPromo()">ДОБАВИТЬ</button>
+            <button onclick="app.closeAdmin()" class="close-btn">ЗАКРЫТЬ</button>
+        </div>
+    </div>
+
     <nav class="bottom-nav">
-        <button class="nav-item active" onclick="app.switchTab('games', this)">
-            <i class="fa-solid fa-gamepad"></i>
-            <span>Игры</span>
-        </button>
-        <button class="nav-item" onclick="app.switchTab('wallet', this)">
-            <i class="fa-solid fa-wallet"></i>
-            <span>Кошелёк</span>
-        </button>
-        <button class="nav-item" onclick="app.switchTab('profile', this)">
-            <i class="fa-solid fa-user"></i>
-            <span>Профиль</span>
-        </button>
+        <button class="nav-item active" onclick="app.switchTab('games', this)"><i class="fa-solid fa-gamepad"></i><span>Игры</span></button>
+        <button class="nav-item" onclick="app.switchTab('wallet', this)"><i class="fa-solid fa-wallet"></i><span>Кошелек</span></button>
+        <button class="nav-item" onclick="app.switchTab('info', this)"><i class="fa-solid fa-gift"></i><span>Инфо</span></button>
+        <button class="nav-item" onclick="app.switchTab('profile', this)"><i class="fa-solid fa-user"></i><span>Профиль</span></button>
     </nav>
 
     <script src="script.js"></script>
