@@ -14,10 +14,12 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
+// Подключение к БД
 mongoose.connect(process.env.MONGO_URI || 'mongodb://localhost:27017/loonx')
     .then(() => console.log('✅ MongoDB Connected'))
     .catch(err => console.error('❌ DB Error:', err));
 
+// Схемы
 const User = mongoose.model('User', new mongoose.Schema({
     userId: String,
     realBalance: { type: Number, default: 0 },
@@ -28,13 +30,14 @@ const User = mongoose.model('User', new mongoose.Schema({
     wallet: { type: String, default: null, sparse: true }
 }));
 
-// Новая схема для выплат
 const Withdrawal = mongoose.model('Withdrawal', new mongoose.Schema({
-    userId: String,
-    wallet: String,
-    amount: Number,
-    status: { type: String, default: 'pending' }, // pending, approved, rejected
+    userId: String, wallet: String, amount: Number,
+    status: { type: String, default: 'pending' },
     date: { type: Date, default: Date.now }
+}));
+
+const Promo = mongoose.model('Promo', new mongoose.Schema({
+    code: String, amount: Number, activations: Number, usedBy: [String]
 }));
 
 // --- CRASH ENGINE ---
@@ -68,62 +71,4 @@ function startFlight() {
 runCrash();
 
 // --- API ROUTES ---
-app.post('/api/init', async (req, res) => {
-    try {
-        let u = await User.findOne({ userId: req.body.userId });
-        if (!u) { u = new User({ userId: req.body.userId, demoBalance: 50 }); await u.save(); }
-        res.json(u);
-    } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-app.post('/api/balance/update', async (req, res) => {
-    const { userId, mode, amount, isWin, isLose } = req.body;
-    const user = await User.findOne({ userId });
-    if (mode === 'real') user.realBalance += amount;
-    else user.demoBalance += amount;
-    user.games++;
-    if (isWin) user.wins++;
-    if (isLose) user.losses++;
-    await user.save();
-    res.json({ real: user.realBalance, demo: user.demoBalance });
-});
-
-// Запрос на выплату
-app.post('/api/withdraw', async (req, res) => {
-    const { userId, amount, wallet } = req.body;
-    const user = await User.findOne({ userId });
-    if (user.realBalance >= amount && amount >= 1) {
-        user.realBalance -= amount;
-        await user.save();
-        await new Withdrawal({ userId, amount, wallet }).save();
-        res.json({ success: true, balance: user.realBalance });
-    } else {
-        res.json({ success: false, error: 'Недостаточно средств или сумма меньше 1 TON' });
-    }
-});
-
-// Админка: получить все выплаты
-app.get('/api/admin/withdrawals', async (req, res) => {
-    const w = await Withdrawal.find({ status: 'pending' });
-    res.json(w);
-});
-
-// АВТО-МАНИФЕСТ TON (Берет твой текущий домен)
-app.get('/tonconnect-manifest.json', (req, res) => {
-    const host = req.get('host');
-    const protocol = req.protocol;
-    res.json({
-        "url": `${protocol}://${host}`,
-        "name": "Loonx Gifts",
-        "iconUrl": `${protocol}://${host}/img/2657-Photoroom.png`
-    });
-});
-
-io.on('connection', (socket) => {
-    io.emit('online', io.engine.clientsCount);
-    socket.emit('crash_state', crashState);
-    socket.on('disconnect', () => io.emit('online', io.engine.clientsCount));
-});
-
-const PORT = process.env.PORT || 10000;
-server.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
+app.post('/api/
