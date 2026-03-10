@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>LoonxGift</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
+    <script src="/socket.io/socket.io.js"></script>
+</head>
+<body>
+    <div id="loading-screen">
+        <div class="loader-spinner"></div>
+        <h2 class="glow" style="margin-top:20px; color:var(--blue)">LoonxGift</h2>
+    </div>
+
+    <div id="stars-container"></div>
+
+    <header class="header">
+        <div class="user-info" id="admin-trigger">
+            <img src="../assets/images/duck_logo.png" class="avatar-mini" id="tg-avatar" alt="Avatar">
+            <div style="display:flex; flex-direction:column;">
+                <span class="username glow">LoonxGift</span>
+                <span style="font-size:10px; color:#aaa;">Онлайн: <b id="online-count">1</b></span>
+            </div>
+        </div>
+        <div class="balance-toggle" onclick="toggleMode()">
+            <span id="header-bal">0.00</span> <span id="header-mode" style="color:var(--blue)">DEMO</span>
+        </div>
+    </header>
+
+    <div id="content">
+        <main id="tab-home" class="tab active">
+            <div class="game-stripe" onclick="openGame('crash')" style="background-image: url('../assets/images/crash_bg.png');">
+                <div class="stripe-overlay"><h3>CRASH 🚀</h3><span>LIVE MULTIPLAYER</span></div>
+            </div>
+            <div class="game-stripe" onclick="openGame('mines')" style="background-image: url('../assets/images/mines_bg.png');">
+                <div class="stripe-overlay"><h3>MINES 💣</h3><span>FIND DIAMONDS</span></div>
+            </div>
+            <div class="game-stripe" onclick="showRoulette()" style="background: linear-gradient(45deg, #111, #333);">
+                <div class="stripe-overlay"><h3>ROULETTE 🎡</h3><span style="color:var(--red)">IN DEV</span></div>
+            </div>
+        </main>
+
+        <main id="tab-wallet" class="tab">
+            <div class="section-title">Кошелек</div>
+            <div class="glass-panel text-center">
+                <div id="ton-connect-btn-container" style="display:flex; justify-content:center; margin-bottom:15px;"></div>
+                <div class="wallet-balance"><span id="wallet-bal">0.00</span> <small id="wallet-cur">TON</small></div>
+                
+                <input type="text" id="withdraw-wallet" placeholder="Ваш TON кошелек для вывода" class="neon-input" style="margin-bottom:10px; font-size:12px;">
+                <input type="number" id="withdraw-amount" placeholder="Сумма (Мин. 5 TON)" class="neon-input" style="margin-bottom:10px;">
+                
+                <button class="btn-primary" onclick="requestWithdraw()">ВЫВЕСТИ (РЕАЛ)</button>
+                <button class="btn-secondary" style="margin-top:10px;" onclick="socket.emit('claim_demo')">🎁 ОБНОВИТЬ DEMO (Раз в 24ч)</button>
+            </div>
+        </main>
+
+        <main id="tab-promo" class="tab">
+            <div class="section-title">Промокод</div>
+            <div class="glass-panel">
+                <input type="text" id="promo-input" placeholder="ПРОМОКОД НА REAL TON" class="neon-input">
+                <button class="btn-primary" style="margin-top:15px" onclick="sendPromo()">АКТИВИРОВАТЬ</button>
+            </div>
+            <div class="glass-panel text-center" style="margin-top: 15px;">
+                <p style="font-size: 14px; margin-bottom: 10px;">Следи за нами и получай промики!</p>
+                <button class="btn-primary" style="background: var(--purple);" onclick="tg.openTelegramLink('https://t.me/Loonxnews')">Перейти в @Loonxnews</button>
+            </div>
+        </main>
+
+        <main id="tab-profile" class="tab">
+            <div class="section-title">Профиль</div>
+            <div class="glass-panel text-center">
+                <img src="../assets/images/duck_logo.png" class="profile-avatar" id="prof-avatar">
+                <h2 id="prof-user">Player</h2>
+                <div class="stats-grid">
+                    <div class="stat-item"><span>Игр</span><b id="stat-games">0</b></div>
+                    <div class="stat-item"><span>Побед</span><b id="stat-wins">0</b></div>
+                </div>
+            </div>
+            <div class="glass-panel" style="margin-top:15px; display:flex; flex-direction:column; gap:10px;">
+                <button class="link-btn" onclick="tg.openTelegramLink('https://t.me/Loonxnews')">📢 Новости & Промо (@Loonxnews)</button>
+                <button class="link-btn" onclick="tg.openTelegramLink('https://t.me/LoonxGift_Support')">💬 Поддержка (@LoonxGift_Support)</button>
+                <button class="link-btn" onclick="tg.openTelegramLink('https://t.me/MsgP2P')">🐛 Баги (@MsgP2P)</button>
+            </div>
+        </main>
+
+        <div id="screen-crash" class="game-fullscreen">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                <div class="balance-toggle" onclick="toggleMode()"><span class="in-game-bal">0.00</span> <span class="in-game-mode" style="color:var(--blue)">DEMO</span></div>
+                <button class="close-game" onclick="closeGame()">✕</button>
+            </div>
+            <div class="history-bar" id="crash-history"></div>
+            <div class="crash-arena glass">
+                <div id="crash-timer" style="position:absolute; top:10px; font-weight:bold; color:var(--red);"></div>
+                <div id="crash-mult">1.00x</div>
+                <div id="rocket">🚀</div>
+            </div>
+            <div class="controls glass" style="flex-direction: column; gap: 5px;">
+                <div style="display: flex; gap: 10px; width: 100%;">
+                    <div style="width:50%">
+                        <label style="font-size:10px; color:#aaa;">Ставка (0.5 - 20)</label>
+                        <input type="number" id="crash-bet" value="1.0" class="neon-input" style="padding:10px;">
+                    </div>
+                    <div style="width:50%">
+                        <label style="font-size:10px; color:#aaa;">Автостоп (кэф)</label>
+                        <input type="number" id="crash-auto" value="2.0" class="neon-input" style="padding:10px;">
+                    </div>
+                </div>
+                <button id="crash-btn" class="btn-primary" onclick="crashAction()">СТАВКА</button>
+            </div>
+            <div class="live-bets glass" id="live-bets">
+                <div style="text-align:center; font-size:12px; color:var(--blue); margin-bottom:10px; font-weight:bold;">🔥 ЛАЙВ СТАВКИ</div>
+                <div id="bets-list"></div>
+            </div>
+        </div>
+
+        <div id="screen-mines" class="game-fullscreen">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                <div class="balance-toggle" onclick="toggleMode()"><span class="in-game-bal">0.00</span> <span class="in-game-mode" style="color:var(--blue)">DEMO</span></div>
+                <button class="close-game" onclick="closeGame()">✕</button>
+            </div>
+            <div class="mines-arena glass">
+                <div id="mines-status" class="glow" style="font-size:24px; margin-bottom:10px;">ОЖИДАНИЕ</div>
+                <div id="mines-grid"></div>
+            </div>
+            <div class="controls glass" style="flex-direction: column;">
+                <label style="font-size:10px; color:#aaa;">Ставка (0.5 - 20)</label>
+                <input type="number" id="mines-bet" value="1.0" class="neon-input" style="padding:10px; margin-bottom: 10px;">
+                <button id="mines-btn" class="btn-primary" style="background:var(--purple)" onclick="minesAction()">ИГРАТЬ</button>
+            </div>
+        </div>
+    </div>
+
+    <nav class="hot-bar">
+        <div class="nav-item active" onclick="switchTab('home', this)"><span>🎮</span><b>Игры</b></div>
+        <div class="nav-item" onclick="switchTab('wallet', this)"><span>💼</span><b>Кошелек</b></div>
+        <div class="nav-item" onclick="switchTab('promo', this)"><span>🎁</span><b>Промо</b></div>
+        <div class="nav-item" onclick="switchTab('profile', this)"><span>👤</span><b>Профиль</b></div>
+    </nav>
+
+    <div id="admin-modal" class="modal">
+        <div class="modal-content glass-panel" style="max-height: 85vh; overflow-y: auto; position:relative;">
+            <button class="close-game" style="top:5px; right:5px; color:var(--red);" onclick="closeAdmin()">✕</button>
+            <h2 style="color:var(--red); text-align:center; margin-bottom: 15px; margin-top:10px;">ADMIN PANEL</h2>
+            
+            <h4 style="color:var(--blue)">Создать Промо (Real TON)</h4>
+            <div style="display:flex; gap:5px; margin-bottom:15px;">
+                <input type="text" id="admin-promo-code" placeholder="Код" class="neon-input" style="padding:5px; font-size:12px;">
+                <input type="number" id="admin-promo-sum" placeholder="Сумма" class="neon-input" style="padding:5px; font-size:12px; width:80px;">
+                <button class="btn-primary" style="padding:5px;" onclick="createPromo()">OK</button>
+            </div>
+
+            <h4 style="color:var(--blue); border-bottom:1px solid #333; padding-bottom:5px;">Заявки на Вывод:</h4>
+            <div id="admin-withdraws" style="margin-bottom:15px;"></div>
+
+            <h4 style="color:var(--blue); border-bottom:1px solid #333; padding-bottom:5px;">База Игроков:</h4>
+            <div id="admin-users" style="font-size:11px;"></div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
