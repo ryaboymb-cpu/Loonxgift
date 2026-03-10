@@ -10,168 +10,76 @@
     <script src="/socket.io/socket.io.js"></script>
 </head>
 <body>
-    <div id="loading-screen">
-        <div class="loader-spinner"></div>
-        <h2 class="glow" style="margin-top:20px; color:var(--blue)">LoonxGift</h2>
-    </div>
-
     <div id="stars-container"></div>
-
     <header class="header">
-        <div class="user-info" id="admin-trigger">
-            <img src="../assets/images/duck_logo.png" class="avatar-mini" id="tg-avatar" alt="Avatar">
-            <div style="display:flex; flex-direction:column;">
-                <span class="username glow">LoonxGift</span>
-            </div>
+        <div class="user-info" onclick="adminAccess()">
+            <img src="../assets/images/duck_logo.png" class="avatar-mini" id="tg-avatar">
+            <span class="username glow">LoonxGift</span>
         </div>
         <div class="balance-toggle" onclick="toggleMode()">
-            <span id="header-bal">0.00</span> <span id="header-mode" style="color:var(--blue)">DEMO</span>
+            <span id="h-bal">0.00</span> <small id="h-mode">DEMO</small>
         </div>
     </header>
 
-    <div id="content">
-        <main id="tab-home" class="tab active">
-            <div class="game-stripe" onclick="openGame('crash')" style="background-image: url('../assets/images/crash_bg.png');">
-                <div class="stripe-overlay"><h3>CRASH 🚀</h3><span>LIVE MULTIPLAYER</span></div>
-            </div>
-            <div class="game-stripe" onclick="openGame('mines')" style="background-image: url('../assets/images/mines_bg.png');">
-                <div class="stripe-overlay"><h3>MINES 💣</h3><span>FIND DIAMONDS</span></div>
-            </div>
-            <div class="game-stripe" onclick="tg.showAlert('Монетка в разработке 🪙\nСкоро добавим!')" style="background: linear-gradient(45deg, #090a0f, #1a1c29); border-color: var(--blue);">
-                <div class="stripe-overlay"><h3>COINFLIP 🪙</h3><span style="color:var(--blue)">В РАЗРАБОТКЕ</span></div>
-            </div>
-        </main>
+    <main id="tab-home" class="tab active">
+        <div class="game-stripe" onclick="openGame('crash')"><h3>CRASH 🚀</h3></div>
+        <div class="game-stripe" onclick="openGame('mines')"><h3>MINES 💣</h3></div>
+        <div class="game-stripe dev"><h3>ROULETTE 🎡</h3><span>В РАЗРАБОТКЕ</span></div>
+        <div class="game-stripe dev"><h3>COINFLIP 🪙</h3><span>В РАЗРАБОТКЕ</span></div>
+    </main>
 
-        <main id="tab-wallet" class="tab">
-            <div class="section-title">Кошелек</div>
-            <div class="glass-panel text-center">
-                <div id="ton-connect-btn-container" style="display:flex; justify-content:center; margin-bottom:15px;"></div>
-                <div class="wallet-balance"><span id="wallet-bal">0.00</span> <small id="wallet-cur">TON</small></div>
-                
-                <h4 style="color:var(--blue); margin-bottom: 10px; margin-top:20px;">Пополнить REAL TON</h4>
-                <input type="number" id="deposit-amount" placeholder="Сумма депозита" class="neon-input" style="margin-bottom:10px;">
-                <button class="btn-primary" style="background: var(--green);" onclick="makeDeposit()">📥 ДЕПОЗИТ (TON CONNECT)</button>
-                <p style="font-size: 10px; margin-top: 5px; color: #888; margin-bottom: 20px;">Средства зачислятся после подтверждения.</p>
-
-                <h4 style="color:var(--blue); margin-bottom: 10px; padding-top:15px; border-top: 1px solid rgba(0,229,255,0.2);">Вывод средств</h4>
-                <input type="text" id="withdraw-wallet" placeholder="Ваш TON кошелек" class="neon-input" style="margin-bottom:10px; font-size:12px;">
-                <input type="number" id="withdraw-amount" placeholder="Сумма (Мин. 5 TON)" class="neon-input" style="margin-bottom:10px;">
-                
-                <button class="btn-primary" onclick="requestWithdraw()">ВЫВЕСТИ</button>
-                <button class="btn-secondary" style="margin-top:10px;" onclick="socket.emit('claim_demo')">🎁 ОБНОВИТЬ DEMO (Раз в 24ч)</button>
-            </div>
-        </main>
-
-        <main id="tab-promo" class="tab">
-            <div class="section-title">Промокод</div>
-            <div class="glass-panel">
-                <input type="text" id="promo-input" placeholder="ПРОМОКОД НА REAL TON" class="neon-input">
-                <button class="btn-primary" style="margin-top:15px" onclick="sendPromo()">АКТИВИРОВАТЬ</button>
-            </div>
-        </main>
-
-        <main id="tab-profile" class="tab">
-            <div class="section-title">Профиль</div>
-            <div class="glass-panel text-center">
-                <img src="../assets/images/duck_logo.png" class="profile-avatar" id="prof-avatar">
-                <h2 id="prof-user">Player</h2>
-                <div class="stats-grid">
-                    <div class="stat-item"><span>Игр</span><b id="stat-games">0</b></div>
-                    <div class="stat-item"><span>Побед</span><b id="stat-wins">0</b></div>
-                </div>
-            </div>
-            <div class="glass-panel" style="margin-top:15px; display:flex; flex-direction:column; gap:10px;">
-                <button class="link-btn" onclick="tg.openTelegramLink('https://t.me/Loonxnews')">📢 Новости & Промо (@Loonxnews)</button>
-                <button class="link-btn" onclick="tg.openTelegramLink('https://t.me/LoonxGift_Support')">💬 Поддержка (@LoonxGift_Support)</button>
-            </div>
-        </main>
-
-        <div id="screen-crash" class="game-fullscreen">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-                <div class="balance-toggle" onclick="toggleMode()"><span class="in-game-bal">0.00</span> <span class="in-game-mode" style="color:var(--blue)">DEMO</span></div>
-                <button class="close-game" onclick="closeGame()">✕</button>
-            </div>
-            <div class="history-bar" id="crash-history"></div>
-            <div class="crash-arena glass">
-                <div id="crash-timer" style="position:absolute; top:10px; font-weight:bold; color:var(--red);"></div>
-                <div id="crash-mult">1.00x</div>
-                <div id="rocket">🚀</div>
-            </div>
-            <div class="controls glass" style="flex-direction: column; gap: 5px;">
-                <div style="display: flex; gap: 10px; width: 100%;">
-                    <div style="width:50%">
-                        <label style="font-size:10px; color:#aaa;">Ставка (0.5 - 20)</label>
-                        <input type="number" id="crash-bet" value="1.0" class="neon-input" style="padding:10px;">
-                    </div>
-                    <div style="width:50%">
-                        <label style="font-size:10px; color:#aaa;">Автостоп (кэф)</label>
-                        <input type="number" id="crash-auto" value="2.0" class="neon-input" style="padding:10px;">
-                    </div>
-                </div>
-                <button id="crash-btn" class="btn-primary" onclick="crashAction()">СТАВКА</button>
-            </div>
-            <div class="live-bets glass" id="live-bets">
-                <div style="text-align:center; font-size:12px; color:var(--blue); margin-bottom:10px; font-weight:bold;">🔥 ЛАЙВ СТАВКИ</div>
-                <div id="bets-list"></div>
-            </div>
+    <main id="tab-wallet" class="tab">
+        <div class="glass-panel text-center">
+            <div id="ton-connect-btn" style="display:flex; justify-content:center; margin-bottom:15px;"></div>
+            <div class="wallet-balance"><span id="w-bal">0.00</span> <small>TON</small></div>
+            <input type="number" id="dep-amt" placeholder="Сумма пополнения" class="neon-input">
+            <button class="btn-primary" onclick="makeDeposit()" style="background:var(--green); margin-top:10px;">ДЕПОЗИТ</button>
         </div>
+    </main>
 
-        <div id="screen-mines" class="game-fullscreen">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-                <div class="balance-toggle" onclick="toggleMode()"><span class="in-game-bal">0.00</span> <span class="in-game-mode" style="color:var(--blue)">DEMO</span></div>
-                <button class="close-game" onclick="closeGame()">✕</button>
+    <main id="tab-profile" class="tab">
+        <div class="glass-panel text-center">
+            <h2 id="p-name">Player</h2>
+            <div class="stats-grid">
+                <div class="stat-item">Игр: <b id="s-games">0</b></div>
+                <div class="stat-item">Побед: <b id="s-wins">0</b></div>
             </div>
-            <div class="mines-arena glass">
-                <div id="mines-status" class="glow" style="font-size:24px; margin-bottom:10px;">ОЖИДАНИЕ</div>
-                <div id="mines-grid"></div>
-            </div>
-            <div class="controls glass" style="flex-direction: column;">
-                <label style="font-size:10px; color:#aaa;">Ставка (0.5 - 20)</label>
-                <input type="number" id="mines-bet" value="1.0" class="neon-input" style="padding:10px; margin-bottom: 10px;">
-                <button id="mines-btn" class="btn-primary" style="background:var(--purple)" onclick="minesAction()">ИГРАТЬ</button>
-            </div>
+            <button class="link-btn" style="margin-top:15px;" onclick="tg.openTelegramLink('https://t.me/msgp2p')">🎒 Bags (@msgp2p)</button>
         </div>
+    </main>
+
+    <main id="tab-promo" class="tab">
+        <div class="glass-panel">
+            <input type="text" id="promo-in" placeholder="ПРОМОКОД" class="neon-input">
+            <button class="btn-primary" onclick="socket.emit('activate_promo', document.getElementById('promo-in').value)" style="margin-top:10px;">ОК</button>
+        </div>
+    </main>
+
+    <div id="screen-crash" class="game-fullscreen">
+        <button class="close-game" onclick="closeGame()">✕</button>
+        <div id="crash-history" class="history-bar"></div>
+        <div class="crash-arena">
+            <div id="c-mult">1.00x</div>
+            <div id="rocket">🚀</div>
+        </div>
+        <input type="number" id="c-bet" value="1.0" class="neon-input">
+        <button id="c-btn" class="btn-primary" onclick="crashAction()">СТАВКА</button>
+    </div>
+
+    <div id="screen-mines" class="game-fullscreen">
+        <button class="close-game" onclick="closeGame()">✕</button>
+        <div id="m-status">ОЖИДАНИЕ</div>
+        <div id="m-grid" class="mines-grid"></div>
+        <input type="number" id="m-bet" value="1.0" class="neon-input">
+        <button id="m-btn" class="btn-primary" onclick="minesAction()">ИГРАТЬ</button>
     </div>
 
     <nav class="hot-bar">
-        <div class="nav-item active" onclick="switchTab('home', this)">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="6" width="20" height="12" rx="2"></rect><path d="M12 12h.01M17 12h.01M7 12h.01"></path></svg>
-            <b>Игры</b>
-        </div>
-        <div class="nav-item" onclick="switchTab('wallet', this)">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"></path><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"></path><path d="M18 12a2 2 0 0 0 0 4h4v-4Z"></path></svg>
-            <b>Кошелек</b>
-        </div>
-        <div class="nav-item" onclick="switchTab('promo', this)">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 12v8H4v-8"></path><path d="M12 2v20"></path><path d="M4 6v6h16V6"></path></svg>
-            <b>Промо</b>
-        </div>
-        <div class="nav-item" onclick="switchTab('profile', this)">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
-            <b>Профиль</b>
-        </div>
+        <div class="nav-item active" onclick="switchTab('home', this)">Игры</div>
+        <div class="nav-item" onclick="switchTab('wallet', this)">Кошелек</div>
+        <div class="nav-item" onclick="switchTab('promo', this)">Промо</div>
+        <div class="nav-item" onclick="switchTab('profile', this)">Профиль</div>
     </nav>
-
-    <div id="admin-modal" class="modal">
-        <div class="modal-content glass-panel" style="max-height: 85vh; overflow-y: auto; position:relative;">
-            <button class="close-game" style="top:5px; right:5px; color:var(--red);" onclick="closeAdmin()">✕</button>
-            <h2 style="color:var(--red); text-align:center; margin-bottom: 15px; margin-top:10px;">ADMIN PANEL</h2>
-            
-            <h4 style="color:var(--blue)">Создать Промо</h4>
-            <div style="display:flex; gap:5px; margin-bottom:15px; flex-wrap: wrap;">
-                <input type="text" id="admin-promo-code" placeholder="Код" class="neon-input" style="padding:5px; font-size:12px; width:45%;">
-                <input type="number" id="admin-promo-sum" placeholder="Сумма" class="neon-input" style="padding:5px; font-size:12px; width:25%;">
-                <input type="number" id="admin-promo-uses" placeholder="Лимит чел." class="neon-input" style="padding:5px; font-size:12px; width:25%;">
-                <button class="btn-primary" style="padding:8px; width: 100%; margin-top: 5px;" onclick="createPromo()">СОЗДАТЬ ПРОМО</button>
-            </div>
-
-            <h4 style="color:var(--blue); border-bottom:1px solid rgba(0,229,255,0.2); padding-bottom:5px;">Заявки на Вывод:</h4>
-            <div id="admin-withdraws" style="margin-bottom:15px;"></div>
-
-            <h4 style="color:var(--blue); border-bottom:1px solid rgba(0,229,255,0.2); padding-bottom:5px;">База Игроков:</h4>
-            <div id="admin-users" style="font-size:11px;"></div>
-        </div>
-    </div>
 
     <script src="script.js"></script>
 </body>
