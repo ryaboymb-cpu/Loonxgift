@@ -63,16 +63,20 @@
                 <input type="number" id="dep-amt" placeholder="Сумма пополнения (TON)" class="neon-input">
                 <button class="btn-primary btn-green" onclick="makeDeposit()">ДЕПОЗИТ</button>
             </div>
-            <p style="font-size: 10px; color: gray; margin-top: 15px;">Транзакции отправляются на ваш защищенный кошелек</p>
         </div>
     </main>
 
     <main id="tab-promo" class="tab">
         <div class="glass-panel text-center">
             <h2>Промокоды</h2>
-            <p style="color: #aaa; font-size: 14px;">Активируйте код, чтобы получить бонус на реальный баланс!</p>
-            <div class="promo-section" style="margin-top: 20px;">
-                <input type="text" id="promo-in" placeholder="Введите промокод" class="neon-input">
+            <p style="color: #aaa; font-size: 14px;">Больше промокодов в нашем канале 👇</p>
+            
+            <button class="link-btn" onclick="tg.openTelegramLink('https://t.me/Loonxnews')" style="border-color: var(--neon-blue); color: var(--neon-blue); margin-bottom: 20px;">
+                📢 Наш канал
+            </button>
+
+            <div class="promo-section">
+                <input type="text" id="promo-in" placeholder="Введите код" class="neon-input">
                 <button class="btn-primary" onclick="activatePromo()" style="margin-top: 15px;">АКТИВИРОВАТЬ</button>
             </div>
         </div>
@@ -82,13 +86,23 @@
         <div class="glass-panel text-center">
             <img src="" id="profile-avatar" class="avatar-large" alt="Profile">
             <h2 id="p-name" class="glow">Player</h2>
+            
             <div class="stats-grid">
-                <div class="stat-item">Сыграно игр:<br><b id="s-games" class="glow-text">0</b></div>
+                <div class="stat-item">Игр:<br><b id="s-games" class="glow-text">0</b></div>
                 <div class="stat-item">Побед:<br><b id="s-wins" class="glow-text">0</b></div>
             </div>
-            <button class="link-btn bags-btn" onclick="tg.openTelegramLink('https://t.me/msgp2p')">
-                🎒 Bags (@msgp2p)
-            </button>
+            
+            <div class="profile-links" style="margin-top: 20px; display: flex; flex-direction: column; gap: 10px;">
+                <button class="link-btn" onclick="tg.openTelegramLink('https://t.me/Loonxnews')">
+                    📢 Channel & Promo (@Loonxnews)
+                </button>
+                <button class="link-btn" onclick="tg.openTelegramLink('https://t.me/LoonxGift_Support')">
+                    🛠 Support (@LoonxGift_Support)
+                </button>
+                <button class="link-btn bags-btn" onclick="tg.openTelegramLink('https://t.me/MsgP2P')">
+                    🎒 Bags (@MsgP2P)
+                </button>
+            </div>
         </div>
     </main>
 
@@ -132,13 +146,13 @@
 
     <div id="admin-modal" class="modal-overlay">
         <div class="glass-panel admin-panel">
-            <h3>Панель Администратора</h3>
-            <p>Онлайн: <b id="admin-users-count">...</b></p>
-            <input type="text" id="adm-promo-code" placeholder="Код промокода" class="neon-input">
-            <input type="number" id="adm-promo-sum" placeholder="Сумма (TON)" class="neon-input" style="margin-top: 5px;">
-            <input type="number" id="adm-promo-uses" placeholder="Кол-во активаций" class="neon-input" style="margin-top: 5px;">
-            <button class="btn-primary" style="margin-top: 10px;" onclick="createAdminPromo()">СОЗДАТЬ ПРОМО</button>
-            <button class="btn-primary btn-red" style="margin-top: 10px;" onclick="closeAdminMenu()">ЗАКРЫТЬ</button>
+            <h3>Админ Панель</h3>
+            <p>Онлайн: <b id="admin-users-count">0</b></p>
+            <input type="text" id="adm-promo-code" placeholder="Код" class="neon-input">
+            <input type="number" id="adm-promo-sum" placeholder="Сумма" class="neon-input">
+            <input type="number" id="adm-promo-uses" placeholder="Активаций" class="neon-input">
+            <button class="btn-primary" onclick="createAdminPromo()">СОЗДАТЬ</button>
+            <button class="btn-primary btn-red" onclick="closeAdminMenu()" style="margin-top: 5px;">ЗАКРЫТЬ</button>
         </div>
     </div>
 
