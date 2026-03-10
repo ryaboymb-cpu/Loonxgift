@@ -22,7 +22,6 @@
             <img src="../assets/images/duck_logo.png" class="avatar-mini" id="tg-avatar" alt="Avatar">
             <div style="display:flex; flex-direction:column;">
                 <span class="username glow">LoonxGift</span>
-                <span style="font-size:10px; color:#aaa;">Онлайн: <b id="online-count">1</b></span>
             </div>
         </div>
         <div class="balance-toggle" onclick="toggleMode()">
@@ -38,8 +37,8 @@
             <div class="game-stripe" onclick="openGame('mines')" style="background-image: url('../assets/images/mines_bg.png');">
                 <div class="stripe-overlay"><h3>MINES 💣</h3><span>FIND DIAMONDS</span></div>
             </div>
-            <div class="game-stripe" onclick="showRoulette()" style="background: linear-gradient(45deg, #111, #333);">
-                <div class="stripe-overlay"><h3>ROULETTE 🎡</h3><span style="color:var(--red)">IN DEV</span></div>
+            <div class="game-stripe" onclick="tg.showAlert('Монетка в разработке 🪙\nСкоро добавим!')" style="background: linear-gradient(45deg, #090a0f, #1a1c29); border-color: var(--blue);">
+                <div class="stripe-overlay"><h3>COINFLIP 🪙</h3><span style="color:var(--blue)">В РАЗРАБОТКЕ</span></div>
             </div>
         </main>
 
@@ -49,10 +48,16 @@
                 <div id="ton-connect-btn-container" style="display:flex; justify-content:center; margin-bottom:15px;"></div>
                 <div class="wallet-balance"><span id="wallet-bal">0.00</span> <small id="wallet-cur">TON</small></div>
                 
-                <input type="text" id="withdraw-wallet" placeholder="Ваш TON кошелек для вывода" class="neon-input" style="margin-bottom:10px; font-size:12px;">
+                <h4 style="color:var(--blue); margin-bottom: 10px; margin-top:20px;">Пополнить REAL TON</h4>
+                <input type="number" id="deposit-amount" placeholder="Сумма депозита" class="neon-input" style="margin-bottom:10px;">
+                <button class="btn-primary" style="background: var(--green);" onclick="makeDeposit()">📥 ДЕПОЗИТ (TON CONNECT)</button>
+                <p style="font-size: 10px; margin-top: 5px; color: #888; margin-bottom: 20px;">Средства зачислятся после подтверждения.</p>
+
+                <h4 style="color:var(--blue); margin-bottom: 10px; padding-top:15px; border-top: 1px solid rgba(0,229,255,0.2);">Вывод средств</h4>
+                <input type="text" id="withdraw-wallet" placeholder="Ваш TON кошелек" class="neon-input" style="margin-bottom:10px; font-size:12px;">
                 <input type="number" id="withdraw-amount" placeholder="Сумма (Мин. 5 TON)" class="neon-input" style="margin-bottom:10px;">
                 
-                <button class="btn-primary" onclick="requestWithdraw()">ВЫВЕСТИ (РЕАЛ)</button>
+                <button class="btn-primary" onclick="requestWithdraw()">ВЫВЕСТИ</button>
                 <button class="btn-secondary" style="margin-top:10px;" onclick="socket.emit('claim_demo')">🎁 ОБНОВИТЬ DEMO (Раз в 24ч)</button>
             </div>
         </main>
@@ -62,10 +67,6 @@
             <div class="glass-panel">
                 <input type="text" id="promo-input" placeholder="ПРОМОКОД НА REAL TON" class="neon-input">
                 <button class="btn-primary" style="margin-top:15px" onclick="sendPromo()">АКТИВИРОВАТЬ</button>
-            </div>
-            <div class="glass-panel text-center" style="margin-top: 15px;">
-                <p style="font-size: 14px; margin-bottom: 10px;">Следи за нами и получай промики!</p>
-                <button class="btn-primary" style="background: var(--purple);" onclick="tg.openTelegramLink('https://t.me/Loonxnews')">Перейти в @Loonxnews</button>
             </div>
         </main>
 
@@ -82,7 +83,6 @@
             <div class="glass-panel" style="margin-top:15px; display:flex; flex-direction:column; gap:10px;">
                 <button class="link-btn" onclick="tg.openTelegramLink('https://t.me/Loonxnews')">📢 Новости & Промо (@Loonxnews)</button>
                 <button class="link-btn" onclick="tg.openTelegramLink('https://t.me/LoonxGift_Support')">💬 Поддержка (@LoonxGift_Support)</button>
-                <button class="link-btn" onclick="tg.openTelegramLink('https://t.me/MsgP2P')">🐛 Баги (@MsgP2P)</button>
             </div>
         </main>
 
@@ -134,10 +134,22 @@
     </div>
 
     <nav class="hot-bar">
-        <div class="nav-item active" onclick="switchTab('home', this)"><span>🎮</span><b>Игры</b></div>
-        <div class="nav-item" onclick="switchTab('wallet', this)"><span>💼</span><b>Кошелек</b></div>
-        <div class="nav-item" onclick="switchTab('promo', this)"><span>🎁</span><b>Промо</b></div>
-        <div class="nav-item" onclick="switchTab('profile', this)"><span>👤</span><b>Профиль</b></div>
+        <div class="nav-item active" onclick="switchTab('home', this)">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="6" width="20" height="12" rx="2"></rect><path d="M12 12h.01M17 12h.01M7 12h.01"></path></svg>
+            <b>Игры</b>
+        </div>
+        <div class="nav-item" onclick="switchTab('wallet', this)">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"></path><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"></path><path d="M18 12a2 2 0 0 0 0 4h4v-4Z"></path></svg>
+            <b>Кошелек</b>
+        </div>
+        <div class="nav-item" onclick="switchTab('promo', this)">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 12v8H4v-8"></path><path d="M12 2v20"></path><path d="M4 6v6h16V6"></path></svg>
+            <b>Промо</b>
+        </div>
+        <div class="nav-item" onclick="switchTab('profile', this)">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+            <b>Профиль</b>
+        </div>
     </nav>
 
     <div id="admin-modal" class="modal">
@@ -145,17 +157,18 @@
             <button class="close-game" style="top:5px; right:5px; color:var(--red);" onclick="closeAdmin()">✕</button>
             <h2 style="color:var(--red); text-align:center; margin-bottom: 15px; margin-top:10px;">ADMIN PANEL</h2>
             
-            <h4 style="color:var(--blue)">Создать Промо (Real TON)</h4>
-            <div style="display:flex; gap:5px; margin-bottom:15px;">
-                <input type="text" id="admin-promo-code" placeholder="Код" class="neon-input" style="padding:5px; font-size:12px;">
-                <input type="number" id="admin-promo-sum" placeholder="Сумма" class="neon-input" style="padding:5px; font-size:12px; width:80px;">
-                <button class="btn-primary" style="padding:5px;" onclick="createPromo()">OK</button>
+            <h4 style="color:var(--blue)">Создать Промо</h4>
+            <div style="display:flex; gap:5px; margin-bottom:15px; flex-wrap: wrap;">
+                <input type="text" id="admin-promo-code" placeholder="Код" class="neon-input" style="padding:5px; font-size:12px; width:45%;">
+                <input type="number" id="admin-promo-sum" placeholder="Сумма" class="neon-input" style="padding:5px; font-size:12px; width:25%;">
+                <input type="number" id="admin-promo-uses" placeholder="Лимит чел." class="neon-input" style="padding:5px; font-size:12px; width:25%;">
+                <button class="btn-primary" style="padding:8px; width: 100%; margin-top: 5px;" onclick="createPromo()">СОЗДАТЬ ПРОМО</button>
             </div>
 
-            <h4 style="color:var(--blue); border-bottom:1px solid #333; padding-bottom:5px;">Заявки на Вывод:</h4>
+            <h4 style="color:var(--blue); border-bottom:1px solid rgba(0,229,255,0.2); padding-bottom:5px;">Заявки на Вывод:</h4>
             <div id="admin-withdraws" style="margin-bottom:15px;"></div>
 
-            <h4 style="color:var(--blue); border-bottom:1px solid #333; padding-bottom:5px;">База Игроков:</h4>
+            <h4 style="color:var(--blue); border-bottom:1px solid rgba(0,229,255,0.2); padding-bottom:5px;">База Игроков:</h4>
             <div id="admin-users" style="font-size:11px;"></div>
         </div>
     </div>
