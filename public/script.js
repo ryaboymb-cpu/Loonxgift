@@ -1,4 +1,4 @@
-// УБИРАЕМ ЭКРАН ЗАГРУЗКИ
+// ЗАГРУЗКА
 window.onload = () => {
     setTimeout(() => {
         document.getElementById('loading-screen').style.opacity = '0';
@@ -6,7 +6,7 @@ window.onload = () => {
     }, 1000);
 };
 
-// ЗВУКИ (Синтезатор, mp3 не нужны!)
+// ЗВУКИ (Web Audio API)
 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 function playSound(type) {
     if(audioCtx.state === 'suspended') audioCtx.resume();
@@ -14,25 +14,23 @@ function playSound(type) {
     osc.connect(gain); gain.connect(audioCtx.destination);
     if(type === 'click') {
         osc.type = 'sine'; osc.frequency.setValueAtTime(600, audioCtx.currentTime);
-        gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
+        gain.gain.setValueAtTime(0.1, audioCtx.currentTime); gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
         osc.start(); osc.stop(audioCtx.currentTime + 0.1);
     } else if(type === 'boom') {
         osc.type = 'square'; osc.frequency.setValueAtTime(150, audioCtx.currentTime);
         osc.frequency.exponentialRampToValueAtTime(10, audioCtx.currentTime + 0.5);
-        gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.5);
+        gain.gain.setValueAtTime(0.2, audioCtx.currentTime); gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.5);
         osc.start(); osc.stop(audioCtx.currentTime + 0.5);
     } else if(type === 'win') {
         osc.type = 'triangle'; osc.frequency.setValueAtTime(400, audioCtx.currentTime);
         osc.frequency.linearRampToValueAtTime(800, audioCtx.currentTime + 0.3);
-        gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
-        gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.3);
+        gain.gain.setValueAtTime(0.1, audioCtx.currentTime); gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.3);
         osc.start(); osc.stop(audioCtx.currentTime + 0.3);
     }
 }
 document.body.addEventListener('click', () => { if(audioCtx.state === 'suspended') audioCtx.resume(); });
 
+// ИНИЦИАЛИЗАЦИЯ TG И TON
 const tg = window.Telegram.WebApp;
 const socket = io();
 tg.expand();
@@ -74,7 +72,6 @@ function switchTab(id, el) {
 
 function openGame(id) { playSound('click'); document.getElementById('screen-' + id).style.display = 'block'; if(id === 'mines') drawMines(false); }
 function closeGame() { playSound('click'); document.querySelectorAll('.game-fullscreen').forEach(el => el.style.display = 'none'); }
-function showRoulette() { playSound('click'); tg.showAlert('Рулетка в разработке 🎡\nСледи за обновлениями в @Loonxnews!'); }
 
 function toggleMode() {
     playSound('click');
@@ -91,7 +88,6 @@ function toggleMode() {
 
 let localUser = { realBal: 0, demoBal: 0, games: 0, wins: 0 };
 socket.on('user_data', (data) => { localUser = data; updateBalanceUI(); });
-socket.on('online_count', (c) => document.getElementById('online-count').innerText = c);
 socket.on('alert', (msg) => { tg.showAlert(msg); });
 
 function updateBalanceUI() {
@@ -113,11 +109,10 @@ function requestWithdraw() {
     if(amount && !isNaN(amount)) socket.emit('request_withdraw', { amount: amount, wallet: wallet });
 }
 
-// ОШИБКА СТАВКИ (Разблокировка кнопок)
 socket.on('bet_error', (msg) => { tg.showAlert(msg); tg.HapticFeedback.notificationOccurred('error'); inCrash = false; inMines = false; playSound('boom'); });
 socket.on('bet_success', () => { playSound('click'); });
 
-// КРАШ
+// CRASH
 socket.on('crash_update', (d) => {
     let btn = document.getElementById('crash-btn');
     document.getElementById('crash-mult').innerText = d.mult.toFixed(2) + 'x';
@@ -137,16 +132,16 @@ socket.on('crash_update', (d) => {
     if (d.status === 'waiting') {
         document.getElementById('rocket').style.bottom = '10px';
         document.getElementById('crash-timer').innerText = `Запуск через ${d.timer}...`;
-        if(!inCrash) { btn.innerText = "СТАВКА"; btn.style.background = "var(--blue)"; }
+        if(!inCrash) { btn.innerText = "СТАВКА"; btn.style.background = "linear-gradient(90deg, #00d2ff 0%, #3a7bd5 100%)"; }
     } else if (d.status === 'flying') {
         document.getElementById('crash-timer').innerText = '';
         document.getElementById('rocket').style.bottom = (10 + d.mult*3) + 'px';
         if(inCrash) { btn.innerText = "ЗАБРАТЬ"; btn.style.background = "var(--green)"; }
     } else {
         document.getElementById('crash-mult').style.color = "var(--red)";
-        if(d.mult === d.history[0]) playSound('boom'); // Звук краша
+        if(d.mult === d.history[0]) playSound('boom');
         setTimeout(() => document.getElementById('crash-mult').style.color = "white", 2000);
-        inCrash = false; btn.innerText = "СТАВКА"; btn.style.background = "var(--blue)";
+        inCrash = false; btn.innerText = "СТАВКА"; btn.style.background = "linear-gradient(90deg, #00d2ff 0%, #3a7bd5 100%)";
     }
 });
 
@@ -160,7 +155,7 @@ function crashAction() {
 }
 socket.on('crash_win', (d) => { inCrash = false; playSound('win'); tg.HapticFeedback.notificationOccurred('success'); });
 
-// МИНЫ
+// MINES
 function drawMines(active) {
     let grid = document.getElementById('mines-grid');
     grid.innerHTML = ''; grid.className = active ? 'active' : '';
@@ -181,12 +176,12 @@ function minesAction() {
 socket.on('mines_ready', () => { drawMines(true); document.getElementById('mines-status').innerText = "ИЩИ АЛМАЗЫ"; document.getElementById('mines-btn').innerText = "ЗАБРАТЬ"; document.getElementById('mines-status').style.color = "var(--blue)"; });
 socket.on('mines_safe', (d) => {
     playSound('click'); let cell = document.getElementById('mines-grid').children[d.idx];
-    cell.innerHTML = "💎"; cell.style.background = "rgba(46,160,67,0.4)"; cell.style.border = "1px solid var(--green)"; cell.style.boxShadow = "0 0 15px var(--green)"; cell.onclick = null;
+    cell.innerHTML = "💎"; cell.style.background = "rgba(0,255,136,0.2)"; cell.style.border = "1px solid var(--green)"; cell.style.boxShadow = "0 0 15px var(--green)"; cell.onclick = null;
     document.getElementById('mines-status').innerText = `X: ${d.mult}`; tg.HapticFeedback.impactOccurred('light');
 });
 socket.on('mines_boom', (f) => {
     playSound('boom'); inMines = false; let grid = document.getElementById('mines-grid'); grid.className = '';
-    f.forEach((v, i) => { grid.children[i].innerHTML = v === 'mine' ? "💣" : "💎"; if(v==='mine') { grid.children[i].style.background = "rgba(248,81,73,0.5)"; grid.children[i].style.boxShadow = "0 0 15px var(--red)"; } });
+    f.forEach((v, i) => { grid.children[i].innerHTML = v === 'mine' ? "💣" : "💎"; if(v==='mine') { grid.children[i].style.background = "rgba(255,51,102,0.3)"; grid.children[i].style.boxShadow = "0 0 15px var(--red)"; } });
     document.getElementById('mines-status').innerText = "ПОДРЫВ!"; document.getElementById('mines-status').style.color = "var(--red)"; document.getElementById('mines-btn').innerText = "СТАВКА"; tg.HapticFeedback.notificationOccurred('error');
 });
 socket.on('mines_win', (d) => {
@@ -194,7 +189,7 @@ socket.on('mines_win', (d) => {
     document.getElementById('mines-btn').innerText = "СТАВКА"; drawMines(false); tg.HapticFeedback.notificationOccurred('success');
 });
 
-// АДМИНКА
+// ADMIN
 let tapCount = 0; let tapTimer = null;
 document.getElementById('admin-trigger').addEventListener('click', () => {
     tapCount++; clearTimeout(tapTimer); tapTimer = setTimeout(() => tapCount = 0, 2000);
@@ -217,7 +212,7 @@ socket.on('admin_data', (d) => {
 
     let wHtml = d.withdraws.map(w => 
         `<div class="admin-card">
-            <b>Заявка от:</b> ${w.name} (ID: ${w.id}) <br>
+            <b>От:</b> ${w.name} (ID: ${w.id}) <br>
             <b>Сумма:</b> ${w.amount} TON <br>
             <b>Кош:</b> <input type="text" value="${w.wallet}" readonly style="width:100%; font-size:9px; background:#000; color:var(--blue); border:none; padding:5px; margin-top:5px;">
             <div style="display:flex; gap:5px; margin-top:5px;">
@@ -235,7 +230,35 @@ window.showAdminUser = function(id) {
 };
 
 window.createPromo = function() {
-    let code = document.getElementById('admin-promo-code').value; let sum = document.getElementById('admin-promo-sum').value;
-    if(code && sum) socket.emit('admin_create_promo', { pw: '7788', code: code, amount: sum });
+    let code = document.getElementById('admin-promo-code').value; 
+    let sum = document.getElementById('admin-promo-sum').value;
+    let uses = document.getElementById('admin-promo-uses').value;
+    if(code && sum && uses) socket.emit('admin_create_promo', { pw: '7788', code: code, amount: sum, uses: uses });
 };
 window.adminActionWithdraw = function(reqId, action) { socket.emit('admin_action_withdraw', { pw: '7788', reqId: reqId, action: action }); };
+
+// ДЕПОЗИТ (TON CONNECT)
+window.makeDeposit = async function() {
+    playSound('click');
+    let amount = document.getElementById('deposit-amount').value;
+    if (!amount || amount < 0.5) return tg.showAlert("Минимальный депозит 0.5 TON");
+    
+    if (!tonConnectUI.connected) return tg.showAlert("Сначала подключите кошелек!");
+
+    const transaction = {
+        validUntil: Math.floor(Date.now() / 1000) + 300, 
+        messages: [
+            {
+                address: "UQCTqV9scQaZR0DHzOnMrOCCY7z3MIT0QfoNrtUDZiXHY1-K", // <--- БРО, ВСТАВЬ СЮДА СВОЙ TON КОШЕЛЕК!!!
+                amount: (amount * 1000000000).toString(), 
+            }
+        ]
+    };
+
+    try {
+        await tonConnectUI.sendTransaction(transaction);
+        tg.showAlert("✅ Транзакция отправлена! Ждем подтверждения сети.");
+    } catch (e) {
+        tg.showAlert("❌ Оплата отменена или произошла ошибка.");
+    }
+           }
