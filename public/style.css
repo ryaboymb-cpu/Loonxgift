@@ -67,6 +67,8 @@ body { background: var(--bg); overflow: hidden; height: 100vh; }
 .mines-arena { height: 320px; display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; margin-bottom: 15px; border-radius: 15px; border: 1px solid rgba(157,80,187,0.4); background: rgba(0,0,0,0.5); box-shadow: inset 0 0 30px rgba(157,80,187,0.2); }
 #crash-mult { font-size: 60px; font-weight: 900; z-index: 2; text-shadow: 0 0 20px currentColor; }
 #rocket { font-size: 40px; position: absolute; bottom: 10px; transition: 0.1s; z-index: 1; filter: drop-shadow(0 10px 10px rgba(0,0,0,0.5)); }
+.game-stripe.dev { opacity: 0.6; border-style: dashed; pointer-events: none; }
+.game-stripe.dev span { font-size: 10px; color: var(--blue); }
 .controls { display: flex; padding: 15px; border-radius: 15px; background: rgba(0,0,0,0.6); border: 1px solid rgba(0,229,255,0.15); }
 .live-bets { margin-top: 15px; padding: 15px; border-radius: 15px; min-height: 100px; background: rgba(0,0,0,0.6); border: 1px solid rgba(0,229,255,0.15); }
 .bet-row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.05); font-size: 12px; align-items: center; }
