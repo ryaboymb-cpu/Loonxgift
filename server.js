@@ -1,306 +1,366 @@
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
-const path = require('path');
 const mongoose = require('mongoose');
-const TelegramBot = require('node-telegram-bot-api');
 
-// Настройки окружения
-const BOT_TOKEN = process.env.BOT_TOKEN;
+const app = express();
+const server = http.createServer(app);
+const io = new Server(server);
+
+// --- ПОДКЛЮЧЕНИЕ К БАЗЕ ДАННЫХ ---
 const MONGO_URI = process.env.MONGO_URI;
 
-// Инициализация Telegram Бота
-if (BOT_TOKEN) {
-    const bot = new TelegramBot(BOT_TOKEN, { polling: true });
-    bot.onText(/\/start/, (msg) => {
-        const chatId = msg.chat.id;
-        bot.sendMessage(chatId, 'Добро пожаловать в Loonx Gift🍀\nИспытай свою удачу здесь👇', {
-            reply_markup: {
-                inline_keyboard: [[{ text: '🫧 Играть 🫧', web_app: { url: 'https://loonxgift.onrender.com' } }]]
-            }
-        });
-    });
-}
+mongoose.connect(MONGO_URI)
+    .then(() => console.log('✅ База данных LoonxGift подключена'))
+    .catch(err => console.error('❌ Ошибка подключения к MongoDB:', err));
 
-// Подключение к MongoDB
-mongoose.connect(MONGO_URI || 'mongodb://localhost/loonx', {
-    useNewUrlParser: true,
-    useUnifiedTopology: true
-}).then(() => {
-    console.log('✅ MongoDB успешно подключена');
-}).catch(err => {
-    console.error('❌ Ошибка подключения к MongoDB:', err);
-});
+// --- СХЕМЫ ДАННЫХ (MODELS) ---
 
-// Схемы Базы Данных
+// Юзеры
 const UserSchema = new mongoose.Schema({
-    id: { type: String, required: true, unique: true },
-    tgName: { type: String, default: 'Player' },
-    photoUrl: { type: String, default: '' },
+    id: { type: String, unique: true },
+    tgName: String,
+    photoUrl: String,
     realBal: { type: Number, default: 0 },
-    demoBal: { type: Number, default: 100 },
-    lastDemoReplenish: { type: Number, default: 0 },
+    demoBal: { type: Number, default: 1000 },
     games: { type: Number, default: 0 },
-    wins: { type: Number, default: 0 },
-    usedPromos: { type: [String], default: [] }
+    wins: { type: Number, default: 0 }
 });
 const User = mongoose.model('User', UserSchema);
 
+// Промокоды
 const PromoSchema = new mongoose.Schema({
-    code: { type: String, required: true, unique: true },
-    reward: { type: Number, required: true },
-    maxUses: { type: Number, required: true },
-    currentUses: { type: Number, default: 0 }
+    code: { type: String, unique: true },
+    reward: Number,
+    uses: Number
 });
 const Promo = mongoose.model('Promo', PromoSchema);
 
-// Инициализация Express и Socket.IO
-const app = express();
-const server = http.createServer(app);
-const io = new Server(server, { cors: { origin: "*" } });
+// Заявки на вывод
+const WithdrawSchema = new mongoose.Schema({
+    userId: String,
+    tgName: String,
+    address: String,
+    amount: Number,
+    status: { type: String, default: 'pending' }, // pending, approve, reject
+    date: { type: Date, default: Date.now }
+});
+const Withdraw = mongoose.model('Withdraw', WithdrawSchema);
 
-app.use(express.static(path.join(__dirname, 'public')));
+// Активные сессии Минера (чтобы не абузили рестартами)
+const MinesSessionSchema = new mongoose.Schema({
+    userId: String,
+    bet: Number,
+    mode: String,
+    field: Array,
+    mult: { type: Number, default: 1.0 },
+    steps: { type: Number, default: 0 }
+});
+const MinesSession = mongoose.model('MinesSession', MinesSessionSchema);
 
-// Игровые переменные
-let crashHistory = [];
-let crash = { status: 'waiting', timer: 8, mult: 1.00, liveBets: [] };
-let nextRoundBets = [];
-let onlineUsers = new Set();
+app.use(express.static('public'));
 
-// Логика игры CRASH
+// === ГЛОБАЛЬНЫЕ ИГРОВЫЕ ПЕРЕМЕННЫЕ (RAM) ===
+let crashState = { status: 'waiting', mult: 1.0, timer: 5, history: [] };
+let crashBets = {}; // socketId: { userId, amount, mode, name }
+let onlineCount = 0;
+
+// === ЛОГИКА CRASH (Реалтайм цикл) ===
 function runCrash() {
-    crash = { status: 'waiting', timer: 8, mult: 1.00, liveBets: [...nextRoundBets] };
-    nextRoundBets = [];
-    io.emit('crash_update', { ...crash, history: crashHistory });
-    
-    let waitInterval = setInterval(() => {
-        crash.timer--;
-        io.emit('crash_update', { ...crash, history: crashHistory });
-        if (crash.timer <= 0) {
-            clearInterval(waitInterval);
+    crashState.status = 'waiting';
+    crashState.timer = 5;
+    crashState.mult = 1.0;
+    crashBets = {};
+    io.emit('crash_update', crashState);
+
+    let t = setInterval(() => {
+        crashState.timer--;
+        io.emit('crash_update', crashState);
+        if (crashState.timer <= 0) {
+            clearInterval(t);
             startCrashFlight();
         }
     }, 1000);
 }
 
 function startCrashFlight() {
-    crash.status = 'flying';
-    
-    // Заниженные шансы (хардкорный рандом)
-    let crashPoint;
-    const rand = Math.random();
-    if (rand < 0.30) { 
-        crashPoint = 1.00; // 30% шанс на моментальный взрыв
-    } else if (rand < 0.85) {
-        crashPoint = 1.00 + (Math.random() * 1.5); // 55% шанс на взрыв от 1.00 до 2.50
-    } else {
-        crashPoint = (100 / (Math.floor(Math.random() * 100) + 1)) + 0.5; // 15% шанс на более высокие иксы
-    }
+    crashState.status = 'flying';
+    // Алгоритм честного рандома
+    let target = 1.0;
+    let r = Math.random();
+    if (r < 0.03) target = 1.0; 
+    else if (r < 0.5) target = 1.1 + Math.random() * 0.9;
+    else if (r < 0.8) target = 2.0 + Math.random() * 3.0;
+    else target = 5.0 + Math.random() * 10.0;
 
-    let flightInterval = setInterval(async () => {
-        if (crash.mult >= crashPoint) {
-            clearInterval(flightInterval);
-            crash.status = 'crashed';
-            crashHistory.unshift(crash.mult.toFixed(2));
-            if (crashHistory.length > 10) crashHistory.pop();
+    let flyTime = setInterval(() => {
+        crashState.mult += 0.01 + (crashState.mult * 0.006);
+        
+        if (crashState.mult >= target) {
+            clearInterval(flyTime);
+            crashState.status = 'crashed';
+            crashState.history.unshift(crashState.mult.toFixed(2));
+            if(crashState.history.length > 8) crashState.history.pop();
             
-            // Завершаем несыгравшие ставки
-            for (let bet of crash.liveBets) {
-                if (!bet.cashed) {
-                    let u = await User.findOne({ id: bet.id });
-                    if(u) {
-                        u.games++;
-                        await u.save();
-                    }
-                }
-            }
-            
-            io.emit('crash_update', { ...crash, history: crashHistory });
-            setTimeout(runCrash, 4000);
+            // Рассылаем инфу о проигрыше тех, кто не забрал
+            Object.values(crashBets).forEach(bet => {
+                io.emit('live_bet', { game: '🚀 Crash', user: bet.name, amount: bet.amount, win: 0 });
+            });
+
+            io.emit('crash_update', crashState);
+            setTimeout(runCrash, 3000);
         } else {
-            crash.mult += 0.01 * Math.pow(crash.mult, 0.4);
-            io.emit('crash_update', { ...crash, history: crashHistory });
+            io.emit('crash_update', crashState);
         }
     }, 100);
 }
 runCrash();
 
-// Обработка Socket-соединений
-io.on('connection', (socket) => {
-    let currentUser = null;
-    onlineUsers.add(socket.id);
-    io.emit('online_update', onlineUsers.size);
+// === ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ===
+const mineMultipliers = [1.09, 1.25, 1.45, 1.68, 1.95, 2.25, 2.65, 3.10, 3.65, 4.30, 5.10];
+function generateMinesField() {
+    let field = Array(25).fill('safe');
+    let bombs = 0;
+    while(bombs < 3) {
+        let r = Math.floor(Math.random() * 25);
+        if(field[r] === 'safe') { field[r] = 'mine'; bombs++; }
+    }
+    return field;
+}
 
+// === SOCKET.IO ОБРАБОТКА ===
+io.on('connection', (socket) => {
+    onlineCount++;
+    io.emit('online_update', onlineCount);
+
+    // Вход / Регистрация
     socket.on('init_user', async (data) => {
-        if (!data || !data.id) return;
-        currentUser = data.id.toString();
         try {
-            let u = await User.findOne({ id: currentUser });
-            if (!u) {
-                u = await User.create({
-                    id: currentUser,
-                    tgName: data.username || 'Player',
-                    photoUrl: data.photo || ''
+            let user = await User.findOne({ id: data.id });
+            if (!user) {
+                user = new User({
+                    id: data.id,
+                    tgName: data.username,
+                    photoUrl: data.photo
                 });
-            } else {
-                if(data.photo) u.photoUrl = data.photo;
-                if(data.username) u.tgName = data.username;
-                await u.save();
+                await user.save();
             }
-            socket.emit('user_data', u);
-        } catch(e) { console.error("Init User Error:", e); }
+            socket.userId = data.id; // Привязываем ID к сокету
+            socket.emit('user_data', user);
+            socket.emit('crash_update', crashState);
+        } catch (e) { console.error(e); }
     });
 
-    // CRASH СОКЕТЫ
-    socket.on('crash_bet', async (data) => {
-        if (!currentUser) return;
+    // --- CRASH СТАВКА ---
+    socket.on('crash_bet', async (d) => {
+        if (crashState.status !== 'waiting') return;
         try {
-            let u = await User.findOne({ id: currentUser });
-            let betAmount = parseFloat(data.bet);
-            if (isNaN(betAmount) || betAmount < 0.5) return socket.emit('alert', 'Минимальная ставка 0.5');
-
-            let balanceField = data.mode === 'real' ? 'realBal' : 'demoBal';
-            if (u[balanceField] < betAmount) return socket.emit('alert', 'Недостаточно средств');
-
-            u[balanceField] -= betAmount;
-            await u.save();
-
-            let betData = { socketId: socket.id, id: currentUser, bet: betAmount, cashed: false, mode: data.mode };
+            let user = await User.findOne({ id: socket.userId });
+            let balKey = d.mode === 'real' ? 'realBal' : 'demoBal';
             
-            if (crash.status === 'waiting') {
-                crash.liveBets.push(betData);
-                socket.emit('alert', 'Ставка принята!');
-            } else {
-                nextRoundBets.push(betData);
-                socket.emit('alert', 'Ставка принята на следующий раунд!');
+            if (user && user[balKey] >= d.bet && d.bet >= 0.1) {
+                user[balKey] -= d.bet;
+                user.games++;
+                await user.save();
+                
+                crashBets[socket.id] = { 
+                    userId: user.id, 
+                    amount: d.bet, 
+                    mode: d.mode, 
+                    name: user.tgName 
+                };
+                
+                socket.emit('user_data', user);
             }
-            socket.emit('user_data', u);
-        } catch(e) { console.log(e); }
+        } catch (e) { console.error(e); }
     });
 
     socket.on('crash_cashout', async () => {
-        if (!currentUser || crash.status !== 'flying') return;
-        try {
-            let betIndex = crash.liveBets.findIndex(x => x.socketId === socket.id && !x.cashed);
-            if (betIndex !== -1) {
-                crash.liveBets[betIndex].cashed = true;
-                let winAmount = crash.liveBets[betIndex].bet * crash.mult;
-                let u = await User.findOne({ id: currentUser });
+        let bet = crashBets[socket.id];
+        if (bet && crashState.status === 'flying') {
+            try {
+                let user = await User.findOne({ id: bet.userId });
+                let win = bet.amount * crashState.mult;
+                let balKey = bet.mode === 'real' ? 'realBal' : 'demoBal';
                 
-                let balanceField = crash.liveBets[betIndex].mode === 'real' ? 'realBal' : 'demoBal';
-                u[balanceField] += winAmount;
-                u.games++;
-                u.wins++;
-                await u.save();
+                user[balKey] += win;
+                user.wins++;
+                await user.save();
                 
-                socket.emit('user_data', u);
-                socket.emit('crash_win', { win: winAmount.toFixed(2), mult: crash.mult.toFixed(2) });
-            }
-        } catch(e) { console.log(e); }
-    });
-
-    // MINES СОКЕТЫ
-    socket.on('mines_start', async (data) => {
-        if (!currentUser) return;
-        try {
-            let u = await User.findOne({ id: currentUser });
-            let betAmount = parseFloat(data.bet);
-            if (isNaN(betAmount) || betAmount < 0.5) return socket.emit('alert', 'Минимальная ставка 0.5');
-
-            let balanceField = data.mode === 'real' ? 'realBal' : 'demoBal';
-            if (u[balanceField] < betAmount) return socket.emit('alert', 'Недостаточно средств');
-
-            u[balanceField] -= betAmount;
-            u.games++;
-            await u.save();
-
-            let mineCount = data.mode === 'real' ? 5 : 3; // В реальном режиме больше мин
-            let field = Array(25).fill('safe');
-            let placed = 0;
-            while (placed < mineCount) {
-                let r = Math.floor(Math.random() * 25);
-                if (field[r] !== 'mine') {
-                    field[r] = 'mine';
-                    placed++;
-                }
-            }
-
-            socket.minesGame = { bet: betAmount, field: field, mult: 1.0, mode: data.mode, opened: 0 };
-            socket.emit('user_data', u);
-            socket.emit('mines_ready');
-        } catch(e) { console.log(e); }
-    });
-
-    socket.on('mines_open', (idx) => {
-        if (!socket.minesGame) return;
-        if (socket.minesGame.field[idx] === 'mine') {
-            socket.emit('mines_boom', socket.minesGame.field);
-            socket.minesGame = null;
-        } else {
-            socket.minesGame.opened++;
-            socket.minesGame.mult += 0.20; // Увеличение икса
-            socket.emit('mines_safe', { idx: idx, mult: socket.minesGame.mult.toFixed(2) });
+                delete crashBets[socket.id];
+                
+                socket.emit('user_data', user);
+                socket.emit('crash_win', { win: win.toFixed(2), mult: crashState.mult.toFixed(2) });
+                io.emit('live_bet', { game: '🚀 Crash', user: user.tgName, amount: bet.amount, win: win });
+            } catch (e) { console.error(e); }
         }
+    });
+
+    // --- MINES СТАВКА ---
+    socket.on('mines_start', async (d) => {
+        try {
+            let user = await User.findOne({ id: socket.userId });
+            let balKey = d.mode === 'real' ? 'realBal' : 'demoBal';
+            
+            if (user && user[balKey] >= d.bet && d.bet >= 0.1) {
+                // Проверяем, нет ли уже активной игры
+                await MinesSession.deleteOne({ userId: user.id });
+                
+                user[balKey] -= d.bet;
+                user.games++;
+                await user.save();
+                
+                const session = new MinesSession({
+                    userId: user.id,
+                    bet: d.bet,
+                    mode: d.mode,
+                    field: generateMinesField()
+                });
+                await session.save();
+                
+                socket.emit('user_data', user);
+                socket.emit('mines_ready');
+            }
+        } catch (e) { console.error(e); }
+    });
+
+    socket.on('mines_open', async (idx) => {
+        try {
+            let session = await MinesSession.findOne({ userId: socket.userId });
+            if (!session) return;
+
+            if (session.field[idx] === 'mine') {
+                // Взрыв
+                socket.emit('mines_boom', session.field);
+                io.emit('live_bet', { game: '💣 Mines', user: (await User.findOne({id: socket.userId})).tgName, amount: session.bet, win: 0 });
+                await MinesSession.deleteOne({ userId: socket.userId });
+            } else {
+                // Безопасно
+                session.steps++;
+                session.mult = mineMultipliers[session.steps - 1];
+                await session.save();
+                socket.emit('mines_safe', { idx: idx, mult: session.mult });
+            }
+        } catch (e) { console.error(e); }
     });
 
     socket.on('mines_cashout', async () => {
-        if (!socket.minesGame || !currentUser) return;
-        if (socket.minesGame.opened === 0) return socket.emit('alert', 'Откройте хотя бы одну ячейку!');
         try {
-            let winAmount = socket.minesGame.bet * socket.minesGame.mult;
-            let u = await User.findOne({ id: currentUser });
-            let balanceField = socket.minesGame.mode === 'real' ? 'realBal' : 'demoBal';
-            
-            u[balanceField] += winAmount;
-            u.wins++;
-            await u.save();
-            
-            socket.emit('user_data', u);
-            socket.emit('mines_win', { win: winAmount.toFixed(2) });
-            socket.minesGame = null;
-        } catch(e) { console.log(e); }
+            let session = await MinesSession.findOne({ userId: socket.userId });
+            if (session && session.steps > 0) {
+                let user = await User.findOne({ id: socket.userId });
+                let win = session.bet * session.mult;
+                let balKey = session.mode === 'real' ? 'realBal' : 'demoBal';
+                
+                user[balKey] += win;
+                user.wins++;
+                await user.save();
+                
+                socket.emit('user_data', user);
+                socket.emit('mines_win', { win: win.toFixed(2) });
+                io.emit('live_bet', { game: '💣 Mines', user: user.tgName, amount: session.bet, win: win });
+                
+                await MinesSession.deleteOne({ userId: socket.userId });
+            }
+        } catch (e) { console.error(e); }
     });
 
-    // АДМИНКА И ПРОМОКОДЫ
+    // --- ПРОМОКОДЫ ---
     socket.on('activate_promo', async (code) => {
-        if (!currentUser) return;
         try {
-            let p = await Promo.findOne({ code: code.toUpperCase() });
-            let u = await User.findOne({ id: currentUser });
-            if (p && p.currentUses < p.maxUses && !u.usedPromos.includes(p.code)) {
-                u.realBal += p.reward;
-                u.usedPromos.push(p.code);
-                p.currentUses++;
-                await u.save();
-                await p.save();
-                socket.emit('user_data', u);
-                socket.emit('alert', '✅ Промокод успешно активирован!');
+            let promo = await Promo.findOne({ code: code.toUpperCase() });
+            let user = await User.findOne({ id: socket.userId });
+            
+            if (promo && promo.uses > 0 && user) {
+                user.realBal += promo.reward;
+                promo.uses--;
+                await user.save();
+                await promo.save();
+                
+                socket.emit('user_data', user);
+                socket.emit('alert', `✅ Промокод на ${promo.reward} TON активирован!`);
             } else {
-                socket.emit('alert', '❌ Промокод недействителен или уже использован');
+                socket.emit('alert', '❌ Код недействителен или закончился');
             }
-        } catch(e) { console.log(e); }
+        } catch (e) { console.error(e); }
+    });
+
+    // --- ВЫВОД СРЕДСТВ ---
+    socket.on('withdraw_request', async (data) => {
+        try {
+            let user = await User.findOne({ id: socket.userId });
+            if (user && user.realBal >= data.amount && data.amount > 0) {
+                user.realBal -= data.amount;
+                await user.save();
+                
+                const req = new Withdraw({
+                    userId: user.id,
+                    tgName: user.tgName,
+                    address: data.address,
+                    amount: data.amount
+                });
+                await req.save();
+                
+                socket.emit('user_data', user);
+                socket.emit('alert', '🚀 Заявка отправлена! Ожидайте проверки админом.');
+            } else {
+                socket.emit('alert', '❌ Недостаточно средств');
+            }
+        } catch (e) { console.error(e); }
+    });
+
+    // --- АДМИН ПАНЕЛЬ ---
+    socket.on('admin_get_data', async () => {
+        try {
+            const allUsers = await User.find({});
+            const pendingWithdraws = await Withdraw.find({ status: 'pending' });
+            socket.emit('admin_data_response', { users: allUsers, withdraws: pendingWithdraws });
+        } catch (e) { console.error(e); }
     });
 
     socket.on('admin_action', async (data) => {
-        if (data.pw !== '7788') return socket.emit('alert', 'Неверный пароль админа');
-        if (data.action === 'create_promo') {
-            try {
-                await Promo.create({ code: data.code.toUpperCase(), reward: data.reward, maxUses: data.uses });
-                socket.emit('alert', 'Промокод создан!');
-            } catch(e) { socket.emit('alert', 'Ошибка создания промокода'); }
-        } else if (data.action === 'get_stats') {
-            let totalUsers = await User.countDocuments();
-            socket.emit('admin_stats', { users: totalUsers });
-        }
+        try {
+            if (data.action === 'create_promo') {
+                const newP = new Promo({ 
+                    code: data.code.toUpperCase(), 
+                    reward: data.reward, 
+                    uses: data.uses 
+                });
+                await newP.save();
+            }
+            
+            if (data.action === 'edit_balance') {
+                let u = await User.findOne({ id: data.userId });
+                if (u) {
+                    if (data.type === 'add') u.realBal += data.amount;
+                    else u.realBal -= data.amount;
+                    await u.save();
+                    // Если юзер онлайн, обновляем ему баланс мгновенно
+                    io.emit('update_force', { id: u.id, bal: u.realBal }); 
+                }
+            }
+            
+            if (data.action === 'process_withdraw') {
+                let req = await Withdraw.findById(data.reqId);
+                if (req) {
+                    req.status = data.status;
+                    await req.save();
+                    if (data.status === 'reject') {
+                        let u = await User.findOne({ id: req.userId });
+                        u.realBal += req.amount;
+                        await u.save();
+                    }
+                }
+            }
+        } catch (e) { console.error(e); }
     });
 
     socket.on('disconnect', () => {
-        onlineUsers.delete(socket.id);
-        io.emit('online_update', onlineUsers.size);
+        onlineCount--;
+        io.emit('online_update', onlineCount);
+        delete crashBets[socket.id];
     });
 });
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
-    console.log(`Сервер запущен на порту ${PORT}`);
-});
+server.listen(PORT, () => console.log(`🚀 Сервер запущен на порту ${PORT}`));
