@@ -13,10 +13,10 @@
     <div id="stars-container"></div>
 
     <header class="header">
-        <div class="user-info" id="header-logo" onclick="handleHeaderClick()">
+        <div class="user-info" id="header-logo" onclick="promptAdminPassword()">
             <img src="" id="tg-avatar" class="avatar-mini" alt="User">
             <div class="user-details">
-                <span id="header-name" class="username">LoonxGift</span>
+                <span class="username">Loonx Gift</span>
                 <span class="online-tag">Онлайн: <b id="online-val">0</b></span>
             </div>
         </div>
@@ -41,6 +41,13 @@
                     <p>Обойди все мины</p>
                 </div>
             </div>
+            <div class="game-card" onclick="openGame('coinflip')">
+                <div class="game-icon">🪙</div>
+                <div class="game-info">
+                    <h3>COINFLIP</h3>
+                    <p>Орел или Решка (L или X)</p>
+                </div>
+            </div>
             <div class="game-card dev">
                 <div class="game-icon">🎡</div>
                 <div class="game-info">
@@ -48,19 +55,6 @@
                     <span>Скоро</span>
                 </div>
             </div>
-            <div class="game-card dev">
-                <div class="game-icon">🪙</div>
-                <div class="game-info">
-                    <h3>COINFLIP</h3>
-                    <span>Скоро</span>
-                </div>
-            </div>
-        </div>
-
-        <div class="live-bets-container">
-            <h3>🔴 Live Ставки</h3>
-            <div class="live-bets-list" id="global-live-bets">
-                </div>
         </div>
     </main>
 
@@ -77,7 +71,7 @@
                 <div class="action-box">
                     <h3>Пополнение</h3>
                     <input type="number" id="dep-amt" placeholder="Сумма (TON)" class="premium-input">
-                    <button class="btn-primary btn-green" onclick="makeDeposit()">ДЕПОЗИТ</button>
+                    <button class="btn-primary btn-green" onclick="makeDeposit()">ДЕПОЗИТ (АВТО)</button>
                 </div>
                 
                 <div class="action-box" style="margin-top: 20px;">
@@ -94,11 +88,7 @@
         <div class="glass-panel text-center">
             <h2>Промокоды</h2>
             <p class="sub-text">Ищи свежие коды в нашем канале 👇</p>
-            
-            <button class="btn-secondary link-btn" onclick="tg.openTelegramLink('https://t.me/Loonxnews')">
-                📢 Перейти в канал
-            </button>
-
+            <button class="btn-secondary link-btn" onclick="tg.openTelegramLink('https://t.me/Loonxnews')">📢 Перейти в канал</button>
             <div class="promo-section" style="margin-top: 25px;">
                 <input type="text" id="promo-in" placeholder="Введите код" class="premium-input">
                 <button class="btn-primary" onclick="activatePromo()" style="margin-top: 15px;">АКТИВИРОВАТЬ</button>
@@ -110,16 +100,11 @@
         <div class="glass-panel text-center">
             <img src="" id="profile-avatar" class="avatar-large" alt="Profile">
             <h2 id="p-name">Player</h2>
+            <p style="color:var(--text-muted); font-size:12px;">ID: <span id="p-id"></span></p>
             
             <div class="stats-grid">
                 <div class="stat-item"><span>Игр</span><b id="s-games">0</b></div>
                 <div class="stat-item"><span>Побед</span><b id="s-wins">0</b></div>
-            </div>
-            
-            <div class="profile-links">
-                <button class="btn-secondary link-btn" onclick="tg.openTelegramLink('https://t.me/Loonxnews')">📢 Channel (@Loonxnews)</button>
-                <button class="btn-secondary link-btn" onclick="tg.openTelegramLink('https://t.me/LoonxGift_Support')">🛠 Support (@LoonxGift_Support)</button>
-                <button class="btn-secondary link-btn bags-btn" onclick="tg.openTelegramLink('https://t.me/MsgP2P')">🎒 Bags (@MsgP2P)</button>
             </div>
         </div>
     </main>
@@ -136,6 +121,11 @@
                 <div class="rocket-flame"></div>
             </div>
         </div>
+        
+        <div class="live-bets-container-mini">
+            <div class="live-bets-list" id="crash-live-bets"></div>
+        </div>
+
         <div class="bet-controls premium-controls">
             <div class="bet-input-group">
                 <button onclick="changeBet('crash', -0.5)">-</button>
@@ -164,6 +154,33 @@
         </div>
     </div>
 
+    <div id="screen-coinflip" class="game-fullscreen">
+        <div class="game-top-bar">
+            <button class="close-game" onclick="closeGame()">◀ Назад</button>
+            <div class="history-bar">Шанс: 35%</div>
+        </div>
+        <div class="coinflip-container">
+            <div id="coin" class="coin">
+                <div class="coin-face coin-front">L</div>
+                <div class="coin-face coin-back">X</div>
+            </div>
+            <h2 id="coin-result-text" style="margin-top: 30px; height: 30px;">Выберите сторону</h2>
+            
+            <div class="coin-choice-buttons">
+                <button class="btn-choice" id="btn-choice-l" onclick="selectCoinSide('L')">Ставить на L</button>
+                <button class="btn-choice" id="btn-choice-x" onclick="selectCoinSide('X')">Ставить на X</button>
+            </div>
+        </div>
+        <div class="bet-controls premium-controls">
+            <div class="bet-input-group">
+                <button onclick="changeBet('coinflip', -0.5)">-</button>
+                <input type="number" id="cf-bet" value="1.0" step="0.5">
+                <button onclick="changeBet('coinflip', 0.5)">+</button>
+            </div>
+            <button id="cf-btn" class="btn-primary bet-btn" onclick="coinflipAction()" disabled>ВЫБЕРИТЕ СТОРОНУ</button>
+        </div>
+    </div>
+
     <div id="admin-modal" class="modal-overlay">
         <div class="glass-panel admin-panel-large">
             <div class="admin-header">
@@ -178,13 +195,11 @@
             </div>
 
             <div id="adm-tab-users" class="adm-content active">
-                <div class="adm-list" id="admin-users-list">
-                    </div>
+                <div class="adm-list" id="admin-users-list"></div>
             </div>
 
             <div id="adm-tab-withdraws" class="adm-content">
-                <div class="adm-list" id="admin-withdraw-list">
-                    </div>
+                <div class="adm-list" id="admin-withdraw-list"></div>
             </div>
 
             <div id="adm-tab-promos" class="adm-content">
@@ -201,6 +216,9 @@
             <h3 id="manage-u-name">User</h3>
             <p>ID: <span id="manage-u-id"></span></p>
             <p>Реал: <b id="manage-u-real" style="color:#00ffcc;">0.00</b></p>
+            
+            <button class="btn-secondary" id="manage-u-tglink" style="margin: 10px 0; font-size:12px;">Перейти в Telegram</button>
+
             <input type="number" id="manage-u-amount" placeholder="Сумма (+ или -)" class="premium-input" style="margin-top:10px;">
             <div style="display:flex; gap:10px; margin-top:15px;">
                 <button class="btn-primary btn-green" onclick="editUserBalance('add')">Добавить</button>
@@ -212,20 +230,16 @@
 
     <nav class="hot-bar premium-hotbar">
         <div class="nav-item active" onclick="switchTab('home', this)">
-            <span class="nav-icon">🎮</span>
-            <span class="nav-text">Игры</span>
+            <span class="nav-icon">🎮</span><span class="nav-text">Игры</span>
         </div>
         <div class="nav-item" onclick="switchTab('wallet', this)">
-            <span class="nav-icon">💳</span>
-            <span class="nav-text">Кошелек</span>
+            <span class="nav-icon">💳</span><span class="nav-text">Кошелек</span>
         </div>
         <div class="nav-item" onclick="switchTab('promo', this)">
-            <span class="nav-icon">🎁</span>
-            <span class="nav-text">Промо</span>
+            <span class="nav-icon">🎁</span><span class="nav-text">Промо</span>
         </div>
         <div class="nav-item" onclick="switchTab('profile', this)">
-            <span class="nav-icon">👤</span>
-            <span class="nav-text">Профиль</span>
+            <span class="nav-icon">👤</span><span class="nav-text">Профиль</span>
         </div>
     </nav>
 
