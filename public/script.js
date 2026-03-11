@@ -3,7 +3,6 @@ const tg = window.Telegram.WebApp;
 tg.expand();
 tg.ready();
 
-// === ГЕНЕРАЦИЯ ЗВЕЗД НА ФОНЕ ===
 function createStars() {
     const container = document.getElementById('stars-container');
     for (let i = 0; i < 50; i++) {
@@ -19,13 +18,12 @@ function createStars() {
 }
 createStars();
 
-// ИНИЦИАЛИЗАЦИЯ TON CONNECT
+// Инициализация TON Connect
 const tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
     manifestUrl: 'https://loonxgift.onrender.com/tonconnect-manifest.json',
     buttonRootId: 'ton-connect-btn'
 });
 
-// ДАННЫЕ ЮЗЕРА
 let userData = {
     id: tg.initDataUnsafe?.user?.id || Math.floor(Math.random() * 100000).toString(),
     username: tg.initDataUnsafe?.user?.username || "",
@@ -34,18 +32,14 @@ let userData = {
 
 let currentMode = 'demo';
 let localData = { realBal: 0, demoBal: 0, games: 0, wins: 0 };
-
-// Флаги игр
 let inGameCrash = false;
 let inGameMines = false;
 let isMineProcessing = false;
 let inGameCoinflip = false;
 let selectedCoinSide = null;
 
-// Подключение к серверу
 socket.emit('init_user', userData);
 
-// ОБНОВЛЕНИЕ ДАННЫХ В UI
 socket.on('user_data', (d) => {
     localData = d;
     document.getElementById('tg-avatar').src = d.photoUrl || userData.photo;
@@ -60,7 +54,6 @@ socket.on('user_data', (d) => {
 socket.on('online_update', (count) => { document.getElementById('online-val').innerText = count; });
 socket.on('alert', (msg) => tg.showAlert(msg));
 
-// БАЛАНС И РЕЖИМЫ
 function updateBalanceDisplay() {
     let bal = currentMode === 'real' ? localData.realBal : localData.demoBal;
     document.getElementById('h-bal').innerText = bal.toFixed(2);
@@ -74,7 +67,6 @@ function toggleMode() {
     tg.HapticFeedback.impactOccurred('light');
 }
 
-// НАВИГАЦИЯ
 function switchTab(tabId, element) {
     document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
     document.getElementById('tab-' + tabId).classList.add('active');
@@ -85,26 +77,32 @@ function switchTab(tabId, element) {
 
 function openGame(game) {
     document.getElementById('screen-' + game).style.display = 'flex';
+    if(game === 'crash') {
+        tg.HapticFeedback.impactOccurred('heavy'); // Звук/вибро при ВХОДЕ в краш
+    }
     if(game === 'mines' && !inGameMines) drawMinesGrid();
 }
+
 function closeGame() {
     document.querySelectorAll('.game-fullscreen').forEach(el => el.style.display = 'none');
 }
 
+// ЛИМИТЫ СТАВОК (от 0.1 до 20)
 function changeBet(game, val) {
     let inputIds = { 'crash': 'c-bet', 'mines': 'm-bet', 'coinflip': 'cf-bet' };
     let input = document.getElementById(inputIds[game]);
     let newVal = parseFloat(input.value) + val;
-    if(newVal >= 0.1) input.value = newVal.toFixed(1);
+    if (newVal < 0.1) newVal = 0.1;
+    if (newVal > 20.0) newVal = 20.0;
+    input.value = newVal.toFixed(1);
 }
 
-// ===== CRASH =====
+// === CRASH ===
 socket.on('crash_update', (d) => {
     let multEl = document.getElementById('c-mult');
     let btn = document.getElementById('c-btn');
     let rocket = document.getElementById('rocket-container');
     
-    // История
     let histHtml = '';
     d.history.forEach(h => {
         let color = h >= 2.0 ? 'var(--success-color)' : 'var(--text-main)';
@@ -128,7 +126,7 @@ socket.on('crash_update', (d) => {
         rocket.className = 'rocket-wrapper crashed';
         if(inGameCrash) inGameCrash = false;
         btn.innerText = "СТАВКА"; btn.className = "btn-primary bet-btn"; btn.disabled = false;
-        if(d.history[0] == d.mult.toFixed(2)) tg.HapticFeedback.notificationOccurred('error'); 
+        // Жужжание (tg.HapticFeedback.notificationOccurred('error')) УБРАНО!
     }
 });
 
@@ -136,7 +134,9 @@ function crashAction() {
     tg.HapticFeedback.impactOccurred('medium');
     if (!inGameCrash) {
         let betAmt = parseFloat(document.getElementById('c-bet').value);
+        if(betAmt < 0.1 || betAmt > 20) return tg.showAlert("Ставка должна быть от 0.1 до 20 TON");
         if(betAmt > (currentMode === 'real' ? localData.realBal : localData.demoBal)) return tg.showAlert("Недостаточно средств");
+        
         socket.emit('crash_bet', { bet: betAmt, mode: currentMode });
         inGameCrash = true;
         document.getElementById('c-btn').innerText = "ОЖИДАНИЕ...";
@@ -148,7 +148,6 @@ function crashAction() {
 }
 socket.on('crash_win', (d) => { tg.showAlert(`Вы забрали: ${d.win} TON (x${d.mult})`); });
 
-// ЛАЙВ СТАВКИ В КРАШЕ
 socket.on('live_bet', (betData) => {
     const list = document.getElementById('crash-live-bets');
     if(!list) return;
@@ -162,7 +161,7 @@ socket.on('live_bet', (betData) => {
     if(list.children.length > 15) list.removeChild(list.lastChild);
 });
 
-// ===== MINES =====
+// === MINES ===
 function drawMinesGrid() {
     const grid = document.getElementById('m-grid');
     grid.innerHTML = '';
@@ -178,7 +177,9 @@ function minesAction() {
     tg.HapticFeedback.impactOccurred('medium');
     if (!inGameMines) {
         let betAmt = parseFloat(document.getElementById('m-bet').value);
+        if(betAmt < 0.1 || betAmt > 20) return tg.showAlert("Ставка должна быть от 0.1 до 20 TON");
         if(betAmt > (currentMode === 'real' ? localData.realBal : localData.demoBal)) return tg.showAlert("Недостаточно средств");
+        
         socket.emit('mines_start', { bet: betAmt, mode: currentMode });
     } else {
         socket.emit('mines_cashout');
@@ -210,7 +211,6 @@ socket.on('mines_safe', (d) => {
 });
 
 socket.on('mines_boom', (field) => {
-    tg.HapticFeedback.notificationOccurred('error');
     inGameMines = false;
     isMineProcessing = false;
     document.getElementById('m-btn').innerText = "ИГРАТЬ";
@@ -238,7 +238,7 @@ socket.on('mines_win', (d) => {
     drawMinesGrid();
 });
 
-// ===== COINFLIP =====
+// === COINFLIP ===
 function selectCoinSide(side) {
     if(inGameCoinflip) return;
     selectedCoinSide = side;
@@ -254,6 +254,7 @@ function selectCoinSide(side) {
 function coinflipAction() {
     if(inGameCoinflip || !selectedCoinSide) return;
     let betAmt = parseFloat(document.getElementById('cf-bet').value);
+    if(betAmt < 0.1 || betAmt > 20) return tg.showAlert("Ставка должна быть от 0.1 до 20 TON");
     if(betAmt > (currentMode === 'real' ? localData.realBal : localData.demoBal)) return tg.showAlert("Недостаточно средств");
     
     tg.HapticFeedback.impactOccurred('medium');
@@ -262,7 +263,6 @@ function coinflipAction() {
     document.getElementById('cf-btn').innerText = "КРУТИМ...";
     document.getElementById('coin-result-text').innerText = "Монетка летит...";
     
-    // Запуск анимации
     const coin = document.getElementById('coin');
     coin.classList.add('flipping');
     
@@ -273,29 +273,24 @@ socket.on('coinflip_result', (d) => {
     const coin = document.getElementById('coin');
     setTimeout(() => {
         coin.classList.remove('flipping');
-        // Поворачиваем монетку в зависимости от результата
-        if(d.resultSide === 'L') {
-            coin.style.transform = 'rotateY(0deg)';
-        } else {
-            coin.style.transform = 'rotateY(180deg)';
-        }
+        if(d.resultSide === 'L') { coin.style.transform = 'rotateY(0deg)'; } 
+        else { coin.style.transform = 'rotateY(180deg)'; }
         
         setTimeout(() => {
             if(d.win) {
                 tg.HapticFeedback.notificationOccurred('success');
                 document.getElementById('coin-result-text').innerText = `🎉 Выпало ${d.resultSide}! Вы выиграли ${d.winAmount} TON`;
             } else {
-                tg.HapticFeedback.notificationOccurred('error');
                 document.getElementById('coin-result-text').innerText = `💀 Выпало ${d.resultSide}. Вы проиграли.`;
             }
             inGameCoinflip = false;
             document.getElementById('cf-btn').disabled = false;
             document.getElementById('cf-btn').innerText = `ПОСТАВИТЬ НА ${selectedCoinSide}`;
         }, 500);
-    }, 2000); // 2 секунды крутится
+    }, 2000); 
 });
 
-// ===== КОШЕЛЕК И ВЫВОД =====
+// === КОШЕЛЕК И ДЕМО ===
 async function makeDeposit() {
     const amount = parseFloat(document.getElementById('dep-amt').value);
     if(!amount || amount < 0.1) return tg.showAlert("Минимальная сумма 0.1 TON");
@@ -304,14 +299,13 @@ async function makeDeposit() {
     const transaction = {
         validUntil: Math.floor(Date.now() / 1000) + 300,
         messages: [{
-            address: "UQCTqV9scQaZR0DHzOnMrOCCY7z3MIT0QfoNrtUDZiXHY1-K", // Твой кошелек
+            address: "UQCTqV9scQaZR0DHzOnMrOCCY7z3MIT0QfoNrtUDZiXHY1-K", 
             amount: (amount * 1000000000).toString() 
         }]
     };
 
     try {
         await tonConnectUI.sendTransaction(transaction);
-        // Если транзакция прошла успешно у клиента, отправляем на сервер автозачисление
         socket.emit('deposit_success', { amount: amount });
         tg.showAlert(`✅ Успешно! ${amount} TON зачислены на ваш баланс.`);
         document.getElementById('dep-amt').value = '';
@@ -334,7 +328,10 @@ function requestWithdraw() {
     document.getElementById('withdraw-amt').value = '';
 }
 
-// ===== ПРОМОКОДЫ =====
+function claimDemo() {
+    socket.emit('claim_demo');
+}
+
 function activatePromo() {
     let code = document.getElementById('promo-in').value;
     if(!code) return tg.showAlert("Введите код");
@@ -342,14 +339,25 @@ function activatePromo() {
     document.getElementById('promo-in').value = '';
 }
 
-// ===== АДМИНКА (ПО ПАРОЛЮ) =====
-function promptAdminPassword() {
-    // Используем нативный prompt в Telegram или стандартный prompt
-    let pwd = prompt("Введите пароль доступа:", "");
-    if (pwd === "7788") {
-        openAdminPanel();
-    } else if (pwd !== null) {
-        tg.showAlert("Неверный пароль!");
+// === АДМИНКА (10 КЛИКОВ) ===
+let adminClicks = 0;
+let adminTimer = null;
+
+function handleHeaderClick() {
+    adminClicks++;
+    clearTimeout(adminTimer);
+    
+    // Если юзер не успел нажать 10 раз за 2 секунды, счетчик сбрасывается
+    adminTimer = setTimeout(() => { adminClicks = 0; }, 2000); 
+
+    if (adminClicks >= 10) {
+        adminClicks = 0;
+        let pwd = prompt("Введите пароль доступа:", "");
+        if (pwd === "7788") {
+            openAdminPanel();
+        } else if (pwd !== null) {
+            tg.showAlert("Неверный пароль!");
+        }
     }
 }
 
@@ -369,13 +377,11 @@ function switchAdminTab(tab) {
     document.getElementById('adm-tab-' + tab).classList.add('active');
 }
 
-// Получение данных в админку
 socket.on('admin_data_response', (data) => {
-    // Рендер Юзеров
     let uHtml = '';
     data.users.forEach(u => {
         let uName = u.tgName ? u.tgName : "Без имени";
-        let uTgUsername = u.tgName ? u.tgName : ""; // Если есть юзернейм
+        let uTgUsername = u.tgName ? u.tgName : ""; 
         uHtml += `
             <div class="adm-list-item" onclick="openUserManage('${u.id}', '${uName}', ${u.realBal}, '${uTgUsername}')">
                 <span><b>${uName}</b> (ID: ${u.id})</span>
@@ -385,7 +391,6 @@ socket.on('admin_data_response', (data) => {
     });
     document.getElementById('admin-users-list').innerHTML = uHtml;
 
-    // Рендер Выводов
     let wHtml = '';
     data.withdraws.forEach(w => {
         wHtml += `
@@ -409,14 +414,10 @@ socket.on('admin_data_response', (data) => {
     document.getElementById('admin-withdraw-list').innerHTML = wHtml;
 });
 
-// Копирование текста для админа
 function copyText(text) {
-    navigator.clipboard.writeText(text).then(() => {
-        tg.showAlert("Адрес скопирован!");
-    });
+    navigator.clipboard.writeText(text).then(() => { tg.showAlert("Адрес скопирован!"); });
 }
 
-// Управление балансом юзера
 let currentManageUserId = null;
 let currentManageTgName = null;
 function openUserManage(id, name, bal, tgUsername) {
@@ -433,20 +434,15 @@ function openUserManage(id, name, bal, tgUsername) {
     } else {
         linkBtn.style.display = 'none';
     }
-
     document.getElementById('user-manage-modal').style.display = 'flex';
 }
+
 function closeUserManage() { document.getElementById('user-manage-modal').style.display = 'none'; }
 
 function editUserBalance(action) {
     let amt = parseFloat(document.getElementById('manage-u-amount').value);
     if(!amt || amt <= 0) return tg.showAlert("Введите сумму");
-    socket.emit('admin_action', { 
-        action: 'edit_balance', 
-        userId: currentManageUserId, 
-        type: action, 
-        amount: amt 
-    });
+    socket.emit('admin_action', { action: 'edit_balance', userId: currentManageUserId, type: action, amount: amt });
     document.getElementById('manage-u-amount').value = '';
     closeUserManage();
     setTimeout(() => socket.emit('admin_get_data'), 500); 
