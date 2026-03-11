@@ -13,7 +13,7 @@
     <div id="stars-container"></div>
 
     <header class="header">
-        <div class="user-info" id="header-logo" onclick="promptAdminPassword()">
+        <div class="user-info" id="header-logo" onclick="handleHeaderClick()">
             <img src="" id="tg-avatar" class="avatar-mini" alt="User">
             <div class="user-details">
                 <span class="username">Loonx Gift</span>
@@ -65,6 +65,7 @@
             
             <div class="wallet-balance-box">
                 <span id="w-bal" class="huge-balance">0.00</span> <small>TON</small>
+                <button class="btn-secondary" onclick="claimDemo()" style="margin-top: 15px; font-size: 13px; padding: 10px;">+ 200 DEMO (Раз в 24 часа)</button>
             </div>
 
             <div class="wallet-actions">
@@ -121,11 +122,9 @@
                 <div class="rocket-flame"></div>
             </div>
         </div>
-        
         <div class="live-bets-container-mini">
             <div class="live-bets-list" id="crash-live-bets"></div>
         </div>
-
         <div class="bet-controls premium-controls">
             <div class="bet-input-group">
                 <button onclick="changeBet('crash', -0.5)">-</button>
@@ -157,8 +156,7 @@
     <div id="screen-coinflip" class="game-fullscreen">
         <div class="game-top-bar">
             <button class="close-game" onclick="closeGame()">◀ Назад</button>
-            <div class="history-bar">Шанс: 35%</div>
-        </div>
+            </div>
         <div class="coinflip-container">
             <div id="coin" class="coin">
                 <div class="coin-face coin-front">L</div>
@@ -216,9 +214,7 @@
             <h3 id="manage-u-name">User</h3>
             <p>ID: <span id="manage-u-id"></span></p>
             <p>Реал: <b id="manage-u-real" style="color:#00ffcc;">0.00</b></p>
-            
             <button class="btn-secondary" id="manage-u-tglink" style="margin: 10px 0; font-size:12px;">Перейти в Telegram</button>
-
             <input type="number" id="manage-u-amount" placeholder="Сумма (+ или -)" class="premium-input" style="margin-top:10px;">
             <div style="display:flex; gap:10px; margin-top:15px;">
                 <button class="btn-primary btn-green" onclick="editUserBalance('add')">Добавить</button>
@@ -229,18 +225,10 @@
     </div>
 
     <nav class="hot-bar premium-hotbar">
-        <div class="nav-item active" onclick="switchTab('home', this)">
-            <span class="nav-icon">🎮</span><span class="nav-text">Игры</span>
-        </div>
-        <div class="nav-item" onclick="switchTab('wallet', this)">
-            <span class="nav-icon">💳</span><span class="nav-text">Кошелек</span>
-        </div>
-        <div class="nav-item" onclick="switchTab('promo', this)">
-            <span class="nav-icon">🎁</span><span class="nav-text">Промо</span>
-        </div>
-        <div class="nav-item" onclick="switchTab('profile', this)">
-            <span class="nav-icon">👤</span><span class="nav-text">Профиль</span>
-        </div>
+        <div class="nav-item active" onclick="switchTab('home', this)"><span class="nav-icon">🎮</span><span class="nav-text">Игры</span></div>
+        <div class="nav-item" onclick="switchTab('wallet', this)"><span class="nav-icon">💳</span><span class="nav-text">Кошелек</span></div>
+        <div class="nav-item" onclick="switchTab('promo', this)"><span class="nav-icon">🎁</span><span class="nav-text">Промо</span></div>
+        <div class="nav-item" onclick="switchTab('profile', this)"><span class="nav-icon">👤</span><span class="nav-text">Профиль</span></div>
     </nav>
 
     <script src="script.js"></script>
