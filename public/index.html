@@ -23,21 +23,23 @@
     </header>
 
     <main id="tab-home" class="tab active">
-        <div class="game-card" onclick="openScreen('crash')" style="background-image: linear-gradient(to right, rgba(13,17,23,0.9), rgba(13,17,23,0.6)), url('https://images.unsplash.com/photo-1541185933-ef5d8ed016c2?w=400&q=80');">
+        <div class="game-card" onclick="openScreen('crash')" style="background-image: linear-gradient(to right, rgba(13,17,23,0.9), rgba(13,17,23,0.4)), url('https://images.unsplash.com/photo-1541185933-ef5d8ed016c2?w=500&q=80');">
             <div class="game-info">
                 <h3>Crash</h3>
                 <p>Успей забрать до взрыва</p>
             </div>
             <div class="game-play-btn">▶</div>
         </div>
-        <div class="game-card" onclick="openScreen('mines')" style="background-image: linear-gradient(to right, rgba(13,17,23,0.9), rgba(13,17,23,0.6)), url('https://images.unsplash.com/photo-1633535560662-79ac4e5bd8b9?w=400&q=80');">
+        
+        <div class="game-card" onclick="openScreen('mines')" style="background-image: linear-gradient(to right, rgba(13,17,23,0.9), rgba(13,17,23,0.4)), url('https://images.unsplash.com/photo-1633535560662-79ac4e5bd8b9?w=500&q=80');">
             <div class="game-info">
                 <h3>Mines</h3>
                 <p>Обойди мины, забери куш</p>
             </div>
             <div class="game-play-btn">▶</div>
         </div>
-        <div class="game-card" onclick="openScreen('coinflip')" style="background-image: linear-gradient(to right, rgba(13,17,23,0.9), rgba(13,17,23,0.6)), url('https://images.unsplash.com/photo-1621504450181-5c3b994d8b9f?w=400&q=80');">
+        
+        <div class="game-card" onclick="openScreen('coinflip')" style="background-image: linear-gradient(to right, rgba(13,17,23,0.9), rgba(13,17,23,0.4)), url('https://images.unsplash.com/photo-1621504450181-5c3b994d8b9f?w=500&q=80');">
             <div class="game-info">
                 <h3>Coinflip</h3>
                 <p>Орел или Решка?</p>
@@ -105,9 +107,9 @@
             </div>
             <h1 id="c-mult">1.00x</h1>
         </div>
-        <div class="panel input-group">
+        <div class="panel input-group mt-half">
             <input type="number" id="c-bet" value="1.0" class="input">
-            <button id="c-btn" class="btn btn-green mt-half" onclick="crashPlay()">Ставка</button>
+            <button id="c-btn" class="btn btn-green mt-half" onclick="crashAction()">СТАВКА</button>
         </div>
         <div class="panel mt" style="flex-grow:1; overflow-y:auto;">
             <h4 style="margin:0;">Лайв ставки</h4>
@@ -117,24 +119,24 @@
 
     <div id="screen-mines" class="screen">
         <div class="game-header"><button class="btn-icon" onclick="closeScreen()">✖</button> <span>MINES</span></div>
-        <div class="panel text-center" style="padding:10px;">
+        <div class="panel text-center" style="padding:10px; margin-bottom: 10px;">
             <h2 id="m-mult" style="margin:0; color:#00cc66;">1.00x</h2>
         </div>
         <div id="m-grid" class="mines-grid panel"></div>
-        <div class="panel input-group">
+        <div class="panel input-group mt-half">
             <div style="display:flex; gap:10px; margin-bottom:10px;">
-                <button class="btn btn-dark" onclick="setMines(3)">3💣</button>
-                <button class="btn btn-dark active-btn" id="btn-m6" onclick="setMines(6)">6💣</button>
-                <button class="btn btn-dark" onclick="setMines(12)">12💣</button>
+                <button class="btn btn-dark" id="btn-m3" onclick="setMines(3, 'btn-m3')">3💣</button>
+                <button class="btn btn-dark active-btn" id="btn-m6" onclick="setMines(6, 'btn-m6')">6💣</button>
+                <button class="btn btn-dark" id="btn-m12" onclick="setMines(12, 'btn-m12')">12💣</button>
             </div>
             <input type="number" id="m-bet" value="1.0" class="input">
-            <button id="m-btn" class="btn btn-green mt-half" onclick="minesPlay()">Ставка</button>
+            <button id="m-btn" class="btn btn-green mt-half" onclick="minesPlay()">СТАВКА</button>
         </div>
     </div>
 
     <div id="screen-coinflip" class="screen">
         <div class="game-header"><button class="btn-icon" onclick="closeScreen()">✖</button> <span>COINFLIP</span></div>
-        <div class="panel text-center" style="height: 250px; display:flex; align-items:center; justify-content:center; perspective: 1000px;">
+        <div class="panel text-center" style="height: 250px; display:flex; align-items:center; justify-content:center; perspective: 1000px; margin-bottom: 10px;">
             <div id="coin" class="coin-3d">
                 <div class="coin-front">L</div>
                 <div class="coin-back">X</div>
@@ -142,18 +144,18 @@
         </div>
         <div class="panel input-group">
             <div style="display:flex; gap:10px; margin-bottom:10px;">
-                <button class="btn btn-blue" onclick="setCoin('L')">Орел (L)</button>
-                <button class="btn btn-dark" onclick="setCoin('X')">Решка (X)</button>
+                <button class="btn btn-blue active-btn" id="btn-cf-l" onclick="setCoin('L', 'btn-cf-l')">Орел (L)</button>
+                <button class="btn btn-dark" id="btn-cf-x" onclick="setCoin('X', 'btn-cf-x')">Решка (X)</button>
             </div>
             <input type="number" id="cf-bet" value="1.0" class="input">
-            <button id="cf-btn" class="btn btn-green mt-half" onclick="coinflipPlay()">Бросить</button>
+            <button id="cf-btn" class="btn btn-green mt-half" onclick="coinflipPlay()">БРОСИТЬ</button>
         </div>
     </div>
 
     <div id="admin-modal" class="modal">
         <div class="modal-body panel">
-            <div style="display:flex; justify-content:space-between;">
-                <h3>Админ Панель</h3>
+            <div style="display:flex; justify-content:space-between; margin-bottom: 15px;">
+                <h3 style="margin:0;">Админ Панель</h3>
                 <button class="btn-icon" onclick="document.getElementById('admin-modal').style.display='none'">✖</button>
             </div>
             <div style="display:flex; gap:5px; overflow-x:auto; margin-bottom:15px; border-bottom:1px solid #333; padding-bottom:10px;">
