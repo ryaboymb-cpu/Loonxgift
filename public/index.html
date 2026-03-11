@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>LoonxGift Casino</title>
     <link rel="stylesheet" href="style.css">
+    
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
     <script src="/socket.io/socket.io.js"></script>
@@ -12,223 +13,175 @@
 <body>
     <div id="stars-container"></div>
 
+    <div id="loading-screen">
+        <div class="spinner"></div>
+        <h1 class="glow-text">Loonx Gift</h1>
+        <p style="color: #888; margin-top: 10px;">Загрузка системы...</p>
+    </div>
+
     <header class="header">
-        <div class="user-info" id="header-logo" onclick="handleHeaderClick()">
-            <img src="" id="tg-avatar" class="avatar-mini" alt="User">
-            <div class="user-details">
-                <span class="username">Loonx Gift</span>
-                <span class="online-tag">Онлайн: <b id="online-val">0</b></span>
-            </div>
+        <div class="user-info" onclick="adminClick()">
+            <img src="" id="tg-avatar" class="avatar" alt="Ava" onerror="this.src='https://cdn-icons-png.flaticon.com/512/149/149071.png'">
+            <span id="tg-name" class="glow-text">Загрузка...</span>
         </div>
-        <div class="balance-toggle" onclick="toggleMode()">
-            <span id="h-bal">0.00</span> <small id="h-mode">DEMO</small>
+        <div class="balance-pill" onclick="toggleBalance()">
+            <span id="bal-val">0.00</span> <small id="bal-mode">DEMO</small> 🔄
         </div>
     </header>
 
     <main id="tab-home" class="tab active">
-        <div class="games-grid">
-            <div class="game-card" onclick="openGame('crash')">
-                <div class="game-icon">🚀</div>
-                <div class="game-info">
+        <div class="game-list">
+            <div class="game-card" onclick="openScreen('crash')">
+                <span class="icon">🚀</span> 
+                <div>
                     <h3>CRASH</h3>
-                    <p>Успей до взрыва</p>
+                    <p style="font-size: 12px; color: #888; font-weight: normal; margin:0;">Успей до взрыва</p>
                 </div>
             </div>
-            <div class="game-card" onclick="openGame('mines')">
-                <div class="game-icon">💣</div>
-                <div class="game-info">
+            <div class="game-card" onclick="openScreen('mines')">
+                <span class="icon">💣</span> 
+                <div>
                     <h3>MINES</h3>
-                    <p>Обойди все мины</p>
+                    <p style="font-size: 12px; color: #888; font-weight: normal; margin:0;">Обойди 6 мин</p>
                 </div>
             </div>
-            <div class="game-card" onclick="openGame('coinflip')">
-                <div class="game-icon">🪙</div>
-                <div class="game-info">
+            <div class="game-card" onclick="openScreen('coinflip')">
+                <span class="icon">🪙</span> 
+                <div>
                     <h3>COINFLIP</h3>
-                    <p>Орел или Решка (L или X)</p>
+                    <p style="font-size: 12px; color: #888; font-weight: normal; margin:0;">Угадай сторону</p>
                 </div>
             </div>
-            <div class="game-card dev">
-                <div class="game-icon">🎡</div>
-                <div class="game-info">
-                    <h3>ROULETTE</h3>
-                    <span>Скоро</span>
-                </div>
+        </div>
+        
+        <div class="global-history-container glass-card">
+            <h3 style="margin-top:0; color: #00ffff;">Лайв Ставки</h3>
+            <div id="global-history-list">
+                <p style="color:#888; text-align:center;">Ставок пока нет</p>
             </div>
         </div>
     </main>
 
     <main id="tab-wallet" class="tab">
-        <div class="glass-panel text-center">
-            <h2>Кошелек</h2>
-            <div id="ton-connect-btn" class="ton-btn-container"></div>
+        <div class="glass-card text-center">
+            <h2 class="glow-text">Кошелек</h2>
             
-            <div class="wallet-balance-box">
-                <span id="w-bal" class="huge-balance">0.00</span> <small>TON</small>
-                <button class="btn-secondary" onclick="claimDemo()" style="margin-top: 15px; font-size: 13px; padding: 10px;">+ 200 DEMO (Раз в 24 часа)</button>
+            <div id="ton-connect-btn" style="display:flex; justify-content:center; margin-bottom: 20px;"></div>
+            
+            <button class="btn-primary" onclick="socket.emit('claim_demo')" style="margin-bottom: 20px;">+ Получить 200 DEMO (24ч)</button>
+            
+            <div class="box">
+                <h4 style="text-align:left; margin:5px 0;">Депозит:</h4>
+                <input type="number" id="dep-amt" placeholder="Сумма пополнения TON" class="input">
+                <button class="btn-green" onclick="playSound('click'); tg.showAlert('Подключите кошелек для пополнения');">ПОПОЛНИТЬ</button>
             </div>
-
-            <div class="wallet-actions">
-                <div class="action-box">
-                    <h3>Пополнение</h3>
-                    <input type="number" id="dep-amt" placeholder="Сумма (TON)" class="premium-input">
-                    <button class="btn-primary btn-green" onclick="makeDeposit()">ДЕПОЗИТ (АВТО)</button>
-                </div>
-                
-                <div class="action-box" style="margin-top: 20px;">
-                    <h3>Вывод средств</h3>
-                    <input type="text" id="withdraw-address" placeholder="Ваш TON адрес" class="premium-input">
-                    <input type="number" id="withdraw-amt" placeholder="Сумма вывода" class="premium-input" style="margin-top:10px;">
-                    <button class="btn-primary btn-blue" onclick="requestWithdraw()">ВЫВЕСТИ</button>
-                </div>
+            <div class="box">
+                <h4 style="text-align:left; margin:5px 0;">Вывод:</h4>
+                <input type="text" id="withdraw-address" placeholder="Ваш TON Адрес" class="input">
+                <input type="number" id="withdraw-amt" placeholder="Сумма вывода" class="input">
+                <button class="btn-blue" onclick="requestWithdraw()">ВЫВЕСТИ СРЕДСТВА</button>
             </div>
         </div>
     </main>
 
     <main id="tab-promo" class="tab">
-        <div class="glass-panel text-center">
-            <h2>Промокоды</h2>
-            <p class="sub-text">Ищи свежие коды в нашем канале 👇</p>
-            <button class="btn-secondary link-btn" onclick="tg.openTelegramLink('https://t.me/Loonxnews')">📢 Перейти в канал</button>
-            <div class="promo-section" style="margin-top: 25px;">
-                <input type="text" id="promo-in" placeholder="Введите код" class="premium-input">
-                <button class="btn-primary" onclick="activatePromo()" style="margin-top: 15px;">АКТИВИРОВАТЬ</button>
-            </div>
+        <div class="glass-card text-center">
+            <h2 class="glow-text">Промокоды</h2>
+            <p style="color:#888; font-size:14px;">Ищите промокоды в нашем канале</p>
+            <input type="text" id="promo-in" placeholder="Введите код" class="input">
+            <button class="btn-primary" onclick="activatePromo()">АКТИВИРОВАТЬ</button>
         </div>
     </main>
 
     <main id="tab-profile" class="tab">
-        <div class="glass-panel text-center">
-            <img src="" id="profile-avatar" class="avatar-large" alt="Profile">
-            <h2 id="p-name">Player</h2>
-            <p style="color:var(--text-muted); font-size:12px;">ID: <span id="p-id"></span></p>
+        <div class="glass-card text-center">
+            <h2 class="glow-text">Моя Статистика</h2>
+            <div style="display:flex; justify-content:space-around; background:#0d1117; padding:15px; border-radius:10px; margin-bottom:20px;">
+                <div>
+                    <p style="margin:0; color:#888;">Игр сыграно</p>
+                    <b id="stat-games" style="font-size:24px; color:#fff;">0</b>
+                </div>
+                <div>
+                    <p style="margin:0; color:#888;">Побед</p>
+                    <b id="stat-wins" style="font-size:24px; color:#00ff00;">0</b>
+                </div>
+            </div>
             
-            <div class="stats-grid">
-                <div class="stat-item"><span>Игр</span><b id="s-games">0</b></div>
-                <div class="stat-item"><span>Побед</span><b id="s-wins">0</b></div>
+            <div class="profile-links">
+                <a href="https://t.me/Loonxnews" class="link-btn" target="_blank">📣 Channel and promo @Loonxnews</a>
+                <a href="https://t.me/LoonxGift_Support" class="link-btn" target="_blank">🎧 Support - @LoonxGift_Support</a>
+                <a href="https://t.me/MsgP2P" class="link-btn" target="_blank">💼 Bags - @MsgP2P</a>
             </div>
         </div>
     </main>
 
-    <div id="screen-crash" class="game-fullscreen">
-        <div class="game-top-bar">
-            <button class="close-game" onclick="closeGame()">◀ Назад</button>
-            <div id="crash-history" class="history-bar"></div>
+    <div id="screen-crash" class="screen">
+        <button onclick="closeScreen()" class="back-btn">◀ В меню</button>
+        <div class="crash-display">
+            <h1 id="c-mult" class="glow-text" style="font-size:48px;">1.00x</h1>
         </div>
-        <div class="crash-arena">
-            <div id="c-mult" class="huge-text">1.00x</div>
-            <div id="rocket-container" class="rocket-wrapper waiting">
-                <div class="rocket-img">🚀</div>
-                <div class="rocket-flame"></div>
-            </div>
+        <div class="controls glass-card">
+            <label style="color:#888; font-size:12px;">Сумма ставки:</label>
+            <input type="number" id="c-bet" value="1.0" step="0.1" class="input">
+            <button id="c-btn" class="btn-primary" onclick="crashPlay()">СДЕЛАТЬ СТАВКУ</button>
         </div>
-        <div class="live-bets-container-mini">
-            <div class="live-bets-list" id="crash-live-bets"></div>
-        </div>
-        <div class="bet-controls premium-controls">
-            <div class="bet-input-group">
-                <button onclick="changeBet('crash', -0.5)">-</button>
-                <input type="number" id="c-bet" value="1.0" step="0.5">
-                <button onclick="changeBet('crash', 0.5)">+</button>
-            </div>
-            <button id="c-btn" class="btn-primary bet-btn" onclick="crashAction()">СТАВКА</button>
+        <div class="live-bets-container glass-card" style="margin-top:10px; flex-grow:1; overflow-y:auto;">
+            <h3 style="margin-top:0; color:#00ffff;">Ставки этого раунда:</h3>
+            <div id="crash-live-list"></div>
         </div>
     </div>
 
-    <div id="screen-mines" class="game-fullscreen">
-        <div class="game-top-bar">
-            <button class="close-game" onclick="closeGame()">◀ Назад</button>
-            <div id="m-status" class="history-bar">Коэф: <span id="m-mult-display" style="color:#00ffcc; font-weight:bold;">1.00x</span></div>
+    <div id="screen-mines" class="screen">
+        <button onclick="closeScreen()" class="back-btn">◀ В меню</button>
+        <div class="mines-mult glass-card" style="padding:10px; margin-bottom:15px;">
+            Текущий икс: <span id="m-mult" class="glow-text" style="font-size:24px;">1.00x</span>
         </div>
-        <div class="mines-container">
-            <div id="m-grid" class="mines-grid"></div>
-        </div>
-        <div class="bet-controls premium-controls">
-            <div class="bet-input-group">
-                <button onclick="changeBet('mines', -0.5)">-</button>
-                <input type="number" id="m-bet" value="1.0" step="0.5">
-                <button onclick="changeBet('mines', 0.5)">+</button>
-            </div>
-            <button id="m-btn" class="btn-primary bet-btn" onclick="minesAction()">ИГРАТЬ</button>
+        <div id="m-grid" class="mines-grid"></div>
+        <div class="controls glass-card">
+            <label style="color:#888; font-size:12px;">Сумма ставки:</label>
+            <input type="number" id="m-bet" value="1.0" step="0.1" class="input">
+            <button id="m-btn-start" class="btn-primary" onclick="minesPlay()">НАЧАТЬ ИГРУ</button>
+            <button id="m-btn-cashout" class="btn-green" onclick="minesCashout()" style="display:none;">ЗАБРАТЬ ВЫИГРЫШ</button>
         </div>
     </div>
 
-    <div id="screen-coinflip" class="game-fullscreen">
-        <div class="game-top-bar">
-            <button class="close-game" onclick="closeGame()">◀ Назад</button>
-            </div>
-        <div class="coinflip-container">
-            <div id="coin" class="coin">
-                <div class="coin-face coin-front">L</div>
-                <div class="coin-face coin-back">X</div>
-            </div>
-            <h2 id="coin-result-text" style="margin-top: 30px; height: 30px;">Выберите сторону</h2>
-            
-            <div class="coin-choice-buttons">
-                <button class="btn-choice" id="btn-choice-l" onclick="selectCoinSide('L')">Ставить на L</button>
-                <button class="btn-choice" id="btn-choice-x" onclick="selectCoinSide('X')">Ставить на X</button>
-            </div>
+    <div id="screen-coinflip" class="screen">
+        <button onclick="closeScreen()" class="back-btn">◀ В меню</button>
+        <div class="glass-card" style="display:flex; justify-content:center; margin-bottom:20px; padding:30px;">
+            <div id="coin" class="coin glow-text">L / X</div>
         </div>
-        <div class="bet-controls premium-controls">
-            <div class="bet-input-group">
-                <button onclick="changeBet('coinflip', -0.5)">-</button>
-                <input type="number" id="cf-bet" value="1.0" step="0.5">
-                <button onclick="changeBet('coinflip', 0.5)">+</button>
+        <div class="controls glass-card">
+            <div style="display:flex; gap:10px; margin-bottom:10px;">
+                <button class="btn-blue" onclick="selectCoin('L')">Выбрать L</button>
+                <button class="btn-green" onclick="selectCoin('X')">Выбрать X</button>
             </div>
-            <button id="cf-btn" class="btn-primary bet-btn" onclick="coinflipAction()" disabled>ВЫБЕРИТЕ СТОРОНУ</button>
+            <label style="color:#888; font-size:12px;">Сумма ставки:</label>
+            <input type="number" id="cf-bet" value="1.0" step="0.1" class="input">
+            <button class="btn-primary" onclick="coinflipPlay()">БРОСИТЬ МОНЕТКУ</button>
         </div>
     </div>
 
-    <div id="admin-modal" class="modal-overlay">
-        <div class="glass-panel admin-panel-large">
-            <div class="admin-header">
-                <h3>👑 Admin Panel</h3>
-                <button class="close-icon" onclick="closeAdminMenu()">✖</button>
-            </div>
-            
-            <div class="admin-tabs">
-                <button class="adm-tab active" onclick="switchAdminTab('users')">Юзеры</button>
-                <button class="adm-tab" onclick="switchAdminTab('withdraws')">Выводы</button>
-                <button class="adm-tab" onclick="switchAdminTab('promos')">Промо</button>
-            </div>
-
-            <div id="adm-tab-users" class="adm-content active">
-                <div class="adm-list" id="admin-users-list"></div>
-            </div>
-
-            <div id="adm-tab-withdraws" class="adm-content">
-                <div class="adm-list" id="admin-withdraw-list"></div>
-            </div>
-
-            <div id="adm-tab-promos" class="adm-content">
-                <input type="text" id="adm-promo-code" placeholder="Код" class="premium-input adm-in">
-                <input type="number" id="adm-promo-sum" placeholder="Сумма" class="premium-input adm-in">
-                <input type="number" id="adm-promo-uses" placeholder="Активаций" class="premium-input adm-in">
-                <button class="btn-primary" onclick="createAdminPromo()" style="margin-top: 10px;">Создать Промо</button>
-            </div>
+    <div id="admin-panel" class="modal">
+        <div class="modal-content">
+            <h3 class="glow-text">Админ-Панель</h3>
+            <div id="user-list" style="max-height:60vh; overflow-y:auto; margin-bottom:15px;">Загрузка...</div>
+            <button class="btn-primary" onclick="document.getElementById('admin-panel').style.display='none'">Закрыть панель</button>
         </div>
     </div>
 
-    <div id="user-manage-modal" class="modal-overlay" style="z-index: 2000;">
-        <div class="glass-panel admin-panel">
-            <h3 id="manage-u-name">User</h3>
-            <p>ID: <span id="manage-u-id"></span></p>
-            <p>Реал: <b id="manage-u-real" style="color:#00ffcc;">0.00</b></p>
-            <button class="btn-secondary" id="manage-u-tglink" style="margin: 10px 0; font-size:12px;">Перейти в Telegram</button>
-            <input type="number" id="manage-u-amount" placeholder="Сумма (+ или -)" class="premium-input" style="margin-top:10px;">
-            <div style="display:flex; gap:10px; margin-top:15px;">
-                <button class="btn-primary btn-green" onclick="editUserBalance('add')">Добавить</button>
-                <button class="btn-primary btn-red" onclick="editUserBalance('remove')">Снять</button>
-            </div>
-            <button class="btn-secondary" onclick="closeUserManage()" style="margin-top:15px; width:100%;">Закрыть</button>
+    <nav class="nav">
+        <div class="nav-item active" onclick="switchTab('home', this)">
+            <span style="font-size:20px;">🎮</span><br>Игры
         </div>
-    </div>
-
-    <nav class="hot-bar premium-hotbar">
-        <div class="nav-item active" onclick="switchTab('home', this)"><span class="nav-icon">🎮</span><span class="nav-text">Игры</span></div>
-        <div class="nav-item" onclick="switchTab('wallet', this)"><span class="nav-icon">💳</span><span class="nav-text">Кошелек</span></div>
-        <div class="nav-item" onclick="switchTab('promo', this)"><span class="nav-icon">🎁</span><span class="nav-text">Промо</span></div>
-        <div class="nav-item" onclick="switchTab('profile', this)"><span class="nav-icon">👤</span><span class="nav-text">Профиль</span></div>
+        <div class="nav-item" onclick="switchTab('wallet', this)">
+            <span style="font-size:20px;">💳</span><br>Кошелек
+        </div>
+        <div class="nav-item" onclick="switchTab('promo', this)">
+            <span style="font-size:20px;">🎁</span><br>Промо
+        </div>
+        <div class="nav-item" onclick="switchTab('profile', this)">
+            <span style="font-size:20px;">👤</span><br>Профиль
+        </div>
     </nav>
 
     <script src="script.js"></script>
