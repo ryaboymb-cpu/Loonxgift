@@ -1,10 +1,17 @@
 const TelegramBot = require('node-telegram-bot-api');
-const token = process.env.BOT_TOKEN;
-const webAppUrl = 'https://loonxgift.onrender.com'; // Ссылка на твое приложение
+
+// Подтягиваем токен из переменных окружения (Render Env)
+const token = process.env.BOT_TOKEN; 
+const webAppUrl = process.env.WEB_APP_URL || 'https://loonxgift.onrender.com';
+
+// Проверка, чтобы бот не крашился, если токен забыли добавить
+if (!token) {
+    console.error('❌ ОШИБКА: BOT_TOKEN не указан в Environment Variables!');
+    process.exit(1);
+}
 
 const bot = new TelegramBot(token, { polling: true });
 
-// Твои контакты
 const CONTACTS = {
     creator: '@tonfrm',
     channel: '@Loonxnews',
@@ -12,18 +19,14 @@ const CONTACTS = {
     bugs: '@MsgP2P'
 };
 
-// Команда /start
 bot.onText(/\/start/, (msg) => {
     const chatId = msg.chat.id;
-    
-    // Твоя фраза (строго по запросу)
     const welcomeText = `🪙 Добро пожаловать в Loonx Gift!\nЛучшие игры уже ждут тебя.`;
 
     bot.sendMessage(chatId, welcomeText, {
         parse_mode: 'Markdown',
         reply_markup: {
             inline_keyboard: [
-                // Твоя кнопка с пузырьками
                 [{ text: '🫧играть🫧', web_app: { url: webAppUrl } }],
                 [{ text: '📢 Channel', url: `https://t.me/${CONTACTS.channel.replace('@', '')}` }]
             ]
@@ -31,10 +34,8 @@ bot.onText(/\/start/, (msg) => {
     });
 });
 
-// Команда /help (Только твои контакты)
 bot.onText(/\/help/, (msg) => {
     const chatId = msg.chat.id;
-    
     const helpText = `💎 *Наши контакты:*\n\n` +
                      `• Creator = ${CONTACTS.creator}\n\n` +
                      `• Channel and promo = ${CONTACTS.channel}\n\n` +
@@ -47,4 +48,4 @@ bot.onText(/\/help/, (msg) => {
     });
 });
 
-console.log('✅ Бот Loonx Gift полностью настроен!');
+console.log('✅ Бот Loonx Gift запущен! Токен успешно подгружен из ENV.');
