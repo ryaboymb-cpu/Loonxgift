@@ -3,12 +3,12 @@ const tg = window.Telegram.WebApp;
 tg.expand();
 
 let user = null;
-let currentBalMode = 'demo'; // По умолчанию демо
+let currentBalMode = 'demo'; 
 let selectedMines = 6;
 let selectedCoin = 'L';
 let adminClicks = 0;
+let crashGameStatus = 'waiting';
 
-// Звуковые эффекты (Премиальные, короткие)
 const sounds = {
     click: new Audio('https://cdn.pixabay.com/audio/2022/03/15/audio_7833316c05.mp3'),
     win: new Audio('https://cdn.pixabay.com/audio/2021/08/04/audio_bb4062e12e.mp3'),
@@ -23,8 +23,7 @@ function playSnd(type) {
     }
 }
 
-// Инициализация юзера
-const userData = tg.initDataUnsafe?.user || { id: '12345', first_name: 'LocalDev', photo_url: '' };
+const userData = tg.initDataUnsafe?.user || { id: '12345', first_name: 'Dev', photo_url: '' };
 socket.emit('init_user', {
     id: userData.id,
     username: userData.first_name,
@@ -42,12 +41,12 @@ socket.on('alert_sound', (data) => {
 });
 
 function updateUI() {
+    if(!user) return;
     const bal = currentBalMode === 'real' ? user.realBal : user.demoBal;
     document.getElementById('bal-val').innerText = bal.toFixed(2);
     document.getElementById('bal-mode').innerText = currentBalMode.toUpperCase();
     document.getElementById('bal-mode').style.color = currentBalMode === 'real' ? '#00cc66' : '#8b949e';
     
-    // Профиль
     document.getElementById('tg-avatar').src = user.photoUrl || '';
     document.getElementById('prof-ava').src = user.photoUrl || '';
     document.getElementById('prof-name').innerText = user.tgName;
@@ -64,7 +63,6 @@ function toggleBalance() {
     updateUI();
 }
 
-// Навигация
 function nav(tabId, el) {
     document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
     document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
@@ -83,26 +81,46 @@ function closeScreen() {
     document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
 }
 
-// --- CRASH ЛОГИКА ---
+// --- CRASH ---
 socket.on('crash_update', (state) => {
+    crashGameStatus = state.status;
     const rocket = document.getElementById('rocket');
     const multText = document.getElementById('c-mult');
+    const btn = document.getElementById('c-btn');
     
     if (state.status === 'waiting') {
         rocket.classList.remove('flying');
         rocket.style.transform = `translate(0, 0)`;
         multText.innerText = `Начало через ${state.timer}с`;
         multText.style.color = '#fff';
+        btn.innerText = 'СТАВКА';
+        btn.onclick = () => {
+            const bet = parseFloat(document.getElementById('c-bet').value);
+            socket.emit('crash_bet', { bet, mode: currentBalMode });
+            playSnd('click');
+            btn.innerText = 'ОЖИДАНИЕ...';
+            btn.onclick = null;
+        };
     } else if (state.status === 'flying') {
         rocket.classList.add('flying');
         multText.innerText = state.mult.toFixed(2) + 'x';
-        // Визуальный подъем ракеты
-        let offset = Math.min(state.mult * 10, 100);
-        rocket.style.transform = `translate(${offset}px, -${offset}px)`;
+        rocket.style.transform = `translate(${Math.min(state.mult * 5, 50)}px, -${Math.min(state.mult * 5, 50)}px)`;
+        
+        // Если юзер в игре, меняем кнопку на ВЫВОД
+        if(btn.innerText === 'ОЖИДАНИЕ...') {
+            btn.innerText = 'ЗАБРАТЬ';
+            btn.onclick = () => {
+                socket.emit('crash_cashout');
+                btn.innerText = 'ВЫВЕЛИ';
+                btn.onclick = null;
+            };
+        }
     } else {
         rocket.classList.remove('flying');
         multText.innerText = 'BOOM!';
         multText.style.color = '#ff4444';
+        btn.innerText = 'СТАВКА';
+        btn.onclick = null;
         playSnd('boom');
     }
 });
@@ -112,7 +130,7 @@ socket.on('crash_live_bets', (bets) => {
     cont.innerHTML = bets.map(b => `
         <div class="list-item">
             <div style="display:flex; align-items:center;">
-                <img src="${b.photoUrl}"> <span>${b.tgName}</span>
+                <img src="${b.photoUrl}" onerror="this.src=''"> <span style="margin-left:5px;">${b.tgName}</span>
             </div>
             <span style="color:${b.status === 'cashed' ? '#00cc66' : '#aaa'}">
                 ${b.bet} TON ${b.win > 0 ? '(+' + b.win.toFixed(2) + ')' : ''}
@@ -121,26 +139,11 @@ socket.on('crash_live_bets', (bets) => {
     `).join('');
 });
 
-function crashPlay() {
-    const bet = parseFloat(document.getElementById('c-bet').value);
-    socket.emit('crash_bet', { bet, mode: currentBalMode });
-    playSnd('click');
-}
-
-function crashCashout() {
-    socket.emit('crash_cashout');
-}
-
-document.getElementById('c-btn').addEventListener('click', () => {
-    // Если кнопка "Ставка", шлем ставку, если "Вывод", шлем кэшаут
-    // В реальности можно менять текст кнопки через socket crash_update
-});
-
-// --- MINES ЛОГИКА ---
-function setMines(count) {
+// --- MINES ---
+function setMines(count, btnId) {
     selectedMines = count;
     document.querySelectorAll('#screen-mines .btn-dark').forEach(b => b.classList.remove('active-btn'));
-    event.target.classList.add('active-btn');
+    document.getElementById(btnId).classList.add('active-btn');
     playSnd('click');
 }
 
@@ -163,8 +166,9 @@ function minesPlay() {
 
 socket.on('mines_started', () => {
     renderMinesGrid();
-    document.getElementById('m-btn').innerText = 'ЗАБРАТЬ';
-    document.getElementById('m-btn').onclick = () => socket.emit('mines_cashout');
+    const btn = document.getElementById('m-btn');
+    btn.innerText = 'ЗАБРАТЬ';
+    btn.onclick = () => socket.emit('mines_cashout');
 });
 
 socket.on('mines_safe', (data) => {
@@ -193,16 +197,22 @@ socket.on('mines_win', () => {
 });
 
 function resetMinesUI() {
-    document.getElementById('m-btn').innerText = 'СТАВКА';
-    document.getElementById('m-btn').onclick = minesPlay;
+    const btn = document.getElementById('m-btn');
+    btn.innerText = 'СТАВКА';
+    btn.onclick = minesPlay;
     document.getElementById('m-mult').innerText = '1.00x';
 }
 
-// --- COINFLIP ЛОГИКА ---
-function setCoin(side) {
+// --- COINFLIP ---
+function setCoin(side, btnId) {
     selectedCoin = side;
-    document.querySelectorAll('#screen-coinflip .btn').forEach(b => b.classList.remove('active-btn'));
-    event.target.classList.add('active-btn');
+    document.getElementById('btn-cf-l').classList.replace('btn-blue', 'btn-dark');
+    document.getElementById('btn-cf-x').classList.replace('btn-blue', 'btn-dark');
+    document.getElementById('btn-cf-l').classList.remove('active-btn');
+    document.getElementById('btn-cf-x').classList.remove('active-btn');
+    
+    document.getElementById(btnId).classList.replace('btn-dark', 'btn-blue');
+    document.getElementById(btnId).classList.add('active-btn');
     playSnd('click');
 }
 
@@ -219,9 +229,8 @@ socket.on('coinflip_result', (data) => {
     const coin = document.getElementById('coin');
     setTimeout(() => {
         coin.classList.remove('spinning');
-        // Поворот на нужную сторону
         const rotation = data.resultSide === 'L' ? 0 : 180;
-        coin.style.transform = `rotateY(${rotation + 1800}deg)`; // 1800 для доп кручений
+        coin.style.transform = `rotateY(${rotation + 1800}deg)`; 
         
         setTimeout(() => {
             if(data.win) playSnd('money');
@@ -239,7 +248,7 @@ function activatePromo() {
 function reqWithdraw() {
     const address = document.getElementById('w-address').value;
     const amount = parseFloat(document.getElementById('w-amt').value);
-    if(!address || amount < 1) return tg.showAlert('Минимум 1 TON');
+    if(!address || amount < 1) return tg.showAlert('Минимум 1 TON и введи адрес');
     socket.emit('withdraw_request', { address, amount });
 }
 
@@ -249,7 +258,7 @@ socket.on('global_history_update', (data) => {
     cont.innerHTML = data.map(h => `
         <div class="list-item">
             <div style="display:flex; align-items:center;">
-                <img src="${h.photoUrl || ''}"> <b>${h.tgName}</b>
+                <img src="${h.photoUrl || ''}" onerror="this.src=''"> <b style="margin-left:5px;">${h.tgName}</b>
             </div>
             <span>${h.game}</span>
             <b style="color:${h.isWin ? '#00cc66' : '#ff4444'}">${h.isWin ? '+' : ''}${h.win.toFixed(2)} TON</b>
@@ -257,13 +266,13 @@ socket.on('global_history_update', (data) => {
     `).join('');
 });
 
-// --- АДМИНКА (СЕКРЕТ) ---
+// --- АДМИНКА ---
 function adminClick() {
     adminClicks++;
     if(adminClicks >= 10) {
         adminClicks = 0;
         const pass = prompt('Admin Password?');
-        if(pass === 'loonx777') { // Твой пароль
+        if(pass === 'loonx777') {
             document.getElementById('admin-modal').style.display = 'flex';
             admTab('users');
         }
@@ -279,10 +288,8 @@ function admTab(type) {
                 <div class="panel mt-half" style="font-size:12px;">
                     <b>${u.tgName}</b> (ID: ${u.id})<br>
                     Бал: ${u.realBal.toFixed(2)} | Игр: ${u.games}<br>
-                    Кошелек: ${u.wallet}<br>
                     <button onclick="admAct('edit_bal', '${u.id}')">+/- Бал</button>
                     <button onclick="admAct('ban', '${u.id}')">${u.banned ? 'Разбан' : 'Бан'}</button>
-                    <button onclick="window.open('https://t.me/${u.tgName}')">TG</button>
                 </div>
             `).join('');
         }
@@ -298,7 +305,7 @@ function admTab(type) {
         }
         if(type === 'promos') {
             cont.innerHTML = `
-                <input id="p-code" placeholder="Код" class="input">
+                <input id="p-code" placeholder="Код" class="input mt-half">
                 <input id="p-amt" placeholder="Сумма" class="input mt-half">
                 <input id="p-uses" placeholder="Кол-во" class="input mt-half">
                 <button class="btn btn-green mt" onclick="createPromo()">Создать</button>
@@ -306,9 +313,9 @@ function admTab(type) {
         }
         if(type === 'rtp') {
             cont.innerHTML = `
-                <label>Crash Win %</label><input id="r-crash" value="${data.settings.crashWinChance}" class="input">
-                <label>Mines Win %</label><input id="r-mines" value="${data.settings.minesWinChance}" class="input">
-                <label>Coin Win %</label><input id="r-coin" value="${data.settings.coinflipWinChance}" class="input">
+                <label>Crash Win %</label><input id="r-crash" value="${data.settings.crashWinChance}" class="input mt-half">
+                <label>Mines Win %</label><input id="r-mines" value="${data.settings.minesWinChance}" class="input mt-half">
+                <label>Coin Win %</label><input id="r-coin" value="${data.settings.coinflipWinChance}" class="input mt-half">
                 <button class="btn btn-blue mt" onclick="saveSettings()">Сохранить</button>
             `;
         }
@@ -323,15 +330,19 @@ function admAct(action, id) {
 }
 
 function createPromo() {
-    const code = document.getElementById('p-code').value;
-    const amount = document.getElementById('p-amt').value;
-    const uses = document.getElementById('p-uses').value;
-    socket.emit('admin_action', { action: 'create_promo', code, amount, uses });
+    socket.emit('admin_action', { 
+        action: 'create_promo', 
+        code: document.getElementById('p-code').value, 
+        amount: document.getElementById('p-amt').value, 
+        uses: document.getElementById('p-uses').value 
+    });
 }
 
 function saveSettings() {
-    const crash = document.getElementById('r-crash').value;
-    const mines = document.getElementById('r-mines').value;
-    const coinflip = document.getElementById('r-coin').value;
-    socket.emit('admin_action', { action: 'save_settings', crash, mines, coinflip });
+    socket.emit('admin_action', { 
+        action: 'save_settings', 
+        crash: document.getElementById('r-crash').value, 
+        mines: document.getElementById('r-mines').value, 
+        coinflip: document.getElementById('r-coin').value 
+    });
 }
