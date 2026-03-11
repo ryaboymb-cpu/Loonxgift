@@ -3,6 +3,7 @@ const http = require('http');
 const { Server } = require('socket.io');
 const mongoose = require('mongoose');
 
+// --- ИНИЦИАЛИЗАЦИЯ EXPRESS И SOCKET.IO ---
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
@@ -14,7 +15,7 @@ mongoose.connect(MONGO_URI)
     .then(() => console.log('✅ База данных LoonxGift подключена'))
     .catch(err => console.error('❌ Ошибка подключения к MongoDB:', err));
 
-// --- СХЕМЫ ДАННЫХ (MODELS) ---
+// --- СХЕМЫ ДАННЫХ ---
 const UserSchema = new mongoose.Schema({
     id: { type: String, unique: true },
     tgName: String,
@@ -22,7 +23,8 @@ const UserSchema = new mongoose.Schema({
     realBal: { type: Number, default: 0 },
     demoBal: { type: Number, default: 1000 },
     games: { type: Number, default: 0 },
-    wins: { type: Number, default: 0 }
+    wins: { type: Number, default: 0 },
+    lastDemoClaim: { type: Date, default: null } // Время последнего получения DEMO
 });
 const User = mongoose.model('User', UserSchema);
 
@@ -55,12 +57,11 @@ const MinesSession = mongoose.model('MinesSession', MinesSessionSchema);
 
 app.use(express.static('public'));
 
-// === ГЛОБАЛЬНЫЕ ИГРОВЫЕ ПЕРЕМЕННЫЕ ===
+// === ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ИГРЫ ===
 let crashState = { status: 'waiting', mult: 1.0, timer: 5, history: [] };
-let crashBets = {}; // socketId: { userId, amount, mode, name }
+let crashBets = {};
 let onlineCount = 0;
 
-// === ЛОГИКА CRASH ===
 function runCrash() {
     crashState.status = 'waiting';
     crashState.timer = 5;
@@ -105,7 +106,6 @@ function startCrashFlight() {
 }
 runCrash();
 
-// === ФУНКЦИИ ===
 const mineMultipliers = [1.09, 1.25, 1.45, 1.68, 1.95, 2.25, 2.65, 3.10, 3.65, 4.30, 5.10];
 function generateMinesField() {
     let field = Array(25).fill('safe');
@@ -117,7 +117,7 @@ function generateMinesField() {
     return field;
 }
 
-// === SOCKET.IO ===
+// === SOCKET.IO ЛОГИКА ===
 io.on('connection', (socket) => {
     onlineCount++;
     io.emit('online_update', onlineCount);
@@ -135,7 +135,29 @@ io.on('connection', (socket) => {
         } catch (e) { console.error(e); }
     });
 
-    // --- ДЕПОЗИТ (АВТОЗАЧИСЛЕНИЕ) ---
+    // --- ПОЛУЧЕНИЕ 200 DEMO TON ---
+    socket.on('claim_demo', async () => {
+        try {
+            let user = await User.findOne({ id: socket.userId });
+            if (user) {
+                const now = new Date();
+                const lastClaim = user.lastDemoClaim ? new Date(user.lastDemoClaim) : new Date(0);
+                const diffHours = Math.abs(now - lastClaim) / 36e5;
+
+                if (diffHours >= 24) {
+                    user.demoBal += 200;
+                    user.lastDemoClaim = now;
+                    await user.save();
+                    socket.emit('user_data', user);
+                    socket.emit('alert', '✅ 200 DEMO TON успешно начислены!');
+                } else {
+                    let wait = (24 - diffHours).toFixed(1);
+                    socket.emit('alert', `❌ Подождите еще ${wait} часов!`);
+                }
+            }
+        } catch(e) { console.error(e); }
+    });
+
     socket.on('deposit_success', async (data) => {
         try {
             let user = await User.findOne({ id: socket.userId });
@@ -147,14 +169,15 @@ io.on('connection', (socket) => {
         } catch (e) { console.error(e); }
     });
 
-    // --- CRASH ---
+    // --- ЛИМИТЫ СТАВОК (0.1 - 20) ---
     socket.on('crash_bet', async (d) => {
         if (crashState.status !== 'waiting') return;
+        if (d.bet < 0.1 || d.bet > 20) return; // Проверка лимита на сервере
         try {
             let user = await User.findOne({ id: socket.userId });
             let balKey = d.mode === 'real' ? 'realBal' : 'demoBal';
             
-            if (user && user[balKey] >= d.bet && d.bet >= 0.1) {
+            if (user && user[balKey] >= d.bet) {
                 user[balKey] -= d.bet;
                 user.games++;
                 await user.save();
@@ -176,7 +199,6 @@ io.on('connection', (socket) => {
                 user[balKey] += win;
                 user.wins++;
                 await user.save();
-                
                 delete crashBets[socket.id];
                 
                 socket.emit('user_data', user);
@@ -186,13 +208,13 @@ io.on('connection', (socket) => {
         }
     });
 
-    // --- MINES ---
     socket.on('mines_start', async (d) => {
+        if (d.bet < 0.1 || d.bet > 20) return; // Лимит
         try {
             let user = await User.findOne({ id: socket.userId });
             let balKey = d.mode === 'real' ? 'realBal' : 'demoBal';
             
-            if (user && user[balKey] >= d.bet && d.bet >= 0.1) {
+            if (user && user[balKey] >= d.bet) {
                 await MinesSession.deleteOne({ userId: user.id });
                 user[balKey] -= d.bet;
                 user.games++;
@@ -243,33 +265,31 @@ io.on('connection', (socket) => {
         } catch (e) { console.error(e); }
     });
 
-    // --- COINFLIP (35% ШАНС ПОБЕДЫ) ---
     socket.on('coinflip_play', async (d) => {
+        if (d.bet < 0.1 || d.bet > 20) return; // Лимит
         try {
             let user = await User.findOne({ id: socket.userId });
             let balKey = d.mode === 'real' ? 'realBal' : 'demoBal';
             
-            if (user && user[balKey] >= d.bet && d.bet >= 0.1) {
-                user[balKey] -= d.bet; // Списываем ставку
+            if (user && user[balKey] >= d.bet) {
+                user[balKey] -= d.bet;
                 user.games++;
                 
-                // Логика 35% шанса на победу
-                const isWin = Math.random() < 0.35; // 35% true, 65% false
-                
+                const isWin = Math.random() < 0.35; 
                 let resultSide;
+                
                 if(isWin) {
-                    resultSide = d.side; // Юзер угадал
-                    let winAmount = d.bet * 1.95; // Кэф х1.95 (чтобы казино тоже забирало процент)
+                    resultSide = d.side;
+                    let winAmount = d.bet * 1.95; 
                     user[balKey] += winAmount;
                     user.wins++;
                 } else {
-                    resultSide = d.side === 'L' ? 'X' : 'L'; // Юзер не угадал
+                    resultSide = d.side === 'L' ? 'X' : 'L'; 
                 }
                 
                 await user.save();
                 socket.emit('user_data', user);
                 
-                // Отправляем результат клиенту
                 socket.emit('coinflip_result', {
                     win: isWin,
                     resultSide: resultSide,
@@ -279,7 +299,6 @@ io.on('connection', (socket) => {
         } catch (e) { console.error(e); }
     });
 
-    // --- ПРОМОКОДЫ ---
     socket.on('activate_promo', async (code) => {
         try {
             let promo = await Promo.findOne({ code: code.toUpperCase() });
@@ -298,7 +317,6 @@ io.on('connection', (socket) => {
         } catch (e) { console.error(e); }
     });
 
-    // --- ВЫВОД СРЕДСТВ ---
     socket.on('withdraw_request', async (data) => {
         try {
             let user = await User.findOne({ id: socket.userId });
@@ -306,12 +324,7 @@ io.on('connection', (socket) => {
                 user.realBal -= data.amount;
                 await user.save();
                 
-                const req = new Withdraw({
-                    userId: user.id,
-                    tgName: user.tgName,
-                    address: data.address,
-                    amount: data.amount
-                });
+                const req = new Withdraw({ userId: user.id, tgName: user.tgName, address: data.address, amount: data.amount });
                 await req.save();
                 
                 socket.emit('user_data', user);
@@ -320,7 +333,6 @@ io.on('connection', (socket) => {
         } catch (e) { console.error(e); }
     });
 
-    // --- АДМИНКА ---
     socket.on('admin_get_data', async () => {
         try {
             const allUsers = await User.find({});
@@ -341,19 +353,18 @@ io.on('connection', (socket) => {
                     if (data.type === 'add') u.realBal += data.amount;
                     else u.realBal -= data.amount;
                     await u.save();
-                    // Отправляем в сокет принудительное обновление если юзер онлайн
                     io.to(u.id).emit('user_data', u); 
                 }
             }
             if (data.action === 'process_withdraw') {
-                let req = await Withdraw.findById(data.reqId); // Ищем заявку по _id в монго
+                let req = await Withdraw.findById(data.reqId); 
                 if (req) {
                     req.status = data.status;
                     await req.save();
                     if (data.status === 'reject') {
                         let u = await User.findOne({ id: req.userId });
                         if(u) {
-                            u.realBal += req.amount; // Возвращаем деньги
+                            u.realBal += req.amount; 
                             await u.save();
                             io.to(req.userId).emit('user_data', u); 
                         }
@@ -369,6 +380,35 @@ io.on('connection', (socket) => {
         delete crashBets[socket.id];
     });
 });
+
+// === TELEGRAM BOT LOGIC (ДОБАВЛЕНО И ИСПРАВЛЕНО) ===
+const TelegramBot = require('node-telegram-bot-api');
+const BOT_TOKEN = process.env.BOT_TOKEN;
+
+if (BOT_TOKEN) {
+    const bot = new TelegramBot(BOT_TOKEN, { polling: true });
+
+    bot.onText(/\/start/, (msg) => {
+        const chatId = msg.chat.id;
+        bot.sendMessage(chatId, "🚀 Добро пожаловать в Loonx Gift!\n\nНажми кнопку ниже, чтобы запустить игру.", {
+            reply_markup: {
+                inline_keyboard: [
+                    [{ text: "🎮 Открыть Loonx Gift", web_app: { url: "https://loonxgift.onrender.com" } }]
+                ]
+            }
+        });
+    });
+
+    bot.onText(/\/help/, (msg) => {
+        const chatId = msg.chat.id;
+        const helpText = "•Creator = @tonfrm\n\n•Channel and promo = @Loonxnews\n\n•Support = @LoonxGift_Support\n\n•Bags = @MsgP2P";
+        bot.sendMessage(chatId, helpText);
+    });
+
+    console.log("🤖 Telegram Бот успешно запущен и слушает команды!");
+} else {
+    console.log("⚠️ ВНИМАНИЕ: Переменная BOT_TOKEN не найдена. Бот не работает. Добавь её в настройки Render.");
+}
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => console.log(`🚀 Сервер запущен на порту ${PORT}`));
