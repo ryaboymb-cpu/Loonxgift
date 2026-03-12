@@ -9,7 +9,7 @@
     <script src="/socket.io/socket.io.js"></script>
 </head>
 <body>
-    <div id="stars"></div>
+    <div id="stars-container"></div>
 
     <header class="header">
         <div class="user-info" onclick="adminClick()">
@@ -23,7 +23,7 @@
     </header>
 
     <main id="tab-home" class="tab active">
-        <div class="game-card" onclick="openScreen('crash')" style="background-image: linear-gradient(to right, rgba(13,17,23,0.9), rgba(13,17,23,0.4)), url('https://images.unsplash.com/photo-1541185933-ef5d8ed016c2?w=500&q=80');">
+        <div class="game-card" onclick="openScreen('crash')" style="background-image: linear-gradient(rgba(0,0,0,0.6), rgba(0,0,0,0.6)), url('https://w.forfun.com/fetch/51/513f8c85e505777777083040333d0261.jpeg');">
             <div class="game-info">
                 <h3>Crash</h3>
                 <p>Успей забрать до взрыва</p>
@@ -31,7 +31,7 @@
             <div class="game-play-btn">▶</div>
         </div>
         
-        <div class="game-card" onclick="openScreen('mines')" style="background-image: linear-gradient(to right, rgba(13,17,23,0.9), rgba(13,17,23,0.4)), url('https://images.unsplash.com/photo-1633535560662-79ac4e5bd8b9?w=500&q=80');">
+        <div class="game-card" onclick="openScreen('mines')" style="background-image: linear-gradient(rgba(0,0,0,0.6), rgba(0,0,0,0.6)), url('https://img.freepik.com/free-photo/dark-gemstones-background_23-2149306915.jpg');">
             <div class="game-info">
                 <h3>Mines</h3>
                 <p>Обойди мины, забери куш</p>
@@ -39,7 +39,7 @@
             <div class="game-play-btn">▶</div>
         </div>
         
-        <div class="game-card" onclick="openScreen('coinflip')" style="background-image: linear-gradient(to right, rgba(13,17,23,0.9), rgba(13,17,23,0.4)), url('https://images.unsplash.com/photo-1621504450181-5c3b994d8b9f?w=500&q=80');">
+        <div class="game-card" onclick="openScreen('coinflip')" style="background-image: linear-gradient(rgba(0,0,0,0.6), rgba(0,0,0,0.6)), url('https://img.freepik.com/free-vector/golden-coins-stack-background_23-2148491410.jpg');">
             <div class="game-info">
                 <h3>Coinflip</h3>
                 <p>Орел или Решка?</p>
@@ -84,17 +84,17 @@
     <main id="tab-profile" class="tab">
         <div class="panel">
             <div style="display:flex; align-items:center; gap:15px; margin-bottom: 20px;">
-                <img src="" id="prof-ava" class="avatar" style="width:60px; height:60px;">
+                <img src="" id="prof-ava" class="avatar" style="width:60px; height:60px; border-radius:50%; object-fit:cover;">
                 <div>
                     <h2 id="prof-name" style="margin:0;">Игрок</h2>
                     <span id="prof-id" class="subtext">ID: </span>
                 </div>
             </div>
             <div class="stats-grid">
-                <div class="stat-box"><span>Сыграно (Реал)</span><b id="s-games">0</b></div>
-                <div class="stat-box"><span>Побед (Реал)</span><b id="s-wins" style="color:#00cc66;">0</b></div>
-                <div class="stat-box"><span>Потрачено TON</span><b id="s-spent">0.00</b></div>
-                <div class="stat-box"><span>Выведено TON</span><b id="s-withdrawn" style="color:#3388ff;">0.00</b></div>
+                <div class="stat-box"><span>Сыграно</span><b id="s-games">0</b></div>
+                <div class="stat-box"><span>Побед</span><b id="s-wins" style="color:#00cc66;">0</b></div>
+                <div class="stat-box"><span>Потрачено</span><b id="s-spent">0.00</b></div>
+                <div class="stat-box"><span>Выведено</span><b id="s-withdrawn" style="color:#3388ff;">0.00</b></div>
             </div>
         </div>
     </main>
@@ -169,18 +169,10 @@
     </div>
 
     <nav class="nav">
-        <div class="nav-item active" onclick="nav('home', this)">
-            <svg viewBox="0 0 24 24"><path d="M21 6H3c-1.1 0-2 .9-2 2v8c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm-10 7H8v3H6v-3H3v-2h3V8h2v3h3v2zm4.5 2c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm3-3c-.83 0-1.5-.67-1.5-1.5S17.67 9 18.5 9s1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/></svg><span>Игры</span>
-        </div>
-        <div class="nav-item" onclick="nav('wallet', this)">
-            <svg viewBox="0 0 24 24"><path d="M21 18v1c0 1.1-.9 2-2 2H5c-1.11 0-2-.9-2-2V5c0-1.1.89-2 2-2h14c1.1 0 2 .9 2 2v1h-9c-1.11 0-2 .9-2 2v8c0 1.1.89 2 2 2h9zm-9-2h10V8H12v8zm4-2.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/></svg><span>Кошелек</span>
-        </div>
-        <div class="nav-item" onclick="nav('promo', this)">
-            <svg viewBox="0 0 24 24"><path d="M20 6h-2.18c.11-.31.18-.65.18-1 0-1.66-1.34-3-3-3-1.05 0-1.96.54-2.5 1.35l-.5.67-.5-.68C10.96 2.54 10.05 2 9 2 7.34 2 6 3.34 6 5c0 .35.07.69.18 1H4c-1.11 0-1.99.89-1.99 2L2 19c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V8c0-1.11-.89-2-2-2zm-5-2c.55 0 1 .45 1 1s-.45 1-1 1-1-.45-1-1 .45-1 1-1zM9 4c.55 0 1 .45 1 1s-.45 1-1 1-1-.45-1-1 .45-1 1-1zm11 15H4v-2h16v2zm0-5H4V8h5.08L7 10.83 8.62 12 11 8.76l1-1.36 1 1.36L15.38 12 17 10.83 14.92 8H20v6z"/></svg><span>Промо</span>
-        </div>
-        <div class="nav-item" onclick="nav('profile', this)">
-            <svg viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg><span>Профиль</span>
-        </div>
+        <div class="nav-item active" onclick="nav('home', this)">Игры</div>
+        <div class="nav-item" onclick="nav('wallet', this)">Кошелек</div>
+        <div class="nav-item" onclick="nav('promo', this)">Промо</div>
+        <div class="nav-item" onclick="nav('profile', this)">Профиль</div>
     </nav>
 
     <script src="script.js"></script>
