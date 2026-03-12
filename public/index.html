@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Loonx Gift — Premium Games</title>
+    <title>Loonx Gifts</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
@@ -15,133 +15,123 @@
     <div id="app">
         <header class="header">
             <div class="user-block" onclick="handleAdminTaps()">
-                <img id="u-avatar" src="" class="avatar-glow">
-                <span id="profile-name">Загрузка...</span>
+                <div class="avatar-wrapper">
+                    <img id="u-avatar" src="" class="avatar-header">
+                </div>
+                <div class="header-text">
+                    <span id="profile-name">Loonx Gift</span>
+                    <span class="status-dot-text"><span class="dot"></span> 1</span>
+                </div>
             </div>
             <div class="balance-container" onclick="switchMode()">
                 <div class="balance-val"><span class="bal-amount">0.00</span> <small class="bal-cur">TON</small></div>
-                <div class="balance-type" id="mode-label">DEMO</div>
+                <div class="balance-type" id="mode-label">REAL TON</div>
             </div>
         </header>
 
         <main class="content">
             <section id="tab-home" class="tab-pane active">
-                <div class="game-grid">
-                    <div class="game-item crash" onclick="openGame('crash')">
-                        <div class="game-icon">🚀</div>
-                        <div class="game-info"><h3>CRASH</h3><p>Множитель до x100</p></div>
+                <div class="games-vertical-list">
+                    <div class="game-row" onclick="openGame('crash')">
+                        <div class="g-icon">🚀</div>
+                        <div class="g-name">CRASH</div>
+                        <div class="g-desc">Множитель до x100</div>
                     </div>
-                    <div class="game-item mines" onclick="openGame('mines')">
-                        <div class="game-icon">💎</div>
-                        <div class="game-info"><h3>MINES</h3><p>25 ячеек удачи</p></div>
+                    <div class="game-row" onclick="openGame('mines')">
+                        <div class="g-icon">💎</div>
+                        <div class="g-name">MINES</div>
+                        <div class="g-desc">25 ячеек удачи</div>
                     </div>
-                    <div class="game-item coin" onclick="openGame('coin')">
-                        <div class="game-icon">🪙</div>
-                        <div class="game-info"><h3>COINFLIP</h3><p>Шанс 50/50</p></div>
+                    <div class="game-row" onclick="openGame('coin')">
+                        <div class="g-icon">🪙</div>
+                        <div class="g-name">COINFLIP</div>
+                        <div class="g-desc">Шанс 50/50</div>
                     </div>
                 </div>
                 
-                <div class="live-history">
-                    <h4>LIVE СТАВКИ</h4>
-                    <div id="live-list"></div>
-                </div>
+                <h3 class="live-title">LIVE СТАВКИ</h3>
+                <div id="live-list"></div>
             </section>
 
             <section id="tab-wallet" class="tab-pane">
-                <div class="wallet-card">
-                    <h2>Пополнение и Вывод</h2>
-                    <div id="ton-connect-button"></div>
-                    <p class="hint">Депозиты зачисляются на REAL баланс</p>
-                    <button class="btn btn-primary" onclick="depositTON()">Внести TON</button>
-                    
-                    <div class="withdraw-section">
-                        <input type="number" id="withdraw-amount" class="ui-input" placeholder="Сумма (мин. 5 TON)">
-                        <input type="text" id="withdraw-wallet" class="ui-input" placeholder="Ваш адрес кошелька">
-                        <button class="btn btn-secondary" onclick="requestWithdraw()">Создать заявку на вывод</button>
-                    </div>
+                <h2 class="tab-title">Пополнение и Вывод</h2>
+                <div id="ton-connect-button" style="margin-bottom: 15px;"></div>
+                <p class="hint">Депозиты зачисляются на REAL баланс</p>
+                <button class="btn btn-blue" onclick="depositTON()">Внести TON</button>
+                
+                <div class="withdraw-section">
+                    <input type="number" id="withdraw-amount" class="ui-input" placeholder="Сумма (мин. 5 TON)">
+                    <input type="text" id="withdraw-wallet" class="ui-input" placeholder="Ваш адрес кошелька">
+                    <button class="btn btn-dark" onclick="requestWithdraw()">Создать заявку на вывод</button>
                 </div>
             </section>
 
             <section id="tab-promo" class="tab-pane">
-                <div class="promo-box">
-                    <h2>Промокоды</h2>
-                    <input type="text" id="promo-input" class="ui-input" placeholder="Введите код...">
-                    <button class="btn btn-success" onclick="activatePromo()">Активировать</button>
-                </div>
+                <h2 class="tab-title">Промокоды</h2>
+                <input type="text" id="promo-input" class="ui-input" placeholder="Введите код...">
+                <button class="btn btn-dark" onclick="activatePromo()">Активировать</button>
             </section>
 
             <section id="tab-profile" class="tab-pane">
-                <div class="profile-header">
-                    <img id="prof-avatar-big" src="" class="avatar-big">
+                <div class="profile-center">
+                    <img id="prof-avatar-big" src="" class="avatar-neon-big">
                     <h2 id="prof-name-big">User</h2>
+                    <div class="profile-stats">
+                        <p>Игр <b id="st-games">0</b></p>
+                        <p>Побед <b id="st-wins">0</b></p>
+                    </div>
                 </div>
-                <div class="stats-row">
-                    <div class="stat-card"><span>Игр</span><b id="st-games">0</b></div>
-                    <div class="stat-card"><span>Побед</span><b id="st-wins">0</b></div>
-                </div>
-                <button class="btn btn-bonus" onclick="claimDaily()">🎁 Бонус 200 DEMO (24ч)</button>
                 
-                <div class="contacts">
-                    <a href="https://t.me/tonfrm" class="contact-link">👨‍💻 Creator: @tonfrm</a>
-                    <a href="https://t.me/Loonxnews" class="contact-link">📢 Channel: @Loonxnews</a>
-                    <a href="https://t.me/LoonxGift_Support" class="contact-link">🛠 Support: @LoonxGift_Support</a>
-                    <a href="https://t.me/msgp2p" class="contact-link">🐛 Bugs: @msgp2p</a>
+                <button class="btn btn-pink" onclick="claimDaily()">🎁 Бонус 200 DEMO (24ч)</button>
+                
+                <div class="contacts-links">
+                    <a href="https://t.me/tonfrm">👨‍💻 Creator: @tonfrm</a>
+                    <a href="https://t.me/Loonxnews">📢 Channel: @Loonxnews</a>
+                    <a href="https://t.me/LoonxGift_Support">🛠 Support: @LoonxGift_Support</a>
+                    <a href="https://t.me/msgp2p">🐛 Bugs: @msgp2p</a>
                 </div>
             </section>
         </main>
 
         <nav class="navbar">
-            <div class="nav-item active" onclick="switchTab('home', this)">🏠<span>Главная</span></div>
-            <div class="nav-item" onclick="switchTab('wallet', this)">👛<span>Кошелек</span></div>
-            <div class="nav-item" onclick="switchTab('promo', this)">🎁<span>Промо</span></div>
-            <div class="nav-item" onclick="switchTab('profile', this)">👤<span>Профиль</span></div>
+            <div class="nav-item active" onclick="switchTab('home', this)"><span class="n-icon">🏠</span>Главная</div>
+            <div class="nav-item" onclick="switchTab('wallet', this)"><span class="n-icon">👛</span>Кошелек</div>
+            <div class="nav-item" onclick="switchTab('promo', this)"><span class="n-icon">🎁</span>Промо</div>
+            <div class="nav-item" onclick="switchTab('profile', this)"><span class="n-icon">👤</span>Профиль</div>
         </nav>
     </div>
 
     <div id="modal-coin" class="modal">
         <div class="modal-header">
-            <button class="back-btn" onclick="closeModal()">❮ Назад</button>
-            <div class="balance-pill" onclick="switchMode()"><span class="bal-amount">0.00</span> <small class="bal-cur">TON</small></div>
+            <button class="back-btn" onclick="closeModal()">✕</button>
         </div>
         <div class="game-container">
-            <div id="coin-object" class="coin-3d">L</div>
+            <div id="coin-object" class="coin-simple">L</div>
             <h2 id="coin-result-text">Выберите сторону</h2>
             <div class="bet-controls">
-                <input type="number" id="coin-bet-val" class="ui-input" value="1.0" min="0.5" max="20" step="0.1">
+                <input type="number" id="coin-bet-val" class="ui-input" value="1.0" min="0.5" max="20">
                 <div class="btn-group">
-                    <button class="btn side-l" onclick="playCoin('L')">Ставка на L</button>
-                    <button class="btn side-x" onclick="playCoin('X')">Ставка на X</button>
+                    <button class="btn btn-green-solid" onclick="playCoin('L')">Символ L</button>
+                    <button class="btn btn-blue-solid" onclick="playCoin('X')">Символ X</button>
                 </div>
             </div>
         </div>
     </div>
 
     <div id="modal-mines" class="modal">
-        <div class="modal-header">
-            <button class="back-btn" onclick="closeModal()">❮ Назад</button>
-            <div class="balance-pill" onclick="switchMode()"><span class="bal-amount">0.00</span> <small class="bal-cur">TON</small></div>
-        </div>
+        <div class="modal-header"><button class="back-btn" onclick="closeModal()">✕</button></div>
         <div class="game-container">
             <div id="mines-grid" class="mines-grid"></div>
             <div class="bet-controls">
-                <div class="input-row">
-                    <input type="number" id="mines-bet-val" class="ui-input" value="1.0" min="0.5" max="20">
-                    <select id="mines-count" class="ui-input">
-                        <option value="3">3 Бомбы</option>
-                        <option value="5">5 Бомб</option>
-                        <option value="10">10 Бомб</option>
-                    </select>
-                </div>
-                <button id="mines-main-btn" class="btn btn-success" onclick="startMines()">ИГРАТЬ</button>
+                <input type="number" id="mines-bet-val" class="ui-input" value="1.0" min="0.5" max="20">
+                <select id="mines-count" class="ui-input"><option value="3">3 Бомбы</option><option value="5">5 Бомб</option></select>
+                <button id="mines-main-btn" class="btn btn-green-solid" onclick="startMines()">ИГРАТЬ</button>
             </div>
         </div>
     </div>
 
     <div id="modal-crash" class="modal">
-        <div class="modal-header">
-            <button class="back-btn" onclick="closeModal()">❮ Назад</button>
-            <div class="balance-pill" onclick="switchMode()"><span class="bal-amount">0.00</span> <small class="bal-cur">TON</small></div>
-        </div>
+        <div class="modal-header"><button class="back-btn" onclick="closeModal()">✕</button></div>
         <div class="game-container">
             <div class="crash-display">
                 <div id="rocket">🚀</div>
@@ -150,42 +140,37 @@
             <div id="crash-history"></div>
             <div class="bet-controls">
                 <input type="number" id="crash-bet-val" class="ui-input" value="1.0" min="0.5" max="20">
-                <button id="crash-main-btn" class="btn btn-success" onclick="crashAction()">ПОСТАВИТЬ</button>
+                <button id="crash-main-btn" class="btn btn-green-solid" onclick="crashAction()">ПОСТАВИТЬ</button>
             </div>
         </div>
     </div>
 
     <div id="modal-admin" class="modal admin-modal">
-        <div class="modal-header">
-            <h3>ADMIN PANEL</h3>
-            <button onclick="closeModal()">✕</button>
-        </div>
+        <div class="modal-header"><h3>ADMIN</h3><button class="back-btn" onclick="closeModal()">✕</button></div>
         <div class="admin-nav">
             <button onclick="switchAdminTab('adm-users')">БД</button>
             <button onclick="switchAdminTab('adm-withdraw')">Выводы</button>
             <button onclick="switchAdminTab('adm-promo')">Промо</button>
-            <button onclick="switchAdminTab('adm-rtp')">RTP</button>
+            <button onclick="switchAdminTab('adm-rtp')">Настройки</button>
         </div>
         <div class="admin-content">
             <div id="adm-users" class="adm-pane active"></div>
             <div id="adm-withdraw" class="adm-pane"></div>
             <div id="adm-promo" class="adm-pane">
                 <input type="text" id="adm-p-name" placeholder="Код" class="ui-input">
-                <input type="number" id="adm-p-sum" placeholder="Сумма TON" class="ui-input">
+                <input type="number" id="adm-p-sum" placeholder="Сумма" class="ui-input">
                 <input type="number" id="adm-p-limit" placeholder="Кол-во" class="ui-input">
-                <button class="btn btn-success" onclick="createPromo()">Создать</button>
+                <button class="btn btn-green-solid" onclick="createPromo()">Создать</button>
                 <div id="adm-p-list"></div>
             </div>
             <div id="adm-rtp" class="adm-pane">
-                <h4>Настройки Шансов</h4>
-                <div class="rtp-item">Crash RTP: <input type="number" id="rtp-crash" step="0.01"></div>
-                <div class="rtp-item">Mines RTP: <input type="number" id="rtp-mines" step="0.01"></div>
-                <div class="rtp-item">Coin Win: <input type="number" id="rtp-coin" step="0.01"></div>
-                <hr>
+                Crash RTP: <input type="number" id="rtp-crash" step="0.01" class="ui-input"><br>
+                Mines RTP: <input type="number" id="rtp-mines" step="0.01" class="ui-input"><br>
+                Coin Win: <input type="number" id="rtp-coin" step="0.01" class="ui-input"><br>
                 <label><input type="checkbox" id="on-crash"> Crash Активен</label><br>
                 <label><input type="checkbox" id="on-mines"> Mines Активен</label><br>
-                <label><input type="checkbox" id="on-coin"> Coin Активен</label>
-                <button class="btn btn-primary" onclick="saveAdminSettings()">Сохранить</button>
+                <label><input type="checkbox" id="on-coin"> Coin Активен</label><br><br>
+                <button class="btn btn-blue" onclick="saveAdminSettings()">Сохранить</button>
             </div>
         </div>
     </div>
