@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Loonx Gift</title>
+    <title>Loonx Gift Premium</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
@@ -14,10 +14,10 @@
 
     <header class="header">
         <div class="user-profile" onclick="openAdmin()">
-            <img src="img/avatar.png" id="tg-avatar" class="avatar">
+            <img src="img/avatar.png" id="tg-avatar" class="avatar" onerror="this.src='img/avatar.png'">
             <div class="user-meta">
-                <span id="user-name">Loonx User</span>
-                <span class="online-tag">🟢 Online: <b id="online-count">0</b></span>
+                <span id="user-name">Loonx Gift</span>
+                <span class="online-tag">🟢 Online: <b id="online-count">1</b></span>
             </div>
         </div>
         <div id="ton-connect-btn"></div>
@@ -26,61 +26,97 @@
     <div class="ssg-balance-card" onclick="toggleBalanceMode()">
         <div class="balance-glow"></div>
         <div class="balance-info">
-            <small id="bal-label">REAL BALANCE</small>
+            <small id="bal-label">REAL BALANCE 🔄</small>
             <h2 id="bal-amount">0.00</h2>
         </div>
-        <div class="balance-icon">TON</div>
     </div>
 
     <main id="tab-home" class="tab active">
-        <div class="games-grid">
-            <div class="game-card crash" onclick="showGame('crash')">
-                <div class="card-overlay">
-                    <h3>CRASH</h3>
-                    <p>Множитель до x100</p>
+        <div class="games-list">
+            <div class="game-panel crash" onclick="openGame('crash')">
+                <div class="panel-overlay">
+                    <h3>Crash</h3>
+                    <p>До x100.00 ▶</p>
                 </div>
             </div>
-            <div class="game-card mines" onclick="showGame('mines')">
-                <div class="card-overlay">
-                    <h3>MINES</h3>
-                    <p>Найди сокровища</p>
+            <div class="game-panel mines" onclick="openGame('mines')">
+                <div class="panel-overlay">
+                    <h3>Mines</h3>
+                    <p>Найди алмазы ▶</p>
                 </div>
             </div>
-            <div class="game-card coinflip" onclick="showGame('coinflip')">
-                <div class="card-overlay">
-                    <h3>COINFLIP</h3>
-                    <p>50/50 Шанс</p>
+            <div class="game-panel coinflip" onclick="openGame('coinflip')">
+                <div class="panel-overlay">
+                    <h3>Coinflip</h3>
+                    <p>50/50 Шанс ▶</p>
                 </div>
             </div>
         </div>
 
         <section class="live-section">
-            <div class="section-header">
-                <span class="pulse"></span> LIVE BETS
-            </div>
-            <div id="live-bets-list" class="bets-container">
+            <div class="section-header"><span class="pulse"></span> LIVE HISTORY</div>
+            <div id="live-history-list" class="bets-container">
                 </div>
         </section>
     </main>
 
-    <main id="tab-promo" class="tab">
-        <div class="promo-box">
-            <h2>АКТИВАЦИЯ ПРОМО</h2>
-            <input type="text" id="promo-input" placeholder="Введите код...">
-            <button class="ssg-btn" onclick="claimPromo()">АКТИВИРОВАТЬ</button>
+    <main id="tab-wallet" class="tab">
+        <div class="content-box">
+            <button class="demo-btn" onclick="socket.emit('get_demo')">+ 200 DEMO TON</button>
+            <h4 class="box-title">ВЫВОД СРЕДСТВ</h4>
+            <input type="text" id="draw-wallet" placeholder="Адрес кошелька" class="input-field">
+            <input type="number" id="draw-amount" placeholder="Сумма TON" class="input-field">
+            <button class="ssg-btn-green" onclick="requestWithdraw()">ОТПРАВИТЬ ЗАЯВКУ</button>
         </div>
     </main>
 
-    <div id="game-screen-crash" class="game-full-screen">
-        <button class="close-btn" onclick="closeGame()">✕</button>
-        <div class="crash-display">
-            <div id="crash-timer">10</div>
-            <div id="crash-mult" style="display:none">1.00x</div>
+    <main id="tab-promo" class="tab">
+        <div class="content-box">
+            <h2>PROMO CODES</h2>
+            <input type="text" id="promo-input" placeholder="Введите код" class="input-field">
+            <button class="ssg-btn-green" onclick="claimPromo()">АКТИВИРОВАТЬ</button>
+        </div>
+    </main>
+
+    <main id="tab-profile" class="tab">
+        <div class="profile-box">
+            <div class="profile-header">
+                <img src="img/avatar.png" id="profile-avatar" class="avatar-large">
+                <h2 id="profile-name">Loonx User</h2>
+            </div>
+            <div class="stats-grid">
+                <div class="stat-card"><small>ИГР</small><br><b id="stat-games">0</b></div>
+                <div class="stat-card"><small>ПОБЕД</small><br><b id="stat-wins">0</b></div>
+            </div>
+            <div class="contacts-box">
+                <p>Support: <b>@LoonxGift_Support</b></p>
+                <p>Channel: <b>@Loonxnews</b></p>
+            </div>
+        </div>
+    </main>
+
+    <div id="game-crash" class="game-modal">
+        <button class="close-modal" onclick="closeAllGames()">✕</button>
+        <div class="crash-canvas-area">
+            <div id="crash-multiplier">1.00x</div>
             <canvas id="crashChart"></canvas>
         </div>
-        <div class="bet-controls">
-            <input type="number" id="bet-amount" placeholder="Сумма...">
-            <button id="bet-btn" class="ssg-btn-win" onclick="placeCrashBet()">СТАВКА</button>
+        <div class="game-controls">
+            <input type="number" id="crash-bet-input" class="input-field" placeholder="Ставка...">
+            <button id="crash-btn" class="ssg-btn-green" onclick="placeCrashBet()">СТАВКА</button>
+        </div>
+        <div id="crash-bets-list" class="mini-table"></div>
+    </div>
+
+    <div id="game-mines" class="game-modal">
+        <button class="close-modal" onclick="closeAllGames()">✕</button>
+        <div class="mines-grid" id="mines-board"></div>
+        <div class="game-controls">
+            <input type="number" id="mines-bet-input" class="input-field" placeholder="Ставка...">
+            <select id="mines-count" class="input-field">
+                <option value="3">3 Мины</option><option value="5">5 Мин</option><option value="10">10 Мин</option>
+            </select>
+            <button id="mines-main-btn" class="ssg-btn-green" onclick="startMines()">ИГРАТЬ</button>
         </div>
     </div>
 
@@ -103,6 +139,159 @@
         </div>
     </nav>
 
-    <script src="script.js"></script>
+    <div id="admin-modal" class="game-modal" style="background:rgba(0,0,0,0.95); overflow-y:auto;">
+        <button onclick="closeAllGames()" class="ssg-btn-green">ЗАКРЫТЬ</button>
+        <div class="content-box">
+            <h3>RTP SETTINGS</h3>
+            Crash: <input type="number" id="rtp-crash" class="input-field">
+            Mines: <input type="number" id="rtp-mines" class="input-field">
+            <button class="ssg-btn-green" onclick="saveRTP()">SAVE</button>
+            <h3 class="mt-20">WITHDRAWS</h3>
+            <div id="admin-withdraws-list"></div>
+        </div>
+    </div>
+
+    <script>
+        const socket = io();
+        const tg = window.Telegram.WebApp;
+        let userData = { realBal: 0, demoBal: 0 };
+        let currentMode = 'real';
+
+        // Init User
+        const initData = tg.initDataUnsafe?.user || { id: 'test_user', first_name: 'Loonx Dev', photo_url: '' };
+        socket.emit('init_user', { id: initData.id, username: initData.first_name, photo: initData.photo_url });
+
+        socket.on('user_data', (u) => {
+            userData = u;
+            updateUI();
+        });
+
+        function updateUI() {
+            document.getElementById('user-name').innerText = userData.tgName;
+            document.getElementById('profile-name').innerText = userData.tgName;
+            document.getElementById('stat-games').innerText = userData.games;
+            document.getElementById('stat-wins').innerText = userData.wins;
+            const bal = currentMode === 'real' ? userData.realBal : userData.demoBal;
+            document.getElementById('bal-amount').innerText = bal.toFixed(2) + (currentMode === 'real' ? ' TON' : ' D-TON');
+            document.getElementById('bal-label').innerText = currentMode.toUpperCase() + ' BALANCE 🔄';
+        }
+
+        function toggleBalanceMode() {
+            currentMode = currentMode === 'real' ? 'demo' : 'real';
+            updateUI();
+        }
+
+        function switchTab(id, el) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.getElementById('tab-' + id).classList.add('active');
+            document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+            el.classList.add('active');
+        }
+
+        function openGame(id) {
+            document.getElementById('game-' + id).style.display = 'flex';
+            if(id === 'mines') initMinesBoard();
+        }
+
+        function closeAllGames() {
+            document.querySelectorAll('.game-modal').forEach(m => m.style.display = 'none');
+        }
+
+        // MINES LOGIC
+        function initMinesBoard() {
+            const board = document.getElementById('mines-board');
+            board.innerHTML = '';
+            for(let i=0; i<25; i++) {
+                const cell = document.createElement('div');
+                cell.className = 'mine-cell';
+                cell.onclick = () => openMine(i);
+                board.appendChild(cell);
+            }
+        }
+
+        function startMines() {
+            const bet = document.getElementById('mines-bet-input').value;
+            const count = document.getElementById('mines-count').value;
+            socket.emit('mines_start', { bet: parseFloat(bet), minesCount: parseInt(count), mode: currentMode });
+            document.getElementById('mines-main-btn').innerText = 'ВЫВЕСТИ (1.00x)';
+            document.getElementById('mines-main-btn').onclick = cashoutMines;
+        }
+
+        function openMine(idx) { socket.emit('mines_open', idx); }
+        function cashoutMines() { socket.emit('mines_cashout'); resetMinesUI(); }
+        
+        socket.on('mines_safe', (data) => {
+            const cells = document.getElementsByClassName('mine-cell');
+            cells[data.idx].classList.add('safe');
+            cells[data.idx].innerText = '💎';
+            document.getElementById('mines-main-btn').innerText = `ВЫВЕСТИ (${data.mult}x)`;
+        });
+
+        socket.on('mines_boom', (field) => {
+            const cells = document.getElementsByClassName('mine-cell');
+            field.forEach((type, i) => {
+                cells[i].classList.add(type);
+                cells[i].innerText = type === 'mine' ? '💣' : '💎';
+            });
+            alert('BOOM!');
+            resetMinesUI();
+        });
+
+        function resetMinesUI() {
+            document.getElementById('mines-main-btn').innerText = 'ИГРАТЬ';
+            document.getElementById('mines-main-btn').onclick = startMines;
+        }
+
+        // CRASH LOGIC
+        socket.on('crash_update', (state) => {
+            const btn = document.getElementById('crash-btn');
+            const multText = document.getElementById('crash-multiplier');
+            if(state.status === 'waiting') {
+                multText.innerText = '00:' + (state.timer < 10 ? '0' : '') + state.timer;
+                multText.style.color = 'white';
+                btn.disabled = false; btn.innerText = 'СТАВКА';
+            } else if(state.status === 'flying') {
+                multText.innerText = state.mult.toFixed(2) + 'x';
+                multText.style.color = '#00ff66';
+            } else {
+                multText.innerText = 'CRASHED!';
+                multText.style.color = 'red';
+            }
+        });
+
+        function placeCrashBet() {
+            const bet = document.getElementById('crash-bet-input').value;
+            const btn = document.getElementById('crash-btn');
+            if(btn.innerText === 'СТАВКА') {
+                socket.emit('crash_bet', { bet: parseFloat(bet), mode: currentMode });
+                btn.innerText = 'ВЫВЕСТИ';
+            } else {
+                socket.emit('crash_cashout');
+            }
+        }
+
+        // LIVE HISTORY
+        socket.on('history_update', (history) => {
+            const list = document.getElementById('live-history-list');
+            list.innerHTML = history.map(h => `
+                <div class="bet-item">
+                    <div style="display:flex; align-items:center; gap:10px;">
+                        <img src="${h.photoUrl}" style="width:24px; height:24px; border-radius:50%">
+                        <span>${h.tgName}</span>
+                    </div>
+                    <span>${h.game}</span>
+                    <span class="${h.isWin ? 'bet-win' : ''}">${h.win > 0 ? '+' + h.win.toFixed(2) : h.bet} TON</span>
+                </div>
+            `).join('');
+        });
+
+        // Stars
+        setInterval(() => {
+            const s = document.createElement('div'); s.className = 'star';
+            s.style.left = Math.random()*100+'vw'; s.style.animationDuration = (Math.random()*3+2)+'s';
+            document.getElementById('stars-container').appendChild(s);
+            setTimeout(() => s.remove(), 5000);
+        }, 400);
+    </script>
 </body>
 </html>
