@@ -1,209 +1,325 @@
-const express = require('express');
-const app = express();
-const http = require('http').createServer(app);
-const io = require('socket.io')(http);
-const path = require('path');
-const TelegramBot = require('node-telegram-bot-api');
+/**
+ * Loonx Gift - Full Backend Engine
+ * Creator: @tonfrm
+ * Environment: Node.js, Express, Socket.io, Mongoose
+ */
 
-// --- ИНИЦИАЛИЗАЦИЯ БОТА ИЗ ENV ---
+const express = require('express');
+const http = require('http');
+const socketIo = require('socket.io');
+const mongoose = require('mongoose');
+const TelegramBot = require('node-telegram-bot-api');
+const path = require('path');
+const crypto = require('crypto');
+
+// --- КОНФИГУРАЦИЯ ---
+const MONGO_URI = process.env.MONGO_URI;
 const BOT_TOKEN = process.env.BOT_TOKEN;
-if (!BOT_TOKEN) {
-    console.error("ОШИБКА: BOT_TOKEN не найден в переменых окружения (env)!");
-}
+const PORT = process.env.PORT || 3000;
+const ADMIN_PASS = "7788";
+
+const app = express();
+const server = http.createServer(app);
+const io = socketIo(server, { cors: { origin: "*" } });
 const bot = new TelegramBot(BOT_TOKEN, { polling: true });
 
-const PORT = process.env.PORT || 3000;
-
-// Глобальные настройки шансов
-let settings = {
-    crash: 95,
-    mines: 90,
-    coin: 35 // Твой шанс 35%
-};
-
-let users = {}; 
-let history = [];
-let adminSocketId = null;
-
 app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.json());
 
-// --- ТЕЛЕГРАМ БОТ ---
-bot.onText(/\/start/, (msg) => {
-    bot.sendMessage(msg.chat.id, `Привет, ${msg.from.first_name}! Это Loonx Gift 🎁`, {
-        reply_markup: {
-            inline_keyboard: [
-                [{ text: "💎 Запустить Игры", web_app: { url: "https://loonxgift.onrender.com" } }],
-                [{ text: "📢 Канал", url: "https://t.me/Loonxnews" }]
-            ]
-        }
-    });
+// --- DATABASE MODELS ---
+const userSchema = new mongoose.Schema({
+    id: { type: String, unique: true, required: true },
+    username: String,
+    firstName: String,
+    photo: String,
+    realBal: { type: Number, default: 0 },
+    demoBal: { type: Number, default: 1000 },
+    refBy: { type: String, default: null },
+    refCount: { type: Number, default: 0 },
+    dailyBonus: { type: Date, default: 0 },
+    banned: { type: Boolean, default: false },
+    role: { type: String, default: 'user' }, // user, admin
+    stats: {
+        totalBets: { type: Number, default: 0 },
+        totalWins: { type: Number, default: 0 },
+        maxWin: { type: Number, default: 0 }
+    },
+    createdAt: { type: Date, default: Date.now }
 });
 
-// --- ЛОГИКА CRASH (РАКЕТА) ---
-let crashState = { status: 'waiting', mult: 1.00, timer: 10, crashAt: 0 };
+const promoSchema = new mongoose.Schema({
+    code: { type: String, unique: true },
+    reward: Number,
+    uses: Number,
+    active: { type: Boolean, default: true }
+});
 
-function startCrashLoop() {
-    if (crashState.status === 'waiting') {
-        if (crashState.timer > 0) {
-            crashState.timer--;
-        } else {
-            crashState.status = 'flying';
-            crashState.mult = 1.00;
-            // Учет RTP
-            const rnd = Math.random();
-            crashState.crashAt = rnd < 0.03 ? 1.00 : (0.96 / (1 - Math.random())).toFixed(2);
+const User = mongoose.model('User', userSchema);
+const Promo = mongoose.model('Promo', promoSchema);
+
+// --- GLOBAL STATE & SETTINGS ---
+let sysSettings = {
+    crashRtp: 0.90,
+    minesRtp: 0.88,
+    coinWinChance: 0.35, // Твои 35%
+    minWithdraw: 5,
+    maintenance: false
+};
+
+let liveHistory = [];
+
+// Подключение к MongoDB
+mongoose.connect(MONGO_URI)
+    .then(() => console.log('✅ MongoDB Connected to Loonx Cloud'))
+    .catch(err => console.error('❌ DB Error:', err));
+
+// --- TELEGRAM BOT LOGIC ---
+bot.onText(/\/start/, async (msg) => {
+    const chatId = msg.chat.id;
+    const userId = msg.from.id.toString();
+    const refOwner = msg.text.split(' ')[1]; // Если зашел по ссылке
+
+    try {
+        let user = await User.findOne({ id: userId });
+        if (!user) {
+            user = new User({
+                id: userId,
+                username: msg.from.username,
+                firstName: msg.from.first_name,
+                refBy: refOwner && refOwner !== userId ? refOwner : null
+            });
+            await user.save();
+            
+            if (user.refBy) {
+                await User.findOneAndUpdate({ id: user.refBy }, { $inc: { refCount: 1, realBal: 0.5 } });
+            }
         }
-    } else if (crashState.status === 'flying') {
-        crashState.mult += 0.01 * (crashState.mult / 1.5);
-        if (crashState.mult >= crashState.crashAt) {
-            crashState.status = 'crashed';
+
+        const welcomeText = `🪙 <b>Добро пожаловать в Loonx Gift!</b>\nЛучшие игры уже ждут тебя.`;
+        bot.sendMessage(chatId, welcomeText, {
+            parse_mode: 'HTML',
+            reply_markup: {
+                inline_keyboard: [
+                    [{ text: "🫧 ЗАПУСТИТЬ ИГРЫ 🫧", web_app: { url: "https://loonxgift.onrender.com" } }],
+                    [{ text: "📢 Новости", url: "https://t.me/Loonxnews" }]
+                ]
+            }
+        });
+    } catch (e) { console.error(e); }
+});
+
+bot.onText(/\/help/, (msg) => {
+    const helpMsg = `🛡 <b>Связь с администрацией Loonx Gift:</b>\n\n` +
+        `👤 <b>Creator:</b> @tonfrm\n` +
+        `📢 <b>Channel:</b> @Loonxnews\n` +
+        `🆘 <b>Support:</b> @LoonxGift_Support\n` +
+        `🐛 <b>Bugs:</b> @msgp2p\n\n` +
+        `<i>При обращении в поддержку указывайте ваш ID: ${msg.from.id}</i>`;
+    bot.sendMessage(msg.chat.id, helpMsg, { parse_mode: 'HTML' });
+});
+
+// --- CRASH ENGINE (SHARED LOOP) ---
+let crash = {
+    status: 'waiting', // waiting, flying, crashed
+    timer: 10,
+    mult: 1.00,
+    crashAt: 0,
+    bets: []
+};
+
+function runCrashTick() {
+    if (crash.status === 'waiting') {
+        if (crash.timer > 0) {
+            crash.timer -= 0.1;
+        } else {
+            crash.status = 'flying';
+            // House Edge logic: 10% моментальный краш на 1.00
+            const rand = Math.random();
+            crash.crashAt = rand < 0.1 ? 1.00 : (sysSettings.crashRtp / (1 - Math.random())).toFixed(2);
+        }
+    } else if (crash.status === 'flying') {
+        let speed = crash.mult < 2 ? 0.01 : crash.mult < 5 ? 0.03 : 0.08;
+        crash.mult = parseFloat((crash.mult + speed).toFixed(2));
+        
+        if (crash.mult >= crash.crashAt) {
+            crash.status = 'crashed';
+            io.emit('crash_boom', { mult: crash.mult });
             setTimeout(() => {
-                crashState.status = 'waiting';
-                crashState.timer = 10;
+                crash.status = 'waiting';
+                crash.timer = 10;
+                crash.mult = 1.00;
+                crash.bets = [];
             }, 4000);
         }
     }
-    io.emit('crash_update', crashState);
+    io.emit('crash_update', { status: crash.status, timer: Math.ceil(crash.timer), mult: crash.mult });
 }
-setInterval(startCrashLoop, 100);
+setInterval(runCrashTick, 100);
 
-// --- SOCKETS ---
+// --- SOCKET HANDLERS ---
 io.on('connection', (socket) => {
-    socket.on('init_user', (data) => {
-        if (!users[data.id]) {
-            users[data.id] = {
-                id: data.id, tgName: data.username || 'User', photoUrl: data.photo || '',
-                realBal: 0, demoBal: 500, games: 0, wins: 0
-            };
-        }
-        socket.userId = data.id;
-        socket.emit('user_data', users[data.id]);
-        socket.emit('history_update', history);
+    console.log('New connection:', socket.id);
+
+    socket.on('auth', async (data) => {
+        try {
+            const user = await User.findOne({ id: data.id.toString() });
+            if (!user || user.banned) return socket.emit('err', 'Access Denied');
+            
+            socket.userId = user.id;
+            socket.join(`user_${user.id}`);
+            socket.emit('init_data', { user, settings: sysSettings, history: liveHistory });
+        } catch (e) { console.error(e); }
     });
 
-    // COINFLIP L/X (Шанс 35%)
-    socket.on('coinflip_play', (data) => {
-        const user = users[socket.userId];
+    // COINFLIP L/X Logic (Strict 35%)
+    socket.on('coin_bet', async (data) => {
+        const user = await User.findOne({ id: socket.userId });
         const balKey = data.mode === 'real' ? 'realBal' : 'demoBal';
-        if (user[balKey] < data.bet) return socket.emit('alert', {msg: 'Недостаточно средств'});
+        if (!user || user[balKey] < data.bet || data.bet <= 0) return;
 
         user[balKey] -= data.bet;
-        user.games++;
-        
-        const winChance = settings.coin / 100;
-        const isWin = Math.random() < winChance;
+        user.stats.totalBets++;
+
+        const isWin = Math.random() < sysSettings.coinWinChance;
         const resultSide = isWin ? data.side : (data.side === 'L' ? 'X' : 'L');
-        let winAmount = isWin ? data.bet * 1.9 : 0;
+        let winSum = isWin ? data.bet * 1.9 : 0;
 
-        if (isWin) { user[balKey] += winAmount; user.wins++; }
-
-        addHistory({ tgName: user.tgName, photoUrl: user.photoUrl, game: 'Coinflip', bet: data.bet, win: winAmount, isWin });
-        socket.emit('user_data', user);
-        socket.emit('coinflip_result', { win: isWin, resultSide, winAmount });
-    });
-
-    // MINES (Заниженные иксы)
-    socket.on('mines_start', (data) => {
-        const user = users[socket.userId];
-        const balKey = data.mode === 'real' ? 'realBal' : 'demoBal';
-        if (user[balKey] < data.bet) return;
-
-        user[balKey] -= data.bet;
-        let field = Array(25).fill('safe');
-        let mCount = 0;
-        while(mCount < data.minesCount) {
-            let r = Math.floor(Math.random() * 25);
-            if(field[r] === 'safe') { field[r] = 'mine'; mCount++; }
+        if (isWin) {
+            user[balKey] += winSum;
+            user.stats.totalWins++;
+            if (winSum > user.stats.maxWin) user.stats.maxWin = winSum;
         }
 
-        socket.activeMine = { bet: data.bet, field, opened: 0, mCount: data.minesCount, balKey, mult: 1.00 };
-        socket.emit('user_data', user);
-        socket.emit('mines_started');
+        await user.save();
+        socket.emit('coin_result', { isWin, resultSide, winSum, balance: user[balKey] });
+        addHistory('Coinflip', user.firstName, data.bet, winSum, isWin);
     });
 
-    socket.on('mines_open', (idx) => {
-        const g = socket.activeMine;
-        if (!g || g.field[idx] === 'opened') return;
+    // MINES Logic (House Edge)
+    socket.on('mines_start', async (data) => {
+        const user = await User.findOne({ id: socket.userId });
+        const balKey = data.mode === 'real' ? 'realBal' : 'demoBal';
+        if (!user || user[balKey] < data.bet || data.bet <= 0) return;
+
+        user[balKey] -= data.bet;
+        await user.save();
+
+        let field = Array(25).fill('safe');
+        let m = 0;
+        while (m < data.mCount) {
+            let r = Math.floor(Math.random() * 25);
+            if (field[r] === 'safe') { field[r] = 'mine'; m++; }
+        }
+
+        socket.activeMines = { 
+            field, bet: data.bet, balKey, opened: 0, 
+            mult: 1.0, mCount: data.mCount, active: true 
+        };
+        
+        socket.emit('mines_init', { balance: user[balKey] });
+    });
+
+    socket.on('mines_step', (idx) => {
+        const g = socket.activeMines;
+        if (!g || !g.active) return;
 
         if (g.field[idx] === 'mine') {
-            socket.emit('mines_boom', g.field);
-            delete socket.activeMine;
+            g.active = false;
+            socket.emit('mines_lose', { field: g.field });
+            delete socket.activeMines;
         } else {
             g.opened++;
-            g.field[idx] = 'opened';
-            // Заниженная прогрессия множителя
-            g.mult = (g.mult * (1 + (g.mCount / 28))).toFixed(2);
-            socket.emit('mines_safe', { idx, mult: g.mult });
+            // Усложненная формула (RTP)
+            const n = 25;
+            const m = g.mCount;
+            const k = g.opened;
+            // Теоретический икс занижается на коэффициент RTP
+            let theoretical = 1;
+            for(let i=0; i<k; i++) { theoretical *= (n-i)/(n-m-i); }
+            g.mult = (theoretical * sysSettings.minesRtp).toFixed(2);
+
+            socket.emit('mines_hit', { idx, mult: g.mult });
         }
     });
 
-    socket.on('mines_cashout', () => {
-        const g = socket.activeMine;
-        if(g && g.opened > 0) {
-            const user = users[socket.userId];
-            const win = g.bet * g.mult;
-            user[g.balKey] += win;
-            user.wins++;
-            addHistory({ tgName: user.tgName, photoUrl: user.photoUrl, game: 'Mines', bet: g.bet, win, isWin: true });
-            socket.emit('user_data', user);
-            socket.emit('mines_win');
-            delete socket.activeMine;
-        }
+    socket.on('mines_cashout', async () => {
+        const g = socket.activeMines;
+        if (!g || !g.active || g.opened === 0) return;
+
+        const user = await User.findOne({ id: socket.userId });
+        const win = g.bet * g.mult;
+        user[g.balKey] += win;
+        user.stats.totalWins++;
+        await user.save();
+
+        socket.emit('mines_win', { win, balance: user[g.balKey] });
+        addHistory('Mines', user.firstName, g.bet, win, true);
+        delete socket.activeMines;
     });
 
-    // CRASH (Ставка/Вывод)
-    socket.on('crash_bet', (data) => {
-        const user = users[socket.userId];
+    // CRASH BET Logic
+    socket.on('crash_place_bet', async (data) => {
+        if (crash.status !== 'waiting') return;
+        const user = await User.findOne({ id: socket.userId });
         const balKey = data.mode === 'real' ? 'realBal' : 'demoBal';
-        if (user[balKey] >= data.bet && crashState.status === 'waiting') {
-            user[balKey] -= data.bet;
-            socket.crashBet = { bet: data.bet, balKey };
-            socket.emit('user_data', user);
+        if (!user || user[balKey] < data.bet) return;
+
+        user[balKey] -= data.bet;
+        await user.save();
+        
+        socket.currentCrash = { bet: data.bet, balKey, cashedOut: false };
+        socket.emit('crash_bet_ok', { balance: user[balKey] });
+    });
+
+    socket.on('crash_cashout', async () => {
+        if (crash.status !== 'flying' || !socket.currentCrash || socket.currentCrash.cashedOut) return;
+        
+        socket.currentCrash.cashedOut = true;
+        const user = await User.findOne({ id: socket.userId });
+        const win = socket.currentCrash.bet * crash.mult;
+        user[socket.currentCrash.balKey] += win;
+        await user.save();
+
+        socket.emit('crash_win', { win, balance: user[socket.currentCrash.balKey] });
+        addHistory('Crash', user.firstName, socket.currentCrash.bet, win, true);
+    });
+
+    // ADMIN LOGIC
+    socket.on('admin_login', (pass) => {
+        if (pass === ADMIN_PASS) {
+            socket.isAdmin = true;
+            socket.emit('admin_auth_success', { settings: sysSettings });
         }
     });
 
-    socket.on('crash_cashout', () => {
-        if (socket.crashBet && crashState.status === 'flying') {
-            const user = users[socket.userId];
-            const win = socket.crashBet.bet * crashState.mult;
-            user[socket.crashBet.balKey] += win;
-            user.wins++;
-            addHistory({ tgName: user.tgName, photoUrl: user.photoUrl, game: 'Crash', bet: socket.crashBet.bet, win, isWin: true });
-            socket.emit('user_data', user);
-            delete socket.crashBet;
-            socket.emit('alert', { msg: `Выплата: ${win.toFixed(2)} TON` });
+    socket.on('admin_update', (newSet) => {
+        if (socket.isAdmin) {
+            sysSettings = { ...sysSettings, ...newSet };
+            io.emit('sys_msg', 'Settings updated by admin');
         }
     });
 
-    // АДМИНКА
-    socket.on('admin_login', (p) => {
-        if (p === '7788') {
-            adminSocketId = socket.id;
-            socket.emit('admin_data', { settings });
-        }
-    });
+    // PROMO CODES
+    socket.on('apply_promo', async (code) => {
+        const promo = await Promo.findOne({ code: code.toUpperCase(), active: true });
+        if (!promo || promo.uses <= 0) return socket.emit('promo_err', 'Invalid Code');
 
-    socket.on('admin_action', (d) => {
-        if (socket.id !== adminSocketId) return;
-        if (d.action === 'save_rtp') {
-            settings.coin = parseFloat(d.coin);
-            settings.crash = parseFloat(d.crash);
-            settings.mines = parseFloat(d.mines);
-        }
-    });
+        const user = await User.findOne({ id: socket.userId });
+        user.realBal += promo.reward;
+        promo.uses -= 1;
+        await user.save();
+        await promo.save();
 
-    socket.on('get_demo', () => {
-        if (users[socket.userId]) {
-            users[socket.userId].demoBal += 500;
-            socket.emit('user_data', users[socket.userId]);
-        }
+        socket.emit('promo_ok', { reward: promo.reward, balance: user.realBal });
     });
 });
 
-function addHistory(d) {
-    history.unshift(d);
-    if (history.length > 20) history.pop();
-    io.emit('history_update', history);
+// Helper for live stats
+function addHistory(game, name, bet, win, isWin) {
+    const item = { game, name, bet, win, isWin, time: new Date() };
+    liveHistory.unshift(item);
+    if (liveHistory.length > 15) liveHistory.pop();
+    io.emit('new_history', item);
 }
 
-http.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+server.listen(PORT, () => console.log(`🚀 Loonx Gift Engine v3.0 running on port ${PORT}`));
