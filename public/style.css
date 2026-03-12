@@ -75,3 +75,26 @@ body {
     position: fixed; inset: 0; background: #000; z-index: 2000; display: none;
     flex-direction: column; padding: 20px;
 }
+/* LIVE HISTORY TABLE */
+.live-section { margin: 20px; }
+.section-header { font-size: 14px; font-weight: 800; margin-bottom: 10px; display: flex; align-items: center; gap: 8px; color: #888; }
+.pulse { width: 8px; height: 8px; background: var(--ssg-green); border-radius: 50%; box-shadow: 0 0 8px var(--ssg-green); animation: pulse 1.5s infinite; }
+@keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; } }
+.bets-container { background: var(--glass); border-radius: 15px; overflow: hidden; }
+.bet-item { display: grid; grid-template-columns: 1.5fr 1fr 1fr; padding: 12px 15px; border-bottom: 1px solid rgba(255,255,255,0.03); font-size: 13px; align-items: center; }
+.bet-win { color: var(--ssg-green); font-weight: bold; }
+
+/* MINES GRID */
+.mines-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin: 20px 0; }
+.mine-cell { aspect-ratio: 1; background: #151515; border-radius: 10px; border: 1px solid #333; display: flex; align-items: center; justify-content: center; font-size: 24px; cursor: pointer; transition: 0.2s; }
+.mine-cell.safe { background: rgba(0, 255, 102, 0.1); border-color: var(--ssg-green); box-shadow: inset 0 0 10px rgba(0, 255, 102, 0.2); }
+.mine-cell.mine { background: rgba(255, 0, 0, 0.1); border-color: #ff4444; }
+
+/* CRASH AREA */
+.crash-canvas-area { position: relative; height: 250px; background: #000; border-radius: 15px; border: 1px solid #222; margin-bottom: 20px; overflow: hidden; display: flex; align-items: center; justify-content: center; }
+#crash-multiplier { position: absolute; font-size: 48px; font-weight: 900; z-index: 10; text-shadow: 0 0 20px rgba(0,0,0,1); }
+#crashChart { width: 100%; height: 100%; }
+
+/* MODALS */
+.close-modal { position: absolute; top: 15px; right: 15px; background: #222; border: none; color: white; width: 35px; height: 35px; border-radius: 50%; font-size: 18px; z-index: 3000; }
+.game-controls { display: flex; flex-direction: column; gap: 10px; }
