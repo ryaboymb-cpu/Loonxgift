@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Loonx Gift Premium</title>
+    <title>Loonx Premium</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
@@ -13,55 +13,37 @@
     <div id="stars-container"></div>
 
     <header class="header">
-        <div class="user-profile" onclick="openAdmin()">
+        <div class="user-profile" onclick="handleProfileTap()">
             <img src="img/avatar.png" id="tg-avatar" class="avatar" onerror="this.src='img/avatar.png'">
             <div class="user-meta">
-                <span id="user-name">Loonx Gift</span>
-                <span class="online-tag">🟢 Online: <b id="online-count">1</b></span>
+                <span id="user-name">Loonx Gift</span> <span class="online-tag">🟢 <b id="online-count">1</b></span>
             </div>
         </div>
-        <div id="ton-connect-btn"></div>
-    </header>
-
-    <div class="ssg-balance-card" onclick="toggleBalanceMode()">
-        <div class="balance-glow"></div>
-        <div class="balance-info">
-            <small id="bal-label">REAL BALANCE 🔄</small>
-            <h2 id="bal-amount">0.00</h2>
+        <div class="header-right">
+            <div class="top-balance" onclick="toggleBalanceMode()">
+                <span id="top-bal-amount">0.00</span> <small id="top-bal-currency">TON</small>
+            </div>
         </div>
-    </div>
+    </header>
 
     <main id="tab-home" class="tab active">
         <div class="games-list">
-            <div class="game-panel crash" onclick="openGame('crash')">
-                <div class="panel-overlay">
-                    <h3>Crash</h3>
-                    <p>До x100.00 ▶</p>
-                </div>
-            </div>
-            <div class="game-panel mines" onclick="openGame('mines')">
-                <div class="panel-overlay">
-                    <h3>Mines</h3>
-                    <p>Найди алмазы ▶</p>
-                </div>
-            </div>
-            <div class="game-panel coinflip" onclick="openGame('coinflip')">
-                <div class="panel-overlay">
-                    <h3>Coinflip</h3>
-                    <p>50/50 Шанс ▶</p>
-                </div>
-            </div>
+            <div class="game-panel crash" onclick="openGame('crash')"><h3>CRASH</h3></div>
+            <div class="game-panel mines" onclick="openGame('mines')"><h3>MINES</h3></div>
+            <div class="game-panel coinflip" onclick="openGame('coinflip')"><h3>COINFLIP</h3></div>
         </div>
 
         <section class="live-section">
-            <div class="section-header"><span class="pulse"></span> LIVE HISTORY</div>
-            <div id="live-history-list" class="bets-container">
-                </div>
+            <div class="section-header"><span class="pulse"></span> LIVE СТАВКИ</div>
+            <div id="live-history-list" class="bets-container"></div>
         </section>
     </main>
 
     <main id="tab-wallet" class="tab">
         <div class="content-box">
+            <h2 style="text-align:center; margin-top:0;">ВАШ БАЛАНС</h2>
+            <h1 style="text-align:center; color:var(--ssg-green); margin-bottom:20px;" id="wallet-bal-amount">0.00 TON</h1>
+            <div id="ton-connect-btn" style="display:flex; justify-content:center; margin-bottom:20px;"></div>
             <button class="demo-btn" onclick="socket.emit('get_demo')">+ 200 DEMO TON</button>
             <h4 class="box-title">ВЫВОД СРЕДСТВ</h4>
             <input type="text" id="draw-wallet" placeholder="Адрес кошелька" class="input-field">
@@ -72,9 +54,10 @@
 
     <main id="tab-promo" class="tab">
         <div class="content-box">
-            <h2>PROMO CODES</h2>
+            <h2>ПРОМОКОДЫ</h2>
             <input type="text" id="promo-input" placeholder="Введите код" class="input-field">
             <button class="ssg-btn-green" onclick="claimPromo()">АКТИВИРОВАТЬ</button>
+            <button class="link-btn" onclick="window.location.href='https://t.me/Loonxnews'" style="margin-top:15px;">📢 БОЛЬШЕ ПРОМОКОДОВ</button>
         </div>
     </main>
 
@@ -82,30 +65,33 @@
         <div class="profile-box">
             <div class="profile-header">
                 <img src="img/avatar.png" id="profile-avatar" class="avatar-large">
-                <h2 id="profile-name">Loonx User</h2>
+                <h2 id="profile-name">User</h2>
             </div>
             <div class="stats-grid">
                 <div class="stat-card"><small>ИГР</small><br><b id="stat-games">0</b></div>
                 <div class="stat-card"><small>ПОБЕД</small><br><b id="stat-wins">0</b></div>
             </div>
             <div class="contacts-box">
-                <p>Support: <b>@LoonxGift_Support</b></p>
+                <h4>Контакты:</h4>
+                <p>Creator: <b>@tonfrm</b></p>
                 <p>Channel: <b>@Loonxnews</b></p>
+                <p>Support: <b>@LoonxGift_Support</b></p>
+                <p>Bugs: <b>@MsgP2P</b></p>
             </div>
         </div>
     </main>
 
     <div id="game-crash" class="game-modal">
         <button class="close-modal" onclick="closeAllGames()">✕</button>
+        <div class="crash-history-bar" id="crash-history-top"></div>
         <div class="crash-canvas-area">
+            <div id="crash-rocket">🚀</div>
             <div id="crash-multiplier">1.00x</div>
-            <canvas id="crashChart"></canvas>
         </div>
         <div class="game-controls">
             <input type="number" id="crash-bet-input" class="input-field" placeholder="Ставка...">
             <button id="crash-btn" class="ssg-btn-green" onclick="placeCrashBet()">СТАВКА</button>
         </div>
-        <div id="crash-bets-list" class="mini-table"></div>
     </div>
 
     <div id="game-mines" class="game-modal">
@@ -120,177 +106,242 @@
         </div>
     </div>
 
-    <nav class="bottom-hotbar">
-        <div class="nav-item active" onclick="switchTab('home', this)">
-            <svg class="ssg-icon" viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
-            <span>HOME</span>
+    <div id="game-coinflip" class="game-modal">
+        <button class="close-modal" onclick="closeAllGames()">✕</button>
+        <div class="coinflip-area">
+            <div id="coin-visual" class="coin-symbol">L</div>
+            <h2 id="coin-result-text">Выбери символ</h2>
         </div>
-        <div class="nav-item" onclick="switchTab('wallet', this)">
-            <svg class="ssg-icon" viewBox="0 0 24 24"><path d="M21 18v1c0 1.1-.9 2-2 2H5c-1.1 0-2-.9-2-2V5c0-1.1.9-2 2-2h14c1.1 0 2 .9 2 2v1h-9c-1.1 0-2 .9-2 2v8c0 1.1.9 2 2 2h9zm-9-2h10V8H12v8zm4-2.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/></svg>
-            <span>WALLET</span>
+        <div class="game-controls">
+            <input type="number" id="coinflip-bet-input" class="input-field" placeholder="Ставка...">
+            <div style="display:flex; gap:10px;">
+                <button class="ssg-btn-green" style="flex:1" onclick="playCoinflip('L')">Символ L</button>
+                <button class="ssg-btn-blue" style="flex:1" onclick="playCoinflip('X')">Символ X</button>
+            </div>
         </div>
-        <div class="nav-item" onclick="switchTab('promo', this)">
-            <svg class="ssg-icon" viewBox="0 0 24 24"><path d="M20 6h-2.18c.11-.31.18-.65.18-1 0-1.66-1.34-3-3-3-1.05 0-1.96.54-2.5 1.35l-.5.65-.5-.65C10.96 2.54 10.05 2 9 2 7.34 2 6 3.34 6 5c0 .35.07.69.18 1H4c-1.11 0-1.99.89-1.99 2L2 19c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V8c0-1.11-.89-2-2-2zm-5-2c.55 0 1 .45 1 1s-.45 1-1 1-1-.45-1-1 .45-1 1-1zM9 4c.55 0 1 .45 1 1s-.45 1-1 1-1-.45-1-1 .45-1 1-1zm11 15H4v-2h16v2zm0-5H4V8h5.08L7 10.83 8.62 12 11 8.76l1-1.36 1 1.36L15.38 12 17 10.83 14.92 8H20v6z"/></svg>
-            <span>PROMO</span>
-        </div>
-        <div class="nav-item" onclick="switchTab('profile', this)">
-            <svg class="ssg-icon" viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
-            <span>PROFILE</span>
-        </div>
-    </nav>
+    </div>
 
-    <div id="admin-modal" class="game-modal" style="background:rgba(0,0,0,0.95); overflow-y:auto;">
-        <button onclick="closeAllGames()" class="ssg-btn-green">ЗАКРЫТЬ</button>
+    <div id="admin-modal" class="game-modal" style="background:rgba(0,0,0,0.95); overflow-y:auto; z-index:9999;">
+        <button onclick="document.getElementById('admin-modal').style.display='none'" class="ssg-btn-green">ЗАКРЫТЬ</button>
         <div class="content-box">
-            <h3>RTP SETTINGS</h3>
+            <h3>RTP SETTINGS (%)</h3>
             Crash: <input type="number" id="rtp-crash" class="input-field">
             Mines: <input type="number" id="rtp-mines" class="input-field">
-            <button class="ssg-btn-green" onclick="saveRTP()">SAVE</button>
-            <h3 class="mt-20">WITHDRAWS</h3>
+            Coinflip: <input type="number" id="rtp-coin" class="input-field" value="35">
+            <button class="ssg-btn-green" onclick="saveAdminSettings()">СОХРАНИТЬ</button>
+            <h3 class="mt-20">ЗАЯВКИ ВЫВОД</h3>
             <div id="admin-withdraws-list"></div>
         </div>
     </div>
 
+    <nav class="bottom-hotbar">
+        <div class="nav-item active" onclick="switchTab('home', this)">
+            <svg class="ssg-icon" viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg><span>HOME</span>
+        </div>
+        <div class="nav-item" onclick="switchTab('wallet', this)">
+            <svg class="ssg-icon" viewBox="0 0 24 24"><path d="M21 18v1c0 1.1-.9 2-2 2H5c-1.1 0-2-.9-2-2V5c0-1.1.9-2 2-2h14c1.1 0 2 .9 2 2v1h-9c-1.1 0-2 .9-2 2v8c0 1.1.9 2 2 2h9zm-9-2h10V8H12v8zm4-2.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/></svg><span>WALLET</span>
+        </div>
+        <div class="nav-item" onclick="switchTab('promo', this)">
+            <svg class="ssg-icon" viewBox="0 0 24 24"><path d="M20 6h-2.18c.11-.31.18-.65.18-1 0-1.66-1.34-3-3-3-1.05 0-1.96.54-2.5 1.35l-.5.65-.5-.65C10.96 2.54 10.05 2 9 2 7.34 2 6 3.34 6 5c0 .35.07.69.18 1H4c-1.11 0-1.99.89-1.99 2L2 19c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V8c0-1.11-.89-2-2-2zm-5-2c.55 0 1 .45 1 1s-.45 1-1 1-1-.45-1-1 .45-1 1-1zM9 4c.55 0 1 .45 1 1s-.45 1-1 1-1-.45-1-1 .45-1 1-1zm11 15H4v-2h16v2zm0-5H4V8h5.08L7 10.83 8.62 12 11 8.76l1-1.36 1 1.36L15.38 12 17 10.83 14.92 8H20v6z"/></svg><span>PROMO</span>
+        </div>
+        <div class="nav-item" onclick="switchTab('profile', this)">
+            <svg class="ssg-icon" viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg><span>PROFILE</span>
+        </div>
+    </nav>
+
     <script>
         const socket = io();
         const tg = window.Telegram.WebApp;
-        let userData = { realBal: 0, demoBal: 0 };
-        let currentMode = 'real';
+        tg.expand();
 
-        // Init User
-        const initData = tg.initDataUnsafe?.user || { id: 'test_user', first_name: 'Loonx Dev', photo_url: '' };
-        socket.emit('init_user', { id: initData.id, username: initData.first_name, photo: initData.photo_url });
-
-        socket.on('user_data', (u) => {
-            userData = u;
-            updateUI();
+        const tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
+            manifestUrl: 'https://loonxgift.onrender.com/tonconnect-manifest.json',
+            buttonRootId: 'ton-connect-btn'
         });
 
+        let userData = { realBal: 0, demoBal: 200, games: 0, wins: 0 };
+        let currentMode = 'real';
+        let crashHistoryArr = [];
+
+        const initData = tg.initDataUnsafe?.user || { id: 'test1', first_name: 'Loonx User', photo_url: '' };
+        socket.emit('init_user', { id: initData.id, username: initData.first_name, photo: initData.photo_url });
+
+        socket.on('user_data', (u) => { userData = u; updateUI(); });
+
+        // Админка
+        let adminTaps = 0; let tapTimer;
+        function handleProfileTap() {
+            adminTaps++;
+            clearTimeout(tapTimer);
+            tapTimer = setTimeout(() => adminTaps = 0, 1500);
+            if(adminTaps >= 10) {
+                adminTaps = 0;
+                let pwd = prompt('Пароль админа:');
+                if(pwd === '7788') socket.emit('admin_login', pwd);
+            }
+        }
+
+        socket.on('admin_data', (data) => {
+            document.getElementById('admin-modal').style.display = 'flex';
+            if(data.settings) {
+                document.getElementById('rtp-crash').value = data.settings.crash || 100;
+                document.getElementById('rtp-mines').value = data.settings.mines || 100;
+                document.getElementById('rtp-coin').value = data.settings.coin || 35;
+            }
+        });
+
+        function saveAdminSettings() {
+            socket.emit('admin_action', {
+                action: 'save_rtp',
+                crash: document.getElementById('rtp-crash').value,
+                mines: document.getElementById('rtp-mines').value,
+                coin: document.getElementById('rtp-coin').value
+            });
+            alert('Сохранено!');
+        }
+
+        // UI
         function updateUI() {
-            document.getElementById('user-name').innerText = userData.tgName;
-            document.getElementById('profile-name').innerText = userData.tgName;
+            document.getElementById('profile-name').innerText = userData.tgName; 
             document.getElementById('stat-games').innerText = userData.games;
             document.getElementById('stat-wins').innerText = userData.wins;
+            if(userData.photoUrl) {
+                document.getElementById('tg-avatar').src = userData.photoUrl;
+                document.getElementById('profile-avatar').src = userData.photoUrl;
+            }
+
             const bal = currentMode === 'real' ? userData.realBal : userData.demoBal;
-            document.getElementById('bal-amount').innerText = bal.toFixed(2) + (currentMode === 'real' ? ' TON' : ' D-TON');
-            document.getElementById('bal-label').innerText = currentMode.toUpperCase() + ' BALANCE 🔄';
+            const cur = currentMode === 'real' ? 'TON' : 'D-TON';
+            
+            document.getElementById('top-bal-amount').innerText = bal.toFixed(2);
+            document.getElementById('top-bal-currency').innerText = cur;
+            document.querySelector('.top-balance').style.borderColor = currentMode === 'real' ? 'var(--ssg-green)' : '#ffaa00';
+            document.getElementById('wallet-bal-amount').innerText = bal.toFixed(2) + ' ' + cur;
+            document.getElementById('wallet-bal-amount').style.color = currentMode === 'real' ? 'var(--ssg-green)' : '#ffaa00';
         }
 
-        function toggleBalanceMode() {
-            currentMode = currentMode === 'real' ? 'demo' : 'real';
-            updateUI();
+        function toggleBalanceMode() { currentMode = currentMode === 'real' ? 'demo' : 'real'; updateUI(); tg.HapticFeedback.impactOccurred('medium'); }
+        function switchTab(id, el) { document.querySelectorAll('.tab').forEach(t => t.classList.remove('active')); document.getElementById('tab-' + id).classList.add('active'); document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active')); el.classList.add('active'); tg.HapticFeedback.selectionChanged(); }
+        function openGame(game) { document.getElementById('game-' + game).style.display = 'flex'; if(game === 'mines') initMinesBoard(); }
+        function closeAllGames() { document.querySelectorAll('.game-modal').forEach(m => m.style.display = 'none'); }
+
+        // LIVE
+        socket.on('history_update', (history) => {
+            document.getElementById('live-history-list').innerHTML = history.map(h => `
+                <div class="bet-item">
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <img src="${h.photoUrl}" style="width:20px; height:20px; border-radius:50%" onerror="this.src='img/avatar.png'">
+                        <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap; width:70px;">${h.tgName}</span>
+                    </div>
+                    <span style="color:#888">${h.game}</span>
+                    <span class="${h.isWin ? 'bet-win' : ''}">${h.win > 0 ? '+' + h.win.toFixed(2) : h.bet.toFixed(2)}</span>
+                </div>
+            `).join('');
+        });
+
+        // CRASH С РАКЕТОЙ
+        socket.on('crash_update', (state) => {
+            const multText = document.getElementById('crash-multiplier');
+            const btn = document.getElementById('crash-btn');
+            const rocket = document.getElementById('crash-rocket');
+
+            if(state.status === 'waiting') {
+                multText.innerText = `00:${state.timer < 10 ? '0' : ''}${state.timer}`;
+                multText.style.color = 'white';
+                rocket.innerText = '🚀'; rocket.className = ''; rocket.style.transform = 'translateY(0) scale(1)';
+                btn.innerText = 'СТАВКА'; btn.style.background = 'var(--ssg-green)';
+            } else if(state.status === 'flying') {
+                multText.innerText = state.mult.toFixed(2) + 'x';
+                multText.style.color = 'var(--ssg-green)';
+                rocket.className = 'flying-rocket'; // Анимация тряски
+            } else {
+                multText.innerText = 'BOOM: ' + state.mult.toFixed(2) + 'x';
+                multText.style.color = '#ff4444';
+                rocket.innerText = '💥'; rocket.className = 'crashed-rocket';
+                btn.innerText = 'СТАВКА';
+                
+                crashHistoryArr.unshift(state.mult.toFixed(2));
+                if(crashHistoryArr.length > 5) crashHistoryArr.pop();
+                document.getElementById('crash-history-top').innerHTML = crashHistoryArr.map(m => `<span class="${m >= 2 ? 'high' : 'low'}">${m}x</span>`).join('');
+            }
+        });
+
+        function placeCrashBet() {
+            const btn = document.getElementById('crash-btn');
+            const bet = parseFloat(document.getElementById('crash-bet-input').value);
+            if(btn.innerText === 'СТАВКА') {
+                if(!bet) return alert('Введите ставку');
+                socket.emit('crash_bet', { bet, mode: currentMode });
+                btn.innerText = 'ВЫВОД'; btn.style.background = '#3b82f6';
+            } else { socket.emit('crash_cashout'); }
         }
 
-        function switchTab(id, el) {
-            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-            document.getElementById('tab-' + id).classList.add('active');
-            document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-            el.classList.add('active');
-        }
-
-        function openGame(id) {
-            document.getElementById('game-' + id).style.display = 'flex';
-            if(id === 'mines') initMinesBoard();
-        }
-
-        function closeAllGames() {
-            document.querySelectorAll('.game-modal').forEach(m => m.style.display = 'none');
-        }
-
-        // MINES LOGIC
+        // MINES С АНИМАЦИЯМИ
         function initMinesBoard() {
             const board = document.getElementById('mines-board');
             board.innerHTML = '';
             for(let i=0; i<25; i++) {
                 const cell = document.createElement('div');
-                cell.className = 'mine-cell';
-                cell.onclick = () => openMine(i);
+                cell.className = 'mine-cell'; cell.id = `mine-${i}`;
+                cell.onclick = () => { socket.emit('mines_open', i); tg.HapticFeedback.impactOccurred('light'); };
                 board.appendChild(cell);
             }
         }
-
         function startMines() {
-            const bet = document.getElementById('mines-bet-input').value;
-            const count = document.getElementById('mines-count').value;
-            socket.emit('mines_start', { bet: parseFloat(bet), minesCount: parseInt(count), mode: currentMode });
-            document.getElementById('mines-main-btn').innerText = 'ВЫВЕСТИ (1.00x)';
-            document.getElementById('mines-main-btn').onclick = cashoutMines;
+            const bet = parseFloat(document.getElementById('mines-bet-input').value);
+            if(bet) socket.emit('mines_start', { bet, minesCount: parseInt(document.getElementById('mines-count').value), mode: currentMode });
         }
-
-        function openMine(idx) { socket.emit('mines_open', idx); }
-        function cashoutMines() { socket.emit('mines_cashout'); resetMinesUI(); }
-        
+        socket.on('mines_started', () => {
+            const btn = document.getElementById('mines-main-btn'); btn.innerText = 'ВЫВЕСТИ (1.00x)'; btn.onclick = () => socket.emit('mines_cashout');
+        });
         socket.on('mines_safe', (data) => {
-            const cells = document.getElementsByClassName('mine-cell');
-            cells[data.idx].classList.add('safe');
-            cells[data.idx].innerText = '💎';
+            const cell = document.getElementById(`mine-${data.idx}`);
+            cell.classList.add('safe'); cell.innerText = '💎';
             document.getElementById('mines-main-btn').innerText = `ВЫВЕСТИ (${data.mult}x)`;
         });
-
         socket.on('mines_boom', (field) => {
-            const cells = document.getElementsByClassName('mine-cell');
-            field.forEach((type, i) => {
-                cells[i].classList.add(type);
-                cells[i].innerText = type === 'mine' ? '💣' : '💎';
+            field.forEach((t, i) => {
+                const c = document.getElementById(`mine-${i}`);
+                c.classList.add(t); c.innerText = t === 'mine' ? '💣' : '💎';
             });
-            alert('BOOM!');
-            resetMinesUI();
+            tg.HapticFeedback.notificationOccurred('error');
+            setTimeout(() => { document.getElementById('mines-main-btn').innerText = 'ИГРАТЬ'; document.getElementById('mines-main-btn').onclick = startMines; initMinesBoard(); }, 2000);
         });
+        socket.on('mines_win', () => { document.getElementById('mines-main-btn').innerText = 'ИГРАТЬ'; document.getElementById('mines-main-btn').onclick = startMines; initMinesBoard(); });
 
-        function resetMinesUI() {
-            document.getElementById('mines-main-btn').innerText = 'ИГРАТЬ';
-            document.getElementById('mines-main-btn').onclick = startMines;
+        // COINFLIP (L / X)
+        function playCoinflip(side) {
+            const bet = parseFloat(document.getElementById('coinflip-bet-input').value);
+            if(!bet) return alert('Введите ставку');
+            
+            const visual = document.getElementById('coin-visual');
+            visual.style.animation = 'flipSpin 0.5s infinite linear';
+            document.getElementById('coin-result-text').innerText = 'Крутим...';
+            
+            socket.emit('coinflip_play', { bet, side, mode: currentMode });
         }
-
-        // CRASH LOGIC
-        socket.on('crash_update', (state) => {
-            const btn = document.getElementById('crash-btn');
-            const multText = document.getElementById('crash-multiplier');
-            if(state.status === 'waiting') {
-                multText.innerText = '00:' + (state.timer < 10 ? '0' : '') + state.timer;
-                multText.style.color = 'white';
-                btn.disabled = false; btn.innerText = 'СТАВКА';
-            } else if(state.status === 'flying') {
-                multText.innerText = state.mult.toFixed(2) + 'x';
-                multText.style.color = '#00ff66';
-            } else {
-                multText.innerText = 'CRASHED!';
-                multText.style.color = 'red';
-            }
+        
+        socket.on('coinflip_result', (data) => {
+            const visual = document.getElementById('coin-visual');
+            visual.style.animation = 'popIn 0.3s ease-out forwards';
+            visual.innerText = data.resultSide; // Придет 'L' или 'X'
+            
+            const text = document.getElementById('coin-result-text');
+            if(data.win) { text.innerText = 'ПОБЕДА!'; text.style.color = 'var(--ssg-green)'; tg.HapticFeedback.notificationOccurred('success'); }
+            else { text.innerText = 'ПОРАЖЕНИЕ'; text.style.color = '#ff4444'; tg.HapticFeedback.notificationOccurred('error'); }
+            
+            setTimeout(() => { text.innerText = 'Выбери символ'; text.style.color = 'white'; visual.innerText = 'L / X'; }, 2000);
         });
 
-        function placeCrashBet() {
-            const bet = document.getElementById('crash-bet-input').value;
-            const btn = document.getElementById('crash-btn');
-            if(btn.innerText === 'СТАВКА') {
-                socket.emit('crash_bet', { bet: parseFloat(bet), mode: currentMode });
-                btn.innerText = 'ВЫВЕСТИ';
-            } else {
-                socket.emit('crash_cashout');
-            }
-        }
+        function requestWithdraw() { socket.emit('request_withdraw', { wallet: document.getElementById('draw-wallet').value, amount: parseFloat(document.getElementById('draw-amount').value) }); }
+        function claimPromo() { socket.emit('activate_promo', document.getElementById('promo-input').value); }
+        socket.on('alert', (data) => alert(data.msg));
 
-        // LIVE HISTORY
-        socket.on('history_update', (history) => {
-            const list = document.getElementById('live-history-list');
-            list.innerHTML = history.map(h => `
-                <div class="bet-item">
-                    <div style="display:flex; align-items:center; gap:10px;">
-                        <img src="${h.photoUrl}" style="width:24px; height:24px; border-radius:50%">
-                        <span>${h.tgName}</span>
-                    </div>
-                    <span>${h.game}</span>
-                    <span class="${h.isWin ? 'bet-win' : ''}">${h.win > 0 ? '+' + h.win.toFixed(2) : h.bet} TON</span>
-                </div>
-            `).join('');
-        });
-
-        // Stars
         setInterval(() => {
-            const s = document.createElement('div'); s.className = 'star';
-            s.style.left = Math.random()*100+'vw'; s.style.animationDuration = (Math.random()*3+2)+'s';
-            document.getElementById('stars-container').appendChild(s);
-            setTimeout(() => s.remove(), 5000);
+            const star = document.createElement('div'); star.className = 'star';
+            star.style.left = Math.random() * 100 + 'vw'; star.style.animationDuration = (Math.random() * 3 + 2) + 's';
+            document.getElementById('stars-container').appendChild(star);
+            setTimeout(() => star.remove(), 5000);
         }, 400);
     </script>
 </body>
