@@ -2,336 +2,213 @@ const socket = io();
 const tg = window.Telegram.WebApp;
 tg.expand();
 
-let user = null;
-let currentBalMode = 'demo'; // По умолчанию демо
-let selectedMines = 6;
-let selectedCoin = 'L';
-let adminClicks = 0;
+let userData = { realBal: 0, demoBal: 200, games: 0, wins: 0, spent: 0, withdrawn: 0 };
+let currentMode = 'real'; // Переключатель REAL/DEMO
+let crashActive = false;
 
-// Звуковые эффекты (Премиальные, короткие)
-const sounds = {
-    click: new Audio('https://cdn.pixabay.com/audio/2022/03/15/audio_7833316c05.mp3'),
-    win: new Audio('https://cdn.pixabay.com/audio/2021/08/04/audio_bb4062e12e.mp3'),
-    boom: new Audio('https://cdn.pixabay.com/audio/2022/03/10/audio_c350596323.mp3'),
-    money: new Audio('https://cdn.pixabay.com/audio/2021/08/04/audio_8242a98661.mp3')
-};
-
-function playSnd(type) {
-    if (sounds[type]) {
-        sounds[type].currentTime = 0;
-        sounds[type].play().catch(() => {});
-    }
-}
-
-// Инициализация юзера
-const userData = tg.initDataUnsafe?.user || { id: '12345', first_name: 'LocalDev', photo_url: '' };
-socket.emit('init_user', {
-    id: userData.id,
-    username: userData.first_name,
-    photo: userData.photo_url
+// 1. ИНИЦИАЛИЗАЦИЯ ЮЗЕРА
+const initData = tg.initDataUnsafe?.user || { id: '777777', first_name: 'Loonx Guest', photo_url: '' };
+socket.emit('init_user', { 
+    id: initData.id, 
+    username: initData.first_name, 
+    photo: initData.photo_url 
 });
 
-socket.on('user_data', (data) => {
-    user = data;
+// Обновление данных юзера
+socket.on('user_data', (u) => {
+    userData = u;
     updateUI();
 });
 
-socket.on('alert_sound', (data) => {
-    tg.showAlert(data.msg);
-    if(data.type) playSnd(data.type);
+// Обновление онлайна
+socket.on('online_count', (count) => {
+    const el = document.getElementById('online-count');
+    if(el) el.innerText = count;
 });
 
-function updateUI() {
-    const bal = currentBalMode === 'real' ? user.realBal : user.demoBal;
-    document.getElementById('bal-val').innerText = bal.toFixed(2);
-    document.getElementById('bal-mode').innerText = currentBalMode.toUpperCase();
-    document.getElementById('bal-mode').style.color = currentBalMode === 'real' ? '#00cc66' : '#8b949e';
-    
-    // Профиль
-    document.getElementById('tg-avatar').src = user.photoUrl || '';
-    document.getElementById('prof-ava').src = user.photoUrl || '';
-    document.getElementById('prof-name').innerText = user.tgName;
-    document.getElementById('prof-id').innerText = `ID: ${user.id}`;
-    document.getElementById('s-games').innerText = user.games;
-    document.getElementById('s-wins').innerText = user.wins;
-    document.getElementById('s-spent').innerText = user.spent.toFixed(2);
-    document.getElementById('s-withdrawn').innerText = user.withdrawn.toFixed(2);
-}
-
-function toggleBalance() {
-    currentBalMode = currentBalMode === 'demo' ? 'real' : 'demo';
-    playSnd('click');
-    updateUI();
-}
-
-// Навигация
-function nav(tabId, el) {
-    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-    document.getElementById(`tab-${tabId}`).classList.add('active');
-    el.classList.add('active');
-    playSnd('click');
-}
-
-function openScreen(id) {
-    document.getElementById(`screen-${id}`).classList.add('active');
-    playSnd('click');
-    if(id === 'mines') renderMinesGrid();
-}
-
-function closeScreen() {
-    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-}
-
-// --- CRASH ЛОГИКА ---
-socket.on('crash_update', (state) => {
-    const rocket = document.getElementById('rocket');
-    const multText = document.getElementById('c-mult');
-    
-    if (state.status === 'waiting') {
-        rocket.classList.remove('flying');
-        rocket.style.transform = `translate(0, 0)`;
-        multText.innerText = `Начало через ${state.timer}с`;
-        multText.style.color = '#fff';
-    } else if (state.status === 'flying') {
-        rocket.classList.add('flying');
-        multText.innerText = state.mult.toFixed(2) + 'x';
-        // Визуальный подъем ракеты
-        let offset = Math.min(state.mult * 10, 100);
-        rocket.style.transform = `translate(${offset}px, -${offset}px)`;
-    } else {
-        rocket.classList.remove('flying');
-        multText.innerText = 'BOOM!';
-        multText.style.color = '#ff4444';
-        playSnd('boom');
-    }
-});
-
-socket.on('crash_live_bets', (bets) => {
-    const cont = document.getElementById('c-live');
-    cont.innerHTML = bets.map(b => `
-        <div class="list-item">
-            <div style="display:flex; align-items:center;">
-                <img src="${b.photoUrl}"> <span>${b.tgName}</span>
+// Живая история ставок
+socket.on('history_update', (history) => {
+    const list = document.getElementById('live-history-list');
+    if(!list) return;
+    list.innerHTML = history.map(h => `
+        <div class="bet-item">
+            <div style="display:flex; align-items:center; gap:8px;">
+                <img src="${h.photoUrl}" onerror="this.src='img/avatar.png'" style="width:20px; height:20px; border-radius:50%">
+                <span style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis; width:60px;">${h.tgName}</span>
             </div>
-            <span style="color:${b.status === 'cashed' ? '#00cc66' : '#aaa'}">
-                ${b.bet} TON ${b.win > 0 ? '(+' + b.win.toFixed(2) + ')' : ''}
-            </span>
+            <span style="color:#888">${h.game}</span>
+            <span class="${h.isWin ? 'bet-win' : ''}">${h.win > 0 ? '+' + h.win.toFixed(2) : h.bet.toFixed(2)}</span>
         </div>
     `).join('');
 });
 
-function crashPlay() {
-    const bet = parseFloat(document.getElementById('c-bet').value);
-    socket.emit('crash_bet', { bet, mode: currentBalMode });
-    playSnd('click');
+// 2. ИНТЕРФЕЙС И ТАБЫ
+function updateUI() {
+    document.getElementById('user-name').innerText = userData.tgName;
+    document.getElementById('profile-name').innerText = userData.tgName;
+    document.getElementById('profile-id').innerText = userData.id;
+    document.getElementById('stat-games').innerText = userData.games;
+    document.getElementById('stat-wins').innerText = userData.wins;
+    
+    // Аватарки
+    if(userData.photoUrl) {
+        document.getElementById('tg-avatar').src = userData.photoUrl;
+        document.getElementById('profile-avatar').src = userData.photoUrl;
+    }
+
+    const bal = currentMode === 'real' ? userData.realBal : userData.demoBal;
+    const suffix = currentMode === 'real' ? ' TON' : ' D-TON';
+    document.getElementById('bal-amount').innerText = bal.toFixed(2) + suffix;
+    
+    const label = document.getElementById('bal-label');
+    label.innerText = currentMode.toUpperCase() + ' BALANCE 🔄';
+    label.style.color = currentMode === 'real' ? 'var(--ssg-green)' : '#ffaa00';
 }
 
-function crashCashout() {
-    socket.emit('crash_cashout');
+function toggleBalanceMode() {
+    currentMode = currentMode === 'real' ? 'demo' : 'real';
+    updateUI();
+    tg.HapticFeedback.impactOccurred('medium');
 }
 
-document.getElementById('c-btn').addEventListener('click', () => {
-    // Если кнопка "Ставка", шлем ставку, если "Вывод", шлем кэшаут
-    // В реальности можно менять текст кнопки через socket crash_update
-});
-
-// --- MINES ЛОГИКА ---
-function setMines(count) {
-    selectedMines = count;
-    document.querySelectorAll('#screen-mines .btn-dark').forEach(b => b.classList.remove('active-btn'));
-    event.target.classList.add('active-btn');
-    playSnd('click');
+function switchTab(tabId, el) {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.getElementById('tab-' + tabId).classList.add('active');
+    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+    el.classList.add('active');
+    tg.HapticFeedback.selectionChanged();
 }
 
-function renderMinesGrid() {
-    const grid = document.getElementById('m-grid');
-    grid.innerHTML = '';
+// 3. ЛОГИКА ИГР
+function openGame(game) {
+    document.getElementById('game-' + game).style.display = 'flex';
+    tg.HapticFeedback.impactOccurred('light');
+    if(game === 'mines') initMinesBoard();
+}
+
+function closeAllGames() {
+    document.querySelectorAll('.game-modal').forEach(m => m.style.display = 'none');
+}
+
+// --- MINES ---
+function initMinesBoard() {
+    const board = document.getElementById('mines-board');
+    board.innerHTML = '';
     for(let i=0; i<25; i++) {
         const cell = document.createElement('div');
         cell.className = 'mine-cell';
-        cell.onclick = () => socket.emit('mines_open', i);
-        grid.appendChild(cell);
+        cell.id = `mine-${i}`;
+        cell.onclick = () => { socket.emit('mines_open', i); tg.HapticFeedback.impactOccurred('light'); };
+        board.appendChild(cell);
     }
 }
 
-function minesPlay() {
-    const bet = parseFloat(document.getElementById('m-bet').value);
-    socket.emit('mines_start', { bet, mode: currentBalMode, minesCount: selectedMines });
-    playSnd('click');
+function startMines() {
+    const bet = parseFloat(document.getElementById('mines-bet-input').value);
+    const minesCount = parseInt(document.getElementById('mines-count').value);
+    if(!bet || bet <= 0) return alert('Введите ставку');
+    
+    socket.emit('mines_start', { bet, minesCount, mode: currentMode });
 }
 
 socket.on('mines_started', () => {
-    renderMinesGrid();
-    document.getElementById('m-btn').innerText = 'ЗАБРАТЬ';
-    document.getElementById('m-btn').onclick = () => socket.emit('mines_cashout');
+    const btn = document.getElementById('mines-main-btn');
+    btn.innerText = 'ВЫВЕСТИ (1.00x)';
+    btn.onclick = () => socket.emit('mines_cashout');
 });
 
 socket.on('mines_safe', (data) => {
-    const cells = document.querySelectorAll('.mine-cell');
-    cells[data.idx].classList.add('safe');
-    cells[data.idx].innerText = '💎';
-    document.getElementById('m-mult').innerText = data.mult + 'x';
-    playSnd('click');
+    const cell = document.getElementById(`mine-${data.idx}`);
+    cell.classList.add('safe');
+    cell.innerText = '💎';
+    document.getElementById('mines-main-btn').innerText = `ВЫВЕСТИ (${data.mult}x)`;
 });
 
 socket.on('mines_boom', (field) => {
-    const cells = document.querySelectorAll('.mine-cell');
-    field.forEach((val, i) => {
-        if(val === 'mine') {
-            cells[i].classList.add('boom');
-            cells[i].innerText = '💣';
-        }
+    field.forEach((type, i) => {
+        const cell = document.getElementById(`mine-${i}`);
+        cell.classList.add(type);
+        cell.innerText = type === 'mine' ? '💣' : '💎';
     });
-    playSnd('boom');
-    resetMinesUI();
+    tg.HapticFeedback.notificationOccurred('error');
+    setTimeout(resetMines, 2000);
 });
 
 socket.on('mines_win', () => {
-    playSnd('money');
-    resetMinesUI();
+    tg.HapticFeedback.notificationOccurred('success');
+    resetMines();
 });
 
-function resetMinesUI() {
-    document.getElementById('m-btn').innerText = 'СТАВКА';
-    document.getElementById('m-btn').onclick = minesPlay;
-    document.getElementById('m-mult').innerText = '1.00x';
+function resetMines() {
+    const btn = document.getElementById('mines-main-btn');
+    btn.innerText = 'ИГРАТЬ';
+    btn.onclick = startMines;
+    initMinesBoard();
 }
 
-// --- COINFLIP ЛОГИКА ---
-function setCoin(side) {
-    selectedCoin = side;
-    document.querySelectorAll('#screen-coinflip .btn').forEach(b => b.classList.remove('active-btn'));
-    event.target.classList.add('active-btn');
-    playSnd('click');
-}
-
-function coinflipPlay() {
-    const bet = parseFloat(document.getElementById('cf-bet').value);
-    const coin = document.getElementById('coin');
-    coin.classList.add('spinning');
+// --- CRASH ---
+socket.on('crash_update', (state) => {
+    const multText = document.getElementById('crash-multiplier');
+    const btn = document.getElementById('crash-btn');
     
-    socket.emit('coinflip_play', { bet, mode: currentBalMode, side: selectedCoin });
-    playSnd('click');
-}
-
-socket.on('coinflip_result', (data) => {
-    const coin = document.getElementById('coin');
-    setTimeout(() => {
-        coin.classList.remove('spinning');
-        // Поворот на нужную сторону
-        const rotation = data.resultSide === 'L' ? 0 : 180;
-        coin.style.transform = `rotateY(${rotation + 1800}deg)`; // 1800 для доп кручений
-        
-        setTimeout(() => {
-            if(data.win) playSnd('money');
-            else playSnd('boom');
-        }, 500);
-    }, 1500);
+    if(state.status === 'waiting') {
+        multText.innerText = `00:${state.timer < 10 ? '0' : ''}${state.timer}`;
+        multText.style.color = 'white';
+        btn.innerText = 'СТАВКА';
+        btn.style.background = 'var(--ssg-green)';
+    } else if(state.status === 'flying') {
+        multText.innerText = state.mult.toFixed(2) + 'x';
+        multText.style.color = 'var(--ssg-green)';
+    } else {
+        multText.innerText = 'BOOM!';
+        multText.style.color = '#ff4444';
+        btn.innerText = 'СТАВКА';
+    }
 });
 
-// --- ПРОМО И ВЫВОД ---
-function activatePromo() {
-    const code = document.getElementById('promo-code').value;
-    socket.emit('activate_promo', code);
-}
-
-function reqWithdraw() {
-    const address = document.getElementById('w-address').value;
-    const amount = parseFloat(document.getElementById('w-amt').value);
-    if(!address || amount < 1) return tg.showAlert('Минимум 1 TON');
-    socket.emit('withdraw_request', { address, amount });
-}
-
-// --- ГЛОБАЛЬНАЯ ИСТОРИЯ ---
-socket.on('global_history_update', (data) => {
-    const cont = document.getElementById('global-history');
-    cont.innerHTML = data.map(h => `
-        <div class="list-item">
-            <div style="display:flex; align-items:center;">
-                <img src="${h.photoUrl || ''}"> <b>${h.tgName}</b>
-            </div>
-            <span>${h.game}</span>
-            <b style="color:${h.isWin ? '#00cc66' : '#ff4444'}">${h.isWin ? '+' : ''}${h.win.toFixed(2)} TON</b>
-        </div>
-    `).join('');
-});
-
-// --- АДМИНКА (СЕКРЕТ) ---
-function adminClick() {
-    adminClicks++;
-    if(adminClicks >= 10) {
-        adminClicks = 0;
-        const pass = prompt('Admin Password?');
-        if(pass === 'loonx777') { // Твой пароль
-            document.getElementById('admin-modal').style.display = 'flex';
-            admTab('users');
-        }
+function placeCrashBet() {
+    const btn = document.getElementById('crash-btn');
+    const bet = parseFloat(document.getElementById('crash-bet-input').value);
+    
+    if(btn.innerText === 'СТАВКА') {
+        if(!bet || bet <= 0) return alert('Введите ставку');
+        socket.emit('crash_bet', { bet, mode: currentMode });
+        btn.innerText = 'ВЫВОД';
+        btn.style.background = '#3b82f6';
+    } else {
+        socket.emit('crash_cashout');
     }
 }
 
-function admTab(type) {
-    socket.emit('admin_req_data');
-    socket.once('admin_res_data', (data) => {
-        const cont = document.getElementById('adm-content');
-        if(type === 'users') {
-            cont.innerHTML = data.users.map(u => `
-                <div class="panel mt-half" style="font-size:12px;">
-                    <b>${u.tgName}</b> (ID: ${u.id})<br>
-                    Бал: ${u.realBal.toFixed(2)} | Игр: ${u.games}<br>
-                    Кошелек: ${u.wallet}<br>
-                    <button onclick="admAct('edit_bal', '${u.id}')">+/- Бал</button>
-                    <button onclick="admAct('ban', '${u.id}')">${u.banned ? 'Разбан' : 'Бан'}</button>
-                    <button onclick="window.open('https://t.me/${u.tgName}')">TG</button>
-                </div>
-            `).join('');
-        }
-        if(type === 'withdraws') {
-            cont.innerHTML = data.withdraws.map(w => `
-                <div class="panel mt-half">
-                    ${w.tgName} - ${w.amount} TON<br>
-                    <small>${w.address}</small><br>
-                    <button onclick="admAct('withdraw_approve', '${w._id}')">✅ OK</button>
-                    <button onclick="admAct('withdraw_reject', '${w._id}')">❌ Отмена</button>
-                </div>
-            `).join('');
-        }
-        if(type === 'promos') {
-            cont.innerHTML = `
-                <input id="p-code" placeholder="Код" class="input">
-                <input id="p-amt" placeholder="Сумма" class="input mt-half">
-                <input id="p-uses" placeholder="Кол-во" class="input mt-half">
-                <button class="btn btn-green mt" onclick="createPromo()">Создать</button>
-            `;
-        }
-        if(type === 'rtp') {
-            cont.innerHTML = `
-                <label>Crash Win %</label><input id="r-crash" value="${data.settings.crashWinChance}" class="input">
-                <label>Mines Win %</label><input id="r-mines" value="${data.settings.minesWinChance}" class="input">
-                <label>Coin Win %</label><input id="r-coin" value="${data.settings.coinflipWinChance}" class="input">
-                <button class="btn btn-blue mt" onclick="saveSettings()">Сохранить</button>
-            `;
-        }
-    });
+// 4. КОШЕЛЕК И ВЫВОДЫ
+function requestWithdraw() {
+    const wallet = document.getElementById('draw-wallet').value;
+    const amount = parseFloat(document.getElementById('draw-amount').value);
+    if(!wallet || !amount) return alert('Заполните все поля');
+    socket.emit('request_withdraw', { wallet, amount });
 }
 
-function admAct(action, id) {
-    let amount = 0;
-    if(action === 'edit_bal') amount = prompt('Сумма (можно -10):');
-    socket.emit('admin_action', { action, userId: id, wId: id, amount });
-    setTimeout(() => admTab('users'), 500);
+function claimPromo() {
+    const code = document.getElementById('promo-input').value;
+    socket.emit('activate_promo', code);
 }
 
-function createPromo() {
-    const code = document.getElementById('p-code').value;
-    const amount = document.getElementById('p-amt').value;
-    const uses = document.getElementById('p-uses').value;
-    socket.emit('admin_action', { action: 'create_promo', code, amount, uses });
+// 5. АДМИНКА
+function openAdmin() {
+    const pass = prompt('Admin Password:');
+    if(pass) socket.emit('admin_login', pass);
 }
 
-function saveSettings() {
-    const crash = document.getElementById('r-crash').value;
-    const mines = document.getElementById('r-mines').value;
-    const coinflip = document.getElementById('r-coin').value;
-    socket.emit('admin_action', { action: 'save_settings', crash, mines, coinflip });
-}
+socket.on('alert', (data) => alert(data.msg));
+
+// Звезды
+setInterval(() => {
+    const container = document.getElementById('stars-container');
+    if(!container) return;
+    const star = document.createElement('div');
+    star.className = 'star';
+    star.style.left = Math.random() * 100 + 'vw';
+    star.style.animationDuration = (Math.random() * 3 + 2) + 's';
+    container.appendChild(star);
+    setTimeout(() => star.remove(), 5000);
+}, 400);
