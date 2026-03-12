@@ -1,3 +1,4 @@
+try { require('dotenv').config(); } catch (e) { console.log("Dotenv не найден, используем Render ENV"); }
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
@@ -6,57 +7,32 @@ const TelegramBot = require('node-telegram-bot-api');
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server);
+const io = new Server(server, { cors: { origin: "*" } });
 
 const MONGO_URI = process.env.MONGO_URI;
 const BOT_TOKEN = process.env.BOT_TOKEN;
-const PORT = process.env.PORT || 3000;
+const WEB_APP_URL = process.env.WEB_APP_URL || 'https://loonxgift.onrender.com';
 
-mongoose.connect(MONGO_URI).then(() => console.log('✅ DB Connected'));
+mongoose.connect(MONGO_URI).then(() => console.log('✅ MongoDB Connected')).catch(err => console.log('❌ DB Error:', err));
 
-// --- СХЕМЫ ---
-const UserSchema = new mongoose.Schema({
-    id: { type: String, unique: true },
-    tgName: String,
-    photoUrl: String,
-    realBal: { type: Number, default: 0 },
-    demoBal: { type: Number, default: 200 }, // Сразу 200 демо новым
-    games: { type: Number, default: 0 },     // Только реал
-    wins: { type: Number, default: 0 },      // Только реал
-    spent: { type: Number, default: 0 },
-    withdrawn: { type: Number, default: 0 },
-    lastDemo: { type: Date, default: null },
-    wallet: { type: String, default: 'Не привязан' },
+// --- СХЕМЫ БАЗЫ ДАННЫХ ---
+const User = mongoose.model('User', new mongoose.Schema({
+    id: String, tgName: String, photoUrl: String,
+    realBal: { type: Number, default: 0 }, demoBal: { type: Number, default: 200 },
+    games: { type: Number, default: 0 }, wins: { type: Number, default: 0 },
     banned: { type: Boolean, default: false }
-});
-const User = mongoose.model('User', UserSchema);
+}));
 
-const WithdrawSchema = new mongoose.Schema({
-    userId: String,
-    tgName: String,
-    amount: Number,
-    address: String,
-    status: { type: String, default: 'pending' }, // pending, approved, rejected
-    date: { type: Date, default: Date.now }
-});
-const Withdraw = mongoose.model('Withdraw', WithdrawSchema);
+const Promo = mongoose.model('Promo', new mongoose.Schema({
+    code: String, amount: Number, uses: Number, activatedBy: [String]
+}));
 
-const PromoSchema = new mongoose.Schema({
-    code: { type: String, unique: true },
-    reward: Number,
-    uses: Number,
-    usedBy: [String] // ID пользователей, которые уже ввели
-});
-const Promo = mongoose.model('Promo', PromoSchema);
-
-// Настройки шансов (RTP)
-const SettingsSchema = new mongoose.Schema({
+// Настройки подкрута (RTP)
+const Settings = mongoose.model('Settings', new mongoose.Schema({
     id: { type: String, default: 'main' },
-    crashWinChance: { type: Number, default: 40 }, 
-    minesWinChance: { type: Number, default: 45 },
-    coinflipWinChance: { type: Number, default: 40 }
-});
-const Settings = mongoose.model('Settings', SettingsSchema);
+    crashWinChance: { type: Number, default: 60 }, // % шанса на нормальный полет
+    minesWinChance: { type: Number, default: 70 }
+}));
 
 async function initSettings() {
     let s = await Settings.findOne({ id: 'main' });
@@ -64,312 +40,107 @@ async function initSettings() {
 }
 initSettings();
 
-const MinesSessionSchema = new mongoose.Schema({
-    userId: String, bet: Number, mode: String, field: Array, steps: { type: Number, default: 0 }, minesCount: Number, mult: { type: Number, default: 1.0 }
+// --- БОТ TELEGRAM ---
+const bot = new TelegramBot(BOT_TOKEN, { polling: true });
+
+bot.onText(/\/start/, (msg) => {
+    bot.sendMessage(msg.chat.id, `🪙 Добро пожаловать в Loonx Gift!\nЛучшие игры уже ждут тебя.`, {
+        reply_markup: { inline_keyboard: [[{ text: '🫧играть🫧', web_app: { url: WEB_APP_URL } }]] }
+    });
 });
-const MinesSession = mongoose.model('MinesSession', MinesSessionSchema);
 
-app.use(express.static('public'));
+bot.onText(/\/help/, (msg) => {
+    bot.sendMessage(msg.chat.id, `💎 *Наши контакты:*\n\n• Creator = @tonfrm\n• Channel = @Loonxnews\n• Support = @LoonxGift_Support\n• Bags = @MsgP2P`, { parse_mode: 'Markdown' });
+});
 
-// --- ИСТОРИЯ И CRASH ---
-let globalHistory = [];
-function addGlobalHistory(user, game, bet, winAmount, isWin, mode) {
-    if (mode === 'real') { // В историю профиля и глобал только РЕАЛ
-        globalHistory.unshift({ tgName: user.tgName, photoUrl: user.photoUrl, game, bet, win: winAmount, isWin });
-        if (globalHistory.length > 5) globalHistory.pop();
-        io.emit('global_history_update', globalHistory);
-    }
-}
+// --- ЛОГИКА CRASH (С подкрутом) ---
+let crashState = { status: 'waiting', timer: 10, mult: 1.0 };
 
-let crashState = { status: 'waiting', mult: 1.0, timer: 5, history: [] };
-let crashBets = {}; 
-
-async function runCrash() {
-    crashState.status = 'waiting'; crashState.timer = 5; crashState.mult = 1.0; crashBets = {};
+async function startCrash() {
+    crashState = { status: 'waiting', timer: 10, mult: 1.0 };
     io.emit('crash_update', crashState);
-    io.emit('crash_live_bets', Object.values(crashBets));
-
-    let waitTimer = setInterval(async () => {
+    
+    let t = setInterval(async () => {
         crashState.timer--;
         io.emit('crash_update', crashState);
-        if (crashState.timer <= 0) {
-            clearInterval(waitTimer);
-            
-            // ДИНАМИЧЕСКИЙ ШАНС
+        if(crashState.timer <= 0) {
+            clearInterval(t);
             let s = await Settings.findOne({ id: 'main' });
-            let chance = s ? s.crashWinChance : 40;
-            let hasRealBets = Object.values(crashBets).some(b => b.mode === 'real');
-            
-            let crashPoint = 1.0;
-            if (hasRealBets) {
-                // Если есть ставки, шанс слива выше (режем кэфы)
-                crashPoint = (Math.random() * 100 < chance) ? (1 + Math.random() * 1.5) : 1.0;
-            } else {
-                // Никто не ставит - показываем красивые иксы для байта
-                crashPoint = (Math.random() * 100 < 70) ? (1.5 + Math.random() * 5) : 1.0;
-            }
-
-            startFlight(parseFloat(crashPoint.toFixed(2)));
+            // Подкрут: Если рандом не попал в winChance, ракета взорвется рано (1.0 - 1.15)
+            let isWin = (Math.random() * 100) <= (s ? s.crashWinChance : 60);
+            let targetMult = isWin ? (1.5 + Math.random() * 5) : (1.0 + Math.random() * 0.15);
+            runRocket(targetMult);
         }
     }, 1000);
 }
 
-function startFlight(targetPoint) {
+function runRocket(target) {
     crashState.status = 'flying';
-    let flyInterval = setInterval(() => {
-        crashState.mult += 0.01 + (crashState.mult * 0.003); 
-        
-        if (crashState.mult >= targetPoint || targetPoint === 1.0) {
-            clearInterval(flyInterval);
+    let fly = setInterval(() => {
+        crashState.mult += 0.01 + (crashState.mult * 0.005);
+        if(crashState.mult >= target) {
+            clearInterval(fly);
             crashState.status = 'crashed';
-            crashState.history.unshift(crashState.mult.toFixed(2));
-            if(crashState.history.length > 6) crashState.history.pop();
-            
-            for (let id in crashBets) {
-                if (crashBets[id].status === 'flying') {
-                    crashBets[id].status = 'lost';
-                    User.findOne({ id: crashBets[id].userId }).then(u => {
-                        if(u) addGlobalHistory(u, 'CRASH', crashBets[id].bet, 0, false, crashBets[id].mode);
-                    });
-                }
-            }
             io.emit('crash_update', crashState);
-            io.emit('crash_live_bets', Object.values(crashBets));
-            setTimeout(runCrash, 3000);
+            setTimeout(startCrash, 4000);
         } else {
-            io.emit('crash_update', crashState);
+            io.emit('crash_update', { status: 'flying', mult: parseFloat(crashState.mult.toFixed(2)) });
         }
-    }, 70); // Чуть быстрее для динамики
+    }, 100);
 }
-runCrash();
+startCrash();
 
-// --- SOCKET.IO ---
+// --- СОКЕТЫ: Онлайн, Промо, Админка ---
 io.on('connection', (socket) => {
+    // Обновляем онлайн для всех
+    io.emit('online_count', io.engine.clientsCount);
+
+    socket.on('disconnect', () => {
+        io.emit('online_count', io.engine.clientsCount);
+    });
+
     socket.on('init_user', async (data) => {
-        let user = await User.findOne({ id: data.id });
-        if (!user) user = new User({ id: data.id, tgName: data.username, photoUrl: data.photo });
-        else { user.tgName = data.username; user.photoUrl = data.photo; }
-        await user.save();
-        
-        if (user.banned) return socket.emit('alert_sound', { msg: '❌ Вы заблокированы', type: 'error' });
-        
-        socket.userId = user.id;
-        socket.emit('user_data', user);
+        let u = await User.findOneAndUpdate({ id: data.id }, { tgName: data.username, photoUrl: data.photo }, { upsert: true, new: true });
+        if (u.banned) return socket.emit('alert', { msg: '❌ Вы заблокированы', type: 'error' });
+        socket.userId = u.id;
+        socket.emit('user_data', u);
         socket.emit('crash_update', crashState);
-        socket.emit('global_history_update', globalHistory);
     });
 
-    socket.on('claim_demo', async () => {
-        let user = await User.findOne({ id: socket.userId });
-        if (!user) return;
-        let now = new Date();
-        if(!user.lastDemo || (now - user.lastDemo) > 86400000) {
-            user.demoBal += 200; user.lastDemo = now; await user.save();
-            socket.emit('user_data', user);
-            socket.emit('alert_sound', { msg: '✅ Начислено 200 DEMO!', type: 'money' });
-        } else {
-            socket.emit('alert_sound', { msg: '❌ Доступно раз в 24 часа!', type: 'error' });
-        }
-    });
-
-    // --- ИГРЫ ---
-    socket.on('crash_bet', async (data) => {
-        if (crashState.status !== 'waiting') return;
-        let user = await User.findOne({ id: socket.userId });
-        if (!user || user.banned) return;
-        let key = data.mode === 'real' ? 'realBal' : 'demoBal';
-
-        if (user[key] >= data.bet && data.bet >= 0.1) {
-            user[key] -= data.bet; 
-            if(data.mode === 'real') { user.games++; user.spent += data.bet; }
-            await user.save();
-            
-            crashBets[socket.id] = { userId: user.id, tgName: user.tgName, photoUrl: user.photoUrl, bet: data.bet, mode: data.mode, status: 'flying', win: 0 };
-            socket.emit('user_data', user);
-            io.emit('crash_live_bets', Object.values(crashBets));
-        }
-    });
-
-    socket.on('crash_cashout', async () => {
-        if (crashBets[socket.id] && crashState.status === 'flying' && crashBets[socket.id].status === 'flying') {
-            let b = crashBets[socket.id];
-            b.status = 'cashed'; b.win = b.bet * crashState.mult;
-            let user = await User.findOne({ id: b.userId });
-            
-            let key = b.mode === 'real' ? 'realBal' : 'demoBal';
-            user[key] += b.win; 
-            if(b.mode === 'real') user.wins++; 
-            await user.save();
-            
-            socket.emit('user_data', user);
-            socket.emit('alert_sound', { msg: `✅ Вывели: +${b.win.toFixed(2)}`, type: 'money' });
-            io.emit('crash_live_bets', Object.values(crashBets));
-            addGlobalHistory(user, 'CRASH', b.bet, b.win, true, b.mode);
-        }
-    });
-
-    socket.on('mines_start', async (data) => {
-        let user = await User.findOne({ id: socket.userId });
-        if (!user || user.banned) return;
-        let key = data.mode === 'real' ? 'realBal' : 'demoBal';
-
-        if (user[key] >= data.bet && data.bet >= 0.1) {
-            user[key] -= data.bet; 
-            if(data.mode === 'real') { user.games++; user.spent += data.bet; }
-            await user.save();
-            
-            let field = Array(25).fill('safe');
-            let bombs = 0; 
-            while(bombs < data.minesCount) { 
-                let r = Math.floor(Math.random() * 25); 
-                if(field[r] === 'safe'){ field[r] = 'mine'; bombs++; }
-            }
-            
-            await MinesSession.findOneAndDelete({ userId: user.id });
-            await new MinesSession({ userId: user.id, bet: data.bet, mode: data.mode, field: field, minesCount: data.minesCount }).save();
-            socket.emit('user_data', user);
-            socket.emit('mines_started');
-        }
-    });
-
-    socket.on('mines_open', async (index) => {
-        let s = await MinesSession.findOne({ userId: socket.userId });
-        if (!s) return;
-        
-        let settings = await Settings.findOne({ id: 'main' });
-        // Коррекция на слив, если шанс не прошел (подменяем сейф на мину визуально для сервера)
-        if (s.mode === 'real' && Math.random() * 100 > settings.minesWinChance && s.steps > 1) {
-            s.field[index] = 'mine'; 
-        }
-
-        if (s.field[index] === 'mine') {
-            socket.emit('mines_boom', s.field);
-            let u = await User.findOne({ id: socket.userId });
-            addGlobalHistory(u, 'MINES', s.bet, 0, false, s.mode);
-            await MinesSession.findOneAndDelete({ userId: socket.userId });
-        } else {
-            s.steps++;
-            // Коэффициенты зависят от кол-ва мин
-            let base = s.minesCount === 3 ? 1.08 : (s.minesCount === 6 ? 1.25 : 1.7);
-            s.mult = parseFloat((s.mult * base).toFixed(2));
-            await s.save();
-            socket.emit('mines_safe', { idx: index, mult: s.mult });
-        }
-    });
-
-    socket.on('mines_cashout', async () => {
-        let s = await MinesSession.findOne({ userId: socket.userId });
-        if (s && s.steps > 0) {
-            let u = await User.findOne({ id: socket.userId });
-            let win = s.bet * s.mult;
-            let key = s.mode === 'real' ? 'realBal' : 'demoBal';
-            u[key] += win; 
-            if(s.mode === 'real') u.wins++; 
-            await u.save();
-            
-            socket.emit('user_data', u);
-            socket.emit('mines_win', { win: win.toFixed(2) });
-            socket.emit('alert_sound', { msg: `✅ +${win.toFixed(2)}`, type: 'money' });
-            addGlobalHistory(u, 'MINES', s.bet, win, true, s.mode);
-            await MinesSession.findOneAndDelete({ userId: socket.userId });
-        }
-    });
-
-    socket.on('coinflip_play', async (data) => {
-        let user = await User.findOne({ id: socket.userId });
-        if (!user || user.banned) return;
-        let key = data.mode === 'real' ? 'realBal' : 'demoBal';
-
-        if (user[key] >= data.bet && data.bet >= 0.1) {
-            user[key] -= data.bet; 
-            if(data.mode === 'real') { user.games++; user.spent += data.bet; }
-            
-            let settings = await Settings.findOne({ id: 'main' });
-            const isWin = (Math.random() * 100) < settings.coinflipWinChance; 
-            
-            let winAmount = 0;
-            if(isWin) {
-                winAmount = data.bet * 1.9;
-                user[key] += winAmount; 
-                if(data.mode === 'real') user.wins++;
-            }
-            await user.save();
-            
-            socket.emit('user_data', user);
-            socket.emit('coinflip_result', { win: isWin, resultSide: isWin ? data.side : (data.side === 'L' ? 'X' : 'L'), winAmount });
-            addGlobalHistory(user, 'COINFLIP', data.bet, winAmount, isWin, data.mode);
-        }
-    });
-
-    // --- ПРОМО И ВЫВОД ---
+    // ИСПРАВЛЕННЫЕ ПРОМОКОДЫ
     socket.on('activate_promo', async (code) => {
-        let promo = await Promo.findOne({ code: code.toUpperCase() });
-        let user = await User.findOne({ id: socket.userId });
+        let p = await Promo.findOne({ code: code.toUpperCase() });
+        let u = await User.findOne({ id: socket.userId });
         
-        if (!promo || promo.uses <= 0) return socket.emit('alert_sound', { msg: '❌ Код не найден или исчерпан', type: 'error' });
-        if (promo.usedBy.includes(user.id)) return socket.emit('alert_sound', { msg: '❌ Вы уже активировали этот код', type: 'error' });
+        if (!p) return socket.emit('alert', { msg: '❌ Промокод не найден', type: 'error' });
+        if (p.uses <= 0) return socket.emit('alert', { msg: '❌ Лимит исчерпан', type: 'error' });
+        if (p.activatedBy.includes(u.id)) return socket.emit('alert', { msg: '❌ Вы уже активировали этот код', type: 'error' });
 
-        user.realBal += promo.reward; 
-        promo.uses--; 
-        promo.usedBy.push(user.id);
-        await user.save(); await promo.save();
-        socket.emit('user_data', user);
-        socket.emit('alert_sound', { msg: `✅ Успешно! +${promo.reward} TON (Реал)`, type: 'money' });
+        u.realBal += p.amount;
+        p.uses--;
+        p.activatedBy.push(u.id);
+        await u.save(); await p.save();
+        
+        socket.emit('user_data', u);
+        socket.emit('alert', { msg: `✅ Успешно! +${p.amount} REAL`, type: 'success' });
     });
 
-    socket.on('withdraw_request', async (data) => {
-        let user = await User.findOne({ id: socket.userId });
-        if (user && user.realBal >= data.amount && data.amount > 0) {
-            user.realBal -= data.amount; await user.save();
-            await new Withdraw({ userId: user.id, tgName: user.tgName, address: data.address, amount: data.amount }).save();
-            socket.emit('user_data', user);
-            socket.emit('alert_sound', { msg: '🚀 Заявка на вывод создана!', type: 'click' });
+    // АДМИНКА (Запуск без багов)
+    socket.on('admin_login', async (pass) => {
+        if(pass === 'loonx777') {
+            const users = await User.find({});
+            const settings = await Settings.findOne({ id: 'main' });
+            socket.emit('admin_data', { users, settings });
+        } else {
+            socket.emit('alert', { msg: '❌ Неверный пароль', type: 'error' });
         }
     });
 
-    // --- АДМИНКА ---
-    socket.on('admin_req_data', async () => {
-        let users = await User.find({});
-        let withdraws = await Withdraw.find({ status: 'pending' });
-        let settings = await Settings.findOne({ id: 'main' });
-        socket.emit('admin_res_data', { users, withdraws, settings });
-    });
-
-    socket.on('admin_action', async (data) => {
-        if(data.action === 'edit_bal') {
-            let u = await User.findOne({ id: data.userId });
-            if(u) { u.realBal += parseFloat(data.amount); await u.save(); io.to(u.id).emit('user_data', u); }
-        }
-        if(data.action === 'ban') {
-            let u = await User.findOne({ id: data.userId });
-            if(u) { u.banned = !u.banned; await u.save(); }
-        }
-        if(data.action === 'withdraw_approve') {
-            let w = await Withdraw.findById(data.wId);
-            if(w) { 
-                w.status = 'approved'; await w.save(); 
-                let u = await User.findOne({ id: w.userId });
-                if(u) { u.withdrawn += w.amount; await u.save(); }
-            }
-        }
-        if(data.action === 'withdraw_reject') {
-            let w = await Withdraw.findById(data.wId);
-            if(w) {
-                w.status = 'rejected'; await w.save();
-                let u = await User.findOne({ id: w.userId });
-                if(u) { u.realBal += w.amount; await u.save(); } // Возврат
-            }
-        }
-        if(data.action === 'create_promo') {
-            await new Promo({ code: data.code.toUpperCase(), reward: data.amount, uses: data.uses }).save();
-        }
-        if(data.action === 'save_settings') {
-            let s = await Settings.findOne({ id: 'main' });
-            s.crashWinChance = data.crash; s.minesWinChance = data.mines; s.coinflipWinChance = data.coinflip;
-            await s.save();
-        }
-        socket.emit('alert_sound', { msg: '✅ Выполнено', type: 'click' });
+    socket.on('admin_set_rtp', async (data) => {
+        await Settings.findOneAndUpdate({ id: 'main' }, { crashWinChance: data.crash, minesWinChance: data.mines });
+        socket.emit('alert', { msg: '✅ RTP обновлен', type: 'success' });
     });
 });
 
-server.listen(PORT, () => console.log(`✅ Порт ${PORT}`));
+app.use(express.static('public'));
+server.listen(process.env.PORT || 3000, () => console.log('🚀 Server is running'));
