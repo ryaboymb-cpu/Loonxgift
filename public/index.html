@@ -1,312 +1,218 @@
-require('dotenv').config();
-const express = require('express');
-const http = require('http');
-const https = require('https');
-const { Server } = require('socket.io');
-const mongoose = require('mongoose');
-const TelegramBot = require('node-telegram-bot-api');
-
-const app = express();
-const server = http.createServer(app);
-const io = new Server(server, { 
-    cors: { origin: "*" },
-    pingInterval: 10000,
-    pingTimeout: 5000 
-});
-
-const {
-    BOT_TOKEN: TOKEN,
-    MONGO_URI,
-    TON_API_KEY,
-    ADMIN_WALLET,
-    WEBAPP_URL,
-    PORT = 3000
-} = process.env;
-
-// ==========================================
-// 1. TELEGRAM BOT (С фиксом 409 и командами)
-// ==========================================
-let bot;
-if (TOKEN) {
-    bot = new TelegramBot(TOKEN, { polling: true });
-    
-    // Щит от падения сервера
-    bot.on('polling_error', (err) => {
-        if (!err.message.includes('409')) console.log("Bot Polling Error:", err.message);
-    });
-
-    bot.onText(/\/start/, (msg) => {
-        bot.sendMessage(msg.chat.id, `🚀 *Добро пожаловать в Loonx Gifts!* \n\nСамый быстрый софт для игры на TON.`, {
-            parse_mode: 'Markdown',
-            reply_markup: { inline_keyboard: [[{ text: "🎮 Играть сейчас", web_app: { url: WEBAPP_URL } }]] }
-        });
-    });
-
-    bot.onText(/\/help/, (msg) => {
-        bot.sendMessage(msg.chat.id, `🛡 *Поддержка и контакты:*\n\n👤 Creator: @tonfrm\n📢 Channel: @Loonxnews\n🆘 Support: @LoonxGift_Support`, { parse_mode: 'Markdown' });
-    });
-}
-
-// ==========================================
-// 2. DATABASE MODELS
-// ==========================================
-mongoose.connect(MONGO_URI).then(() => console.log("✅ MongoDB Connected")).catch(e => console.log("❌ DB Error:", e));
-
-const userSchema = new mongoose.Schema({
-    tgId: { type: Number, unique: true },
-    username: String,
-    photo_url: String,
-    real_balance: { type: Number, default: 0 },
-    demo_balance: { type: Number, default: 5000 },
-    stats_games: { type: Number, default: 0 },
-    stats_wins: { type: Number, default: 0 },
-    processed_txs: { type: [String], default: [] },
-    isAdmin: { type: Boolean, default: false }
-});
-const User = mongoose.model('User', userSchema);
-
-const Withdraw = mongoose.model('Withdraw', new mongoose.Schema({
-    tgId: Number, username: String, amount: Number, address: String, status: { type: String, default: 'pending' }, date: { type: Date, default: Date.now }
-}));
-
-app.use(express.static('public'));
-
-// ==========================================
-// 3. GAME STATE & LOGIC
-// ==========================================
-let liveBets = [];
-let onlineCount = 0;
-let crashState = { status: 'waiting', multiplier: 1.0, history: [], currentBets: [], nextBets: [], timer: 8 };
-let activeMines = new Map(); // Храним сессии Mines
-
-function addLiveBet(username, game, profit) {
-    liveBets.unshift({ username, game, profit: parseFloat(profit).toFixed(2), time: new Date().toLocaleTimeString() });
-    if (liveBets.length > 20) liveBets.pop();
-    io.emit('live_bets_update', liveBets);
-}
-
-// --- CRASH SYSTEM ---
-function startCrashCycle() {
-    crashState.status = 'waiting';
-    crashState.multiplier = 1.0;
-    crashState.currentBets = [...crashState.nextBets];
-    crashState.nextBets = [];
-    io.emit('crash_update_bets', crashState.currentBets);
-    
-    crashState.timer = 8.0;
-    const interval = setInterval(() => {
-        crashState.timer -= 0.1;
-        io.emit('crash_timer', crashState.timer.toFixed(1));
-        if (crashState.timer <= 0) { clearInterval(interval); runFlight(); }
-    }, 100);
-}
-
-function runFlight() {
-    crashState.status = 'flying';
-    io.emit('crash_start');
-    const point = Math.max(1.01, (1 / (1 - Math.random() * 0.96)).toFixed(2));
-    
-    const flight = setInterval(() => {
-        // Формула роста: мн-ль увеличивается экспоненциально
-        crashState.multiplier += (crashState.multiplier * 0.007) + 0.01;
-        io.emit('crash_tick', crashState.multiplier.toFixed(2));
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Loonx Gifts</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script src="/socket.io/socket.io.js"></script>
+    <style>
+        :root { --neon: #007bff; --neon-win: #00ff88; --neon-lose: #ff4444; }
+        body { background: #0a0a0b; color: white; font-family: 'Segoe UI', sans-serif; margin: 0; overflow: hidden; user-select: none; }
         
-        if (crashState.multiplier >= point) {
-            clearInterval(flight);
-            doCrash(point);
+        /* Звездное небо */
+        #stars { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: -1; }
+
+        /* Лоадер (исправлен) */
+        #loader { 
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
+            background: #0a0a0b; display: flex; flex-direction: column; 
+            justify-content: center; align-items: center; z-index: 9999; 
         }
-    }, 100);
-}
+        .neon-logo { font-size: 3.5em; font-weight: bold; text-shadow: 0 0 20px var(--neon); margin-bottom: 15px; }
 
-function doCrash(p) {
-    crashState.status = 'crashed';
-    crashState.history.unshift(p);
-    if (crashState.history.length > 15) crashState.history.pop();
-    io.emit('crash_end', { point: p, history: crashState.history });
-    
-    crashState.currentBets.forEach(b => {
-        if (!b.cashedOut) addLiveBet(b.username, 'Crash', -b.amount);
-    });
-    setTimeout(startCrashCycle, 4000);
-}
-startCrashCycle();
+        /* Контейнер приложения */
+        #app { display: none; height: 100vh; flex-direction: column; overflow-y: auto; }
 
-// ==========================================
-// 4. TON DEPOSIT MONITOR (HTTPS)
-// ==========================================
-setInterval(() => {
-    if (!TON_API_KEY || !ADMIN_WALLET) return;
-    const url = `https://toncenter.com/api/v2/getTransactions?address=${ADMIN_WALLET}&limit=10&api_key=${TON_API_KEY}`;
-    
-    https.get(url, (res) => {
-        let data = '';
-        res.on('data', chunk => data += chunk);
-        res.on('end', async () => {
-            try {
-                const json = JSON.parse(data);
-                if (json.ok) {
-                    for (let tx of json.result) {
-                        const hash = tx.transaction_id.hash;
-                        const msg = tx.in_msg.message;
-                        const val = tx.in_msg.value / 1e9;
-                        if (msg && !isNaN(msg)) {
-                            const user = await User.findOne({ tgId: parseInt(msg) });
-                            if (user && !user.processed_txs.includes(hash)) {
-                                user.real_balance += val;
-                                user.processed_txs.push(hash);
-                                await user.save();
-                                io.to(`user_${user.tgId}`).emit('user_data', user);
-                                io.to(`user_${user.tgId}`).emit('notify', { text: `✅ Депозит ${val} TON зачислен!` });
-                            }
-                        }
-                    }
+        /* Шапка */
+        .header { padding: 15px; background: rgba(255,255,255,0.03); border-bottom: 1px solid #333; display: flex; justify-content: space-between; align-items: center; }
+        .balance-box { text-align: right; }
+        .balance-val { color: var(--neon-win); font-weight: bold; font-size: 1.2em; }
+
+        /* Переключатель игр */
+        .game-nav { display: flex; gap: 10px; padding: 10px; justify-content: center; }
+        .nav-btn { background: #1a1a1c; border: 1px solid #333; color: white; padding: 8px 20px; border-radius: 10px; cursor: pointer; }
+        .nav-btn.active { border-color: var(--neon); box-shadow: 0 0 10px var(--neon); }
+
+        /* CRASH AREA */
+        .crash-container { padding: 20px; text-align: center; }
+        .multiplier { font-size: 5em; font-weight: bold; margin: 30px 0; transition: color 0.2s; }
+        .history { display: flex; gap: 8px; justify-content: center; overflow-x: auto; padding: 10px; }
+        .history-item { background: #1a1a1c; padding: 4px 10px; border-radius: 5px; font-size: 0.8em; border: 1px solid #333; }
+
+        /* MINES AREA */
+        .mines-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; max-width: 320px; margin: 20px auto; }
+        .cell { aspect-ratio: 1; background: #1a1a1c; border: 1px solid #333; border-radius: 8px; display: flex; justify-content: center; align-items: center; font-size: 1.5em; cursor: pointer; }
+        .cell.open { background: #2a2a2c; border-color: var(--neon); }
+
+        /* УПРАВЛЕНИЕ СТАВКОЙ */
+        .bet-controls { padding: 20px; background: rgba(0,0,0,0.3); border-radius: 20px 20px 0 0; margin-top: auto; }
+        input { background: #1a1a1c; border: 1px solid #333; color: white; padding: 12px; border-radius: 10px; width: calc(100% - 26px); margin-bottom: 10px; font-size: 1.1em; }
+        .btn-main { background: var(--neon); border: none; color: white; padding: 15px; width: 100%; border-radius: 12px; font-weight: bold; font-size: 1.2em; box-shadow: 0 5px 15px rgba(0,123,255,0.3); }
+        .btn-main:active { transform: scale(0.98); }
+
+        /* АДМИНКА */
+        #admin_panel { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #0a0a0b; z-index: 10000; overflow-y: auto; padding: 20px; box-sizing: border-box; }
+    </style>
+</head>
+<body>
+    <canvas id="stars"></canvas>
+
+    <div id="loader">
+        <div class="neon-logo">LOONX</div>
+        <div style="color: #444; letter-spacing: 2px;">LOADING SESSION...</div>
+    </div>
+
+    <div id="app">
+        <div class="header">
+            <div>
+                <div id="user_display" style="font-weight: bold;">User</div>
+                <div style="font-size: 0.7em; opacity: 0.5;">ID: <span id="user_id">0</span></div>
+            </div>
+            <div class="balance-box">
+                <div class="balance-val"><span id="bal_val">0.00</span> TON</div>
+                <div style="font-size: 0.8em; opacity: 0.6;" onclick="switchMode()">Demo: <span id="demo_val">0</span></div>
+            </div>
+        </div>
+
+        <div class="game-nav">
+            <button class="nav-btn active" onclick="showGame('crash')">Crash</button>
+            <button class="nav-btn" onclick="showGame('mines')">Mines</button>
+        </div>
+
+        <div id="game_crash" class="crash-container">
+            <div id="crash_status" style="color: var(--neon); font-size: 0.9em;">Waiting for bets...</div>
+            <div id="mult_display" class="multiplier">1.00x</div>
+            <div id="crash_history" class="history"></div>
+        </div>
+
+        <div id="game_mines" style="display: none; padding: 20px;">
+            <div class="mines-grid" id="mines_grid"></div>
+        </div>
+
+        <div class="bet-controls">
+            <input type="number" id="bet_amount" value="10" step="1">
+            <button id="main_action_btn" class="btn-main" onclick="handleMainAction()">СДЕЛАТЬ СТАВКУ</button>
+        </div>
+    </div>
+
+    <div id="admin_panel">
+        <button onclick="document.getElementById('admin_panel').style.display='none'">[X] Close</button>
+        <h2>Admin Panel</h2>
+        <div id="user_list"></div>
+    </div>
+
+    <script>
+        const tg = window.Telegram.WebApp;
+        tg.expand();
+        const socket = io();
+
+        let currentMode = 'demo';
+        let currentGame = 'crash';
+        let isMinesActive = false;
+
+        // 1. АВТОРИЗАЦИЯ И СКРЫТИЕ ЛОАДЕРА
+        socket.on('connect', () => {
+            const user = tg.initDataUnsafe.user || { id: 777, username: "DevLocal" };
+            socket.emit('auth', user);
+        });
+
+        socket.on('user_data', (user) => {
+            // ФИКС: Скрываем лоадер только когда сервер ответил данными
+            document.getElementById('loader').style.display = 'none';
+            document.getElementById('app').style.display = 'flex';
+            
+            document.getElementById('user_display').innerText = user.username;
+            document.getElementById('user_id').innerText = user.tgId;
+            document.getElementById('bal_val').innerText = user.real_balance.toFixed(2);
+            document.getElementById('demo_val').innerText = user.demo_balance.toFixed(0);
+        });
+
+        // 2. ЛОГИКА CRASH
+        socket.on('crash_tick', (m) => {
+            const el = document.getElementById('mult_display');
+            el.innerText = m + 'x';
+            el.style.color = 'white';
+            document.getElementById('crash_status').innerText = "Flying...";
+        });
+
+        socket.on('crash_end', (data) => {
+            const el = document.getElementById('mult_display');
+            el.innerText = 'CRASH!';
+            el.style.color = 'var(--neon-lose)';
+            document.getElementById('crash_status').innerText = "Crashed!";
+            
+            // Обновляем историю
+            const hist = document.getElementById('crash_history');
+            hist.innerHTML = data.history.map(h => `<div class="history-item">${h}x</div>`).join('');
+        });
+
+        socket.on('crash_timer', (t) => {
+            document.getElementById('mult_display').innerText = t + 's';
+            document.getElementById('mult_display').style.color = 'var(--neon)';
+            document.getElementById('crash_status').innerText = "Next round starts in...";
+        });
+
+        // 3. ЛОГИКА MINES
+        function initMines() {
+            const grid = document.getElementById('mines_grid');
+            grid.innerHTML = '';
+            for(let i=0; i<25; i++) {
+                const cell = document.createElement('div');
+                cell.className = 'cell';
+                cell.onclick = () => openCell(i);
+                grid.appendChild(cell);
+            }
+        }
+        initMines();
+
+        function openCell(idx) {
+            if(!isMinesActive) return;
+            socket.emit('mines_open', idx);
+        }
+
+        socket.on('mines_started', () => {
+            isMinesActive = true;
+            initMines();
+            document.getElementById('main_action_btn').innerText = "CASHOUT";
+            document.getElementById('main_action_btn').style.background = 'var(--neon-win)';
+        });
+
+        // 4. ПЕРЕКЛЮЧЕНИЯ
+        function showGame(game) {
+            currentGame = game;
+            document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+            event.target.classList.add('active');
+            
+            document.getElementById('game_crash').style.display = game === 'crash' ? 'block' : 'none';
+            document.getElementById('game_mines').style.display = game === 'mines' ? 'block' : 'none';
+        }
+
+        function handleMainAction() {
+            const amt = document.getElementById('bet_amount').value;
+            if(currentGame === 'crash') {
+                socket.emit('crash_bet', { amount: amt, mode: currentMode });
+            } else {
+                if(!isMinesActive) {
+                    socket.emit('mines_start', { amount: amt, mines: 3, mode: currentMode });
+                } else {
+                    socket.emit('mines_cashout');
                 }
-            } catch (e) {}
-        });
-    }).on('error', () => {});
-}, 20000);
-
-// ==========================================
-// 5. SOCKET CONNECTIONS (The Heart)
-// ==========================================
-io.on('connection', (socket) => {
-    onlineCount++;
-    io.emit('online_count', onlineCount);
-    socket.emit('live_bets_update', liveBets);
-    socket.emit('crash_init', { history: crashState.history });
-
-    // Авторизация (Ключ к лоадеру)
-    socket.on('auth', async (data) => {
-        if (!data || !data.id) return;
-        let user = await User.findOne({ tgId: data.id });
-        if (!user) {
-            user = await User.create({ 
-                tgId: data.id, 
-                username: data.username || `User_${data.id}`,
-                photo_url: data.photo_url || ''
-            });
-        }
-        socket.userId = user._id;
-        socket.tgId = user.tgId;
-        socket.join(`user_${user.tgId}`);
-        socket.emit('user_data', user); // Это событие убирает лоадер на фронте
-    });
-
-    // --- CRASH ACTIONS ---
-    socket.on('crash_bet', async (d) => {
-        const user = await User.findById(socket.userId);
-        if (!user) return;
-        const amt = parseFloat(d.amount);
-        const bal = d.mode === 'real' ? user.real_balance : user.demo_balance;
-        
-        if (bal < amt || amt <= 0) return socket.emit('notify', { text: 'Недостаточно средств!' });
-
-        if (d.mode === 'real') user.real_balance -= amt; else user.demo_balance -= amt;
-        user.stats_games += 1;
-        await user.save();
-        
-        socket.emit('user_data', user);
-        const bet = { id: socket.id, username: user.username, amount: amt, mode: d.mode, cashedOut: false };
-        
-        if (crashState.status !== 'waiting') {
-            crashState.nextBets.push(bet);
-        } else {
-            crashState.currentBets.push(bet);
-            io.emit('crash_update_bets', crashState.currentBets);
-        }
-    });
-
-    socket.on('crash_cashout', async () => {
-        if (crashState.status !== 'flying') return;
-        const b = crashState.currentBets.find(x => x.id === socket.id && !x.cashedOut);
-        if (!b) return;
-
-        b.cashedOut = true;
-        const win = b.amount * crashState.multiplier;
-        const user = await User.findById(socket.userId);
-        
-        if (b.mode === 'real') user.real_balance += win; else user.demo_balance += win;
-        user.stats_wins += 1;
-        await user.save();
-        
-        addLiveBet(user.username, 'Crash', win);
-        socket.emit('user_data', user);
-        io.emit('crash_update_bets', crashState.currentBets);
-        socket.emit('notify', { text: `Выигрыш: ${win.toFixed(2)}`, type: 'success' });
-    });
-
-    // --- MINES ACTIONS ---
-    socket.on('mines_start', async (d) => {
-        const user = await User.findById(socket.userId);
-        if (!user || activeMines.has(socket.id)) return;
-        
-        const amt = parseFloat(d.amount);
-        const minesCount = parseInt(d.mines);
-        const bal = d.mode === 'real' ? user.real_balance : user.demo_balance;
-        
-        if (bal < amt || minesCount < 1 || minesCount > 24) return;
-
-        if (d.mode === 'real') user.real_balance -= amt; else user.demo_balance -= amt;
-        await user.save();
-
-        // Генерируем поле
-        let grid = Array(25).fill('diamond');
-        let placed = 0;
-        while(placed < minesCount) {
-            let idx = Math.floor(Math.random() * 25);
-            if(grid[idx] !== 'mine') { grid[idx] = 'mine'; placed++; }
+            }
+            tg.HapticFeedback.impactOccurred('medium');
         }
 
-        activeMines.set(socket.id, { amt, minesCount, grid, opened: [], mode: d.mode });
-        socket.emit('user_data', user);
-        socket.emit('mines_started');
-    });
-
-    socket.on('mines_open', async (idx) => {
-        const game = activeMines.get(socket.id);
-        if (!game || game.opened.includes(idx)) return;
-
-        if (game.grid[idx] === 'mine') {
-            socket.emit('mines_lost', { grid: game.grid });
-            addLiveBet((await User.findById(socket.userId)).username, 'Mines', -game.amt);
-            activeMines.delete(socket.id);
-        } else {
-            game.opened.push(idx);
-            socket.emit('mines_hit', { idx, openedCount: game.opened.length });
+        // 5. ФОНОВЫЕ ЗВЕЗДЫ
+        const canvas = document.getElementById('stars');
+        const ctx = canvas.getContext('2d');
+        canvas.width = window.innerWidth; canvas.height = window.innerHeight;
+        let stars = Array(100).fill().map(() => ({ x: Math.random()*canvas.width, y: Math.random()*canvas.height, r: Math.random()*1.2 }));
+        function draw() {
+            ctx.clearRect(0,0,canvas.width, canvas.height); ctx.fillStyle = "white";
+            stars.forEach(s => { ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, Math.PI*2); ctx.fill(); });
+            requestAnimationFrame(draw);
         }
-    });
-
-    socket.on('mines_cashout', async () => {
-        const game = activeMines.get(socket.id);
-        if (!game || game.opened.length === 0) return;
-
-        // Расчет коэффициента (примерный)
-        const coef = 1.2 * game.opened.length; // Тут должна быть твоя формула
-        const win = game.amt * coef;
-        
-        const user = await User.findById(socket.userId);
-        if (game.mode === 'real') user.real_balance += win; else user.demo_balance += win;
-        await user.save();
-        
-        addLiveBet(user.username, 'Mines', win);
-        socket.emit('user_data', user);
-        socket.emit('mines_won', { win, grid: game.grid });
-        activeMines.delete(socket.id);
-    });
-
-    // --- ADMIN ---
-    socket.on('admin_auth', async (code) => {
-        if (code === '7788') {
-            const users = await User.find().sort({_id: -1}).limit(100);
-            socket.emit('admin_ok', { users });
-        }
-    });
-
-    socket.on('disconnect', () => {
-        onlineCount--;
-        activeMines.delete(socket.id);
-        io.emit('online_count', onlineCount);
-    });
-});
-
-server.listen(PORT, () => console.log(`🚀 Loonx Server started on port ${PORT}`));
+        draw();
+    </script>
+</body>
+</html>
