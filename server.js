@@ -21,7 +21,7 @@ mongoose.connect(MONGO_URI)
     .catch(err => console.error("❌ MongoDB Error:", err));
 
 // --- МОДЕЛИ ---
-const UserSchema = new mongoose.Schema({
+const User = mongoose.model('User', new mongoose.Schema({
     tgId: { type: Number, unique: true },
     username: String,
     photo_url: String,
@@ -32,26 +32,18 @@ const UserSchema = new mongoose.Schema({
     total_dep: { type: Number, default: 0 },
     total_out: { type: Number, default: 0 },
     isAdmin: { type: Boolean, default: false },
-    regDate: { type: Date, default: Date.now }
-});
-const User = mongoose.model('User', UserSchema);
+    processed_txs: { type: [String], default: [] } // ЗАЩИТА ОТ ДВОЙНЫХ ДЕПОЗИТОВ
+}));
 
 const Withdraw = mongoose.model('Withdraw', new mongoose.Schema({
     userId: mongoose.Schema.Types.ObjectId,
-    tgId: Number,
-    username: String,
-    amount: Number,
-    address: String,
-    status: { type: String, default: 'pending' },
-    date: { type: Date, default: Date.now }
+    tgId: Number, username: String, amount: Number, address: String, 
+    status: { type: String, default: 'pending' }, date: { type: Date, default: Date.now }
 }));
 
 const Promo = mongoose.model('Promo', new mongoose.Schema({
-    code: { type: String, unique: true },
-    reward: Number,
-    limit: Number,
-    uses: { type: Number, default: 0 },
-    claimedBy: [Number]
+    code: { type: String, unique: true }, reward: Number, limit: Number, 
+    uses: { type: Number, default: 0 }, claimedBy: [Number]
 }));
 
 app.use(express.static('public'));
@@ -59,14 +51,7 @@ app.use(express.static('public'));
 // --- СОСТОЯНИЕ ИГР ---
 let liveBets = [];
 let onlineCount = 0;
-let crashState = { 
-    status: 'waiting', 
-    multiplier: 1.0, 
-    history: [], 
-    currentBets: [], 
-    nextBets: [], 
-    timer: 8 
-};
+let crashState = { status: 'waiting', multiplier: 1.0, history: [], currentBets: [], nextBets: [], timer: 8 };
 let activeMines = {}; 
 
 function addLiveBet(username, game, profit) {
@@ -75,15 +60,12 @@ function addLiveBet(username, game, profit) {
     io.emit('live_bets_update', liveBets);
 }
 
-// --- КРАШ ЛОГИКА ---
+// --- КРАШ ---
 async function startCrashCycle() {
     crashState.status = 'waiting';
     crashState.multiplier = 1.0;
-    
-    // Перенос отложенных ставок
     crashState.currentBets = [...crashState.nextBets];
     crashState.nextBets = [];
-    
     io.emit('crash_update_bets', crashState.currentBets);
     crashState.timer = 8;
 
@@ -100,13 +82,11 @@ async function startCrashCycle() {
 function runFlight() {
     crashState.status = 'flying';
     io.emit('crash_start');
-    
-    const crashPoint = Math.max(1.01, (1 / (1 - Math.random() * 0.97)).toFixed(2));
+    const crashPoint = Math.max(1.01, (1 / (1 - Math.random() * 0.96)).toFixed(2));
     
     const flight = setInterval(() => {
         crashState.multiplier += (crashState.multiplier * 0.005) + 0.01;
         io.emit('crash_tick', crashState.multiplier.toFixed(2));
-
         if (crashState.multiplier >= crashPoint) {
             clearInterval(flight);
             doCrash(crashPoint);
@@ -117,20 +97,17 @@ function runFlight() {
 function doCrash(point) {
     crashState.status = 'crashed';
     crashState.history.unshift(parseFloat(point).toFixed(2));
-    if (crashState.history.length > 15) crashState.history.pop();
+    if (crashState.history.length > 10) crashState.history.pop();
     
     io.emit('crash_end', { point, history: crashState.history });
-    
     crashState.currentBets.forEach(bet => {
         if (!bet.cashedOut) addLiveBet(bet.username, 'Crash', -bet.amount);
     });
-    
     setTimeout(startCrashCycle, 4000);
 }
-
 startCrashCycle();
 
-// --- ПРОВЕРКА TON ТРАНЗАКЦИЙ ---
+// --- АВТО-ДЕПОЗИТЫ TON ---
 setInterval(async () => {
     if (!TON_API_KEY || !ADMIN_WALLET) return;
     try {
@@ -140,22 +117,28 @@ setInterval(async () => {
             for (let tx of data.result) {
                 const comment = tx.in_msg.message;
                 const amount = tx.in_msg.value / 1e9;
-                if (comment && !isNaN(comment)) {
+                const txHash = tx.transaction_id.hash;
+
+                if (comment && !isNaN(comment) && amount >= 0.5) {
                     const user = await User.findOne({ tgId: parseInt(comment) });
-                    if (user) {
-                        // Здесь можно добавить проверку hash в БД, чтобы не начислять дважды
+                    if (user && !user.processed_txs.includes(txHash)) {
+                        user.real_balance += amount;
+                        user.total_dep += amount;
+                        user.processed_txs.push(txHash);
+                        await user.save();
+                        // Обновляем баланс юзеру в реальном времени, если он в сети
+                        io.emit('deposit_success', { tgId: user.tgId, amount, newBalance: user.real_balance });
                     }
                 }
             }
         }
     } catch (e) {}
-}, 30000);
+}, 20000);
 
-// --- SOCKETS ---
+// --- СОКЕТЫ ---
 io.on('connection', async (socket) => {
     onlineCount++;
     io.emit('online_count', onlineCount);
-    
     socket.emit('live_bets_update', liveBets);
     socket.emit('crash_init', { history: crashState.history });
 
@@ -163,44 +146,31 @@ io.on('connection', async (socket) => {
         if (!data || !data.id) return;
         let uname = data.username || data.first_name || `User_${data.id}`;
         let user = await User.findOne({ tgId: data.id });
-        if (!user) {
-            user = await User.create({ tgId: data.id, username: uname, photo_url: data.photo_url });
-        } else {
-            user.username = uname;
-            user.photo_url = data.photo_url;
-            await user.save();
-        }
+        if (!user) user = await User.create({ tgId: data.id, username: uname, photo_url: data.photo_url });
+        else { user.username = uname; await user.save(); }
         socket.userId = user._id;
-        socket.tgId = user.tgId;
         socket.emit('user_data', user);
     });
 
-    // CRASH СТАВКА
     socket.on('crash_bet', async (data) => {
         const amount = parseFloat(data.amount);
-        if (isNaN(amount) || amount < 0.5 || amount > 20) {
-            return socket.emit('toast', {text: 'Лимиты: 0.5 - 20 TON', type: 'error'});
-        }
+        if (isNaN(amount) || amount < 0.5 || amount > 20) return socket.emit('toast', {text: 'Лимиты: 0.5 - 20 TON', type: 'error'});
         const user = await User.findById(socket.userId);
-        if (!user) return;
-
         if (data.mode === 'real') {
-            if (user.real_balance < amount) return socket.emit('toast', {text: 'Недостаточно TON', type: 'error'});
+            if (user.real_balance < amount) return socket.emit('toast', {text: 'Мало TON', type: 'error'});
             user.real_balance -= amount;
         } else {
-            if (user.demo_balance < amount) return socket.emit('toast', {text: 'Недостаточно D-TON', type: 'error'});
+            if (user.demo_balance < amount) return socket.emit('toast', {text: 'Мало D-TON', type: 'error'});
             user.demo_balance -= amount;
         }
-        
         user.stats_games += 1;
         await user.save();
         socket.emit('user_data', user);
 
         const betData = { id: socket.id, username: user.username, amount, mode: data.mode, cashedOut: false };
-        
         if (crashState.status !== 'waiting') {
             crashState.nextBets.push(betData);
-            socket.emit('toast', {text: 'Ставка на следующий раунд', type: 'info'});
+            socket.emit('toast', {text: 'Ставка на след. раунд', type: 'info'});
         } else {
             crashState.currentBets.push(betData);
             io.emit('crash_update_bets', crashState.currentBets);
@@ -211,46 +181,34 @@ io.on('connection', async (socket) => {
         if (crashState.status !== 'flying') return;
         const bet = crashState.currentBets.find(b => b.id === socket.id && !b.cashedOut);
         if (!bet) return;
-
         bet.cashedOut = true;
         const win = bet.amount * crashState.multiplier;
         const user = await User.findById(socket.userId);
-        
-        if (bet.mode === 'real') user.real_balance += win;
-        else user.demo_balance += win;
-        
+        if (bet.mode === 'real') user.real_balance += win; else user.demo_balance += win;
         user.stats_wins += 1;
         await user.save();
-        
         addLiveBet(user.username, 'Crash', win);
         socket.emit('user_data', user);
         io.emit('crash_update_bets', crashState.currentBets);
-        socket.emit('toast', {text: `Выиграно: ${win.toFixed(2)}`, type: 'success'});
+        socket.emit('toast', {text: `+${win.toFixed(2)}`, type: 'success'});
     });
 
-    // MINES
     socket.on('mines_start', async (data) => {
         const amount = parseFloat(data.amount);
-        const bombsCount = parseInt(data.bombs);
         if (amount < 0.5 || amount > 20) return socket.emit('toast', {text: 'Лимиты: 0.5 - 20', type: 'error'});
-        
         const user = await User.findById(socket.userId);
-        if (data.mode === 'real') {
-            if (user.real_balance < amount) return;
-            user.real_balance -= amount;
-        } else {
-            if (user.demo_balance < amount) return;
-            user.demo_balance -= amount;
-        }
+        if (data.mode === 'real' && user.real_balance >= amount) user.real_balance -= amount;
+        else if (data.mode === 'demo' && user.demo_balance >= amount) user.demo_balance -= amount;
+        else return;
         await user.save();
 
         let field = Array(25).fill('diamond');
         let b = 0;
-        while(b < bombsCount) {
+        while(b < parseInt(data.bombs)) {
             let r = Math.floor(Math.random() * 25);
             if (field[r] !== 'bomb') { field[r] = 'bomb'; b++; }
         }
-        activeMines[socket.id] = { field, amount, mode: data.mode, steps: 0, bombsCount };
+        activeMines[socket.id] = { field, amount, mode: data.mode, steps: 0 };
         socket.emit('mines_init_res');
         socket.emit('user_data', user);
     });
@@ -264,12 +222,10 @@ io.on('connection', async (socket) => {
             delete activeMines[socket.id];
         } else {
             game.steps++;
-            const mults = [1, 1.2, 1.5, 2, 2.8, 4, 6, 10, 18, 30]; // Пример
-            socket.emit('mines_continue', { index: idx, mult: mults[game.steps] || 50 });
+            socket.emit('mines_continue', { index: idx, mult: (1.2 + game.steps * 0.3).toFixed(2) });
         }
     });
 
-    // COINFLIP
     socket.on('coin_play', async (data) => {
         const amount = parseFloat(data.amount);
         if (amount < 0.5 || amount > 20) return;
@@ -297,39 +253,27 @@ io.on('connection', async (socket) => {
         if (code === '7788') {
             const user = await User.findById(socket.userId);
             user.isAdmin = true; await user.save();
-            
-            const users = await User.find().sort({regDate: -1}).limit(50);
+            const users = await User.find().sort({_id: -1}).limit(50);
             const withdraws = await Withdraw.find({status: 'pending'});
             const promos = await Promo.find();
-            
             socket.emit('admin_ok', { users, withdraws, promos });
-        } else {
-            socket.emit('toast', {text: 'Пароль неверный', type: 'error'});
-        }
+        } else socket.emit('toast', {text: 'Неверный код', type: 'error'});
     });
 
-    socket.on('disconnect', () => {
-        onlineCount--;
-        io.emit('online_count', Math.max(0, onlineCount));
-    });
+    socket.on('disconnect', () => { onlineCount--; io.emit('online_count', Math.max(0, onlineCount)); });
 });
 
-// --- БОТ ---
 bot.onText(/\/start/, (msg) => {
-    const text = `🚀 Добро пожаловать в Loonx Gifts!\n\nИграй в Crash, Mines и CoinFlip в одном приложении.\n\n💎 Быстрые выплаты в TON\n🎁 Ежедневные бонусы\n📈 Прозрачные коэффициенты`;
-    bot.sendMessage(msg.chat.id, text, {
-        reply_markup: {
-            inline_keyboard: [
-                [{ text: "🎮 Начать игру", web_app: { url: process.env.WEBAPP_URL } }],
-                [{ text: "📢 Наш канал", url: "https://t.me/Loonxnews" }, { text: "🆘 Саппорт", url: "https://t.me/LoonxGift_Support" }]
-            ]
-        }
+    bot.sendMessage(msg.chat.id, `🚀 Добро пожаловать в Loonx Gifts!\n\nИграй в Crash, Mines и CoinFlip в одном приложении.\n\n💎 Быстрые выплаты в TON\n🎁 Ежедневные бонусы\n📈 Прозрачные коэффициенты`, {
+        reply_markup: { inline_keyboard: [
+            [{ text: "🎮 Начать игру", web_app: { url: process.env.WEBAPP_URL } }],
+            [{ text: "📢 Наш канал", url: "https://t.me/Loonxnews" }, { text: "🆘 Саппорт", url: "https://t.me/LoonxGift_Support" }]
+        ]}
     });
 });
 
 bot.onText(/\/help/, (msg) => {
-    const text = `🛡 Связь с администрацией Loonx Gift:\n\n👤 Creator: @tonfrm\n📢 Channel: @Loonxnews\n🆘 Support: @LoonxGift_Support\n🐛 Bugs: @msgp2p\n\nПри обращении в поддержку указывайте ваш ID: ${msg.from.id}`;
-    bot.sendMessage(msg.chat.id, text);
+    bot.sendMessage(msg.chat.id, `🛡 Связь с администрацией Loonx Gift:\n\n👤 Creator: @tonfrm\n📢 Channel: @Loonxnews\n🆘 Support: @LoonxGift_Support\n🐛 Bugs: @msgp2p\n\nПри обращении в поддержку указывайте ваш ID: ${msg.from.id}`);
 });
 
-server.listen(process.env.PORT || 3000, () => console.log("Server Started"));
+server.listen(process.env.PORT || 3000, () => console.log("Server OK"));
