@@ -4,28 +4,40 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Loonx Gifts</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
     <script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body>
+    <div id="loader">
+        <div class="loader-content">
+            <div class="spinner"></div>
+            <h1 class="loader-title">Loonx Gift</h1>
+        </div>
+    </div>
+
     <div id="stars"></div>
+    
     <div id="toast-container"></div>
 
     <div id="app">
         <header class="header">
-            <div class="user-block" onclick="handleAdminTaps()">
-                <div class="avatar-wrapper">
-                    <img id="u-avatar" src="" class="avatar-header">
-                </div>
+            <div class="header-left" onclick="handleAdminTaps()">
+                <img id="u-avatar" src="" class="avatar-header" alt="Avatar">
                 <div class="header-text">
-                    <span id="profile-name">Loonx Gift</span>
-                    <span class="status-dot-text"><span class="dot"></span> 1</span>
+                    <span id="header-title">Loonx Gift</span>
+                    <span class="status-online"><span class="dot"></span> <span id="online-counter">1</span> online</span>
                 </div>
             </div>
-            <div class="balance-container" onclick="switchMode()">
-                <div class="balance-val"><span class="bal-amount">0.00</span> <small class="bal-cur">TON</small></div>
-                <div class="balance-type" id="mode-label">REAL TON</div>
+            <div class="header-right">
+                <div class="balance-switcher" onclick="switchMode()">
+                    <div class="balance-val">
+                        <span class="bal-amount" id="top-balance">0.00</span> 
+                        <small class="bal-cur" id="top-currency">D-TON</small>
+                    </div>
+                    <div class="balance-mode" id="top-mode-label">DEMO</div>
+                </div>
             </div>
         </header>
 
@@ -33,86 +45,158 @@
             <section id="tab-home" class="tab-pane active">
                 <div class="games-vertical-list">
                     <div class="game-row" onclick="openGame('crash')">
-                        <div class="g-icon">🚀</div>
-                        <div class="g-name">CRASH</div>
-                        <div class="g-desc">Множитель до x100</div>
+                        <div class="g-icon-box crash-bg"><span class="g-emoji">🚀</span></div>
+                        <div class="g-info">
+                            <div class="g-name">CRASH</div>
+                            <div class="g-desc">Успей забрать до взрыва</div>
+                        </div>
                     </div>
                     <div class="game-row" onclick="openGame('mines')">
-                        <div class="g-icon">💎</div>
-                        <div class="g-name">MINES</div>
-                        <div class="g-desc">25 ячеек удачи</div>
+                        <div class="g-icon-box mines-bg"><span class="g-emoji">💎</span></div>
+                        <div class="g-info">
+                            <div class="g-name">MINES</div>
+                            <div class="g-desc">Обойди все бомбы</div>
+                        </div>
                     </div>
                     <div class="game-row" onclick="openGame('coin')">
-                        <div class="g-icon">🪙</div>
-                        <div class="g-name">COINFLIP</div>
-                        <div class="g-desc">Шанс 50/50</div>
+                        <div class="g-icon-box coin-bg"><span class="g-emoji">🪙</span></div>
+                        <div class="g-info">
+                            <div class="g-name">COINFLIP</div>
+                            <div class="g-desc">Испытай удачу 50/50</div>
+                        </div>
                     </div>
                 </div>
                 
-                <h3 class="live-title">LIVE СТАВКИ</h3>
-                <div id="live-list"></div>
+                <h3 class="section-title">GLOBAL LIVE</h3>
+                <div id="global-live-list" class="live-list-container">
+                    </div>
             </section>
 
             <section id="tab-wallet" class="tab-pane">
-                <h2 class="tab-title">Пополнение и Вывод</h2>
-                <div id="ton-connect-button" style="margin-bottom: 15px;"></div>
-                <p class="hint">Депозиты зачисляются на REAL баланс</p>
-                <button class="btn btn-blue" onclick="depositTON()">Внести TON</button>
+                <h2 class="tab-title">Баланс & Вывод</h2>
                 
-                <div class="withdraw-section">
-                    <input type="number" id="withdraw-amount" class="ui-input" placeholder="Сумма (мин. 5 TON)">
-                    <input type="text" id="withdraw-wallet" class="ui-input" placeholder="Ваш адрес кошелька">
-                    <button class="btn btn-dark" onclick="requestWithdraw()">Создать заявку на вывод</button>
+                <div class="wallet-card">
+                    <h3>Пополнение</h3>
+                    <div id="ton-connect-button" class="tc-wrapper"></div>
+                    <input type="number" id="deposit-amount" class="ui-input mt-15" placeholder="Сумма депозита (TON)">
+                    <button class="btn btn-green-solid mt-10" onclick="processDeposit()">Оплатить и Внести</button>
+                    <p class="hint">Средства зачисляются на REAL баланс</p>
+                </div>
+
+                <div class="wallet-card mt-20">
+                    <h3>Вывод средств</h3>
+                    <div class="user-stats-mini">
+                        <span>Доступно: <b id="withdraw-available-bal" class="color-green">0.00 TON</b></span>
+                    </div>
+                    <input type="number" id="withdraw-amount" class="ui-input mt-15" placeholder="Сумма (мин. 5 TON)">
+                    <input type="text" id="withdraw-wallet" class="ui-input mt-10" placeholder="Адрес TON кошелька">
+                    <button class="btn btn-blue-solid mt-10" onclick="requestWithdraw()">Создать заявку</button>
                 </div>
             </section>
 
             <section id="tab-promo" class="tab-pane">
-                <h2 class="tab-title">Промокоды</h2>
-                <input type="text" id="promo-input" class="ui-input" placeholder="Введите код...">
-                <button class="btn btn-dark" onclick="activatePromo()">Активировать</button>
+                <h2 class="tab-title">Активация бонусов</h2>
+                <div class="promo-card">
+                    <input type="text" id="promo-input" class="ui-input" placeholder="Введите промокод...">
+                    <button class="btn btn-green-solid mt-10" onclick="activatePromo()">Активировать</button>
+                </div>
+                <button class="btn btn-dark mt-20" onclick="window.location.href='https://t.me/Loonxnews'">Перейти в наш канал</button>
             </section>
 
             <section id="tab-profile" class="tab-pane">
-                <div class="profile-center">
+                <div class="profile-header-big">
                     <img id="prof-avatar-big" src="" class="avatar-neon-big">
-                    <h2 id="prof-name-big">User</h2>
-                    <div class="profile-stats">
-                        <p>Игр <b id="st-games">0</b></p>
-                        <p>Побед <b id="st-wins">0</b></p>
+                    <h2 id="prof-name-big">Пользователь</h2>
+                </div>
+                
+                <div class="stats-grid">
+                    <div class="stat-box">
+                        <span class="st-label">Игр сыграно</span>
+                        <span class="st-val" id="st-games">0</span>
+                    </div>
+                    <div class="stat-box">
+                        <span class="st-label">Побед</span>
+                        <span class="st-val color-green" id="st-wins">0</span>
+                    </div>
+                    <div class="stat-box">
+                        <span class="st-label">Депозиты</span>
+                        <span class="st-val" id="st-deps">0 TON</span>
+                    </div>
+                    <div class="stat-box">
+                        <span class="st-label">Выведено</span>
+                        <span class="st-val color-blue" id="st-withdraws">0 TON</span>
                     </div>
                 </div>
                 
-                <button class="btn btn-pink" onclick="claimDaily()">🎁 Бонус 200 DEMO (24ч)</button>
+                <button class="btn btn-pink mt-20" onclick="claimDaily()">🎁 Бонус 200 DEMO (24ч)</button>
                 
-                <div class="contacts-links">
-                    <a href="https://t.me/tonfrm">👨‍💻 Creator: @tonfrm</a>
-                    <a href="https://t.me/Loonxnews">📢 Channel: @Loonxnews</a>
-                    <a href="https://t.me/LoonxGift_Support">🛠 Support: @LoonxGift_Support</a>
-                    <a href="https://t.me/msgp2p">🐛 Bugs: @msgp2p</a>
+                <div class="contacts-box mt-20">
+                    <h3 class="section-title">Контакты</h3>
+                    <a href="https://t.me/Loonxnews" class="contact-link"><svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69.01-.03.01-.14-.08-.19-.09-.05-.21-.02-.3.01-.13.04-2.26 1.45-3.8 2.49-.69.47-1.31.7-1.86.69-.61-.01-1.79-.35-2.67-.63-.72-.23-1.29-.35-1.24-.74.03-.2.27-.4.74-.6 2.89-1.26 4.82-2.09 5.79-2.49 2.75-1.14 3.33-1.34 3.71-1.35.08 0 .27.02.39.12.1.08.13.19.14.27-.01.06.01.24 0 .24z"/></svg> Канал @Loonxnews</a>
+                    <a href="https://t.me/LoonxGift_Support" class="contact-link"><svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 2a10 10 0 100 20 10 10 0 000-20zm0 18a8 8 0 110-16 8 8 0 010 16zm-1-6h2v2h-2v-2zm1-8c-2.21 0-4 1.79-4 4h2c0-1.1.9-2 2-2s2 .9 2 2c0 2-3 1.75-3 5h2c0-2.25 3-2.5 3-5 0-2.21-1.79-4-4-4z"/></svg> Поддержка</a>
+                    <a href="https://t.me/msgp2p" class="contact-link"><svg viewBox="0 0 24 24"><path fill="currentColor" d="M20 8h-2.81c-.45-.78-1.07-1.45-1.82-1.96L17 4.41 15.59 3l-2.17 2.17C12.96 5.06 12.49 5 12 5c-.49 0-.96.06-1.41.17L8.41 3 7 4.41l1.62 1.63C7.88 6.55 7.26 7.22 6.81 8H4v2h2.09c-.05.33-.09.66-.09 1v1H4v2h2v1c0 .34.04.67.09 1H4v2h2.81c1.04 1.79 2.97 3 5.19 3s4.15-1.21 5.19-3H20v-2h-2.09c.05-.33.09-.66.09-1v-1h2v-2h-2v-1c0-.34-.04-.67-.09-1H20V8zm-6 8h-4v-2h4v2zm0-4h-4v-2h4v2z"/></svg> Сообщить о баге</a>
                 </div>
             </section>
         </main>
 
         <nav class="navbar">
-            <div class="nav-item active" onclick="switchTab('home', this)"><span class="n-icon">🏠</span>Главная</div>
-            <div class="nav-item" onclick="switchTab('wallet', this)"><span class="n-icon">👛</span>Кошелек</div>
-            <div class="nav-item" onclick="switchTab('promo', this)"><span class="n-icon">🎁</span>Промо</div>
-            <div class="nav-item" onclick="switchTab('profile', this)"><span class="n-icon">👤</span>Профиль</div>
+            <div class="nav-item active" onclick="switchTab('home', this)">
+                <svg class="n-icon" viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z" fill="currentColor"/></svg>
+                <span>Игры</span>
+            </div>
+            <div class="nav-item" onclick="switchTab('wallet', this)">
+                <svg class="n-icon" viewBox="0 0 24 24"><path d="M21 18v1c0 1.1-.9 2-2 2H5c-1.11 0-2-.9-2-2V5c0-1.1.89-2 2-2h14c1.1 0 2 .9 2 2v1h-9c-1.11 0-2 .9-2 2v8c0 1.1.89 2 2 2h9zm-9-2h10V8H12v8zm4-2.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z" fill="currentColor"/></svg>
+                <span>Кошелек</span>
+            </div>
+            <div class="nav-item" onclick="switchTab('promo', this)">
+                <svg class="n-icon" viewBox="0 0 24 24"><path d="M20 6h-2.18c.11-.31.18-.65.18-1 0-1.66-1.34-3-3-3-1.05 0-1.96.54-2.5 1.35l-.5.67-.5-.68C10.96 2.54 10.05 2 9 2 7.34 2 6 3.34 6 5c0 .35.07.69.18 1H4c-1.11 0-1.99.89-1.99 2L2 19c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V8c0-1.11-.89-2-2-2zm-5-2c.55 0 1 .45 1 1s-.45 1-1 1h-4v-1.5l1.08-1.45c.42-.56 1.07-.85 1.7-.85C14.11 4.2 14.54 4 15 4zM9 4c.46 0 .89.2 1.22.55L11.3 6H7c0-.55.45-1 1-1s1-.45 1-1zm11 15H4v-2h16v2zm0-5H4V8h5.08L7 10.83 8.62 12 11 8.76 12 7.4l1 1.36L15.38 12 17 10.83 14.92 8H20v6z" fill="currentColor"/></svg>
+                <span>Промо</span>
+            </div>
+            <div class="nav-item" onclick="switchTab('profile', this)">
+                <svg class="n-icon" viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" fill="currentColor"/></svg>
+                <span>Профиль</span>
+            </div>
         </nav>
     </div>
 
-    <div id="modal-coin" class="modal">
+    <div id="modal-crash" class="modal">
         <div class="modal-header">
+            <div class="crash-history-track" id="crash-history"></div>
             <button class="back-btn" onclick="closeModal()">✕</button>
         </div>
+        <div class="game-container crash-layout">
+            <div class="crash-display">
+                <div id="rocket-anim" class="rocket-idle"></div>
+                <h1 id="crash-multiplier">1.00x</h1>
+            </div>
+            
+            <div class="bet-controls mt-15">
+                <input type="number" id="crash-bet-val" class="ui-input" value="1.0" min="0.5">
+                <button id="crash-main-btn" class="btn btn-green-solid" onclick="crashAction()">ПОСТАВИТЬ</button>
+            </div>
+
+            <div class="crash-live-section mt-15">
+                <h3 class="section-title">Ставки в этом раунде</h3>
+                <div id="crash-live-bets" class="live-list-container small-list"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-coin" class="modal">
+        <div class="modal-header"><button class="back-btn" onclick="closeModal()">✕</button></div>
         <div class="game-container">
-            <div id="coin-object" class="coin-simple">L</div>
-            <h2 id="coin-result-text">Выберите сторону</h2>
+            <div class="coin-wrapper">
+                <div id="coin-object" class="coin-gold">
+                    <div class="coin-front">L</div>
+                    <div class="coin-back">X</div>
+                </div>
+            </div>
+            <h2 id="coin-result-text" class="mt-20 mb-10">Выберите сторону</h2>
             <div class="bet-controls">
-                <input type="number" id="coin-bet-val" class="ui-input" value="1.0" min="0.5" max="20">
-                <div class="btn-group">
-                    <button class="btn btn-green-solid" onclick="playCoin('L')">Символ L</button>
-                    <button class="btn btn-blue-solid" onclick="playCoin('X')">Символ X</button>
+                <input type="number" id="coin-bet-val" class="ui-input" value="1.0" min="0.5">
+                <div class="btn-group mt-10">
+                    <button class="btn btn-green-solid" onclick="playCoin('L')">Орел (L)</button>
+                    <button class="btn btn-blue-solid" onclick="playCoin('X')">Решка (X)</button>
                 </div>
             </div>
         </div>
@@ -122,55 +206,59 @@
         <div class="modal-header"><button class="back-btn" onclick="closeModal()">✕</button></div>
         <div class="game-container">
             <div id="mines-grid" class="mines-grid"></div>
-            <div class="bet-controls">
-                <input type="number" id="mines-bet-val" class="ui-input" value="1.0" min="0.5" max="20">
-                <select id="mines-count" class="ui-input"><option value="3">3 Бомбы</option><option value="5">5 Бомб</option></select>
+            <div class="bet-controls mt-15">
+                <div class="btn-group mb-10">
+                    <input type="number" id="mines-bet-val" class="ui-input" value="1.0" min="0.5">
+                    <select id="mines-count" class="ui-input"><option value="3">3 Бомбы</option><option value="5">5 Бомб</option></select>
+                </div>
                 <button id="mines-main-btn" class="btn btn-green-solid" onclick="startMines()">ИГРАТЬ</button>
             </div>
         </div>
     </div>
 
-    <div id="modal-crash" class="modal">
-        <div class="modal-header"><button class="back-btn" onclick="closeModal()">✕</button></div>
-        <div class="game-container">
-            <div class="crash-display">
-                <div id="rocket">🚀</div>
-                <h1 id="crash-multiplier">1.00x</h1>
-            </div>
-            <div id="crash-history"></div>
-            <div class="bet-controls">
-                <input type="number" id="crash-bet-val" class="ui-input" value="1.0" min="0.5" max="20">
-                <button id="crash-main-btn" class="btn btn-green-solid" onclick="crashAction()">ПОСТАВИТЬ</button>
-            </div>
-        </div>
-    </div>
-
     <div id="modal-admin" class="modal admin-modal">
-        <div class="modal-header"><h3>ADMIN</h3><button class="back-btn" onclick="closeModal()">✕</button></div>
-        <div class="admin-nav">
-            <button onclick="switchAdminTab('adm-users')">БД</button>
-            <button onclick="switchAdminTab('adm-withdraw')">Выводы</button>
-            <button onclick="switchAdminTab('adm-promo')">Промо</button>
-            <button onclick="switchAdminTab('adm-rtp')">Настройки</button>
+        <div class="modal-header">
+            <h3>ПАРАМЕТРЫ СЕРВЕРА</h3>
+            <button class="back-btn" onclick="closeModal()">✕</button>
         </div>
-        <div class="admin-content">
+        <div class="admin-nav mt-10">
+            <button class="adm-btn active" onclick="switchAdminTab('adm-users', this)">Юзеры</button>
+            <button class="adm-btn" onclick="switchAdminTab('adm-withdraw', this)">Выводы</button>
+            <button class="adm-btn" onclick="switchAdminTab('adm-promo', this)">Промо</button>
+            <button class="adm-btn" onclick="switchAdminTab('adm-rtp', this)">Настройки</button>
+        </div>
+        <div class="admin-content mt-15">
             <div id="adm-users" class="adm-pane active"></div>
             <div id="adm-withdraw" class="adm-pane"></div>
             <div id="adm-promo" class="adm-pane">
-                <input type="text" id="adm-p-name" placeholder="Код" class="ui-input">
-                <input type="number" id="adm-p-sum" placeholder="Сумма" class="ui-input">
-                <input type="number" id="adm-p-limit" placeholder="Кол-во" class="ui-input">
-                <button class="btn btn-green-solid" onclick="createPromo()">Создать</button>
+                <div class="adm-card">
+                    <input type="text" id="adm-p-name" placeholder="Код (например GIFT100)" class="ui-input">
+                    <input type="number" id="adm-p-sum" placeholder="Сумма награды (TON)" class="ui-input mt-5">
+                    <input type="number" id="adm-p-limit" placeholder="Лимит использований" class="ui-input mt-5">
+                    <button class="btn btn-green-solid mt-10" onclick="createPromo()">Создать промокод</button>
+                </div>
+                <h4 class="mt-15 mb-10">Активные коды:</h4>
                 <div id="adm-p-list"></div>
             </div>
             <div id="adm-rtp" class="adm-pane">
-                Crash RTP: <input type="number" id="rtp-crash" step="0.01" class="ui-input"><br>
-                Mines RTP: <input type="number" id="rtp-mines" step="0.01" class="ui-input"><br>
-                Coin Win: <input type="number" id="rtp-coin" step="0.01" class="ui-input"><br>
-                <label><input type="checkbox" id="on-crash"> Crash Активен</label><br>
-                <label><input type="checkbox" id="on-mines"> Mines Активен</label><br>
-                <label><input type="checkbox" id="on-coin"> Coin Активен</label><br><br>
-                <button class="btn btn-blue" onclick="saveAdminSettings()">Сохранить</button>
+                <div class="adm-card">
+                    <label>Crash RTP (0.1 - 0.99):</label>
+                    <input type="number" id="rtp-crash" step="0.01" class="ui-input mb-10">
+                    
+                    <label>Mines RTP:</label>
+                    <input type="number" id="rtp-mines" step="0.01" class="ui-input mb-10">
+                    
+                    <label>Шанс победы CoinFlip (0.1 - 0.99):</label>
+                    <input type="number" id="rtp-coin" step="0.01" class="ui-input mb-10">
+                    
+                    <div class="toggle-group mb-15">
+                        <label><input type="checkbox" id="on-crash"> Crash Включен</label><br>
+                        <label><input type="checkbox" id="on-mines"> Mines Включен</label><br>
+                        <label><input type="checkbox" id="on-coin"> CoinFlip Включен</label>
+                    </div>
+                    
+                    <button class="btn btn-blue-solid" onclick="saveAdminSettings()">Сохранить настройки сервера</button>
+                </div>
             </div>
         </div>
     </div>
