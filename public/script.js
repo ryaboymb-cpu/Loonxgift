@@ -44,7 +44,7 @@ async function processDeposit() {
         const transaction = {
             validUntil: Math.floor(Date.now() / 1000) + 60,
             messages: [{
-                address: "UQAl_ВАШ_АДРЕС_КОШЕЛЬКА", // ЗАМЕНИ НА СВОЙ
+                address: "UQCTqV9scQaZR0DHzOnMrOCCY7z3MIT0QfoNrtUDZiXHY1-K", // ЗАМЕНИ НА СВОЙ
                 amount: (amount * 1000000000).toString()
             }]
         };
