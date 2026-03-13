@@ -1,7 +1,7 @@
 {
-  "name": "loonx-gift-premium",
+  "name": "loonx-gifts",
   "version": "1.0.0",
-  "description": "Premium Telegram Casino",
+  "description": "Telegram Mini App Game",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
@@ -9,9 +9,10 @@
   "dependencies": {
     "express": "^4.18.2",
     "http": "^0.0.1-security",
+    "https": "^1.0.0",
+    "mongoose": "^8.0.0",
+    "node-telegram-bot-api": "^0.64.0",
     "socket.io": "^4.7.2",
-    "mongoose": "^7.5.0",
-    "node-telegram-bot-api": "^0.63.0",
     "dotenv": "^16.3.1"
   }
 }
