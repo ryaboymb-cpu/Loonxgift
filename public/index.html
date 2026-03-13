@@ -2,345 +2,157 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Loonx Gifts | Premium Platform</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+    <title>Loonx Gifts | Premium</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
     <script src="/socket.io/socket.io.js"></script>
-    
     <style>
-        /* APPLE DESIGN SYSTEM & NEON EFFECTS */
         :root {
-            --bg-color: #000000;
-            --panel-color: #1c1c1e;
-            --accent-color: #007aff;
-            --success-color: #34c759;
-            --error-color: #ff3b30;
-            --warning-color: #ff9500;
-            --text-main: #ffffff;
-            --text-secondary: #8e8e93;
-            --glow-green: 0 0 15px rgba(52, 199, 89, 0.4);
-            --glow-blue: 0 0 15px rgba(0, 122, 255, 0.4);
-            --border-style: 0.5px solid #38383a;
-        }
-
-        * {
-            box-sizing: border-box;
-            -webkit-tap-highlight-color: transparent;
-            user-select: none;
+            --apple-bg: #000000;
+            --apple-card: #1c1c1e;
+            --accent: #007aff;
+            --success: #34c759;
+            --error: #ff3b30;
+            --glow: 0 0 20px rgba(0, 122, 255, 0.5);
         }
 
         body {
-            margin: 0;
-            padding: 0;
-            background-color: var(--bg-color);
-            color: var(--text-main);
-            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
-            overflow: hidden;
-            height: 100vh;
+            margin: 0; padding: 0; background: var(--apple-bg);
+            color: #fff; font-family: -apple-system, system-ui;
+            overflow: hidden; height: 100vh;
         }
 
-        /* Анимированный фон (Звезды) */
-        #star-canvas {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            z-index: -1;
+        /* Твой звездный фон */
+        #star-canvas { position: fixed; top: 0; left: 0; z-index: -1; }
+
+        header {
+            padding: 20px; display: flex; justify-content: space-between; align-items: center;
+            background: rgba(28, 28, 30, 0.8); backdrop-filter: blur(20px);
+            border-bottom: 0.5px solid #38383a;
         }
 
-        /* Загрузочный экран */
-        #preloader {
-            position: fixed;
-            inset: 0;
-            background: #000;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            z-index: 9999;
-            transition: opacity 0.5s ease;
-        }
+        .avatar-box { display: flex; align-items: center; gap: 12px; }
+        .avatar-img { width: 40px; height: 40px; border-radius: 50%; border: 1.5px solid #444; }
+        
+        .balance-info { text-align: right; }
+        .bal-ton { color: var(--success); font-weight: 800; font-size: 1.2rem; text-shadow: 0 0 10px rgba(52, 199, 89, 0.3); }
+        .bal-demo { color: #8e8e93; font-size: 0.75rem; }
 
-        .loader-spinner {
-            width: 45px;
-            height: 45px;
-            border: 3px solid rgba(255,255,255,0.1);
-            border-top: 3px solid #fff;
-            border-radius: 50%;
-            animation: spin 0.8s linear infinite;
+        /* Игровые табы */
+        .game-nav { display: flex; justify-content: center; gap: 15px; padding: 15px; }
+        .nav-btn {
+            background: #2c2c2e; border: none; padding: 10px 25px;
+            border-radius: 14px; color: #fff; font-weight: 600; transition: 0.3s;
         }
+        .nav-btn.active { background: var(--accent); box-shadow: var(--glow); }
 
-        @keyframes spin { 100% { transform: rotate(360deg); } }
+        .view { padding: 15px; height: 65vh; overflow-y: auto; display: none; }
+        .view.active { display: block; }
 
-        /* Шапка приложения */
-        .app-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 15px 20px;
-            background: rgba(28, 28, 30, 0.8);
-            backdrop-filter: blur(20px);
-            border-bottom: var(--border-style);
-            position: sticky;
-            top: 0;
-            z-index: 100;
-        }
-
-        .user-meta { display: flex; align-items: center; gap: 12px; }
-        .avatar-frame {
-            width: 42px;
-            height: 42px;
-            border-radius: 50%;
-            overflow: hidden;
-            border: 1.5px solid #333;
-        }
-        .avatar-frame img { width: 100%; height: 100%; object-fit: cover; }
-
-        .balance-container { text-align: right; }
-        .bal-value {
-            font-size: 1.2rem;
-            font-weight: 700;
-            color: var(--success-color);
-            text-shadow: var(--glow-green);
-        }
-        .bal-type-toggle {
-            display: flex;
-            gap: 8px;
-            font-size: 0.65rem;
-            color: var(--text-secondary);
-            justify-content: flex-end;
-            margin-top: 4px;
-        }
-        .bal-type-toggle span.active { color: #fff; font-weight: 600; text-decoration: underline; }
-
-        /* Контентная область */
-        #main-scroll-view {
-            height: calc(100vh - 150px);
-            overflow-y: auto;
-            padding: 20px;
-            padding-bottom: 100px;
-            scrollbar-width: none;
-        }
-        #main-scroll-view::-webkit-scrollbar { display: none; }
-
-        /* Карточки игр */
-        .game-card {
-            background: var(--panel-color);
-            border-radius: 24px;
-            padding: 20px;
-            margin-bottom: 20px;
-            border: var(--border-style);
-            position: relative;
-            overflow: hidden;
-        }
-
-        .game-card h2 { margin: 0; font-size: 1.1rem; letter-spacing: 0.5px; opacity: 0.9; }
-
-        /* CRASH UI */
-        .crash-display {
-            height: 150px;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            margin: 15px 0;
-        }
-        #crash-multiplier {
-            font-size: 4rem;
-            font-weight: 900;
-            letter-spacing: -2px;
-            transition: color 0.3s;
-        }
-        .history-ribbon {
-            display: flex;
-            gap: 8px;
-            overflow-x: auto;
-            margin-bottom: 15px;
-            padding-bottom: 5px;
-        }
-        .history-tag {
-            background: #2c2c2e;
-            padding: 4px 10px;
-            border-radius: 8px;
-            font-size: 0.75rem;
-            font-weight: 600;
-        }
-
-        /* MINES UI */
+        /* Дизайн Mines */
         .mines-grid {
-            display: grid;
-            grid-template-columns: repeat(5, 1fr);
-            gap: 10px;
-            margin: 20px 0;
+            display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px;
+            max-width: 320px; margin: 20px auto;
         }
-        .mine-cell {
-            aspect-ratio: 1;
-            background: #2c2c2e;
-            border-radius: 12px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 1.5rem;
-            transition: 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-            border: 1px solid transparent;
+        .cell {
+            aspect-ratio: 1; background: #2c2c2e; border-radius: 12px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 1.5rem; transition: 0.2s; border: 1px solid #3a3a3c;
         }
-        .mine-cell:active { transform: scale(0.9); }
-        .mine-cell.open-gem { background: rgba(52, 199, 89, 0.1); border-color: var(--success-color); animation: pop 0.4s; }
-        .mine-cell.open-bomb { background: rgba(255, 59, 48, 0.1); border-color: var(--error-color); }
+        .cell.active:active { transform: scale(0.9); }
+        .cell.gem { background: rgba(52, 199, 89, 0.2); border-color: var(--success); }
+        .cell.bomb { background: rgba(255, 59, 48, 0.2); border-color: var(--error); }
 
-        @keyframes pop { 0% { transform: scale(0.8); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } }
+        /* Дизайн Crash */
+        .crash-display { height: 180px; display: flex; flex-direction: column; justify-content: center; align-items: center; }
+        #crash-num { font-size: 4.5rem; font-weight: 900; margin: 10px 0; }
 
-        /* SSG HOTBAR (BOTTOM NAV) */
-        .ssg-hotbar {
-            position: fixed;
-            bottom: 0;
-            width: 100%;
-            height: 85px;
-            background: rgba(18, 18, 18, 0.95);
-            backdrop-filter: blur(25px);
-            border-top: var(--border-style);
-            display: flex;
-            justify-content: space-around;
-            padding-bottom: 25px;
-            z-index: 1000;
+        /* Ставки и Кнопки */
+        .bet-box { background: var(--apple-card); padding: 20px; border-radius: 24px; border: 0.5px solid #38383a; margin-top: 10px; }
+        .bet-input {
+            width: 100%; background: #000; border: 1px solid #333; padding: 15px;
+            border-radius: 14px; color: #fff; font-size: 1.1rem; margin-bottom: 15px; box-sizing: border-box;
         }
-
-        .nav-item {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            color: var(--text-secondary);
-            font-size: 0.7rem;
-            width: 20%;
-            transition: 0.3s;
+        .main-btn {
+            width: 100%; padding: 18px; border-radius: 16px; border: none;
+            background: var(--accent); color: #fff; font-weight: 700; font-size: 1rem;
+            box-shadow: var(--glow);
         }
+        .main-btn:active { opacity: 0.8; transform: scale(0.98); }
 
-        .nav-item.active { color: var(--success-color); text-shadow: var(--glow-green); }
-        .nav-item svg { width: 26px; height: 26px; margin-bottom: 4px; fill: currentColor; transition: transform 0.3s; }
-        .nav-item.active svg { transform: translateY(-5px); }
-
-        /* Кнопки в стиле Apple */
-        .apple-btn {
-            width: 100%;
-            padding: 16px;
-            border-radius: 16px;
-            border: none;
-            background: #ffffff;
-            color: #000;
-            font-weight: 700;
-            font-size: 1rem;
-            cursor: pointer;
-            transition: 0.2s;
+        /* SSG HOTBAR */
+        .hotbar {
+            position: fixed; bottom: 0; width: 100%; height: 85px;
+            background: rgba(20, 20, 22, 0.95); backdrop-filter: blur(25px);
+            display: flex; justify-content: space-around; padding-top: 10px;
+            border-top: 0.5px solid #38383a; z-index: 1000;
         }
-        .apple-btn:active { transform: scale(0.97); opacity: 0.8; }
-        .apple-btn.blue { background: var(--accent-color); color: #fff; box-shadow: var(--glow-blue); }
+        .bar-item { text-align: center; color: #8e8e93; font-size: 0.65rem; text-decoration: none; width: 20%; }
+        .bar-item.active { color: var(--success); }
+        .bar-item i { font-size: 1.6rem; display: block; margin-bottom: 4px; }
 
-        /* Уведомления */
-        #notification-center {
-            position: fixed;
-            top: -100px;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 90%;
-            background: rgba(28, 28, 30, 0.98);
-            border: var(--border-style);
-            padding: 18px;
-            border-radius: 20px;
-            z-index: 10000;
-            transition: 0.6s cubic-bezier(0.23, 1, 0.32, 1);
-            text-align: center;
-            font-weight: 600;
-        }
-
-        /* Модальные окна */
-        .modal-overlay {
-            position: fixed;
-            inset: 0;
-            background: rgba(0,0,0,0.8);
-            z-index: 5000;
-            display: none;
-            justify-content: center;
-            align-items: center;
-            padding: 20px;
-        }
+        #ton-connect-btn { margin-bottom: 20px; display: flex; justify-content: center; }
     </style>
 </head>
 <body>
-
     <canvas id="star-canvas"></canvas>
-    <div id="notification-center">Пример уведомления</div>
 
-    <div id="preloader">
-        <div class="loader-spinner"></div>
-        <div style="margin-top: 20px; font-weight: 700; letter-spacing: 2px;">LOONX GIFTS</div>
-    </div>
-
-    <header class="app-header" id="header-tap-zone">
-        <div class="user-meta">
-            <div class="avatar-frame"><img id="header-avatar" src=""></div>
+    <header>
+        <div class="avatar-box">
+            <img src="" class="avatar-img" id="user-pic">
             <div>
-                <b id="header-username">Loading...</b><br>
-                <span id="online-tag" style="font-size: 0.6rem; color: var(--success-color);">● Online</span>
+                <b id="user-name">Loading...</b><br>
+                <span style="font-size: 0.6rem; color: var(--success);">● ONLINE</span>
             </div>
         </div>
-        <div class="balance-container">
-            <div class="bal-value" id="balance-main">0.00 D</div>
-            <div class="bal-type-toggle">
-                <span id="sw-demo" class="active" onclick="toggleBalance('demo')">DEMO</span>
-                <span id="sw-real" onclick="toggleBalance('real')">TON</span>
-            </div>
+        <div class="balance-info">
+            <div class="bal-ton" id="bal-real">0.00 TON</div>
+            <div class="bal-demo" id="bal-demo">Demo: 5000</div>
         </div>
     </header>
 
-    <main id="main-scroll-view">
-        <section id="view-games" class="view-tab">
-            <div class="game-card">
-                <h2>🚀 CRASH</h2>
-                <div class="history-ribbon" id="crash-history-list"></div>
-                <div class="crash-display">
-                    <div id="crash-wait-time" style="color: var(--accent-color); font-weight: 700;">Ожидание...</div>
-                    <div id="crash-multiplier">1.00x</div>
-                </div>
-                <input type="number" id="crash-bet-input" placeholder="Сумма ставки" style="width:100%; padding: 12px; border-radius: 12px; border: 1px solid #333; background: #000; color: #fff; margin-bottom: 10px;">
-                <button class="apple-btn blue" onclick="placeCrashBet()">ПОСТАВИТЬ</button>
-            </div>
+    <div class="game-nav">
+        <button class="nav-btn active" onclick="switchTab('crash', this)">Crash</button>
+        <button class="nav-btn" onclick="switchTab('mines', this)">Mines</button>
+    </div>
 
-            <div class="game-card">
-                <h2>💣 MINES</h2>
-                <div class="mines-grid" id="mines-grid-box"></div>
-                <button class="apple-btn" onclick="startMines()">ОБНОВИТЬ СЕТКУ</button>
-            </div>
-        </section>
+    <div id="v-crash" class="view active">
+        <div class="crash-display">
+            <div id="crash-info" style="color: var(--accent); font-weight: 600;">Ожидание...</div>
+            <div id="crash-num">1.00x</div>
+        </div>
+        <div class="bet-box">
+            <input type="number" class="bet-input" id="crash-amt" value="10">
+            <button class="main-btn" id="crash-btn" onclick="handleCrashBet()">СДЕЛАТЬ СТАВКУ</button>
+        </div>
+    </div>
 
-        <section id="view-wallet" class="view-tab" style="display: none;">
-            <div class="game-card">
-                <h2 style="margin-bottom: 20px;">💎 КОШЕЛЕК TON</h2>
-                <div id="ton-connect-root" style="margin-bottom: 20px;"></div>
-                <p style="font-size: 0.8rem; color: var(--text-secondary);">Для депозита используйте ваш ID в комментарии.</p>
-                <div style="background: #000; padding: 15px; border-radius: 12px; border: 1px solid #333; margin: 15px 0;">
-                    Your ID: <b id="wallet-tg-id">000000</b>
-                </div>
-                <button class="apple-btn blue" onclick="copyAdminWallet()">СКОПИРОВАТЬ АДРЕС</button>
+    <div id="v-mines" class="view">
+        <div class="mines-grid" id="mine-grid"></div>
+        <div class="bet-box">
+            <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+                <input type="number" class="bet-input" id="mine-amt" value="10" placeholder="Ставка">
+                <input type="number" class="bet-input" id="mine-count" value="3" placeholder="Бомбы">
             </div>
-        </section>
-    </main>
+            <button class="main-btn" id="mine-main-btn" onclick="startMinesGame()">ИГРАТЬ</button>
+        </div>
+    </div>
 
-    <nav class="ssg-hotbar">
-        <div class="nav-item active" onclick="switchNav('games', this)">
-            <svg viewBox="0 0 24 24"><path d="M21,6H3C1.9,6,1,6.9,1,8v8c0,1.1,0.9,2,2,2h18c1.1,0,2-0.9,2-2V8C23,6.9,22.1,6,21,6z M18,15h-2v-2h2V15z M18,11h-2V9h2V11z M11,13H9v2H7v-2H5v-2h2V9h2v2h2V13z"/></svg>
-            <span>Игры</span>
+    <div id="v-wallet" class="view">
+        <div class="bet-box" style="text-align: center;">
+            <h2 style="margin-top: 0;">Кошелек</h2>
+            <div id="ton-connect-btn"></div>
+            <p style="color: #8e8e93; font-size: 0.8rem;">Минимальный депозит: 0.1 TON</p>
+            <button class="main-btn" style="background: var(--success); box-shadow: none;">ПОПОЛНИТЬ</button>
         </div>
-        <div class="nav-item" onclick="switchNav('wallet', this)">
-            <svg viewBox="0 0 24 24"><path d="M21,18v1c0,1.1-0.9,2-2,2H5c-1.1,0-2-0.9-2-2V5c0-1.1,0.9-2,2-2h14c1.1,0,2,0.9,2,2v1h-9c-1.1,0-2,0.9-2,2v8 c0,1.1,0.9,2,2,2H21z M12,16h10V8H12V16z M16,13.5c-0.83,0-1.5-0.67-1.5-1.5s0.67-1.5,1.5-1.5s1.5,0.67,1.5,1.5S16.83,13.5,16,13.5z"/></svg>
-            <span>Кошелек</span>
-        </div>
-        <div class="nav-item" onclick="switchNav('profile', this)">
-            <svg viewBox="0 0 24 24"><path d="M12,2C6.48,2,2,6.48,2,12s4.48,10,10,10s10-4.48,10-10S17.52,2,12,2z M12,5c1.66,0,3,1.34,3,3s-1.34,3-3,3s-3-1.34-3-3 S10.34,5,12,5z M12,19.2c-2.5,0-4.71-1.28-6-3.22c0.03-1.99,4-3.08,6-3.08c1.99,0,5.97,1.09,6,3.08C16.71,17.92,14.5,19.2,12,19.2z"/></svg>
-            <span>Профиль</span>
-        </div>
+    </div>
+
+    <nav class="hotbar">
+        <div class="bar-item active" onclick="switchTab('crash')"><i>🎮</i>Игры</div>
+        <div class="bar-item"><i>🎁</i>Промо</div>
+        <div class="bar-item" onclick="switchTab('wallet')"><i>💼</i>Кошелек</div>
+        <div class="bar-item"><i>👤</i>Профиль</div>
     </nav>
 
     <script src="script.js"></script>
