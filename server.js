@@ -1,312 +1,215 @@
 require('dotenv').config();
 const express = require('express');
 const http = require('http');
-const https = require('https');
 const { Server } = require('socket.io');
 const mongoose = require('mongoose');
 const TelegramBot = require('node-telegram-bot-api');
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server, { 
-    cors: { origin: "*" },
-    pingInterval: 10000,
-    pingTimeout: 5000 
+const io = new Server(server, { cors: { origin: "*" } });
+
+const { BOT_TOKEN, MONGO_URI, WEBAPP_URL, PORT = 3000 } = process.env;
+
+// --- ФИКС ОШИБКИ 409 ---
+const bot = new TelegramBot(BOT_TOKEN, { polling: { autoStart: true, params: { timeout: 10 } } });
+bot.on('polling_error', (err) => { if (!err.message.includes('409')) console.log("Bot Error:", err.message); });
+
+bot.onText(/\/start/, (msg) => {
+    bot.sendMessage(msg.chat.id, `🚀 *Добро пожаловать в Loonx Gifts!*\n\nИграй в Crash, Mines и CoinFlip в одном приложении.\n\n💎 Быстрые выплаты в TON\n🎁 Ежедневные бонусы\n📈 Прозрачные коэффициенты`, {
+        parse_mode: 'Markdown',
+        reply_markup: {
+            inline_keyboard: [
+                [{ text: "🎮 Начать игру", web_app: { url: WEBAPP_URL } }],
+                [{ text: "📢 Наш канал", url: "https://t.me/Loonxnews" }, { text: "🆘 Саппорт", url: "https://t.me/LoonxGift_Support" }]
+            ]
+        }
+    });
 });
 
-const {
-    BOT_TOKEN: TOKEN,
-    MONGO_URI,
-    TON_API_KEY,
-    ADMIN_WALLET,
-    WEBAPP_URL,
-    PORT = 3000
-} = process.env;
+bot.onText(/\/help/, (msg) => {
+    bot.sendMessage(msg.chat.id, `🛡 *Связь с администрацией Loonx Gift:*\n\n👤 Creator: @tonfrm\n📢 Channel: @Loonxnews\n🆘 Support: @LoonxGift_Support\n🐛 Bugs: @LoonxGift_Support\n\nПри обращении указывайте ваш ID: \`${msg.from.id}\``, { parse_mode: 'Markdown' });
+});
 
-// ==========================================
-// 1. TELEGRAM BOT (С фиксом 409 и командами)
-// ==========================================
-let bot;
-if (TOKEN) {
-    bot = new TelegramBot(TOKEN, { polling: true });
-    
-    // Щит от падения сервера
-    bot.on('polling_error', (err) => {
-        if (!err.message.includes('409')) console.log("Bot Polling Error:", err.message);
-    });
+// --- БАЗА ДАННЫХ ---
+mongoose.connect(MONGO_URI).then(() => console.log("✅ База MongoDB подключена"));
 
-    bot.onText(/\/start/, (msg) => {
-        bot.sendMessage(msg.chat.id, `🚀 *Добро пожаловать в Loonx Gifts!* \n\nСамый быстрый софт для игры на TON.`, {
-            parse_mode: 'Markdown',
-            reply_markup: { inline_keyboard: [[{ text: "🎮 Играть сейчас", web_app: { url: WEBAPP_URL } }]] }
-        });
-    });
-
-    bot.onText(/\/help/, (msg) => {
-        bot.sendMessage(msg.chat.id, `🛡 *Поддержка и контакты:*\n\n👤 Creator: @tonfrm\n📢 Channel: @Loonxnews\n🆘 Support: @LoonxGift_Support`, { parse_mode: 'Markdown' });
-    });
-}
-
-// ==========================================
-// 2. DATABASE MODELS
-// ==========================================
-mongoose.connect(MONGO_URI).then(() => console.log("✅ MongoDB Connected")).catch(e => console.log("❌ DB Error:", e));
-
-const userSchema = new mongoose.Schema({
+const UserSchema = new mongoose.Schema({
     tgId: { type: Number, unique: true },
     username: String,
-    photo_url: String,
+    avatar: String,
     real_balance: { type: Number, default: 0 },
     demo_balance: { type: Number, default: 5000 },
-    stats_games: { type: Number, default: 0 },
-    stats_wins: { type: Number, default: 0 },
-    processed_txs: { type: [String], default: [] },
-    isAdmin: { type: Boolean, default: false }
+    stats: { games: { type: Number, default: 0 }, wins: { type: Number, default: 0 }, dep: { type: Number, default: 0 }, with: { type: Number, default: 0 } },
+    usedPromos: [String]
 });
-const User = mongoose.model('User', userSchema);
+const User = mongoose.model('User', UserSchema);
 
 const Withdraw = mongoose.model('Withdraw', new mongoose.Schema({
     tgId: Number, username: String, amount: Number, address: String, status: { type: String, default: 'pending' }, date: { type: Date, default: Date.now }
 }));
 
+const Promo = mongoose.model('Promo', new mongoose.Schema({
+    code: { type: String, unique: true }, amount: Number, limits: Number, uses: { type: Number, default: 0 }
+}));
+
+// Системные настройки (РТП и отключение игр)
+let sysConfig = {
+    crashRTP: 85, minesRTP: 85, flipRTP: 50,
+    crashActive: true, minesActive: true, flipActive: true
+};
+
 app.use(express.static('public'));
 
-// ==========================================
-// 3. GAME STATE & LOGIC
-// ==========================================
-let liveBets = [];
-let onlineCount = 0;
-let crashState = { status: 'waiting', multiplier: 1.0, history: [], currentBets: [], nextBets: [], timer: 8 };
-let activeMines = new Map(); // Храним сессии Mines
+// --- ЛОГИКА ИГРЫ: CRASH ---
+let crash = { status: 'waiting', mult: 1.0, timer: 8, history: [], liveBets: [] };
 
-function addLiveBet(username, game, profit) {
-    liveBets.unshift({ username, game, profit: parseFloat(profit).toFixed(2), time: new Date().toLocaleTimeString() });
-    if (liveBets.length > 20) liveBets.pop();
-    io.emit('live_bets_update', liveBets);
-}
-
-// --- CRASH SYSTEM ---
-function startCrashCycle() {
-    crashState.status = 'waiting';
-    crashState.multiplier = 1.0;
-    crashState.currentBets = [...crashState.nextBets];
-    crashState.nextBets = [];
-    io.emit('crash_update_bets', crashState.currentBets);
+function runCrash() {
+    crash.status = 'flying';
+    io.emit('crash_state', { status: crash.status });
     
-    crashState.timer = 8.0;
-    const interval = setInterval(() => {
-        crashState.timer -= 0.1;
-        io.emit('crash_timer', crashState.timer.toFixed(1));
-        if (crashState.timer <= 0) { clearInterval(interval); runFlight(); }
-    }, 100);
-}
+    // Подкрутка через RTP
+    let max = sysConfig.crashRTP > 80 ? 0.98 : (sysConfig.crashRTP / 100);
+    let point = Math.max(1.00, (1 / (1 - Math.random() * max)).toFixed(2));
+    if (point > 100) point = 50 + Math.random() * 50; // Ограничение
 
-function runFlight() {
-    crashState.status = 'flying';
-    io.emit('crash_start');
-    const point = Math.max(1.01, (1 / (1 - Math.random() * 0.96)).toFixed(2));
-    
-    const flight = setInterval(() => {
-        // Формула роста: мн-ль увеличивается экспоненциально
-        crashState.multiplier += (crashState.multiplier * 0.007) + 0.01;
-        io.emit('crash_tick', crashState.multiplier.toFixed(2));
-        
-        if (crashState.multiplier >= point) {
-            clearInterval(flight);
-            doCrash(point);
+    let timer = setInterval(() => {
+        crash.mult += (crash.mult * 0.007) + 0.01;
+        io.emit('crash_tick', crash.mult.toFixed(2));
+        if (crash.mult >= point) {
+            clearInterval(timer);
+            crash.status = 'crashed';
+            crash.history.unshift(point);
+            io.emit('crash_end', { point: point, history: crash.history.slice(0, 10) });
+            setTimeout(startCrashWait, 4000);
         }
     }, 100);
 }
 
-function doCrash(p) {
-    crashState.status = 'crashed';
-    crashState.history.unshift(p);
-    if (crashState.history.length > 15) crashState.history.pop();
-    io.emit('crash_end', { point: p, history: crashState.history });
-    
-    crashState.currentBets.forEach(b => {
-        if (!b.cashedOut) addLiveBet(b.username, 'Crash', -b.amount);
-    });
-    setTimeout(startCrashCycle, 4000);
+function startCrashWait() {
+    crash.status = 'waiting';
+    crash.mult = 1.0;
+    crash.timer = 8.0;
+    crash.liveBets = [];
+    let cd = setInterval(() => {
+        crash.timer -= 0.1;
+        io.emit('crash_timer', crash.timer.toFixed(1));
+        if (crash.timer <= 0) { clearInterval(cd); runCrash(); }
+    }, 100);
 }
-startCrashCycle();
+startCrashWait();
 
-// ==========================================
-// 4. TON DEPOSIT MONITOR (HTTPS)
-// ==========================================
-setInterval(() => {
-    if (!TON_API_KEY || !ADMIN_WALLET) return;
-    const url = `https://toncenter.com/api/v2/getTransactions?address=${ADMIN_WALLET}&limit=10&api_key=${TON_API_KEY}`;
-    
-    https.get(url, (res) => {
-        let data = '';
-        res.on('data', chunk => data += chunk);
-        res.on('end', async () => {
-            try {
-                const json = JSON.parse(data);
-                if (json.ok) {
-                    for (let tx of json.result) {
-                        const hash = tx.transaction_id.hash;
-                        const msg = tx.in_msg.message;
-                        const val = tx.in_msg.value / 1e9;
-                        if (msg && !isNaN(msg)) {
-                            const user = await User.findOne({ tgId: parseInt(msg) });
-                            if (user && !user.processed_txs.includes(hash)) {
-                                user.real_balance += val;
-                                user.processed_txs.push(hash);
-                                await user.save();
-                                io.to(`user_${user.tgId}`).emit('user_data', user);
-                                io.to(`user_${user.tgId}`).emit('notify', { text: `✅ Депозит ${val} TON зачислен!` });
-                            }
-                        }
-                    }
-                }
-            } catch (e) {}
-        });
-    }).on('error', () => {});
-}, 20000);
+// --- SOCKET.IO ---
+let onlineUsers = 0;
 
-// ==========================================
-// 5. SOCKET CONNECTIONS (The Heart)
-// ==========================================
 io.on('connection', (socket) => {
-    onlineCount++;
-    io.emit('online_count', onlineCount);
-    socket.emit('live_bets_update', liveBets);
-    socket.emit('crash_init', { history: crashState.history });
+    onlineUsers++;
+    io.emit('online_count', onlineUsers);
 
-    // Авторизация (Ключ к лоадеру)
+    socket.on('disconnect', () => { onlineUsers--; io.emit('online_count', onlineUsers); });
+
+    // АВТОРИЗАЦИЯ
     socket.on('auth', async (data) => {
         if (!data || !data.id) return;
         let user = await User.findOne({ tgId: data.id });
-        if (!user) {
-            user = await User.create({ 
-                tgId: data.id, 
-                username: data.username || `User_${data.id}`,
-                photo_url: data.photo_url || ''
-            });
-        }
+        if (!user) user = await User.create({ tgId: data.id, username: data.username || "Gamer", avatar: data.photo_url || "" });
         socket.userId = user._id;
-        socket.tgId = user.tgId;
-        socket.join(`user_${user.tgId}`);
-        socket.emit('user_data', user); // Это событие убирает лоадер на фронте
+        socket.emit('auth_ok', user);
+        socket.emit('crash_history', crash.history.slice(0, 10));
     });
 
-    // --- CRASH ACTIONS ---
-    socket.on('crash_bet', async (d) => {
+    // СТАВКИ
+    socket.on('place_bet', async (data) => { // data = { game: 'crash', amount: 10, isDemo: true }
+        if (!sysConfig[`${data.game}Active`]) return socket.emit('notify', { text: "Игра на тех. перерыве!", type: "error" });
         const user = await User.findById(socket.userId);
-        if (!user) return;
-        const amt = parseFloat(d.amount);
-        const bal = d.mode === 'real' ? user.real_balance : user.demo_balance;
-        
-        if (bal < amt || amt <= 0) return socket.emit('notify', { text: 'Недостаточно средств!' });
-
-        if (d.mode === 'real') user.real_balance -= amt; else user.demo_balance -= amt;
-        user.stats_games += 1;
-        await user.save();
-        
-        socket.emit('user_data', user);
-        const bet = { id: socket.id, username: user.username, amount: amt, mode: d.mode, cashedOut: false };
-        
-        if (crashState.status !== 'waiting') {
-            crashState.nextBets.push(bet);
+        let balType = data.isDemo ? 'demo_balance' : 'real_balance';
+        if (user[balType] >= data.amount) {
+            user[balType] -= data.amount;
+            user.stats.games++;
+            await user.save();
+            socket.emit('auth_ok', user); // Обновляем баланс
+            
+            if(data.game === 'crash') {
+                crash.liveBets.push({ user: user.username, amount: data.amount, mult: null });
+                io.emit('live_bets', crash.liveBets);
+                let msg = crash.status === 'flying' ? "Ставка принята на след. раунд" : "Ставка принята";
+                socket.emit('notify', { text: msg, type: "success" });
+            }
         } else {
-            crashState.currentBets.push(bet);
-            io.emit('crash_update_bets', crashState.currentBets);
+            socket.emit('notify', { text: "Недостаточно средств!", type: "error" });
         }
     });
 
-    socket.on('crash_cashout', async () => {
-        if (crashState.status !== 'flying') return;
-        const b = crashState.currentBets.find(x => x.id === socket.id && !x.cashedOut);
-        if (!b) return;
-
-        b.cashedOut = true;
-        const win = b.amount * crashState.multiplier;
-        const user = await User.findById(socket.userId);
-        
-        if (b.mode === 'real') user.real_balance += win; else user.demo_balance += win;
-        user.stats_wins += 1;
-        await user.save();
-        
-        addLiveBet(user.username, 'Crash', win);
-        socket.emit('user_data', user);
-        io.emit('crash_update_bets', crashState.currentBets);
-        socket.emit('notify', { text: `Выигрыш: ${win.toFixed(2)}`, type: 'success' });
-    });
-
-    // --- MINES ACTIONS ---
-    socket.on('mines_start', async (d) => {
-        const user = await User.findById(socket.userId);
-        if (!user || activeMines.has(socket.id)) return;
-        
-        const amt = parseFloat(d.amount);
-        const minesCount = parseInt(d.mines);
-        const bal = d.mode === 'real' ? user.real_balance : user.demo_balance;
-        
-        if (bal < amt || minesCount < 1 || minesCount > 24) return;
-
-        if (d.mode === 'real') user.real_balance -= amt; else user.demo_balance -= amt;
-        await user.save();
-
-        // Генерируем поле
-        let grid = Array(25).fill('diamond');
-        let placed = 0;
-        while(placed < minesCount) {
-            let idx = Math.floor(Math.random() * 25);
-            if(grid[idx] !== 'mine') { grid[idx] = 'mine'; placed++; }
+    socket.on('cashout', async (data) => { // data = { game: 'crash', mult: 2.5, isDemo: true, amount: 10 }
+        if(data.game === 'crash' && crash.status === 'flying') {
+            const user = await User.findById(socket.userId);
+            let win = data.amount * crash.mult;
+            let balType = data.isDemo ? 'demo_balance' : 'real_balance';
+            user[balType] += win;
+            user.stats.wins++;
+            await user.save();
+            socket.emit('auth_ok', user);
+            socket.emit('notify', { text: `Выведено ${win.toFixed(2)}`, type: "success" });
         }
-
-        activeMines.set(socket.id, { amt, minesCount, grid, opened: [], mode: d.mode });
-        socket.emit('user_data', user);
-        socket.emit('mines_started');
     });
 
-    socket.on('mines_open', async (idx) => {
-        const game = activeMines.get(socket.id);
-        if (!game || game.opened.includes(idx)) return;
+    // ПРОМОКОДЫ
+    socket.on('activate_promo', async (code) => {
+        const user = await User.findById(socket.userId);
+        if(user.usedPromos.includes(code)) return socket.emit('notify', {text: "Промокод уже использован!", type: "error"});
+        const promo = await Promo.findOne({code: code});
+        if(!promo) return socket.emit('notify', {text: "Промокод не найден!", type: "error"});
+        if(promo.uses >= promo.limits) return socket.emit('notify', {text: "Лимит активаций исчерпан!", type: "error"});
+        
+        user.real_balance += promo.amount;
+        user.usedPromos.push(code);
+        promo.uses++;
+        await user.save();
+        await promo.save();
+        socket.emit('auth_ok', user);
+        socket.emit('notify', {text: `Промокод активирован! +${promo.amount} TON`, type: "success"});
+    });
 
-        if (game.grid[idx] === 'mine') {
-            socket.emit('mines_lost', { grid: game.grid });
-            addLiveBet((await User.findById(socket.userId)).username, 'Mines', -game.amt);
-            activeMines.delete(socket.id);
+    // --- АДМИН ПАНЕЛЬ (Пароль 8877) ---
+    socket.on('admin_login', (pass) => {
+        if (pass === "8877") socket.emit('admin_auth_ok', sysConfig);
+        else socket.emit('notify', { text: "Неверный пароль", type: "error" });
+    });
+
+    // Раздел 1: БД
+    socket.on('admin_get_users', async () => {
+        const users = await User.find().select('tgId username real_balance demo_balance avatar');
+        socket.emit('admin_users_list', users);
+    });
+
+    // Раздел 2: Выводы
+    socket.on('admin_get_withdraws', async () => {
+        const w = await Withdraw.find({status: 'pending'});
+        socket.emit('admin_withdraws_list', w);
+    });
+    socket.on('admin_action_withdraw', async (data) => { // data = { id: w_id, action: 'accept'/'reject' }
+        const w = await Withdraw.findById(data.id);
+        if(!w) return;
+        w.status = data.action;
+        await w.save();
+        if(data.action === 'reject') {
+             bot.sendMessage(w.tgId, `❌ Ваш вывод на сумму ${w.amount} TON отклонен. За подробностями обратитесь в саппорт.`, {
+                 reply_markup: { inline_keyboard: [[{text: "🆘 Саппорт", url: "https://t.me/LoonxGift_Support"}]] }
+             });
         } else {
-            game.opened.push(idx);
-            socket.emit('mines_hit', { idx, openedCount: game.opened.length });
+             bot.sendMessage(w.tgId, `✅ Ваш вывод на сумму ${w.amount} TON успешно обработан!`);
         }
+        socket.emit('admin_withdraws_list', await Withdraw.find({status: 'pending'}));
     });
 
-    socket.on('mines_cashout', async () => {
-        const game = activeMines.get(socket.id);
-        if (!game || game.opened.length === 0) return;
-
-        // Расчет коэффициента (примерный)
-        const coef = 1.2 * game.opened.length; // Тут должна быть твоя формула
-        const win = game.amt * coef;
-        
-        const user = await User.findById(socket.userId);
-        if (game.mode === 'real') user.real_balance += win; else user.demo_balance += win;
-        await user.save();
-        
-        addLiveBet(user.username, 'Mines', win);
-        socket.emit('user_data', user);
-        socket.emit('mines_won', { win, grid: game.grid });
-        activeMines.delete(socket.id);
+    // Раздел 3: Промокоды
+    socket.on('admin_create_promo', async (data) => {
+        await Promo.create({ code: data.name, amount: data.amount, limits: data.limit });
+        socket.emit('notify', {text: "Промокод создан", type: "success"});
     });
 
-    // --- ADMIN ---
-    socket.on('admin_auth', async (code) => {
-        if (code === '7788') {
-            const users = await User.find().sort({_id: -1}).limit(100);
-            socket.emit('admin_ok', { users });
-        }
-    });
-
-    socket.on('disconnect', () => {
-        onlineCount--;
-        activeMines.delete(socket.id);
-        io.emit('online_count', onlineCount);
-    });
+    // Раздел 4: RTP
+    socket.on('admin_set_rtp', (data) => { sysConfig = { ...sysConfig, ...data }; });
 });
 
-server.listen(PORT, () => console.log(`🚀 Loonx Server started on port ${PORT}`));
+server.listen(PORT, () => console.log(`🚀 Loonx Server started on ${PORT}`));
