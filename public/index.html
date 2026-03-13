@@ -3,425 +3,346 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Loonx Gifts</title>
+    <title>Loonx Gifts | Premium Platform</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
     <script src="/socket.io/socket.io.js"></script>
+    
     <style>
-        :root { --bg: #0a0a0b; --panel: #141416; --blue: #007bff; --green: #00ff88; --red: #ff4444; --text: #ffffff; }
-        body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', sans-serif; margin: 0; padding: 0; overflow: hidden; user-select: none; }
-        
-        /* АНИМИРОВАННЫЕ ЗВЕЗДЫ */
-        #stars_canvas { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: -1; }
+        /* APPLE DESIGN SYSTEM & NEON EFFECTS */
+        :root {
+            --bg-color: #000000;
+            --panel-color: #1c1c1e;
+            --accent-color: #007aff;
+            --success-color: #34c759;
+            --error-color: #ff3b30;
+            --warning-color: #ff9500;
+            --text-main: #ffffff;
+            --text-secondary: #8e8e93;
+            --glow-green: 0 0 15px rgba(52, 199, 89, 0.4);
+            --glow-blue: 0 0 15px rgba(0, 122, 255, 0.4);
+            --border-style: 0.5px solid #38383a;
+        }
 
-        /* БЕЛЫЙ ЛОАДЕР (БЕЗ НЕОНА) */
-        #loader { position: fixed; inset: 0; background: var(--bg); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 9999; transition: opacity 0.5s; }
-        .spinner { width: 40px; height: 40px; border: 4px solid rgba(255,255,255,0.1); border-top: 4px solid white; border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 20px; }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        .loader-text { font-size: 1.5em; font-weight: 600; letter-spacing: 2px; color: white; }
+        * {
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+            user-select: none;
+        }
 
-        /* УВЕДОМЛЕНИЯ */
-        #notify { position: fixed; top: -100px; left: 50%; transform: translateX(-50%); background: rgba(20,20,22,0.95); padding: 12px 20px; border-radius: 12px; border: 1px solid var(--blue); z-index: 10000; transition: top 0.4s cubic-bezier(0.18, 0.89, 0.32, 1.28); text-align: center; font-weight: bold; width: 85%; }
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+            overflow: hidden;
+            height: 100vh;
+        }
 
-        /* ШАПКА */
-        .header { display: flex; justify-content: space-between; align-items: center; padding: 15px; background: rgba(0,0,0,0.3); backdrop-filter: blur(5px); border-bottom: 1px solid #222; }
-        .user-info { display: flex; align-items: center; gap: 10px; }
-        .avatar { width: 40px; height: 40px; border-radius: 50%; background: #333; object-fit: cover; }
-        .balance-switch { background: var(--panel); padding: 5px; border-radius: 12px; border: 1px solid #333; display: flex; flex-direction: column; align-items: flex-end; }
-        .bal-btn { background: none; border: none; color: gray; font-size: 0.8em; cursor: pointer; padding: 2px 5px; }
-        .bal-btn.active { color: var(--green); font-weight: bold; }
-        .online-counter { font-size: 0.7em; color: var(--green); margin-top: 5px; }
+        /* Анимированный фон (Звезды) */
+        #star-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+        }
 
-        /* ОСНОВНОЙ КОНТЕЙНЕР */
-        #main_content { height: calc(100vh - 140px); overflow-y: auto; padding: 15px; padding-bottom: 80px; }
-        .page { display: none; animation: fadeIn 0.3s; }
-        .page.active { display: block; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        /* Загрузочный экран */
+        #preloader {
+            position: fixed;
+            inset: 0;
+            background: #000;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+            transition: opacity 0.5s ease;
+        }
 
-        /* ИГРЫ: CRASH */
-        .crash-area { text-align: center; padding: 30px 0; }
-        .mult-text { font-size: 5em; font-weight: bold; }
-        .live-bets { background: var(--panel); border-radius: 15px; padding: 10px; margin-top: 20px; max-height: 150px; overflow-y: auto; border: 1px solid #222; }
-        .bet-item { display: flex; justify-content: space-between; padding: 8px; border-bottom: 1px solid #333; font-size: 0.9em; }
+        .loader-spinner {
+            width: 45px;
+            height: 45px;
+            border: 3px solid rgba(255,255,255,0.1);
+            border-top: 3px solid #fff;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
 
-        /* ИГРЫ: COINFLIP */
-        .coin-container { display: flex; justify-content: center; margin: 30px 0; perspective: 1000px; }
-        .coin { width: 100px; height: 100px; background: var(--blue); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 3em; font-weight: bold; box-shadow: 0 0 20px var(--blue); transition: transform 2s cubic-bezier(0.2, 0.8, 0.2, 1); transform-style: preserve-3d; }
-        .coin.flip { transform: rotateY(1800deg); }
+        @keyframes spin { 100% { transform: rotate(360deg); } }
 
-        /* КНОПКИ И ИНПУТЫ */
-        input, select { width: 100%; background: var(--panel); border: 1px solid #333; color: white; padding: 15px; border-radius: 12px; margin-bottom: 15px; box-sizing: border-box; outline: none; }
-        input:focus { border-color: var(--blue); }
-        .btn { width: 100%; padding: 15px; border: none; border-radius: 12px; font-weight: bold; font-size: 1.1em; cursor: pointer; color: white; margin-bottom: 10px; }
-        .btn-blue { background: var(--blue); } .btn-green { background: var(--green); color: black; } .btn-red { background: var(--red); }
-        .btn-outline { background: transparent; border: 1px solid var(--blue); color: var(--blue); }
+        /* Шапка приложения */
+        .app-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px 20px;
+            background: rgba(28, 28, 30, 0.8);
+            backdrop-filter: blur(20px);
+            border-bottom: var(--border-style);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
 
-        /* ПРОФИЛЬ */
-        .profile-card { background: var(--panel); padding: 20px; border-radius: 15px; text-align: center; border: 1px solid #222; }
-        .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 15px; }
-        .stat-box { background: rgba(255,255,255,0.05); padding: 10px; border-radius: 10px; }
-        .contacts { margin-top: 20px; display: flex; flex-direction: column; gap: 10px; }
+        .user-meta { display: flex; align-items: center; gap: 12px; }
+        .avatar-frame {
+            width: 42px;
+            height: 42px;
+            border-radius: 50%;
+            overflow: hidden;
+            border: 1.5px solid #333;
+        }
+        .avatar-frame img { width: 100%; height: 100%; object-fit: cover; }
 
-        /* НИЖНИЙ ХОТБАР */
-        .hotbar { position: fixed; bottom: 0; left: 0; width: 100%; background: #0e0e0f; display: flex; justify-content: space-around; padding: 15px 0; border-top: 1px solid #222; z-index: 100; }
-        .nav-item { color: #666; font-size: 0.9em; font-weight: bold; display: flex; flex-direction: column; align-items: center; gap: 5px; transition: 0.3s; }
-        .nav-item.active { color: var(--green); text-shadow: 0 0 10px var(--green); }
-        .nav-item.active .icon { box-shadow: 0 0 10px var(--green); border-color: var(--green); }
-        .icon { width: 24px; height: 24px; border: 2px solid transparent; border-radius: 5px; display: flex; align-items: center; justify-content: center; }
+        .balance-container { text-align: right; }
+        .bal-value {
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: var(--success-color);
+            text-shadow: var(--glow-green);
+        }
+        .bal-type-toggle {
+            display: flex;
+            gap: 8px;
+            font-size: 0.65rem;
+            color: var(--text-secondary);
+            justify-content: flex-end;
+            margin-top: 4px;
+        }
+        .bal-type-toggle span.active { color: #fff; font-weight: 600; text-decoration: underline; }
 
-        /* АДМИН ПАНЕЛЬ (МОДАЛКА) */
-        #admin_modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 100000; padding: 20px; overflow-y: auto; }
-        .admin-nav { display: flex; gap: 10px; margin-bottom: 20px; overflow-x: auto; padding-bottom: 10px; }
-        .admin-tab { padding: 8px 15px; background: #222; border-radius: 8px; white-space: nowrap; }
-        .admin-tab.active { background: var(--red); }
-        .admin-section { display: none; } .admin-section.active { display: block; }
-        .data-row { background: #1a1a1c; padding: 10px; border-radius: 8px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
+        /* Контентная область */
+        #main-scroll-view {
+            height: calc(100vh - 150px);
+            overflow-y: auto;
+            padding: 20px;
+            padding-bottom: 100px;
+            scrollbar-width: none;
+        }
+        #main-scroll-view::-webkit-scrollbar { display: none; }
+
+        /* Карточки игр */
+        .game-card {
+            background: var(--panel-color);
+            border-radius: 24px;
+            padding: 20px;
+            margin-bottom: 20px;
+            border: var(--border-style);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .game-card h2 { margin: 0; font-size: 1.1rem; letter-spacing: 0.5px; opacity: 0.9; }
+
+        /* CRASH UI */
+        .crash-display {
+            height: 150px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            margin: 15px 0;
+        }
+        #crash-multiplier {
+            font-size: 4rem;
+            font-weight: 900;
+            letter-spacing: -2px;
+            transition: color 0.3s;
+        }
+        .history-ribbon {
+            display: flex;
+            gap: 8px;
+            overflow-x: auto;
+            margin-bottom: 15px;
+            padding-bottom: 5px;
+        }
+        .history-tag {
+            background: #2c2c2e;
+            padding: 4px 10px;
+            border-radius: 8px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        /* MINES UI */
+        .mines-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 10px;
+            margin: 20px 0;
+        }
+        .mine-cell {
+            aspect-ratio: 1;
+            background: #2c2c2e;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            transition: 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            border: 1px solid transparent;
+        }
+        .mine-cell:active { transform: scale(0.9); }
+        .mine-cell.open-gem { background: rgba(52, 199, 89, 0.1); border-color: var(--success-color); animation: pop 0.4s; }
+        .mine-cell.open-bomb { background: rgba(255, 59, 48, 0.1); border-color: var(--error-color); }
+
+        @keyframes pop { 0% { transform: scale(0.8); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } }
+
+        /* SSG HOTBAR (BOTTOM NAV) */
+        .ssg-hotbar {
+            position: fixed;
+            bottom: 0;
+            width: 100%;
+            height: 85px;
+            background: rgba(18, 18, 18, 0.95);
+            backdrop-filter: blur(25px);
+            border-top: var(--border-style);
+            display: flex;
+            justify-content: space-around;
+            padding-bottom: 25px;
+            z-index: 1000;
+        }
+
+        .nav-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-secondary);
+            font-size: 0.7rem;
+            width: 20%;
+            transition: 0.3s;
+        }
+
+        .nav-item.active { color: var(--success-color); text-shadow: var(--glow-green); }
+        .nav-item svg { width: 26px; height: 26px; margin-bottom: 4px; fill: currentColor; transition: transform 0.3s; }
+        .nav-item.active svg { transform: translateY(-5px); }
+
+        /* Кнопки в стиле Apple */
+        .apple-btn {
+            width: 100%;
+            padding: 16px;
+            border-radius: 16px;
+            border: none;
+            background: #ffffff;
+            color: #000;
+            font-weight: 700;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+        .apple-btn:active { transform: scale(0.97); opacity: 0.8; }
+        .apple-btn.blue { background: var(--accent-color); color: #fff; box-shadow: var(--glow-blue); }
+
+        /* Уведомления */
+        #notification-center {
+            position: fixed;
+            top: -100px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 90%;
+            background: rgba(28, 28, 30, 0.98);
+            border: var(--border-style);
+            padding: 18px;
+            border-radius: 20px;
+            z-index: 10000;
+            transition: 0.6s cubic-bezier(0.23, 1, 0.32, 1);
+            text-align: center;
+            font-weight: 600;
+        }
+
+        /* Модальные окна */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.8);
+            z-index: 5000;
+            display: none;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
     </style>
 </head>
 <body>
 
-    <canvas id="stars_canvas"></canvas>
+    <canvas id="star-canvas"></canvas>
+    <div id="notification-center">Пример уведомления</div>
 
-    <div id="loader">
-        <div class="spinner"></div>
-        <div class="loader-text">Loonx Gifts</div>
+    <div id="preloader">
+        <div class="loader-spinner"></div>
+        <div style="margin-top: 20px; font-weight: 700; letter-spacing: 2px;">LOONX GIFTS</div>
     </div>
 
-    <div id="notify">Сообщение</div>
-
-    <div class="header" id="header_area">
-        <div class="user-info">
-            <img src="" alt="ava" class="avatar" id="u_ava">
+    <header class="app-header" id="header-tap-zone">
+        <div class="user-meta">
+            <div class="avatar-frame"><img id="header-avatar" src=""></div>
             <div>
-                <b id="u_name">Игрок</b><br>
-                <span style="font-size: 0.7em; color: gray;">ID: <span id="u_id">000000</span></span>
-                <div class="online-counter">Онлайн: <span id="online_count">1</span></div>
+                <b id="header-username">Loading...</b><br>
+                <span id="online-tag" style="font-size: 0.6rem; color: var(--success-color);">● Online</span>
             </div>
         </div>
-        <div class="balance-switch">
-            <span id="bal_display" style="font-size: 1.2em; font-weight: bold; color: var(--green);">0.00</span>
-            <div style="display: flex; gap: 5px; margin-top: 5px;">
-                <button class="bal-btn active" id="btn_demo" onclick="switchBalance('demo')">DEMO</button>
-                <button class="bal-btn" id="btn_real" onclick="switchBalance('real')">TON</button>
+        <div class="balance-container">
+            <div class="bal-value" id="balance-main">0.00 D</div>
+            <div class="bal-type-toggle">
+                <span id="sw-demo" class="active" onclick="toggleBalance('demo')">DEMO</span>
+                <span id="sw-real" onclick="toggleBalance('real')">TON</span>
             </div>
         </div>
-    </div>
+    </header>
 
-    <div id="main_content">
-        <div id="page_games" class="page active">
-            <div style="display: flex; gap: 10px; margin-bottom: 20px;">
-                <button class="btn btn-outline" onclick="openGame('crash')">🚀 Crash</button>
-                <button class="btn btn-outline" onclick="openGame('mines')">💣 Mines</button>
-                <button class="btn btn-outline" onclick="openGame('flip')">🪙 Flip</button>
-            </div>
-
-            <div id="game_crash">
-                <div class="crash-area">
-                    <div style="color: var(--blue);" id="crash_status">Ожидание...</div>
-                    <div class="mult-text" id="crash_mult">1.00x</div>
-                    <div style="display: flex; gap: 5px; justify-content: center; margin-top: 10px; font-size: 0.8em; opacity: 0.6;" id="crash_history"></div>
+    <main id="main-scroll-view">
+        <section id="view-games" class="view-tab">
+            <div class="game-card">
+                <h2>🚀 CRASH</h2>
+                <div class="history-ribbon" id="crash-history-list"></div>
+                <div class="crash-display">
+                    <div id="crash-wait-time" style="color: var(--accent-color); font-weight: 700;">Ожидание...</div>
+                    <div id="crash-multiplier">1.00x</div>
                 </div>
-                <input type="number" id="bet_amt" placeholder="Сумма ставки">
-                <button class="btn btn-blue" id="btn_action" onclick="handleBet()">СДЕЛАТЬ СТАВКУ</button>
-                
-                <div class="live-bets">
-                    <div style="text-align: center; color: gray; font-size: 0.8em; margin-bottom: 5px;">Лайв ставки</div>
-                    <div id="live_bets_list"></div>
+                <input type="number" id="crash-bet-input" placeholder="Сумма ставки" style="width:100%; padding: 12px; border-radius: 12px; border: 1px solid #333; background: #000; color: #fff; margin-bottom: 10px;">
+                <button class="apple-btn blue" onclick="placeCrashBet()">ПОСТАВИТЬ</button>
+            </div>
+
+            <div class="game-card">
+                <h2>💣 MINES</h2>
+                <div class="mines-grid" id="mines-grid-box"></div>
+                <button class="apple-btn" onclick="startMines()">ОБНОВИТЬ СЕТКУ</button>
+            </div>
+        </section>
+
+        <section id="view-wallet" class="view-tab" style="display: none;">
+            <div class="game-card">
+                <h2 style="margin-bottom: 20px;">💎 КОШЕЛЕК TON</h2>
+                <div id="ton-connect-root" style="margin-bottom: 20px;"></div>
+                <p style="font-size: 0.8rem; color: var(--text-secondary);">Для депозита используйте ваш ID в комментарии.</p>
+                <div style="background: #000; padding: 15px; border-radius: 12px; border: 1px solid #333; margin: 15px 0;">
+                    Your ID: <b id="wallet-tg-id">000000</b>
                 </div>
+                <button class="apple-btn blue" onclick="copyAdminWallet()">СКОПИРОВАТЬ АДРЕС</button>
             </div>
+        </section>
+    </main>
 
-            <div id="game_flip" style="display: none;">
-                <div class="coin-container">
-                    <div class="coin" id="coin_obj">L</div>
-                </div>
-                <div style="display: flex; gap: 10px;">
-                    <button class="btn btn-blue" onclick="playFlip('L')">Ставка на L</button>
-                    <button class="btn btn-red" onclick="playFlip('X')">Ставка на X</button>
-                </div>
-            </div>
+    <nav class="ssg-hotbar">
+        <div class="nav-item active" onclick="switchNav('games', this)">
+            <svg viewBox="0 0 24 24"><path d="M21,6H3C1.9,6,1,6.9,1,8v8c0,1.1,0.9,2,2,2h18c1.1,0,2-0.9,2-2V8C23,6.9,22.1,6,21,6z M18,15h-2v-2h2V15z M18,11h-2V9h2V11z M11,13H9v2H7v-2H5v-2h2V9h2v2h2V13z"/></svg>
+            <span>Игры</span>
         </div>
-
-        <div id="page_promo" class="page">
-            <h2 style="text-align: center;">Промокоды</h2>
-            <input type="text" id="promo_code" placeholder="Введите промокод">
-            <button class="btn btn-blue" onclick="activatePromo()">Активировать</button>
+        <div class="nav-item" onclick="switchNav('wallet', this)">
+            <svg viewBox="0 0 24 24"><path d="M21,18v1c0,1.1-0.9,2-2,2H5c-1.1,0-2-0.9-2-2V5c0-1.1,0.9-2,2-2h14c1.1,0,2,0.9,2,2v1h-9c-1.1,0-2,0.9-2,2v8 c0,1.1,0.9,2,2,2H21z M12,16h10V8H12V16z M16,13.5c-0.83,0-1.5-0.67-1.5-1.5s0.67-1.5,1.5-1.5s1.5,0.67,1.5,1.5S16.83,13.5,16,13.5z"/></svg>
+            <span>Кошелек</span>
         </div>
-
-        <div id="page_wallet" class="page">
-            <h2 style="text-align: center;">Кошелек</h2>
-            <button class="btn btn-blue" onclick="connectTon()">🔗 TON Connect</button>
-            <div style="background: var(--panel); padding: 15px; border-radius: 12px; margin-top: 20px;">
-                <h3>Вывод средств</h3>
-                <input type="text" id="with_wallet" placeholder="Ваш TON адрес">
-                <input type="number" id="with_amt" placeholder="Сумма вывода">
-                <button class="btn btn-green" onclick="requestWithdraw()">Вывести в админку</button>
-            </div>
+        <div class="nav-item" onclick="switchNav('profile', this)">
+            <svg viewBox="0 0 24 24"><path d="M12,2C6.48,2,2,6.48,2,12s4.48,10,10,10s10-4.48,10-10S17.52,2,12,2z M12,5c1.66,0,3,1.34,3,3s-1.34,3-3,3s-3-1.34-3-3 S10.34,5,12,5z M12,19.2c-2.5,0-4.71-1.28-6-3.22c0.03-1.99,4-3.08,6-3.08c1.99,0,5.97,1.09,6,3.08C16.71,17.92,14.5,19.2,12,19.2z"/></svg>
+            <span>Профиль</span>
         </div>
+    </nav>
 
-        <div id="page_profile" class="page">
-            <div class="profile-card">
-                <img src="" id="prof_ava" style="width: 80px; height: 80px; border-radius: 50%; border: 2px solid var(--green);">
-                <h2 id="prof_name">Игрок</h2>
-                <div class="stats-grid">
-                    <div class="stat-box"><div style="color: gray; font-size: 0.8em;">Сыграно</div><b id="stat_games">0</b></div>
-                    <div class="stat-box"><div style="color: gray; font-size: 0.8em;">Выиграно</div><b id="stat_wins">0</b></div>
-                    <div class="stat-box"><div style="color: gray; font-size: 0.8em;">Депозит</div><b id="stat_dep">0 TON</b></div>
-                    <div class="stat-box"><div style="color: gray; font-size: 0.8em;">Выведено</div><b id="stat_with">0 TON</b></div>
-                </div>
-            </div>
-            <div class="contacts">
-                <button class="btn btn-outline" onclick="tg.openTelegramLink('https://t.me/tonfrm')">👤 Creator</button>
-                <button class="btn btn-outline" onclick="tg.openTelegramLink('https://t.me/Loonxnews')">📢 Channel</button>
-                <button class="btn btn-outline" onclick="tg.openTelegramLink('https://t.me/LoonxGift_Support')">🆘 Support & Bugs</button>
-            </div>
-        </div>
-    </div>
-
-    <div class="hotbar">
-        <div class="nav-item active" onclick="nav('games', this)"><div class="icon">🎮</div>Игры</div>
-        <div class="nav-item" onclick="nav('promo', this)"><div class="icon">🎁</div>Промо</div>
-        <div class="nav-item" onclick="nav('wallet', this)"><div class="icon">💼</div>Кошелек</div>
-        <div class="nav-item" onclick="nav('profile', this)"><div class="icon">👤</div>Профиль</div>
-    </div>
-
-    <div id="admin_modal">
-        <h2 style="color: var(--red);">⚙️ Admin Panel</h2>
-        <div class="admin-nav">
-            <div class="admin-tab active" onclick="switchAdmin('db', this)">1. БД</div>
-            <div class="admin-tab" onclick="switchAdmin('with', this)">2. Выводы</div>
-            <div class="admin-tab" onclick="switchAdmin('promo', this)">3. Промо</div>
-            <div class="admin-tab" onclick="switchAdmin('rtp', this)">4. RTP/Игры</div>
-        </div>
-
-        <div id="adm_db" class="admin-section active">
-            <button class="btn btn-blue" onclick="socket.emit('admin_get_users')">Загрузить юзеров</button>
-            <div id="adm_users_list" style="margin-top: 10px;"></div>
-        </div>
-
-        <div id="adm_with" class="admin-section">
-            <button class="btn btn-blue" onclick="socket.emit('admin_get_withdraws')">Загрузить заявки</button>
-            <div id="adm_with_list" style="margin-top: 10px;"></div>
-        </div>
-
-        <div id="adm_promo" class="admin-section">
-            <input type="text" id="adm_pr_name" placeholder="Название промо">
-            <input type="number" id="adm_pr_amt" placeholder="Сумма (TON)">
-            <input type="number" id="adm_pr_lim" placeholder="Кол-во активаций">
-            <button class="btn btn-green" onclick="createPromo()">Создать лимитированный промо</button>
-        </div>
-
-        <div id="adm_rtp" class="admin-section">
-            <h3>Подкрутка шансов (RTP %)</h3>
-            <label>Crash RTP:</label> <input type="number" id="adm_rtp_crash" value="85">
-            <label>Mines RTP:</label> <input type="number" id="adm_rtp_mines" value="85">
-            <label>Flip RTP:</label> <input type="number" id="adm_rtp_flip" value="50">
-            <button class="btn btn-blue" onclick="saveRTP()">Сохранить RTP</button>
-            <hr style="border-color: #333;">
-            <h3>Статус игр (Тех. перерыв)</h3>
-            <button class="btn btn-green" onclick="toggleGame('crash')">Crash: Вкл/Выкл</button>
-            <button class="btn btn-green" onclick="toggleGame('mines')">Mines: Вкл/Выкл</button>
-        </div>
-        <button class="btn btn-red" style="margin-top: 30px;" onclick="document.getElementById('admin_modal').style.display='none'">Закрыть админку</button>
-    </div>
-
-    <script>
-        const tg = window.Telegram.WebApp;
-        tg.expand();
-        const socket = io();
-        
-        let currentUser = null;
-        let isDemo = true;
-        let isFlying = false;
-        
-        // --- АНИМАЦИЯ ЗВЕЗД ВНИЗ ---
-        const canvas = document.getElementById('stars_canvas');
-        const ctx = canvas.getContext('2d');
-        canvas.width = window.innerWidth; canvas.height = window.innerHeight;
-        let stars = Array(150).fill().map(() => ({ x: Math.random()*canvas.width, y: Math.random()*canvas.height, r: Math.random()*2, speed: Math.random()*1 + 0.5 }));
-        function drawStars() {
-            ctx.clearRect(0,0,canvas.width, canvas.height); ctx.fillStyle = "white";
-            stars.forEach(s => { 
-                ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, Math.PI*2); ctx.fill(); 
-                s.y += s.speed; if(s.y > canvas.height) { s.y = 0; s.x = Math.random()*canvas.width; }
-            });
-            requestAnimationFrame(drawStars);
-        }
-        drawStars();
-
-        // --- УВЕДОМЛЕНИЯ ---
-        function notify(text, type = 'info') {
-            tg.HapticFeedback.notificationOccurred(type === 'error' ? 'error' : 'success');
-            const el = document.getElementById('notify');
-            el.innerText = text;
-            el.style.borderColor = type === 'error' ? 'var(--red)' : 'var(--green)';
-            el.style.top = '20px';
-            setTimeout(() => el.style.top = '-100px', 3000);
-        }
-        socket.on('notify', (d) => notify(d.text, d.type));
-
-        // --- СОКЕТЫ И АВТОРИЗАЦИЯ ---
-        socket.on('connect', () => {
-            const user = tg.initDataUnsafe.user || {id: 111, username: "DevMode", photo_url: ""};
-            socket.emit('auth', user);
-        });
-
-        socket.on('auth_ok', (user) => {
-            document.getElementById('loader').style.opacity = '0';
-            setTimeout(() => document.getElementById('loader').style.display = 'none', 500);
-            currentUser = user;
-            updateUI();
-        });
-
-        socket.on('online_count', (c) => document.getElementById('online_count').innerText = c);
-
-        function updateUI() {
-            if(!currentUser) return;
-            document.getElementById('u_name').innerText = currentUser.username;
-            document.getElementById('u_id').innerText = currentUser.tgId;
-            document.getElementById('u_ava').src = currentUser.avatar || 'https://via.placeholder.com/40';
-            document.getElementById('prof_name').innerText = currentUser.username;
-            document.getElementById('prof_ava').src = currentUser.avatar || 'https://via.placeholder.com/80';
-            
-            // Статистика
-            document.getElementById('stat_games').innerText = currentUser.stats.games;
-            document.getElementById('stat_wins').innerText = currentUser.stats.wins;
-            document.getElementById('stat_dep').innerText = currentUser.stats.dep.toFixed(2) + ' TON';
-            document.getElementById('stat_with').innerText = currentUser.stats.with.toFixed(2) + ' TON';
-
-            // Баланс
-            let b = isDemo ? currentUser.demo_balance : currentUser.real_balance;
-            document.getElementById('bal_display').innerText = b.toFixed(2) + (isDemo ? ' D' : ' TON');
-        }
-
-        function switchBalance(type) {
-            isDemo = (type === 'demo');
-            document.getElementById('btn_demo').classList.toggle('active', isDemo);
-            document.getElementById('btn_real').classList.toggle('active', !isDemo);
-            updateUI();
-        }
-
-        // --- НАВИГАЦИЯ ---
-        function nav(page, el) {
-            tg.HapticFeedback.impactOccurred('light');
-            document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-            document.getElementById('page_' + page).classList.add('active');
-            document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
-            el.classList.add('active');
-        }
-
-        function openGame(g) {
-            document.getElementById('game_crash').style.display = g === 'crash' ? 'block' : 'none';
-            document.getElementById('game_flip').style.display = g === 'flip' ? 'block' : 'none';
-        }
-
-        // --- ИГРОВАЯ ЛОГИКА ---
-        socket.on('crash_state', (data) => {
-            isFlying = data.status === 'flying';
-            document.getElementById('crash_status').innerText = isFlying ? "ЛЕТИМ..." : "ОЖИДАНИЕ...";
-            document.getElementById('crash_mult').style.color = "white";
-        });
-        
-        socket.on('crash_tick', (m) => document.getElementById('crash_mult').innerText = m + 'x');
-        socket.on('crash_timer', (t) => { document.getElementById('crash_mult').innerText = t + 's'; document.getElementById('crash_mult').style.color = "var(--blue)"; });
-        
-        socket.on('crash_end', (d) => {
-            isFlying = false;
-            document.getElementById('crash_mult').innerText = 'CRASH!';
-            document.getElementById('crash_mult').style.color = "var(--red)";
-            document.getElementById('crash_history').innerHTML = d.history.map(x => `<span>${x}x</span>`).join(' ');
-            document.getElementById('btn_action').innerText = "СДЕЛАТЬ СТАВКУ";
-            document.getElementById('btn_action').className = "btn btn-blue";
-        });
-
-        socket.on('live_bets', (bets) => {
-            document.getElementById('live_bets_list').innerHTML = bets.map(b => `<div class="bet-item"><span>${b.user}</span><span>${b.amount}</span></div>`).join('');
-        });
-
-        function handleBet() {
-            tg.HapticFeedback.impactOccurred('medium');
-            let amt = parseFloat(document.getElementById('bet_amt').value);
-            if(isNaN(amt) || amt <= 0) return notify('Введите сумму', 'error');
-            
-            if(document.getElementById('btn_action').innerText === "ВЫВЕСТИ") {
-                socket.emit('cashout', { game: 'crash', amount: amt, isDemo });
-                document.getElementById('btn_action').innerText = "СДЕЛАТЬ СТАВКУ";
-                document.getElementById('btn_action').className = "btn btn-blue";
-            } else {
-                socket.emit('place_bet', { game: 'crash', amount: amt, isDemo });
-                if(isFlying) {
-                    notify('Ставка принята на след. раунд', 'info');
-                } else {
-                    document.getElementById('btn_action').innerText = "ВЫВЕСТИ";
-                    document.getElementById('btn_action').className = "btn btn-green";
-                }
-            }
-        }
-
-        function playFlip(choice) {
-            tg.HapticFeedback.impactOccurred('heavy');
-            let coin = document.getElementById('coin_obj');
-            coin.classList.add('flip');
-            setTimeout(() => {
-                let res = Math.random() > 0.5 ? 'L' : 'X';
-                coin.innerText = res;
-                coin.classList.remove('flip');
-                notify(`Выпало ${res}! ` + (choice === res ? "Победа!" : "Проигрыш"), choice === res ? 'success' : 'error');
-            }, 2000);
-        }
-
-        // --- КОШЕЛЕК И ПРОМО ---
-        function connectTon() { notify("Инициализация TON Connect...", "info"); /* Тут вызов TonConnect UI */ }
-        function activatePromo() { socket.emit('activate_promo', document.getElementById('promo_code').value); }
-        function requestWithdraw() { socket.emit('withdraw_req', { amount: document.getElementById('with_amt').value, wallet: document.getElementById('with_wallet').value }); }
-
-        // --- АДМИН ПАНЕЛЬ (10 кликов) ---
-        let clicks = 0;
-        document.getElementById('header_area').addEventListener('click', () => {
-            clicks++;
-            if(clicks >= 10) {
-                clicks = 0;
-                let pass = prompt("Enter Admin Password:");
-                socket.emit('admin_login', pass);
-            }
-        });
-
-        socket.on('admin_auth_ok', (config) => {
-            document.getElementById('admin_modal').style.display = 'block';
-            document.getElementById('adm_rtp_crash').value = config.crashRTP;
-        });
-
-        function switchAdmin(tab, el) {
-            document.querySelectorAll('.admin-section').forEach(s => s.classList.remove('active'));
-            document.querySelectorAll('.admin-tab').forEach(t => t.classList.remove('active'));
-            document.getElementById('adm_' + tab).classList.add('active');
-            el.classList.add('active');
-        }
-
-        // Рендер данных админки
-        socket.on('admin_users_list', (users) => {
-            document.getElementById('adm_users_list').innerHTML = users.map(u => `<div class="data-row"><span>${u.username} (ID: ${u.tgId})</span><span>${u.real_balance.toFixed(2)} TON</span></div>`).join('');
-        });
-        
-        socket.on('admin_withdraws_list', (w) => {
-            document.getElementById('adm_with_list').innerHTML = w.map(x => `<div class="data-row"><div style="font-size:0.8em">${x.username}<br>${x.amount} TON<br>${x.address}</div>
-            <div><button class="btn btn-green" style="padding:5px" onclick="socket.emit('admin_action_withdraw', {id:'${x._id}', action:'accept'})">✓</button>
-            <button class="btn btn-red" style="padding:5px" onclick="socket.emit('admin_action_withdraw', {id:'${x._id}', action:'reject'})">✗</button></div></div>`).join('');
-        });
-
-        function createPromo() {
-            socket.emit('admin_create_promo', {
-                name: document.getElementById('adm_pr_name').value,
-                amount: document.getElementById('adm_pr_amt').value,
-                limit: document.getElementById('adm_pr_lim').value
-            });
-        }
-        function saveRTP() {
-            socket.emit('admin_set_rtp', {
-                crashRTP: document.getElementById('adm_rtp_crash').value,
-                minesRTP: document.getElementById('adm_rtp_mines').value,
-                flipRTP: document.getElementById('adm_rtp_flip').value
-            });
-            notify("RTP Сохранен", "success");
-        }
-    </script>
+    <script src="script.js"></script>
 </body>
 </html>
