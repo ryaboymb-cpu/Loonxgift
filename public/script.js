@@ -1,145 +1,210 @@
-const tg = window.Telegram.WebApp;
 const socket = io();
+const tg = window.Telegram.WebApp;
+tg.expand();
 
 let user = null;
-let currentTab = 'crash';
-let isDemo = true;
+let currentTab = 'home';
+let balanceMode = 'demo'; // 'demo' или 'real'
+let tonConnectUI = null;
 
-// --- INITIALIZATION ---
-window.onload = () => {
-    tg.expand();
+// === ИНИЦИАЛИЗАЦИЯ ПРИЛОЖЕНИЯ ===
+window.addEventListener('DOMContentLoaded', () => {
+    // 5 секунд загрузки
+    setTimeout(() => {
+        document.getElementById('loader').style.opacity = '0';
+        setTimeout(() => { document.getElementById('loader').style.display = 'none'; }, 500);
+    }, 5000);
+
     initStars();
+    initTonConnect();
     
-    const tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
-        manifestUrl: 'https://loonx-gifts.render.com/tonconnect-manifest.json',
-        buttonRootId: 'ton-connect-btn'
-    });
-
-    const initData = tg.initDataUnsafe?.user || { id: 8423153067, username: "Player" };
-    socket.emit('auth', initData);
-};
-
-// --- STARS ANIMATION ---
-function initStars() {
-    const canvas = document.getElementById('star-canvas');
-    const ctx = canvas.getContext('2d');
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
-    const stars = Array.from({length: 100}, () => ({
-        x: Math.random() * canvas.width,
-        y: Math.random() * canvas.height,
-        s: Math.random() * 2
-    }));
-    function draw() {
-        ctx.clearRect(0,0,canvas.width, canvas.height);
-        ctx.fillStyle = "#fff";
-        stars.forEach(st => {
-            ctx.beginPath(); ctx.arc(st.x, st.y, st.s, 0, Math.PI*2); ctx.fill();
-            st.y += 0.2; if(st.y > canvas.height) st.y = 0;
-        });
-        requestAnimationFrame(draw);
-    }
-    draw();
-}
-
-// --- SOCKET EVENTS ---
-socket.on('init_data', (data) => {
-    user = data.user;
-    updateUI();
-});
-
-socket.on('update_balance', (data) => {
-    user.real_balance = data.real;
-    user.demo_balance = data.demo;
-    updateUI();
-    if(data.msg) tg.showAlert(data.msg);
-});
-
-function updateUI() {
-    document.getElementById('user-name').innerText = user.username;
-    document.getElementById('user-pic').src = user.avatar || '';
-    document.getElementById('bal-real').innerText = user.real_balance.toFixed(2) + ' TON';
-    document.getElementById('bal-demo').innerText = 'Demo: ' + user.demo_balance.toFixed(0);
-}
-
-// --- CRASH LOGIC ---
-let crashActive = false;
-socket.on('crash_timer', (t) => {
-    document.getElementById('crash-info').innerText = `Взлет через ${t}s`;
-    document.getElementById('crash-num').style.color = '#fff';
-    document.getElementById('crash-btn').innerText = 'СДЕЛАТЬ СТАВКУ';
-    crashActive = false;
-});
-
-socket.on('crash_tick', (m) => {
-    document.getElementById('crash-info').innerText = `ПОЛЕТ...`;
-    document.getElementById('crash-num').innerText = m + 'x';
-    document.getElementById('crash-num').style.color = 'var(--success)';
-});
-
-socket.on('crash_end', (data) => {
-    document.getElementById('crash-info').innerText = `КРАШ!`;
-    document.getElementById('crash-num').innerText = data.point + 'x';
-    document.getElementById('crash-num').style.color = 'var(--error)';
-    tg.HapticFeedback.notificationOccurred('error');
-});
-
-function handleCrashBet() {
-    const amt = parseFloat(document.getElementById('crash-amt').value);
-    socket.emit('place_bet', { game: 'crash', amount: amt, isDemo: true });
-}
-
-// --- MINES LOGIC ---
-let mineBombs = [];
-let mineActive = false;
-let currentWin = 0;
-
-function startMinesGame() {
-    const amt = parseFloat(document.getElementById('mine-amt').value);
-    const count = parseInt(document.getElementById('mine-count').value);
-    if(count < 1 || count > 24) return;
-    
-    socket.emit('place_bet', { game: 'mines', amount: amt, bombCount: count, isDemo: true });
-}
-
-socket.on('mines_ready', (data) => {
-    mineBombs = data.bombs;
-    mineActive = true;
-    currentWin = parseFloat(document.getElementById('mine-amt').value);
-    renderMines();
-});
-
-function renderMines() {
-    const grid = document.getElementById('mine-grid');
-    grid.innerHTML = '';
-    for(let i=0; i<25; i++) {
-        const cell = document.createElement('div');
-        cell.className = 'cell active';
-        cell.onclick = () => clickMine(i, cell);
-        grid.appendChild(cell);
-    }
-}
-
-function clickMine(idx, el) {
-    if(!mineActive || el.classList.contains('gem')) return;
-
-    if(mineBombs.includes(idx)) {
-        el.innerText = '💣'; el.classList.add('bomb');
-        mineActive = false;
-        tg.HapticFeedback.notificationOccurred('error');
-        setTimeout(renderMines, 2000);
+    // Данные юзера из TG
+    const initData = tg.initDataUnsafe?.user;
+    if (initData) {
+        socket.emit('auth', initData);
     } else {
-        el.innerText = '💎'; el.classList.add('gem');
-        currentWin *= 1.2; // Множитель для теста
-        tg.HapticFeedback.impactOccurred('light');
+        // Для теста в браузере
+        socket.emit('auth', { id: 777, first_name: 'Dev_User', username: 'tester' });
+    }
+});
+
+// === TON CONNECT ===
+function initTonConnect() {
+    tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
+        manifestUrl: 'https://' + window.location.host + '/tonconnect-manifest.json',
+        buttonRootId: 'ton-connect-button'
+    });
+}
+
+async function processDeposit() {
+    const amount = document.getElementById('deposit-amount').value;
+    if (!amount || amount <= 0) return showToast('Введите сумму депозита', 'error');
+
+    try {
+        const transaction = {
+            validUntil: Math.floor(Date.now() / 1000) + 60,
+            messages: [{
+                address: "UQAl_ВАШ_АДРЕС_КОШЕЛЬКА", // ЗАМЕНИ НА СВОЙ
+                amount: (amount * 1000000000).toString()
+            }]
+        };
+        await tonConnectUI.sendTransaction(transaction);
+        showToast('Транзакция отправлена! Ожидайте зачисления', 'success');
+        socket.emit('deposit_check', { amount: amount });
+    } catch (e) {
+        showToast('Ошибка оплаты', 'error');
     }
 }
 
-function switchTab(t, el) {
-    document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
-    document.getElementById('v-'+t).classList.add('active');
-    if(el) {
-        document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
-        el.classList.add('active');
+// === ОБРАБОТКА ДАННЫХ ОТ СЕРВЕРА ===
+socket.on('user_data', (data) => {
+    user = data;
+    updateUI();
+});
+
+socket.on('online_count', (count) => {
+    document.getElementById('online-counter').innerText = count;
+});
+
+socket.on('toast', (data) => {
+    showToast(data.text, data.type);
+});
+
+// === ЛОГИКА ИНТЕРФЕЙСА ===
+function updateUI() {
+    if (!user) return;
+    
+    // Балансы
+    const bal = balanceMode === 'demo' ? user.demo_balance : user.real_balance;
+    const cur = balanceMode === 'demo' ? 'D-TON' : 'TON';
+    
+    document.getElementById('top-balance').innerText = bal.toFixed(2);
+    document.getElementById('top-currency').innerText = cur;
+    document.getElementById('withdraw-available-bal').innerText = user.real_balance.toFixed(2) + ' TON';
+
+    // Профиль
+    document.getElementById('u-avatar').src = user.photo_url || 'https://i.imgur.com/6VBx3io.png';
+    document.getElementById('prof-avatar-big').src = user.photo_url || 'https://i.imgur.com/6VBx3io.png';
+    document.getElementById('prof-name-big').innerText = user.first_name;
+    document.getElementById('st-games').innerText = user.stats_games || 0;
+    document.getElementById('st-wins').innerText = user.stats_wins || 0;
+    document.getElementById('st-deps').innerText = (user.total_dep || 0) + ' TON';
+    document.getElementById('st-withdraws').innerText = (user.total_out || 0) + ' TON';
+}
+
+function switchMode() {
+    balanceMode = (balanceMode === 'demo') ? 'real' : 'demo';
+    const btn = document.querySelector('.balance-switcher');
+    document.getElementById('top-mode-label').innerText = balanceMode.toUpperCase();
+    if (balanceMode === 'real') btn.classList.add('real-mode');
+    else btn.classList.remove('real-mode');
+    updateUI();
+}
+
+function switchTab(tabId, el) {
+    document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
+    
+    document.getElementById('tab-' + tabId).classList.add('active');
+    el.classList.add('active');
+    currentTab = tabId;
+}
+
+// === УВЕДОМЛЕНИЯ ===
+function showToast(text, type = 'info') {
+    const container = document.getElementById('toast-container');
+    const t = document.createElement('div');
+    t.className = `toast ${type}`;
+    t.innerText = text;
+    container.appendChild(t);
+    setTimeout(() => { t.style.opacity = '0'; setTimeout(() => t.remove(), 500); }, 3000);
+}
+
+// === ИГРА: CRASH (Анимация кадров) ===
+let crashInterval;
+function crashAction() {
+    const btn = document.getElementById('crash-main-btn');
+    const bet = parseFloat(document.getElementById('crash-bet-val').value);
+    
+    if (btn.innerText === 'ПОСТАВИТЬ') {
+        socket.emit('crash_bet', { amount: bet, mode: balanceMode });
+        btn.innerText = 'ЗАБРАТЬ';
+        btn.classList.replace('btn-green-solid', 'btn-blue-solid');
+        
+        // Запуск анимации ракеты
+        const rocket = document.getElementById('rocket-anim');
+        rocket.classList.remove('rocket-crashed');
+        rocket.classList.add('rocket-flying');
+    } else {
+        socket.emit('crash_cashout');
+    }
+}
+
+socket.on('crash_tick', (multiplier) => {
+    document.getElementById('crash-multiplier').innerText = multiplier.toFixed(2) + 'x';
+});
+
+socket.on('crash_end', () => {
+    const btn = document.getElementById('crash-main-btn');
+    btn.innerText = 'ПОСТАВИТЬ';
+    btn.classList.replace('btn-blue-solid', 'btn-green-solid');
+    
+    const rocket = document.getElementById('rocket-anim');
+    rocket.classList.remove('rocket-flying');
+    rocket.classList.add('rocket-crashed');
+    showToast('ВЗРЫВ!', 'error');
+});
+
+// === ИГРА: COINFLIP (3D Золотая монета) ===
+function playCoin(side) {
+    const bet = parseFloat(document.getElementById('coin-bet-val').value);
+    const coin = document.getElementById('coin-object');
+    
+    coin.classList.add('coin-flipping');
+    socket.emit('coin_play', { side: side, amount: bet, mode: balanceMode });
+}
+
+socket.on('coin_result', (data) => {
+    const coin = document.getElementById('coin-object');
+    setTimeout(() => {
+        coin.classList.remove('coin-flipping');
+        // Поворот на нужную сторону
+        coin.style.transform = data.winSide === 'L' ? 'rotateY(0deg)' : 'rotateY(180deg)';
+        
+        if (data.win) showToast(`Выиграл +${data.prize} ${data.cur}`, 'success');
+        else showToast('Проигрыш', 'error');
+    }, 1500);
+});
+
+// === ВСПОМОГАТЕЛЬНОЕ ===
+function initStars() {
+    const container = document.getElementById('stars');
+    for (let i = 0; i < 50; i++) {
+        const star = document.createElement('div');
+        star.className = 'star';
+        star.style.left = Math.random() * 100 + '%';
+        star.style.width = star.style.height = (Math.random() * 3) + 'px';
+        star.style.animationDuration = (Math.random() * 5 + 5) + 's';
+        star.style.animationDelay = (Math.random() * 10) + 's';
+        container.appendChild(star);
+    }
+}
+
+function openGame(name) {
+    document.getElementById('modal-' + name).classList.add('open');
+}
+
+function closeModal() {
+    document.querySelectorAll('.modal').forEach(m => m.classList.remove('open'));
+}
+
+// Админка (скрытая функция)
+let taps = 0;
+function handleAdminTaps() {
+    taps++;
+    if (taps >= 7) {
+        document.getElementById('modal-admin').classList.add('open');
+        taps = 0;
+        socket.emit('admin_load_data');
     }
 }
