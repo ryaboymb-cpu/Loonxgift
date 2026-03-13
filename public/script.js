@@ -54,7 +54,10 @@ async function processDeposit() {
     } catch (e) {
         showToast('Ошибка оплаты', 'error');
     }
-}
+user.real_balance += amount; 
+await user.save();
+io.to(found_socket_id).emit('user_data', user); // Обновить баланс у игрока в реальном времени
+
 
 // === ОБРАБОТКА ДАННЫХ ОТ СЕРВЕРА ===
 socket.on('user_data', (data) => {
@@ -206,5 +209,29 @@ function handleAdminTaps() {
         document.getElementById('modal-admin').classList.add('open');
         taps = 0;
         socket.emit('admin_load_data');
+    // Функция для кнопки "Админ панель"
+function clickAdminButton() {
+    const pass = prompt("Введите код доступа для управления:");
+    if (pass) {
+        socket.emit('admin_auth', pass);
     }
 }
+
+// Слушаем ответ от сервера
+socket.on('admin_ok', (data) => {
+    alert("Доступ разрешен!");
+    // Здесь код, который открывает твое скрытое окно админки
+    document.getElementById('admin-modal').classList.add('active'); 
+    
+    // Пример отрисовки пользователей в таблицу (Раздел 1: БД)
+    const userTable = document.getElementById('admin-user-list');
+    if (userTable) {
+        userTable.innerHTML = data.users.map(u => `
+            <tr>
+                <td>${u.tgId}</td>
+                <td>${u.username}</td>
+                <td>${u.real_balance.toFixed(2)} TON</td>
+            </tr>
+        `).join('');
+    }
+});
