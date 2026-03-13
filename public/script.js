@@ -1,3 +1,89 @@
+// ЖЕЛЕЗОБЕТОННОЕ СНЯТИЕ ЭКРАНА ЗАГРУЗКИ
+window.addEventListener('DOMContentLoaded', () => {
+    // Принудительно убираем лоадер через 3 секунды, даже если сокеты тупят
+    setTimeout(() => {
+        const loader = document.getElementById('loader');
+        if (loader) {
+            loader.style.opacity = '0';
+            setTimeout(() => loader.style.display = 'none', 500);
+        }
+    }, 3000);
+
+    // Инициализация Telegram
+    const tg = window.Telegram.WebApp;
+    tg.expand();
+    
+    // Если тестируешь в браузере (нет данных ТГ), даем фейковые данные, чтобы ничего не ломалось
+    const initData = tg.initDataUnsafe?.user || { id: 777, first_name: 'Dev', username: 'tester' };
+    socket.emit('auth', initData);
+});
+
+// Когда приходят данные от сервера, сразу обновляем UI и прячем лоадер
+socket.on('user_data', (data) => {
+    user = data;
+    updateUI(); // Твоя функция обновления балансов
+    
+    const loader = document.getElementById('loader');
+    if (loader) {
+        loader.style.opacity = '0';
+        setTimeout(() => loader.style.display = 'none', 500);
+    }
+});
+
+// АДМИН ПАНЕЛЬ: Вызов и обработка
+function openAdminPanel() {
+    const code = prompt("Введите код доступа (7788):");
+    if (code) socket.emit('admin_auth', code);
+}
+
+socket.on('admin_ok', (data) => {
+    alert("Доступ разрешен!");
+    document.getElementById('modal-admin').classList.add('open'); // Показываем твою модалку админки
+    
+    // Пример вставки пользователей в раздел БД (если у тебя есть таблица с id="adm-users-list")
+    const usersList = document.getElementById('adm-users-list');
+    if (usersList) {
+        usersList.innerHTML = data.users.map(u => `<div style="padding:5px; border-bottom:1px solid #333;">${u.username} | ${u.real_balance.toFixed(2)} TON</div>`).join('');
+    }
+});
+
+// ТАБЛИЦА ПОСЛЕДНИХ КРАШЕЙ
+socket.on('crash_init', (data) => renderCrashHistory(data.history));
+socket.on('crash_end', (data) => renderCrashHistory(data.history));
+
+function renderCrashHistory(history) {
+    const track = document.getElementById('crash-history'); // ID твоей полоски над крашем
+    if (!track) return;
+    track.innerHTML = '';
+    history.forEach(mult => {
+        const el = document.createElement('div');
+        el.className = 'hist-item ' + (mult > 2 ? 'good' : 'bad');
+        el.innerText = mult + 'x';
+        track.appendChild(el);
+    });
+}
+
+// ЛАЙВ СТАВКИ
+socket.on('live_bets_update', (bets) => {
+    const liveContainer = document.getElementById('global-live-list'); // ID твоего контейнера лайв ставок
+    if (!liveContainer) return;
+
+    liveContainer.innerHTML = '';
+    bets.forEach(bet => {
+        const isWin = bet.profit > 0;
+        const color = isWin ? '#00e676' : '#ff1744';
+        const sign = isWin ? '+' : '';
+        liveContainer.innerHTML += `
+            <div class="live-item">
+                <div class="l-user">
+                    <img src="https://i.imgur.com/6VBx3io.png" class="l-avatar"> 
+                    ${bet.username} <span class="l-game">(${bet.game})</span>
+                </div>
+                <div class="l-bet-info" style="color: ${color}">${sign}${bet.profit}</div>
+            </div>
+        `;
+    });
+});
 const socket = io();
 const tg = window.Telegram.WebApp;
 tg.expand();
