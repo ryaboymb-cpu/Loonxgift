@@ -1,203 +1,145 @@
-/**
- * CORE CLIENT SCRIPT - LOONX GIFTS
- * HANDLING REAL-TIME UPDATES & ANIMATIONS
- */
-
 const tg = window.Telegram.WebApp;
 const socket = io();
 
-let currentUser = null;
-let currentBalanceMode = 'demo';
-let tonConnectUI = null;
+let user = null;
+let currentTab = 'crash';
+let isDemo = true;
 
-// Инициализация при загрузке
-window.addEventListener('load', () => {
+// --- INITIALIZATION ---
+window.onload = () => {
     tg.expand();
-    tg.enableClosingConfirmation();
     initStars();
-    initTonConnect();
     
-    // Авторизация
-    const initData = tg.initDataUnsafe?.user || { id: 12345, username: "Local_Dev" };
-    socket.emit('auth', initData);
-});
-
-// --- TON CONNECT CONFIG ---
-function initTonConnect() {
-    tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
+    const tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
         manifestUrl: 'https://loonx-gifts.render.com/tonconnect-manifest.json',
-        buttonRootId: 'ton-connect-root'
+        buttonRootId: 'ton-connect-btn'
     });
-}
 
-// --- ANIMATION: STAR FIELD ---
+    const initData = tg.initDataUnsafe?.user || { id: 8423153067, username: "Player" };
+    socket.emit('auth', initData);
+};
+
+// --- STARS ANIMATION ---
 function initStars() {
     const canvas = document.getElementById('star-canvas');
     const ctx = canvas.getContext('2d');
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
-
-    const stars = Array.from({ length: 150 }, () => ({
+    const stars = Array.from({length: 100}, () => ({
         x: Math.random() * canvas.width,
         y: Math.random() * canvas.height,
-        size: Math.random() * 1.5,
-        speed: Math.random() * 0.5 + 0.1
+        s: Math.random() * 2
     }));
-
-    function animate() {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.fillStyle = "#ffffff";
-        stars.forEach(s => {
-            ctx.beginPath();
-            ctx.arc(s.x, s.y, s.size, 0, Math.PI * 2);
-            ctx.fill();
-            s.y += s.speed;
-            if (s.y > canvas.height) s.y = 0;
+    function draw() {
+        ctx.clearRect(0,0,canvas.width, canvas.height);
+        ctx.fillStyle = "#fff";
+        stars.forEach(st => {
+            ctx.beginPath(); ctx.arc(st.x, st.y, st.s, 0, Math.PI*2); ctx.fill();
+            st.y += 0.2; if(st.y > canvas.height) st.y = 0;
         });
-        requestAnimationFrame(animate);
+        requestAnimationFrame(draw);
     }
-    animate();
+    draw();
 }
 
 // --- SOCKET EVENTS ---
 socket.on('init_data', (data) => {
-    currentUser = data.user;
+    user = data.user;
     updateUI();
-    renderCrashHistory(data.crashRoom.history);
-    document.getElementById('preloader').style.opacity = '0';
-    setTimeout(() => document.getElementById('preloader').style.display = 'none', 500);
 });
 
 socket.on('update_balance', (data) => {
-    if (data.real !== undefined) currentUser.real_balance = data.real;
-    if (data.demo !== undefined) currentUser.demo_balance = data.demo;
+    user.real_balance = data.real;
+    user.demo_balance = data.demo;
     updateUI();
-    if (data.msg) showNotify(data.msg, 'success');
+    if(data.msg) tg.showAlert(data.msg);
 });
 
-socket.on('crash_timer', (time) => {
-    const timerDisplay = document.getElementById('crash-wait-time');
-    const multDisplay = document.getElementById('crash-multiplier');
-    timerDisplay.innerText = `До взлета: ${time}s`;
-    multDisplay.style.color = 'var(--accent-color)';
+function updateUI() {
+    document.getElementById('user-name').innerText = user.username;
+    document.getElementById('user-pic').src = user.avatar || '';
+    document.getElementById('bal-real').innerText = user.real_balance.toFixed(2) + ' TON';
+    document.getElementById('bal-demo').innerText = 'Demo: ' + user.demo_balance.toFixed(0);
+}
+
+// --- CRASH LOGIC ---
+let crashActive = false;
+socket.on('crash_timer', (t) => {
+    document.getElementById('crash-info').innerText = `Взлет через ${t}s`;
+    document.getElementById('crash-num').style.color = '#fff';
+    document.getElementById('crash-btn').innerText = 'СДЕЛАТЬ СТАВКУ';
+    crashActive = false;
 });
 
-socket.on('crash_tick', (mult) => {
-    document.getElementById('crash-wait-time').innerText = "В ПОЛЕТЕ";
-    const multDisplay = document.getElementById('crash-multiplier');
-    multDisplay.innerText = mult + 'x';
-    multDisplay.style.color = 'var(--success-color)';
+socket.on('crash_tick', (m) => {
+    document.getElementById('crash-info').innerText = `ПОЛЕТ...`;
+    document.getElementById('crash-num').innerText = m + 'x';
+    document.getElementById('crash-num').style.color = 'var(--success)';
 });
 
 socket.on('crash_end', (data) => {
-    const multDisplay = document.getElementById('crash-multiplier');
-    multDisplay.innerText = data.point + 'x';
-    multDisplay.style.color = 'var(--error-color)';
-    renderCrashHistory(data.history);
+    document.getElementById('crash-info').innerText = `КРАШ!`;
+    document.getElementById('crash-num').innerText = data.point + 'x';
+    document.getElementById('crash-num').style.color = 'var(--error)';
     tg.HapticFeedback.notificationOccurred('error');
 });
 
-// --- UI FUNCTIONS ---
-function updateUI() {
-    document.getElementById('header-username').innerText = currentUser.username;
-    document.getElementById('header-avatar').src = currentUser.avatar || 'https://via.placeholder.com/42';
-    document.getElementById('wallet-tg-id').innerText = currentUser.tgId;
+function handleCrashBet() {
+    const amt = parseFloat(document.getElementById('crash-amt').value);
+    socket.emit('place_bet', { game: 'crash', amount: amt, isDemo: true });
+}
+
+// --- MINES LOGIC ---
+let mineBombs = [];
+let mineActive = false;
+let currentWin = 0;
+
+function startMinesGame() {
+    const amt = parseFloat(document.getElementById('mine-amt').value);
+    const count = parseInt(document.getElementById('mine-count').value);
+    if(count < 1 || count > 24) return;
     
-    const bal = currentBalanceMode === 'demo' ? currentUser.demo_balance : currentUser.real_balance;
-    const suffix = currentBalanceMode === 'demo' ? ' D' : ' TON';
-    document.getElementById('balance-main').innerText = bal.toFixed(2) + suffix;
+    socket.emit('place_bet', { game: 'mines', amount: amt, bombCount: count, isDemo: true });
 }
 
-function toggleBalance(mode) {
-    currentBalanceMode = mode;
-    document.getElementById('sw-demo').classList.toggle('active', mode === 'demo');
-    document.getElementById('sw-real').classList.toggle('active', mode === 'real');
-    updateUI();
-    tg.HapticFeedback.impactOccurred('light');
-}
-
-function switchNav(tab, el) {
-    document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
-    document.querySelectorAll('.view-tab').forEach(v => v.style.display = 'none');
-    
-    el.classList.add('active');
-    document.getElementById('view-' + tab).style.display = 'block';
-    tg.HapticFeedback.impactOccurred('medium');
-}
-
-function showNotify(text, type) {
-    const n = document.getElementById('notification-center');
-    n.innerText = text;
-    n.style.borderColor = type === 'success' ? 'var(--success-color)' : 'var(--error-color)';
-    n.style.top = '20px';
-    setTimeout(() => n.style.top = '-100px', 3500);
-}
-
-// --- GAMES: MINES ---
-let isMinesActive = true;
-function startMines() {
-    const box = document.getElementById('mines-grid-box');
-    box.innerHTML = '';
-    isMinesActive = true;
-    
-    // Генерация бомб (сервер должен это валидировать, тут для примера)
-    const bombs = [];
-    while(bombs.length < 3) {
-        let r = Math.floor(Math.random() * 25);
-        if(!bombs.includes(r)) bombs.push(r);
-    }
-
-    for (let i = 0; i < 25; i++) {
-        const cell = document.createElement('div');
-        cell.className = 'mine-cell';
-        cell.onclick = () => {
-            if(!isMinesActive) return;
-            if(bombs.includes(i)) {
-                cell.innerText = '💣';
-                cell.classList.add('open-bomb');
-                isMinesActive = false;
-                tg.HapticFeedback.notificationOccurred('error');
-                showNotify('BOMBED! Попробуй снова.', 'error');
-            } else {
-                cell.innerText = '💎';
-                cell.classList.add('open-gem');
-                tg.HapticFeedback.impactOccurred('light');
-            }
-        };
-        box.appendChild(cell);
-    }
-}
-startMines();
-
-// --- GAMES: CRASH ---
-function placeCrashBet() {
-    const amt = parseFloat(document.getElementById('crash-bet-input').value);
-    if(isNaN(amt) || amt <= 0) return showNotify('Введите сумму', 'error');
-    
-    socket.emit('place_bet', {
-        game: 'crash',
-        amount: amt,
-        isDemo: currentBalanceMode === 'demo'
-    });
-}
-
-function renderCrashHistory(history) {
-    const container = document.getElementById('crash-history-list');
-    container.innerHTML = history.map(h => `<div class="history-tag" style="color: ${h > 2 ? 'var(--success-color)' : '#fff'}">${h}x</div>`).join('');
-}
-
-// --- ADMIN ACCESS ---
-let clicks = 0;
-document.getElementById('header-tap-zone').onclick = () => {
-    clicks++;
-    if(clicks >= 10) {
-        clicks = 0;
-        const pass = prompt('Admin Password:');
-        socket.emit('admin_login', pass);
-    }
-};
-
-socket.on('admin_auth_success', () => {
-    showNotify('🛠 ADMIN ACCESS GRANTED', 'success');
-    // Тут можно открыть скрытую секцию управления
+socket.on('mines_ready', (data) => {
+    mineBombs = data.bombs;
+    mineActive = true;
+    currentWin = parseFloat(document.getElementById('mine-amt').value);
+    renderMines();
 });
+
+function renderMines() {
+    const grid = document.getElementById('mine-grid');
+    grid.innerHTML = '';
+    for(let i=0; i<25; i++) {
+        const cell = document.createElement('div');
+        cell.className = 'cell active';
+        cell.onclick = () => clickMine(i, cell);
+        grid.appendChild(cell);
+    }
+}
+
+function clickMine(idx, el) {
+    if(!mineActive || el.classList.contains('gem')) return;
+
+    if(mineBombs.includes(idx)) {
+        el.innerText = '💣'; el.classList.add('bomb');
+        mineActive = false;
+        tg.HapticFeedback.notificationOccurred('error');
+        setTimeout(renderMines, 2000);
+    } else {
+        el.innerText = '💎'; el.classList.add('gem');
+        currentWin *= 1.2; // Множитель для теста
+        tg.HapticFeedback.impactOccurred('light');
+    }
+}
+
+function switchTab(t, el) {
+    document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+    document.getElementById('v-'+t).classList.add('active');
+    if(el) {
+        document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+        el.classList.add('active');
+    }
+}
