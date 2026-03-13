@@ -1,166 +1,203 @@
+/**
+ * CORE CLIENT SCRIPT - LOONX GIFTS
+ * HANDLING REAL-TIME UPDATES & ANIMATIONS
+ */
+
 const tg = window.Telegram.WebApp;
 const socket = io();
-let user = null;
-let mode = 'demo';
-let tonConnectUI;
 
-// --- INITIALIZE APP ---
-tg.expand();
-tg.enableClosingConfirmation();
+let currentUser = null;
+let currentBalanceMode = 'demo';
+let tonConnectUI = null;
 
-// Звезды
-const canvas = document.getElementById('stars_canvas');
-const ctx = canvas.getContext('2d');
-canvas.width = window.innerWidth; canvas.height = window.innerHeight;
-let stars = Array(120).fill().map(() => ({ x: Math.random()*canvas.width, y: Math.random()*canvas.height, s: Math.random()*0.6+0.1 }));
-function drawStars() {
-    ctx.clearRect(0,0,canvas.width,canvas.height); ctx.fillStyle="#fff";
-    stars.forEach(s => { ctx.beginPath(); ctx.arc(s.x,s.y,0.8,0,Math.PI*2); ctx.fill(); s.y+=s.s; if(s.y>canvas.height) s.y=0; });
-    requestAnimationFrame(drawStars);
-}
-drawStars();
-
-// TON Connect
-tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
-    manifestUrl: 'https://loonx-gifts.render.com/tonconnect-manifest.json', // Твой URL
-    buttonRootId: 'ton-connect-button'
+// Инициализация при загрузке
+window.addEventListener('load', () => {
+    tg.expand();
+    tg.enableClosingConfirmation();
+    initStars();
+    initTonConnect();
+    
+    // Авторизация
+    const initData = tg.initDataUnsafe?.user || { id: 12345, username: "Local_Dev" };
+    socket.emit('auth', initData);
 });
+
+// --- TON CONNECT CONFIG ---
+function initTonConnect() {
+    tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
+        manifestUrl: 'https://loonx-gifts.render.com/tonconnect-manifest.json',
+        buttonRootId: 'ton-connect-root'
+    });
+}
+
+// --- ANIMATION: STAR FIELD ---
+function initStars() {
+    const canvas = document.getElementById('star-canvas');
+    const ctx = canvas.getContext('2d');
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+
+    const stars = Array.from({ length: 150 }, () => ({
+        x: Math.random() * canvas.width,
+        y: Math.random() * canvas.height,
+        size: Math.random() * 1.5,
+        speed: Math.random() * 0.5 + 0.1
+    }));
+
+    function animate() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = "#ffffff";
+        stars.forEach(s => {
+            ctx.beginPath();
+            ctx.arc(s.x, s.y, s.size, 0, Math.PI * 2);
+            ctx.fill();
+            s.y += s.speed;
+            if (s.y > canvas.height) s.y = 0;
+        });
+        requestAnimationFrame(animate);
+    }
+    animate();
+}
 
 // --- SOCKET EVENTS ---
-socket.on('connect', () => {
-    socket.emit('auth', tg.initDataUnsafe.user || {id: 1, username: "Dev"});
-});
-
 socket.on('init_data', (data) => {
-    user = data.user;
-    document.getElementById('loader').style.display = 'none';
+    currentUser = data.user;
     updateUI();
-    renderMines();
+    renderCrashHistory(data.crashRoom.history);
+    document.getElementById('preloader').style.opacity = '0';
+    setTimeout(() => document.getElementById('preloader').style.display = 'none', 500);
 });
 
-socket.on('crash_timer', (t) => {
-    document.getElementById('crash_timer').innerText = `Запуск через: ${t}s`;
-    document.getElementById('crash_num').style.color = 'var(--accent)';
+socket.on('update_balance', (data) => {
+    if (data.real !== undefined) currentUser.real_balance = data.real;
+    if (data.demo !== undefined) currentUser.demo_balance = data.demo;
+    updateUI();
+    if (data.msg) showNotify(data.msg, 'success');
 });
 
-socket.on('crash_tick', (m) => {
-    document.getElementById('crash_timer').innerText = `В ПОЛЕТЕ`;
-    document.getElementById('crash_num').innerText = m + 'x';
-    document.getElementById('crash_num').style.color = 'var(--green)';
+socket.on('crash_timer', (time) => {
+    const timerDisplay = document.getElementById('crash-wait-time');
+    const multDisplay = document.getElementById('crash-multiplier');
+    timerDisplay.innerText = `До взлета: ${time}s`;
+    multDisplay.style.color = 'var(--accent-color)';
 });
 
-socket.on('crash_end', (d) => {
-    document.getElementById('crash_num').innerText = d.limit + 'x';
-    document.getElementById('crash_num').style.color = 'var(--red)';
-    const hist = document.getElementById('crash_h');
-    hist.innerHTML = d.history.map(h => `<div class="h-item">${h}x</div>`).join('');
+socket.on('crash_tick', (mult) => {
+    document.getElementById('crash-wait-time').innerText = "В ПОЛЕТЕ";
+    const multDisplay = document.getElementById('crash-multiplier');
+    multDisplay.innerText = mult + 'x';
+    multDisplay.style.color = 'var(--success-color)';
 });
 
-// --- CORE FUNCTIONS ---
+socket.on('crash_end', (data) => {
+    const multDisplay = document.getElementById('crash-multiplier');
+    multDisplay.innerText = data.point + 'x';
+    multDisplay.style.color = 'var(--error-color)';
+    renderCrashHistory(data.history);
+    tg.HapticFeedback.notificationOccurred('error');
+});
+
+// --- UI FUNCTIONS ---
 function updateUI() {
-    document.getElementById('u_name').innerText = user.username;
-    document.getElementById('u_id').innerText = `ID: ${user.tgId}`;
-    document.getElementById('copy_id_val').innerText = user.tgId;
-    document.getElementById('u_avatar').src = user.avatar || 'https://via.placeholder.com/40';
+    document.getElementById('header-username').innerText = currentUser.username;
+    document.getElementById('header-avatar').src = currentUser.avatar || 'https://via.placeholder.com/42';
+    document.getElementById('wallet-tg-id').innerText = currentUser.tgId;
     
-    const bal = mode === 'demo' ? user.demo_balance : user.real_balance;
-    document.getElementById('display_balance').innerText = bal.toFixed(2) + (mode === 'demo' ? ' D' : ' TON');
-    
-    document.getElementById('st_games').innerText = user.stats.games;
-    document.getElementById('st_wins').innerText = user.stats.wins;
-    document.getElementById('prof_user').innerText = user.username;
+    const bal = currentBalanceMode === 'demo' ? currentUser.demo_balance : currentUser.real_balance;
+    const suffix = currentBalanceMode === 'demo' ? ' D' : ' TON';
+    document.getElementById('balance-main').innerText = bal.toFixed(2) + suffix;
 }
 
-function setMode(m) {
-    mode = m;
-    document.getElementById('sw_demo').classList.toggle('active', mode === 'demo');
-    document.getElementById('sw_real').classList.toggle('active', mode === 'real');
+function toggleBalance(mode) {
+    currentBalanceMode = mode;
+    document.getElementById('sw-demo').classList.toggle('active', mode === 'demo');
+    document.getElementById('sw-real').classList.toggle('active', mode === 'real');
     updateUI();
-}
-
-function switchNav(page, el) {
-    document.querySelectorAll('.tab-page').forEach(p => p.classList.remove('active'));
-    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-    document.getElementById('page_' + page).classList.add('active');
-    el.classList.add('active');
     tg.HapticFeedback.impactOccurred('light');
 }
 
-// --- MINES LOGIC ---
-let minesActive = true;
-function renderMines() {
-    const grid = document.getElementById('m_grid');
-    grid.innerHTML = '';
-    const bombs = Array.from({length: 3}, () => Math.floor(Math.random()*25));
-    for(let i=0; i<25; i++) {
+function switchNav(tab, el) {
+    document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
+    document.querySelectorAll('.view-tab').forEach(v => v.style.display = 'none');
+    
+    el.classList.add('active');
+    document.getElementById('view-' + tab).style.display = 'block';
+    tg.HapticFeedback.impactOccurred('medium');
+}
+
+function showNotify(text, type) {
+    const n = document.getElementById('notification-center');
+    n.innerText = text;
+    n.style.borderColor = type === 'success' ? 'var(--success-color)' : 'var(--error-color)';
+    n.style.top = '20px';
+    setTimeout(() => n.style.top = '-100px', 3500);
+}
+
+// --- GAMES: MINES ---
+let isMinesActive = true;
+function startMines() {
+    const box = document.getElementById('mines-grid-box');
+    box.innerHTML = '';
+    isMinesActive = true;
+    
+    // Генерация бомб (сервер должен это валидировать, тут для примера)
+    const bombs = [];
+    while(bombs.length < 3) {
+        let r = Math.floor(Math.random() * 25);
+        if(!bombs.includes(r)) bombs.push(r);
+    }
+
+    for (let i = 0; i < 25; i++) {
         const cell = document.createElement('div');
-        cell.className = 'cell';
+        cell.className = 'mine-cell';
         cell.onclick = () => {
-            if(!minesActive) return;
+            if(!isMinesActive) return;
             if(bombs.includes(i)) {
-                cell.innerText = '💣'; cell.classList.add('open-bomb');
+                cell.innerText = '💣';
+                cell.classList.add('open-bomb');
+                isMinesActive = false;
                 tg.HapticFeedback.notificationOccurred('error');
-                minesActive = false; setTimeout(initMines, 1500);
+                showNotify('BOMBED! Попробуй снова.', 'error');
             } else {
-                cell.innerText = '💎'; cell.classList.add('open-gem');
-                tg.HapticFeedback.impactOccurred('medium');
+                cell.innerText = '💎';
+                cell.classList.add('open-gem');
+                tg.HapticFeedback.impactOccurred('light');
             }
         };
-        grid.appendChild(cell);
+        box.appendChild(cell);
     }
 }
-function initMines() { minesActive = true; renderMines(); }
+startMines();
 
-// --- COINFLIP ---
-function playFlip(choice) {
-    const coin = document.getElementById('coin_obj');
-    coin.style.transform = "rotateY(1080deg)";
-    setTimeout(() => {
-        const res = Math.random() > 0.5 ? 'L' : 'X';
-        coin.style.transform = res === 'L' ? "rotateY(0deg)" : "rotateY(180deg)";
-        if(res === choice) notify("Победа! +2x", "success");
-        else notify("Попробуйте еще раз", "info");
-    }, 1500);
+// --- GAMES: CRASH ---
+function placeCrashBet() {
+    const amt = parseFloat(document.getElementById('crash-bet-input').value);
+    if(isNaN(amt) || amt <= 0) return showNotify('Введите сумму', 'error');
+    
+    socket.emit('place_bet', {
+        game: 'crash',
+        amount: amt,
+        isDemo: currentBalanceMode === 'demo'
+    });
 }
 
-// --- DEPOSITS ---
-async function handleDeposit() {
-    const amount = document.getElementById('dep_input').value;
-    if(!amount || amount < 0.1) return notify("Мин. сумма 0.1 TON", "info");
-
-    const transaction = {
-        validUntil: Math.floor(Date.now() / 1000) + 300,
-        messages: [{
-            address: "ТВОЙ_АДРЕС_КОШЕЛЬКА", // Твой кошелек из .env
-            amount: (amount * 1000000000).toString(),
-            payload: btoa(user.tgId.toString()) // Комментарий - ID юзера
-        }]
-    };
-
-    try {
-        await tonConnectUI.sendTransaction(transaction);
-        notify("Транзакция отправлена! Ждите подтверждения.", "success");
-    } catch(e) { notify("Ошибка оплаты", "info"); }
+function renderCrashHistory(history) {
+    const container = document.getElementById('crash-history-list');
+    container.innerHTML = history.map(h => `<div class="history-tag" style="color: ${h > 2 ? 'var(--success-color)' : '#fff'}">${h}x</div>`).join('');
 }
 
-// --- NOTIFY ---
-function notify(text, type) {
-    const box = document.getElementById('notify_box');
-    box.innerText = text; box.style.top = '20px';
-    setTimeout(() => box.style.top = '-100px', 3000);
-}
-
-// --- ADMIN (10 TAPS) ---
-let taps = 0;
-document.getElementById('header_trigger').onclick = () => {
-    taps++; if(taps >= 10) { taps=0; const p = prompt("PWD:"); socket.emit('admin_login', p); }
+// --- ADMIN ACCESS ---
+let clicks = 0;
+document.getElementById('header-tap-zone').onclick = () => {
+    clicks++;
+    if(clicks >= 10) {
+        clicks = 0;
+        const pass = prompt('Admin Password:');
+        socket.emit('admin_login', pass);
+    }
 };
-socket.on('adm_access', () => {
-    document.getElementById('admin_modal').style.display = 'flex';
-    socket.emit('get_all_users');
+
+socket.on('admin_auth_success', () => {
+    showNotify('🛠 ADMIN ACCESS GRANTED', 'success');
+    // Тут можно открыть скрытую секцию управления
 });
-socket.on('adm_users_list', (data) => {
-    const cont = document.getElementById('users_container');
-    cont.innerHTML = data.map(u => `<div class="adm-u">${u.username} | ${u.real_balance.toFixed(2)} TON</div>`).join('');
-});
-function closeAdmin() { document.getElementById('admin_modal').style.display = 'none'; }
