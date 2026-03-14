@@ -13,95 +13,144 @@ const io = socketIo(server, { cors: { origin: "*" } });
 
 app.use(cors());
 app.use(express.json());
-// Раздаем статику из папки public (там лежат index.html и script.js)
 app.use(express.static(path.join(__dirname, 'public')));
 
-// --- БАЗА ДАННЫХ (Простая JSON-БД) ---
+// --- DATABASE ---
 const DB_FILE = path.join(__dirname, 'db.json');
-let db = { users: {}, stats: { totalGames: 0, globalRTP: 85 } };
+let db = { 
+    users: {}, 
+    promos: {}, 
+    withdraws: [], 
+    stats: { totalGames: 0 },
+    rtp: { crash: 85, mines: 85, coinflip: 85 } 
+};
 
-if (fs.existsSync(DB_FILE)) {
-    db = JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
-}
+if (fs.existsSync(DB_FILE)) db = JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
 const saveDB = () => fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2));
 
-// --- ТЕЛЕГРАМ БОТ ---
-// Берем токен из .env. drop_pending_updates спасает от ошибки 409
-const bot = new TelegramBot(process.env.BOT_TOKEN, {
-    polling: { autoStart: true, params: { drop_pending_updates: true } }
-});
+// --- BOT ---
+const bot = new TelegramBot(process.env.BOT_TOKEN, { polling: { autoStart: true, params: { drop_pending_updates: true } } });
 
 bot.onText(/\/start/, (msg) => {
-    bot.sendMessage(msg.chat.id, `🚀 *Добро пожаловать в Loonx Gifts!*\n\nТвоя лучшая платформа для игр и заработка TON. Нажимай кнопку ниже, чтобы войти в приложение!`, {
+    bot.sendMessage(msg.chat.id, `🚀 *Loonx Gifts* — Твой путь к TON!`, {
         parse_mode: 'Markdown',
         reply_markup: {
-            inline_keyboard: [
-                [{ text: "🎮 ИГРАТЬ", web_app: { url: process.env.WEB_APP_URL || 'https://loonxgift.onrender.com' } }],
-                [{ text: "📣 Канал", url: "https://t.me/Loonxnews" }, { text: "🆘 Саппорт", url: "https://t.me/LoonxGift_Support" }]
-            ]
+            inline_keyboard: [[{ text: "🎮 Начать игру", web_app: { url: process.env.WEB_APP_URL } }]]
         }
     });
 });
 
-bot.onText(/\/help/, (msg) => {
-    bot.sendMessage(msg.chat.id, `❓ *Нужна помощь?*\n\nЕсли у тебя баг или не пришел депозит, пиши в поддержку.`, {
-        parse_mode: 'Markdown',
-        reply_markup: { inline_keyboard: [[{ text: "🆘 Написать саппорту", url: "https://t.me/LoonxGift_Support" }]] }
-    });
-});
+// --- API ENDPOINTS ---
 
-// --- API ДЛЯ WEB APP ---
-// Авторизация
+// Авторизация и получение данных
 app.post('/api/auth', (req, res) => {
-    const user = req.body;
-    if (!user || !user.id) return res.status(400).json({ error: "Bad request" });
-
-    if (!db.users[user.id]) {
-        db.users[user.id] = {
-            id: user.id,
-            name: user.first_name || "Player",
-            username: user.username || "User_" + user.id,
-            balance: 100.00, // Стартовый баланс для тестов
-            history: []
+    const u = req.body;
+    if (!u.id) return res.status(400).send();
+    if (!db.users[u.id]) {
+        db.users[u.id] = {
+            id: u.id, name: u.first_name, username: u.username,
+            balance: 0.00, demo_balance: 5000.00, history: [], photo: u.photo_url || ''
         };
         saveDB();
     }
-    res.json(db.users[user.id]);
+    res.json({ user: db.users[u.id], rtp: db.rtp });
 });
 
-// Обработка ставок
+// Ставки
 app.post('/api/bet', (req, res) => {
-    const { id, game, bet, winAmount } = req.body;
+    const { id, game, bet, win, mode } = req.body;
     const user = db.users[id];
-    
-    if (!user || user.balance < bet) return res.status(400).json({ error: "Insufficient funds" });
+    const balType = mode === 'demo' ? 'demo_balance' : 'balance';
 
-    // Снимаем ставку, начисляем выигрыш
-    user.balance = user.balance - bet + winAmount;
+    if (!user || user[balType] < bet) return res.status(400).json({ error: "No money" });
+
+    user[balType] = user[balType] - bet + win;
+    const betData = { 
+        game, bet, win, mode, 
+        id: user.id, username: user.username, photo: user.photo,
+        time: new Date().toLocaleTimeString() 
+    };
     
-    const isWin = winAmount > bet;
-    user.history.unshift({
-        game, bet, winAmount, isWin, time: new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
-    });
+    user.history.unshift(betData);
+    if (user.history.length > 20) user.history.pop();
     
-    if (user.history.length > 25) user.history.pop();
+    db.stats.totalGames++;
     saveDB();
-
-    io.emit('liveFeed', { username: user.username, game, amount: winAmount });
-    res.json({ balance: user.balance, history: user.history });
-});
-
-// --- SOCKET.IO ---
-let onlineUsers = 0;
-io.on('connection', (socket) => {
-    onlineUsers++;
-    io.emit('onlineUpdate', onlineUsers);
     
-    socket.on('disconnect', () => {
-        onlineUsers--;
-        io.emit('onlineUpdate', onlineUsers);
-    });
+    io.emit('newBet', betData); // Лайв-лента для всех
+    res.json({ balance: user.balance, demo_balance: user.demo_balance, history: user.history });
 });
 
-const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => console.log(`🚀 Сервер Loonx запущен на порту ${PORT}`));
+// Админка: Промокоды
+app.post('/api/admin/promo', (req, res) => {
+    const { code, amount, limit } = req.body;
+    db.promos[code] = { amount, limit, uses: 0, usedBy: [] };
+    saveDB();
+    res.json({ success: true });
+});
+
+// Активация промо
+app.post('/api/promo/activate', (req, res) => {
+    const { id, code } = req.body;
+    const promo = db.promos[code];
+    const user = db.users[id];
+    if (promo && promo.uses < promo.limit && !promo.usedBy.includes(id)) {
+        user.balance += parseFloat(promo.amount);
+        promo.uses++;
+        promo.usedBy.push(id);
+        saveDB();
+        res.json({ success: true, amount: promo.amount });
+    } else {
+        res.status(400).json({ error: "Invalid or used" });
+    }
+});
+
+// Вывод средств
+app.post('/api/withdraw', (req, res) => {
+    const { id, address, amount } = req.body;
+    const user = db.users[id];
+    if (user.balance >= amount && amount >= 5) {
+        user.balance -= amount;
+        db.withdraws.push({ id, address, amount, status: 'pending', time: new Date().toLocaleString() });
+        saveDB();
+        res.json({ success: true });
+    } else {
+        res.status(400).json({ error: "Min 5 TON or low balance" });
+    }
+});
+
+// --- SOCKETS (CRASH LOGIC) ---
+let crashState = { multiplier: 1.0, status: 'waiting', timer: 10 };
+function startCrashCycle() {
+    crashState.status = 'waiting';
+    crashState.timer = 10;
+    const countdown = setInterval(() => {
+        crashState.timer--;
+        io.emit('crashUpdate', crashState);
+        if (crashState.timer <= 0) {
+            clearInterval(countdown);
+            runCrash();
+        }
+    }, 1000);
+}
+
+function runCrash() {
+    crashState.status = 'running';
+    crashState.multiplier = 1.0;
+    const rtp = db.rtp.crash / 100;
+    const crashAt = Math.pow(100 / (100 - Math.random() * 100), rtp).toFixed(2);
+    
+    const interval = setInterval(() => {
+        crashState.multiplier = (parseFloat(crashState.multiplier) + 0.01).toFixed(2);
+        io.emit('crashUpdate', crashState);
+        if (parseFloat(crashState.multiplier) >= crashAt) {
+            clearInterval(interval);
+            crashState.status = 'crashed';
+            io.emit('crashUpdate', crashState);
+            setTimeout(startCrashCycle, 3000);
+        }
+    }, 100);
+}
+startCrashCycle();
+
+server.listen(process.env.PORT || 3000, () => console.log('Server UP'));
