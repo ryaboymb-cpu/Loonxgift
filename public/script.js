@@ -1,241 +1,214 @@
 /**
- * 👑 LOONX GIFTS - CORE FRONTEND V7.0
- * 1. Полная интеграция TON Connect (Депозиты)
- * 2. Движок Crash & Mines
- * 3. Система Haptic Feedback (Вибрация)
- * 4. Скрытая админка (10 тапов)
+ * ==============================================================================
+ * LOONX GIFTS - MAIN SCRIPT ENGINE v3.0.0
+ * ==============================================================================
+ * Разработчик: Loonx Team
+ * Особенности: Socket.io, TON Connect, Advanced Admin, Game Logic
  */
 
+// --- ГЛОБАЛЬНЫЕ КОНСТАНТЫ ---
 const tg = window.Telegram.WebApp;
-const socket = io();
-
-// Расширяем приложение на весь экран
-tg.expand();
-tg.ready();
-
-// Состояние приложения
-let currentView = 'crash';
+const socket = io(); // Подключение к твоему бэкенду на Render
+let currentUser = null;
+let currentBalance = 0;
 let adminTaps = 0;
-let userBalance = 0;
-let myUsername = "Player";
+let adminTimer = null;
 
-// --- 1. ИНИЦИАЛИЗАЦИЯ TON CONNECT ---
-// Замени 'YOUR_WALLET_ADDRESS' на свой реальный TON кошелек!
-const MY_WALLET = "UQXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"; 
+// --- 1. ИНИЦИАЛИЗАЦИЯ И ЭКРАН ЗАГРУЗКИ ---
+document.addEventListener('DOMContentLoaded', () => {
+    console.log("🚀 Loonx Engine Starting...");
+    tg.expand();
+    tg.ready();
 
-const tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
-    manifestUrl: 'https://raw.githubusercontent.com/ton-community/tutorials/main/03-client/test/public/tonconnect-manifest.json',
-    buttonRootId: 'ton-connect-box'
+    // Плавное скрытие спиннера после загрузки данных
+    setTimeout(async () => {
+        await authorizeUser();
+        initStars();
+        
+        const loader = document.getElementById('loading-screen');
+        if (loader) {
+            loader.style.opacity = '0';
+            setTimeout(() => loader.style.display = 'none', 500);
+        }
+    }, 2800); // Держим спиннер чуть дольше для солидности
 });
 
-// Функция для совершения депозита
-async function makeDeposit() {
-    const amount = document.getElementById('dep-amount').value;
-    if (!amount || amount < 0.1) {
-        tg.showAlert("Минимальная сумма депозита — 0.1 TON");
-        return;
-    }
+// --- 2. СИСТЕМА АВТОРИЗАЦИИ (Sync с бэкендом) ---
+async function authorizeUser() {
+    const initData = tg.initData;
+    const userData = tg.initDataUnsafe.user || { id: 0, first_name: "LocalDev" };
 
-    // Переводим TON в нано-единицы (1 TON = 10^9)
-    const nanoAmount = (parseFloat(amount) * 1000000000).toString();
+    try {
+        const response = await fetch('/api/auth', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ initData, user: userData })
+        });
+        
+        currentUser = await response.json();
+        syncUI();
+        console.log("✅ User authorized:", currentUser.id);
+    } catch (err) {
+        console.error("❌ Auth failed:", err);
+        notify("Ошибка сервера!", "error");
+    }
+}
+
+function syncUI() {
+    if (!currentUser) return;
+    document.getElementById('player-name').innerText = currentUser.username || currentUser.name;
+    document.getElementById('user-balance').innerText = currentUser.balance.toFixed(2);
+    currentBalance = currentUser.balance;
+}
+
+// --- 3. РЕАЛЬНОЕ ВРЕМЯ (Socket.io) ---
+socket.on('onlineUpdate', (count) => {
+    const counter = document.getElementById('online-counter');
+    if (counter) counter.innerText = count;
+});
+
+// Живая лента выигрышей
+socket.on('liveFeed', (data) => {
+    // Здесь можно выводить "User123 выиграл 5 TON в Coinflip"
+    console.log("Live Event:", data);
+});
+
+// --- 4. СЕКРЕТНАЯ АДМИНКА (10 тапов) ---
+document.getElementById('main-header').addEventListener('click', () => {
+    adminTaps++;
+    clearTimeout(adminTimer);
+    
+    if (adminTaps >= 10) {
+        const password = prompt("ADMIN ACCESS CODE:");
+        if (password === "8877") {
+            openAdminPanel();
+        }
+        adminTaps = 0;
+    }
+    
+    adminTimer = setTimeout(() => { adminTaps = 0; }, 2000);
+});
+
+function openAdminPanel() {
+    tg.HapticFeedback.notificationOccurred('success');
+    const panel = document.getElementById('admin-panel');
+    if (panel) panel.style.display = 'flex';
+}
+
+// --- 5. ЛОГИКА ИГРЫ: CRASH (Пример) ---
+let crashMultiplier = 1.0;
+let crashInterval = null;
+
+function startCrash() {
+    if (currentBalance <= 0) return notify("Пополните баланс!", "error");
+    
+    crashMultiplier = 1.0;
+    document.getElementById('crash-btn').innerText = "ЗАБРАТЬ";
+    
+    crashInterval = setInterval(() => {
+        crashMultiplier += 0.01;
+        document.getElementById('multiplier-display').innerText = crashMultiplier.toFixed(2) + "x";
+        
+        // Рандомный взрыв (шанс зависит от RTP с сервера)
+        if (Math.random() < 0.01) { 
+            stopCrash(true);
+        }
+    }, 100);
+}
+
+function stopCrash(isBoom) {
+    clearInterval(crashInterval);
+    if (isBoom) {
+        notify("BOOM! Взрыв на " + crashMultiplier.toFixed(2) + "x", "error");
+    } else {
+        notify("ВЫИГРЫШ! Множитель: " + crashMultiplier.toFixed(2), "success");
+    }
+}
+
+// --- 6. TON CONNECT & ТРАНЗАКЦИИ ---
+const tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
+    manifestUrl: 'https://raw.githubusercontent.com/ton-community/tutorials/main/03-client/test/public/tonconnect-manifest.json',
+    buttonRootId: 'ton-connect-btn'
+});
+
+async function depositTON() {
+    const amountInput = document.getElementById('dep-amount');
+    const amount = parseFloat(amountInput.value);
+    
+    if (!amount || amount < 0.1) return notify("Минимум 0.1 TON", "error");
 
     const transaction = {
-        validUntil: Math.floor(Date.now() / 1000) + 60, // 60 секунд на оплату
+        validUntil: Math.floor(Date.now() / 1000) + 300,
         messages: [
             {
-                address: MY_WALLET, 
-                amount: nanoAmount,
+                address: "ВАШ_КОШЕЛЕК_АДМИНА", 
+                amount: (amount * 1000000000).toString() 
             }
         ]
     };
 
     try {
-        tg.HapticFeedback.impactOccurred('heavy');
         const result = await tonConnectUI.sendTransaction(transaction);
-        
-        // Если транзакция отправлена успешно
-        tg.showAlert("✅ Транзакция отправлена! Баланс обновится после подтверждения в сети (1-2 мин).");
-        console.log("Tx Result:", result);
+        notify("Ожидание подтверждения...", "success");
+        // Отправляем хеш на сервер для проверки
+        socket.emit('checkDeposit', { hash: result.boc, userId: currentUser.id });
     } catch (e) {
-        console.error("Deposit Error:", e);
-        tg.showAlert("❌ Ошибка при оплате или пользователь отменил транзакцию.");
+        notify("Транзакция отменена", "error");
     }
 }
 
-// --- 2. АНИМАЦИЯ ЗВЕЗДНОГО НЕБА (CANVAS) ---
-const canvas = document.getElementById('stars-canvas');
-const ctx = canvas.getContext('2d');
-canvas.width = window.innerWidth;
-canvas.height = window.innerHeight;
-
-let stars = Array.from({ length: 100 }, () => ({
-    x: Math.random() * canvas.width,
-    y: Math.random() * canvas.height,
-    size: Math.random() * 2,
-    speed: 0.2 + Math.random() * 0.5
-}));
-
-function animateStars() {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = "#ffffff";
-    stars.forEach(s => {
-        ctx.beginPath();
-        ctx.arc(s.x, s.y, s.size, 0, Math.PI * 2);
-        ctx.fill();
-        s.y += s.speed;
-        if (s.y > canvas.height) s.y = 0;
-    });
-    requestAnimationFrame(animateStars);
-}
-animateStars();
-
-// --- 3. СКРЫТАЯ АДМИНКА ---
-function handleAdminTap() {
-    adminTaps++;
-    tg.HapticFeedback.impactOccurred('light');
-    if (adminTaps >= 10) {
-        socket.emit('trigger_admin', tg.initDataUnsafe.user?.id || 12345);
-        tg.showAlert("🔐 Запрос на вход отправлен в Telegram!");
-        adminTaps = 0;
-    }
-    setTimeout(() => { adminTaps = 0; }, 5000);
-}
-
-// --- 4. УПРАВЛЕНИЕ ВКЛАДКАМИ ---
-function setTab(name, element) {
-    currentView = name;
+// --- 7. ВИЗУАЛЬНЫЕ ЭФФЕКТЫ (STARS ENGINE) ---
+function initStars() {
+    const canvas = document.getElementById('stars-canvas');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
     
-    // Скрываем все виды
-    document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
-    // Показываем нужный
-    const target = document.getElementById('v-' + name);
-    if(target) target.classList.add('active');
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
 
-    // Обновляем визуальное состояние кнопок
-    document.querySelectorAll('.g-btn, .nav-item').forEach(el => el.classList.remove('active'));
-    if(element) element.classList.add('active');
-
-    // Если открыли мины — инициализируем поле
-    if(name === 'mines') initMines();
-    
-    tg.HapticFeedback.impactOccurred('medium');
-}
-
-// --- 5. ЛОГИКА ИГРЫ MINES ---
-function initMines() {
-    const grid = document.getElementById('mine-grid');
-    if(!grid) return;
-    grid.innerHTML = '';
-    
-    for(let i = 0; i < 25; i++) {
-        const cell = document.createElement('div');
-        cell.className = 'cell';
-        cell.onclick = () => {
-            cell.classList.add('open');
-            cell.innerHTML = '💎';
-            cell.style.boxShadow = '0 0 15px var(--success)';
-            tg.HapticFeedback.notificationOccurred('success');
-        };
-        grid.appendChild(cell);
-    }
-}
-
-// --- 6. ОБРАБОТКА СТАВКИ CRASH ---
-function handlePlay() {
-    const amount = document.getElementById('bet-amt').value;
-    if (amount <= 0) {
-        tg.showAlert("Введите сумму ставки!");
-        return;
-    }
-
-    tg.HapticFeedback.impactOccurred('medium');
-    
-    if (currentView === 'crash') {
-        socket.emit('place_bet', { 
-            username: myUsername, 
-            amount: parseFloat(amount) 
+    let stars = [];
+    for (let i = 0; i < 150; i++) {
+        stars.push({
+            x: Math.random() * canvas.width,
+            y: Math.random() * canvas.height,
+            size: Math.random() * 2,
+            speed: Math.random() * 0.5 + 0.2,
+            opacity: Math.random()
         });
-    } else {
-        tg.showAlert("Эта игра временно в разработке!");
+    }
+
+    function draw() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = "#ffffff";
+        
+        stars.forEach(s => {
+            ctx.globalAlpha = s.opacity;
+            ctx.beginPath();
+            ctx.arc(s.x, s.y, s.size, 0, Math.PI * 2);
+            ctx.fill();
+            
+            s.y += s.speed;
+            if (s.y > canvas.height) s.y = -5;
+        });
+        
+        requestAnimationFrame(draw);
+    }
+    draw();
+}
+
+// --- 8. УТИЛИТЫ ---
+function notify(text, type) {
+    tg.HapticFeedback.notificationOccurred(type === 'success' ? 'success' : 'error');
+    const toast = document.getElementById('toast');
+    if (toast) {
+        toast.innerText = text;
+        toast.className = 'show ' + (type === 'success' ? 'success' : 'error');
+        setTimeout(() => toast.classList.remove('show'), 3000);
     }
 }
 
-// --- 7. РАБОТА С СЕРВЕРОМ (SOCKET.IO) ---
-window.onload = () => {
-    // Получаем данные юзера из TG или ставим заглушку для теста
-    const userData = tg.initDataUnsafe.user || { id: 8423153067, username: "Guest" };
-    myUsername = userData.username;
-    
-    socket.emit('auth', userData);
-};
-
-socket.on('init', (data) => {
-    document.getElementById('u-name').innerText = data.user.username;
-    document.getElementById('bal-real').innerText = data.user.real_balance.toFixed(2) + ' TON';
-    
-    // Аватарка
-    if (data.user.avatar) {
-        document.getElementById('u-avatar').src = data.user.avatar;
-    }
-    
-    // История краша
-    if (data.crash && data.crash.history) {
-        updateHistory(data.crash.history);
-    }
-});
-
-socket.on('crash_timer', (time) => {
-    if (currentView === 'crash') {
-        const display = document.getElementById('crash-mult');
-        const label = document.getElementById('crash-label');
-        display.innerText = time;
-        display.style.color = "#ffffff";
-        label.innerText = "ВЗЛЕТ ЧЕРЕЗ";
-    }
-});
-
-socket.on('crash_tick', (mult) => {
-    if (currentView === 'crash') {
-        const display = document.getElementById('crash-mult');
-        display.innerText = mult + 'x';
-        display.style.color = "var(--success)";
-        document.getElementById('crash-label').innerText = "ПОЛЕТ";
-    }
-});
-
-socket.on('crash_end', (data) => {
-    if (currentView === 'crash') {
-        const display = document.getElementById('crash-mult');
-        display.innerText = data.point + 'x';
-        display.style.color = "var(--error)";
-        document.getElementById('crash-label').innerText = "CRASH!";
-        updateHistory(data.history);
-        tg.HapticFeedback.notificationOccurred('error');
-    }
-});
-
-socket.on('update_bets', (bets) => {
-    const list = document.getElementById('bets-list');
-    if (!list) return;
-    
-    list.innerHTML = bets.length > 0 
-        ? bets.map(b => `
-            <div class="bet-item">
-                <span>👤 ${b.user}</span>
-                <span style="color:var(--success)">${b.amount} TON</span>
-            </div>
-        `).join('')
-        : '<div style="color:var(--text-secondary); font-size:0.8rem; text-align:center;">Ставок пока нет</div>';
-});
-
-socket.on('bet_accepted', (res) => {
-    tg.showAlert(res.msg);
-    tg.HapticFeedback.notificationOccurred('success');
-});
-
-// Вспомогательная функция для истории
-function updateHistory(history) {
-    const container = document.getElementById('crash-history');
-    if (!container) return;
-    container.innerHTML = history.map(h => `<div class="h-node">${h}</div>`).join('');
-}
+/**
+ * ==============================================================================
+ * END OF SCRIPT
+ * ==============================================================================
+ */
