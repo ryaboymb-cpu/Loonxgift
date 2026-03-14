@@ -13,7 +13,6 @@ const io = socketIo(server, { cors: { origin: "*" } });
 
 app.use(cors()); app.use(express.json()); app.use(express.static(path.join(__dirname, 'public')));
 
-// DB
 mongoose.connect(process.env.MONGO_URI).then(() => console.log('✅ DB Connected'));
 
 const UserSchema = new mongoose.Schema({
@@ -28,15 +27,18 @@ const User = mongoose.model('User', UserSchema);
 const Promo = mongoose.model('Promo', PromoSchema);
 const Withdraw = mongoose.model('Withdraw', WithdrawSchema);
 
-// BOT
+// Исправленный БОТ
 const bot = new TelegramBot(process.env.BOT_TOKEN, { polling: true });
-bot.onText(/\/(start|help)/, (msg) => {
-    bot.sendMessage(msg.chat.id, `🚀 Добро пожаловать в Loonx Casino!`, {
-        reply_markup: { inline_keyboard: [[{ text: "🎮 ИГРАТЬ", web_app: { url: process.env.WEB_APP_URL } }]] }
-    });
+bot.on('message', (msg) => {
+    if (msg.text === '/start' || msg.text === '/help') {
+        bot.sendMessage(msg.chat.id, `🚀 Привет, ${msg.from.first_name}! Добро пожаловать в Loonx Casino. Твой баланс и игры внутри.`, {
+            reply_markup: { inline_keyboard: [[{ text: "🎮 ОТКРЫТЬ ИГРЫ", web_app: { url: process.env.WEB_APP_URL } }]] }
+        });
+    }
 });
+bot.on('polling_error', (err) => console.log('Bot Error:', err));
 
-// CRASH ENGINE
+// CRASH Движок
 let crash = { status: 'waiting', timer: 10, multiplier: 1.0 };
 function startCrash() {
     crash.status = 'waiting'; crash.timer = 10;
@@ -56,18 +58,19 @@ function runCrash() {
 }
 startCrash();
 
-// SOCKETS (Online & Bets)
+// СОКЕТЫ
 let online = 0;
 io.on('connection', (socket) => {
     online++; io.emit('online', online);
     socket.on('disconnect', () => { online--; io.emit('online', online); });
 });
 
-// API ROUTES
+// API
 app.post('/api/auth', async (req, res) => {
     const { id, username, first_name, photo_url } = req.body;
     let user = await User.findOne({ id });
     if (!user) user = await User.create({ id, username: username || first_name, photo: photo_url });
+    else { user.username = username || first_name; user.photo = photo_url; await user.save(); }
     res.json(user);
 });
 
@@ -75,7 +78,6 @@ app.post('/api/bet', async (req, res) => {
     const { id, game, bet, win, mode } = req.body;
     const user = await User.findOne({ id });
     const field = mode === 'demo' ? 'demo_balance' : 'balance';
-    
     if (user[field] < bet) return res.status(400).json({error: 'No money'});
     
     user[field] = Number((user[field] - bet + win).toFixed(2));
@@ -87,34 +89,37 @@ app.post('/api/bet', async (req, res) => {
     res.json(user);
 });
 
+// Имитация депозита для UI
+app.post('/api/deposit_mock', async (req, res) => {
+    const { id, amount } = req.body;
+    const user = await User.findOne({ id });
+    user.balance += parseFloat(amount); await user.save();
+    res.json(user);
+});
+
 app.post('/api/promo', async (req, res) => {
     const { id, code } = req.body;
     const promo = await Promo.findOne({ code });
     if(!promo || promo.usedBy.length >= promo.limit || promo.usedBy.includes(id)) return res.status(400).json({error: 'Invalid promo'});
-    
-    const user = await User.findOne({ id });
     user.balance += promo.amount; promo.usedBy.push(id);
-    await user.save(); await promo.save();
+    const user = await User.findOne({ id }); await user.save(); await promo.save();
     res.json(user);
 });
 
 app.post('/api/withdraw', async (req, res) => {
     const { id, address, amount } = req.body;
     const user = await User.findOne({ id });
-    if (user.balance < amount || amount < 5) return res.status(400).json({error: 'Min 5 TON or low balance'});
+    if (user.balance < amount || amount < 5) return res.status(400).json({error: 'Min 5 TON'});
     user.balance -= amount; await user.save();
     await Withdraw.create({ userId: id, address, amount });
     res.json(user);
 });
 
-// ADMIN API
 app.post('/api/admin', async (req, res) => {
-    if(req.body.pass !== process.env.ADMIN_PASS) return res.status(403).send();
-    if(req.body.action === 'get') {
-        const w = await Withdraw.find({status: 'pending'});
-        const p = await Promo.find();
-        res.json({ withdraws: w, promos: p });
-    }
+    if(req.body.pass !== (process.env.ADMIN_PASS || '1234')) return res.status(403).json({error: 'Wrong pass'});
+    const w = await Withdraw.find({status: 'pending'});
+    const u = await User.find().limit(10);
+    res.json({ withdraws: w, users: u });
 });
 
 server.listen(process.env.PORT || 3000, () => console.log('Server running'));
