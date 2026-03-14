@@ -6,7 +6,6 @@
     <title>Loonx Gift</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    <script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
     <script src="/socket.io/socket.io.js"></script>
 </head>
 <body>
@@ -33,8 +32,8 @@
 
     <div class="content">
         <div id="page-home" class="page active">
-            <div class="card" id="live-feed" style="font-size: 12px; max-height: 120px; overflow: hidden; border-color: #222;">
-                <div style="color:var(--sub); margin-bottom: 8px; font-weight: bold;">LIVE ЛЕНТА</div>
+            <div class="card" id="live-feed" style="font-size: 12px; max-height: 140px; overflow-y: auto; border-color: #222;">
+                <div style="color:var(--sub); margin-bottom: 8px; font-weight: bold;">LIVE ЛЕНТА СТАВОК</div>
                 <div id="feed-list"></div>
             </div>
             <div class="card game-card" onclick="nav('crash')">
@@ -53,11 +52,18 @@
 
         <div id="page-crash" class="page">
             <div class="crash-screen">
+                <div class="cr-history" id="cr-history">
+                    </div>
                 <div id="cr-timer" style="color:var(--neon); font-size:14px; margin-bottom:10px; font-weight:bold;">ОЖИДАНИЕ...</div>
                 <div id="cr-x" style="font-size: 65px; font-weight: 900; text-shadow: 0 0 20px rgba(255,255,255,0.2);">1.00x</div>
             </div>
             <input type="number" id="cr-bet" class="input-box" placeholder="Сумма ставки">
             <button id="cr-btn" class="btn" onclick="playCrash()">ПОСТАВИТЬ</button>
+            
+            <div class="live-bets-container">
+                <div style="color:var(--sub); font-size:11px; margin-bottom:5px; text-align:center;">СТАВКИ В ЭТОМ РАУНДЕ</div>
+                <div id="cr-live-bets"></div>
+            </div>
         </div>
 
         <div id="page-mines" class="page">
@@ -83,7 +89,7 @@
 
         <div id="page-promo" class="page">
             <div class="card">
-                <h3 style="text-align:center; color:var(--neon);">АКТИВАЦИЯ ПРОМОКОДА</h3>
+                <h3 style="text-align:center; color:var(--neon);">ПРОМОКОД</h3>
                 <input type="text" id="promo-code" class="input-box" style="margin-top:20px" placeholder="Введите код">
                 <button class="btn" onclick="activatePromo()">АКТИВИРОВАТЬ</button>
             </div>
@@ -91,13 +97,20 @@
 
         <div id="page-wallet" class="page">
             <div class="card" style="text-align: center;">
-                <div id="ton-connect" style="margin-bottom: 15px;"></div>
-                <p style="font-size: 13px; color: var(--sub);">Пополнение баланса</p>
-                <input type="number" id="dep-amount" class="input-box" style="margin-top:10px" placeholder="Сумма в TON">
-                <button class="btn" onclick="mockDeposit()">ПОПОЛНИТЬ</button>
+                <h3 style="margin-bottom: 10px; color:var(--neon);">ПОПОЛНЕНИЕ (TON)</h3>
+                <p style="font-size:12px; color:var(--sub); margin-bottom: 15px;">Отправьте TON на кошелек ниже. Обязательно укажите ваш ID в комментарий (Memo)!</p>
+                
+                <div style="background:#1a1a1a; padding:10px; border-radius:8px; margin-bottom:10px; word-break: break-all; font-size: 11px; border: 1px solid #333;" id="dep-wallet">Загрузка...</div>
+                
+                <div style="margin-bottom: 15px;">
+                    <span style="font-size: 12px; color:var(--sub);">Ваш комментарий (MEMO):</span><br>
+                    <b id="dep-memo" style="font-size: 16px; color: var(--neon);">...</b>
+                </div>
+
+                <button class="btn" style="background:var(--neon-blue); color:#000;" onclick="checkRealDeposit()">ПРОВЕРИТЬ ОПЛАТУ</button>
             </div>
             <div class="card">
-                <h3 style="text-align:center;">Вывод средств</h3>
+                <h3 style="text-align:center;">ВЫВОД СРЕДСТВ</h3>
                 <input type="number" id="with-amount" class="input-box" style="margin-top:15px" placeholder="Сумма вывода">
                 <input type="text" id="with-addr" class="input-box" placeholder="Адрес кошелька (UQ...)">
                 <button class="btn" style="background: #fff; color: #000;" onclick="withdraw()">СОЗДАТЬ ЗАЯВКУ</button>
@@ -118,18 +131,22 @@
                 <div><div style="color:var(--neon); font-size:11px; margin-bottom:5px;">Общий Плюс</div><b id="p-plus" style="font-size:16px;">0 TON</b></div>
                 <div><div style="color:var(--neon-red); font-size:11px; margin-bottom:5px;">Общий Минус</div><b id="p-minus" style="font-size:16px;">0 TON</b></div>
             </div>
+            <button class="btn" style="background:var(--neon-blue); color:#000; border: none; margin-bottom: 10px;" onclick="tg.openTelegramLink('https://t.me/ТВОЙ_КАНАЛ_СЮДА')">НАШ КАНАЛ</button>
             <button class="btn" style="background:#222; color:#fff; border: 1px solid #444;" onclick="tg.openTelegramLink('https://t.me/msgp2p')">ТЕХ. ПОДДЕРЖКА</button>
         </div>
     </div>
 
     <div id="admin-modal">
-        <h2 style="color:var(--neon); margin-bottom: 20px; text-align:center;">ADMIN PANEL</h2>
-        <div style="display: flex; gap: 10px; margin-bottom: 20px;">
-            <button class="btn" style="padding:12px; font-size: 14px;" onclick="loadAdmin('users')">ЮЗЕРЫ</button>
-            <button class="btn" style="padding:12px; font-size: 14px;" onclick="loadAdmin('withdraws')">ВЫВОДЫ</button>
+        <h2 style="color:var(--neon); margin-bottom: 15px; text-align:center;">ADMIN PANEL</h2>
+        <div class="admin-tabs">
+            <button class="admin-tab active" onclick="switchAdminTab('withdraws')">Выводы</button>
+            <button class="admin-tab" onclick="switchAdminTab('promo')">Промо</button>
+            <button class="admin-tab" onclick="switchAdminTab('rtp')">RTP</button>
+            <button class="admin-tab" onclick="switchAdminTab('users')">Юзеры</button>
         </div>
-        <div id="admin-content" class="card" style="min-height: 200px;">Здесь будет инфа...</div>
-        <button class="btn" style="background:var(--neon-red);" onclick="document.getElementById('admin-modal').style.display='none'">ЗАКРЫТЬ АДМИНКУ</button>
+        <div id="admin-content" class="card" style="min-height: 250px; font-size: 12px; overflow-y:auto; max-height: 60vh;">
+            </div>
+        <button class="btn" style="background:var(--neon-red); margin-top:20px;" onclick="document.getElementById('admin-modal').style.display='none'">ЗАКРЫТЬ</button>
     </div>
 
     <div class="hotbar">
