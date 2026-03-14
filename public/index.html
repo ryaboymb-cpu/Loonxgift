@@ -9,6 +9,8 @@
     <script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
     <script src="/socket.io/socket.io.js"></script>
 
+    </div>
+
     <style>
         /* === БАЗОВЫЕ СТИЛИ ПО СКРИНАМ === */
         :root {
@@ -22,6 +24,11 @@
         }
 
         body {
+            <div id="loading-screen" style="position:fixed; top:0; left:0; width:100%; height:100%; background:#000; z-index:10000; display:flex; flex-direction:column; justify-content:center; align-items:center; transition: opacity 0.5s ease;">
+    <div class="spinner" style="width:60px; height:60px; border:4px solid rgba(255,255,255,0.1); border-top:4px solid #ffffff; border-radius:50%; animation:spin 1s linear infinite; box-shadow: 0 0 15px rgba(255,255,255,0.2);"></div>
+    <h1 style="color:#ffffff; font-family: sans-serif; letter-spacing: 5px; margin-top: 25px; font-weight: 900; text-transform: uppercase; text-shadow: 0 0 10px rgba(255,255,255,0.5);">Loonx Gift</h1>
+    <style> @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } } </style>
+</div>
             margin: 0;
             padding: 0;
             background-color: var(--bg);
@@ -77,14 +84,15 @@
         #toast-container.error { border-color: #ff3b30; background: rgba(20, 0, 0, 0.9); box-shadow: 0 4px 20px rgba(255, 59, 48, 0.2); color: #ff3b30; }
 
         /* === ШАПКА === */
-        header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 15px 20px;
-            background: rgba(0,0,0,0.5);
-            backdrop-filter: blur(10px);
-            border-bottom: 1px solid #1c1c1e;
+        <header id="main-header" style="cursor: pointer;">
+    <div class="user-info">
+        <span id="player-name">Player</span>
+        <div class="status-badge" style="display:flex; align-items:center; gap:5px; font-size:10px; color:#00ff88; margin-top:4px;">
+            <span style="width:6px; height:6px; background:#00ff88; border-radius:50%; box-shadow:0 0 5px #00ff88;"></span>
+            Online: <span id="online-counter">1</span>
+        </div>
+    </header>
+
         }
 
         .header-left {
