@@ -1,227 +1,191 @@
-/**
- * ==============================================================================
- * LOONX GIFTS - CORE SERVER ENGINE (v2.0.4)
- * ==============================================================================
- * * Особенности:
- * - Полная защита от 409 Conflict (Telegram API)
- * - Real-time Online Counter через WebSockets
- * - Persistence Data Storage (сохранение балансов в JSON)
- * - Расширенная система логирования и безопасности
- * - Административная панель с доступом по паролю 8877
- */
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+    <title>Loonx Gifts</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
+    <script src="/socket.io/socket.io.js"></script>
+    <style>
+        /* --- GLOBAL STYLES --- */
+        :root { --bg: #09090b; --card: #18181b; --accent: #00ff88; --text: #ffffff; --sub: #a1a1aa; }
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: -apple-system, sans-serif; -webkit-tap-highlight-color: transparent; }
+        body { background: var(--bg); color: var(--text); overflow: hidden; height: 100vh; display: flex; flex-direction: column; }
+        
+        /* --- LOADER --- */
+        #loader { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #000; z-index: 9999; display: flex; flex-direction: column; justify-content: center; align-items: center; transition: opacity 0.5s; }
+        .spinner { width: 50px; height: 50px; border: 3px solid rgba(255,255,255,0.1); border-top: 3px solid #fff; border-radius: 50%; animation: spin 1s linear infinite; }
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+        
+        /* --- HEADER --- */
+        header { padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; background: rgba(9,9,11,0.8); backdrop-filter: blur(10px); z-index: 10; border-bottom: 1px solid rgba(255,255,255,0.05); }
+        .user-box { display: flex; align-items: center; gap: 10px; cursor: pointer; }
+        .avatar { width: 40px; height: 40px; border-radius: 12px; background: var(--card); border: 1px solid var(--accent); }
+        .u-name { font-weight: 800; font-size: 15px; }
+        .u-online { font-size: 11px; color: var(--accent); display: flex; align-items: center; gap: 4px; }
+        .dot { width: 6px; height: 6px; background: var(--accent); border-radius: 50%; box-shadow: 0 0 5px var(--accent); }
+        .bal-box { text-align: right; }
+        .bal-val { font-size: 18px; font-weight: 900; }
+        .bal-sub { font-size: 9px; color: var(--sub); text-transform: uppercase; }
 
-const TelegramBot = require('node-telegram-bot-api');
-const express = require('express');
-const http = require('http');
-const socketIo = require('socket.io');
-const path = require('path');
-const cors = require('cors');
-const crypto = require('crypto');
-const fs = require('fs');
+        /* --- LAYOUT & PAGES --- */
+        .content { flex: 1; overflow-y: auto; padding: 20px; padding-bottom: 90px; }
+        .page { display: none; animation: fadeIn 0.3s; }
+        .page.active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 
-// --- КОНФИГУРАЦИЯ ---
-const TOKEN = 'ВАШ_ТОКЕН_БОТА'; // Вставь свой токен
-const ADMIN_PASS = '8877';
-const DB_PATH = path.join(__dirname, 'database.json');
-const WEB_APP_URL = 'https://loonx-gifts.render.com'; // Твой URL
+        /* --- CARDS & BUTTONS --- */
+        .game-card { background: var(--card); border-radius: 18px; padding: 15px; margin-bottom: 15px; display: flex; align-items: center; gap: 15px; border: 1px solid rgba(255,255,255,0.05); }
+        .game-card:active { transform: scale(0.98); }
+        .g-icon { width: 50px; height: 50px; border-radius: 12px; display: flex; justify-content: center; align-items: center; font-size: 24px; }
+        .ic-crash { background: linear-gradient(135deg, #ff0055, #ff007f); }
+        .ic-mines { background: linear-gradient(135deg, #00ff88, #00b0ff); }
+        .ic-coin { background: linear-gradient(135deg, #ffcc00, #ff8800); }
+        
+        .btn { width: 100%; padding: 15px; background: var(--accent); color: #000; border: none; border-radius: 12px; font-weight: 800; font-size: 16px; margin-top: 10px; }
+        .btn-outline { background: transparent; border: 1px solid var(--sub); color: var(--text); }
+        input.bet-input { width: 100%; padding: 15px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: #fff; border-radius: 12px; font-size: 18px; text-align: center; outline: none; margin-bottom: 10px; }
 
-// --- ПЕРЕМЕННЫЕ ОКРУЖЕНИЯ ---
-const PORT = process.env.PORT || 3000;
-let onlineUsers = 0;
+        /* --- HOT BAR --- */
+        .hot-bar { position: fixed; bottom: 0; left: 0; width: 100%; background: rgba(24,24,27,0.95); backdrop-filter: blur(10px); display: flex; justify-content: space-around; padding: 15px 0 25px; border-top: 1px solid rgba(255,255,255,0.05); z-index: 100; }
+        .nav-item { color: var(--sub); font-size: 11px; font-weight: 700; text-align: center; text-decoration: none; }
+        .nav-item.active { color: var(--accent); }
+        .nav-item svg { width: 24px; height: 24px; fill: currentColor; display: block; margin: 0 auto 4px; }
 
-// --- ИНИЦИАЛИЗАЦИЯ БАЗЫ ДАННЫХ ---
-let db = {
-    users: {},
-    stats: { totalDeposits: 0, totalGames: 0 },
-    settings: { rtp: 85, maintenance: false },
-    activePromos: { "START": 10, "LOONX": 25 }
-};
+        /* --- TOAST --- */
+        #toast { position: fixed; top: -100px; left: 50%; transform: translateX(-50%); background: var(--card); padding: 15px 30px; border-radius: 12px; border: 1px solid var(--accent); z-index: 10000; transition: 0.3s; font-weight: bold; }
+        #toast.show { top: 20px; }
+        #toast.error { border-color: #ff3b30; color: #ff3b30; }
 
-const loadDB = () => {
-    if (fs.existsSync(DB_PATH)) {
-        try {
-            const data = fs.readFileSync(DB_PATH);
-            db = JSON.parse(data);
-            console.log('✅ База данных успешно загружена');
-        } catch (e) {
-            console.error('❌ Ошибка чтения БД:', e);
-        }
-    }
-};
+        /* --- GAMES UI --- */
+        .game-area { background: var(--card); border-radius: 20px; padding: 30px 20px; text-align: center; margin-bottom: 20px; min-height: 200px; display: flex; flex-direction: column; justify-content: center; border: 1px solid rgba(255,255,255,0.05); }
+        #crash-mult { font-size: 48px; font-weight: 900; color: var(--text); text-shadow: 0 0 20px rgba(255,255,255,0.2); }
+        
+        .mines-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; max-width: 300px; margin: 0 auto; }
+        .mine-cell { aspect-ratio: 1; background: rgba(255,255,255,0.05); border-radius: 8px; display: flex; justify-content: center; align-items: center; font-size: 24px; transition: 0.2s; }
+        .mine-cell.open-gem { background: rgba(0,255,136,0.2); border: 1px solid var(--accent); }
+        .mine-cell.open-bomb { background: rgba(255,59,48,0.2); border: 1px solid #ff3b30; }
 
-const saveDB = () => {
-    try {
-        fs.writeFileSync(DB_PATH, JSON.stringify(db, null, 4));
-    } catch (e) {
-        console.error('❌ Ошибка сохранения БД:', e);
-    }
-};
+        /* --- PROFILE & HISTORY --- */
+        .history-item { display: flex; justify-content: space-between; padding: 12px; border-bottom: 1px solid rgba(255,255,255,0.05); font-size: 14px; }
+        .hist-win { color: var(--accent); }
+        .hist-lose { color: #ff3b30; }
+        
+        /* --- ADMIN PANEL --- */
+        #admin-panel { display: none; position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.9); z-index: 9000; padding: 40px 20px; }
+    </style>
+</head>
+<body>
 
-loadDB();
+    <div id="loader">
+        <div class="spinner"></div>
+        <h2 style="margin-top:20px; letter-spacing: 2px;">LOONX GIFTS</h2>
+    </div>
 
-// --- НАСТРОЙКА EXPRESS И SOCKET.IO ---
-const app = express();
-const server = http.createServer(app);
-const io = socketIo(server, {
-    cors: { origin: "*", methods: ["GET", "POST"] }
-});
+    <header id="header-area">
+        <div class="user-box">
+            <div class="avatar"></div>
+            <div>
+                <div class="u-name" id="ui-name">Player</div>
+                <div class="u-online"><div class="dot"></div> Онлайн: <span id="ui-online">1</span></div>
+            </div>
+        </div>
+        <div class="bal-box">
+            <div class="bal-val"><span id="ui-balance">0.00</span></div>
+            <div class="bal-sub">TON BALANCE</div>
+        </div>
+    </header>
 
-app.use(cors());
-app.use(express.json());
-app.use(express.static(path.join(__dirname, 'public')));
+    <div class="content">
+        
+        <div id="page-games" class="page active">
+            <h3 style="margin-bottom: 15px;">Все игры</h3>
+            <div class="game-card" onclick="openGame('crash')">
+                <div class="g-icon ic-crash">🚀</div>
+                <div><b>CRASH</b><br><small class="bal-sub">Успей забрать до взрыва</small></div>
+            </div>
+            <div class="game-card" onclick="openGame('mines')">
+                <div class="g-icon ic-mines">💣</div>
+                <div><b>MINES</b><br><small class="bal-sub">Обойди мины, забери алмазы</small></div>
+            </div>
+            <div class="game-card" onclick="openGame('coinflip')">
+                <div class="g-icon ic-coin">🪙</div>
+                <div><b>COINFLIP</b><br><small class="bal-sub">Шанс 50/50 на удвоение</small></div>
+            </div>
+        </div>
 
-// --- ТЕЛЕГРАМ БОТ (ЗАЩИТА ОТ 409) --
-const bot = new TelegramBot(process.env.BOT_TOKEN, { polling: { autoStart: true, params: { drop_pending_updates: true } } });
+        <div id="page-crash" class="page">
+            <h3 style="margin-bottom: 15px; text-align:center;">CRASH</h3>
+            <div class="game-area">
+                <div id="crash-mult">1.00x</div>
+            </div>
+            <input type="number" id="crash-bet" class="bet-input" placeholder="Сумма ставки">
+            <button class="btn" id="crash-btn" onclick="actionCrash()">ПОСТАВИТЬ</button>
+            <button class="btn btn-outline" style="margin-top:10px;" onclick="nav('games')">НАЗАД</button>
+        </div>
 
-});
+        <div id="page-mines" class="page">
+            <h3 style="margin-bottom: 15px; text-align:center;">MINES</h3>
+            <div class="game-area" style="padding: 15px;">
+                <div class="mines-grid" id="mines-grid"></div>
+            </div>
+            <input type="number" id="mines-bet" class="bet-input" placeholder="Сумма ставки">
+            <button class="btn" id="mines-btn" onclick="startMines()">НАЧАТЬ (5 МИН)</button>
+            <button class="btn btn-outline" style="margin-top:10px;" onclick="nav('games')">НАЗАД</button>
+        </div>
 
-// Команда /start
-bot.onText(/\/start/, (msg) => {
-    const chatId = msg.chat.id;
-    bot.sendMessage(chatId, "🚀 **Добро пожаловать в Loonx Gifts!**\n\nИграй и зарабатывай TON прямо в Telegram. Используй кнопку ниже, чтобы войти в приложение.", {
-        parse_mode: 'Markdown',
-        reply_markup: {
-            inline_keyboard: [
-                [{ text: "🎮 Начать игру", web_app: { url: WEB_APP_URL } }],
-                [
-                    { text: "📣 Канал", url: "https://t.me/Loonxnews" },
-                    { text: "🆘 Саппорт", url: "https://t.me/LoonxGift_Support" }
-                ]
-            ]
-        }
-    });
-});
+        <div id="page-wallet" class="page">
+            <h3 style="margin-bottom: 15px; text-align:center;">Депозит</h3>
+            <div style="background:var(--card); padding:20px; border-radius:20px; text-align:center; border: 1px solid rgba(255,255,255,0.05);">
+                <div id="ton-connect-btn" style="display:flex; justify-content:center; margin-bottom:20px;"></div>
+                <input type="number" id="dep-amount" class="bet-input" placeholder="Сумма пополнения (TON)">
+                <button class="btn" onclick="sendDeposit()">ПОПОЛНИТЬ</button>
+            </div>
+        </div>
 
-// Команда /help
-bot.onText(/\/help/, (msg) => {
-    bot.sendMessage(msg.chat.id, "❓ **Есть вопросы?**\n\nНаша служба поддержки Loonx Gifts работает 24/7. Нажмите кнопку ниже, чтобы создать тикет.", {
-        parse_mode: 'Markdown',
-        reply_markup: {
-            inline_keyboard: [[{ text: "🆘 Саппорт", url: "https://t.me/LoonxGift_Support" }]]
-        }
-    });
-});
+        <div id="page-profile" class="page">
+            <h3 style="margin-bottom: 15px;">Профиль и История</h3>
+            
+            <div style="display:flex; gap:10px; margin-bottom: 20px;">
+                <a href="https://t.me/Loonxnews" target="_blank" class="btn btn-outline" style="flex:1; text-align:center; text-decoration:none; font-size:12px;">📣 Канал</a>
+                <a href="https://t.me/LoonxGift_Support" target="_blank" class="btn btn-outline" style="flex:1; text-align:center; text-decoration:none; font-size:12px;">🆘 Саппорт</a>
+            </div>
 
-// --- API ДЛЯ КЛИЕНТА ---
+            <div style="background:var(--card); border-radius:18px; padding:15px; border: 1px solid rgba(255,255,255,0.05);">
+                <h4 style="margin-bottom: 10px; color:var(--sub);">Последние игры</h4>
+                <div id="history-list">
+                    <div style="text-align:center; color:var(--sub); padding:10px;">История пуста</div>
+                </div>
+            </div>
+        </div>
+    </div>
 
-// Проверка и получение профиля
-app.post('/api/auth', (req, res) => {
-    const { user } = req.body;
-    if (!user || !user.id) return res.status(400).send('No user data');
+    <div class="hot-bar">
+        <a href="#" class="nav-item active" onclick="nav('games', this)">
+            <svg viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>Игры
+        </a>
+        <a href="#" class="nav-item" onclick="nav('wallet', this)">
+            <svg viewBox="0 0 24 24"><path d="M21 18v1c0 1.1-.9 2-2 2H5c-1.11 0-2-.9-2-2V5c0-1.1.89-2 2-2h14c1.1 0 2 .9 2 2v1h-9c-1.11 0-2-.9-2-2v8c0 1.1.89 2 2 2h9zm-9-2h10V8H12v8zm4-2.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/></svg>Кошелек
+        </a>
+        <a href="#" class="nav-item" onclick="nav('profile', this)">
+            <svg viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>Профиль
+        </a>
+    </div>
 
-    if (!db.users[user.id]) {
-        db.users[user.id] = {
-            id: user.id,
-            name: user.first_name,
-            username: user.username || "player",
-            balance: 500.00,
-            games: 0,
-            wins: 0,
-            history: []
-        };
-        saveDB();
-    }
+    <div id="toast">Сообщение</div>
 
-    res.json(db.users[user.id]);
-});
+    <div id="admin-panel">
+        <h2 style="color:var(--accent); text-align:center; margin-bottom: 20px;">[ ADM ENGINE ]</h2>
+        <div style="background:var(--card); padding:20px; border-radius:12px; border:1px solid var(--accent);">
+            <p>RTP Control: <input type="range" min="1" max="100" value="85" style="width:100%"></p>
+            <p>Выдать баланс ID:</p>
+            <input type="text" class="bet-input">
+            <button class="btn">ВЫДАТЬ</button>
+            <button class="btn btn-outline" style="margin-top:20px;" onclick="document.getElementById('admin-panel').style.display='none'">ЗАКРЫТЬ</button>
+        </div>
+    </div>
 
-// Обработка ставок
-app.post('/api/play', (req, res) => {
-    const { userId, bet, game, result } = req.body;
-    const player = db.users[userId];
-    
-    if (!player || player.balance < bet) {
-        return res.status(400).json({ error: 'Insufficient funds' });
-    }
-
-    const winAmount = result.win ? bet * result.multiplier : 0;
-    player.balance = player.balance - bet + winAmount;
-    player.games += 1;
-    if (result.win) player.wins += 1;
-
-    // Живая лента через Socket.io
-    io.emit('liveFeed', {
-        user: player.username,
-        game: game,
-        amount: winAmount.toFixed(2),
-        isWin: result.win
-    });
-
-    saveDB();
-    res.json({ newBalance: player.balance });
-});
-
-// Промокоды
-app.post('/api/promo', (req, res) => {
-    const { userId, code } = req.body;
-    const cleanCode = code.toUpperCase();
-    const reward = db.activePromos[cleanCode];
-
-    if (reward && db.users[userId]) {
-        db.users[userId].balance += reward;
-        // Можно сделать промокод одноразовым для юзера
-        res.json({ success: true, reward });
-        saveDB();
-    } else {
-        res.status(400).json({ success: false });
-    }
-});
-
-// Админ-панель (Данные)
-app.get('/api/admin/data', (req, res) => {
-    if (req.query.pass !== ADMIN_PASS) return res.status(403).send('Access Denied');
-    res.json({
-        users: Object.values(db.users).length,
-        rtp: db.settings.rtp,
-        totalBalance: Object.values(db.users).reduce((a, b) => a + b.balance, 0)
-    });
-});
-
-// --- SOCKET.IO (ОНЛАЙН СЧЕТЧИК) ---
-io.on('connection', (socket) => {
-    onlineUsers++;
-    io.emit('onlineUpdate', onlineUsers);
-    console.log(`📡 New connection. Online: ${onlineUsers}`);
-
-    socket.on('disconnect', () => {
-        onlineUsers--;
-        io.emit('onlineUpdate', onlineUsers);
-    });
-});
-
-// --- СЕРВИСНЫЕ ФУНКЦИИ ---
-bot.on('polling_error', (e) => console.log(`[Bot Error] ${e.code}`));
-
-const shutdown = () => {
-    console.log('\n🛑 Graceful shutdown initiated...');
-    saveDB();
-    bot.stopPolling().then(() => {
-        console.log('🤖 Bot stopped.');
-        server.close(() => {
-            console.log('🌐 Server closed.');
-            process.exit(0);
-        });
-    });
-};
-
-process.on('SIGINT', shutdown);
-process.on('SIGTERM', shutdown);
-
-server.listen(PORT, () => {
-    console.log(`
-    ██╗      ██████╗  ██████╗ ███╗   ██╗██╗  ██╗
-    ██║     ██╔═══██╗██╔═══██╗████╗  ██║╚██╗██╔╝
-    ██║     ██║   ██║██║   ██║██╔██╗ ██║ ╚███╔╝ 
-    ██║     ██║   ██║██║   ██║██║╚██╗██║ ██╔██╗ 
-    ███████╗╚██████╔╝╚██████╔╝██║ ╚████║██╔╝ ██╗
-    ╚══════╝ ╚═════╝  ╚═════╝ ╚═╝  ╚═══╝╚═╝  ╚═╝
-    🚀 Loonx Gifts Engine Running on Port: ${PORT}
-    🛠  RTP: ${db.settings.rtp}% | DB: ${DB_PATH}
-    `);
-});
-
-/**
- * ==============================================================================
- * END OF SERVER FILE
- * ==============================================================================
- */
+    <script src="script.js"></script>
+</body>
+</html>
