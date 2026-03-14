@@ -70,12 +70,9 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// --- ТЕЛЕГРАМ БОТ (ЗАЩИТА ОТ 409) ---
-const bot = new TelegramBot(TOKEN, {
-    polling: {
-        autoStart: true,
-        params: { drop_pending_updates: true }
-    }
+// --- ТЕЛЕГРАМ БОТ (ЗАЩИТА ОТ 409) --
+const bot = new TelegramBot(process.env.BOT_TOKEN, { polling: { autoStart: true, params: { drop_pending_updates: true } } });
+
 });
 
 // Команда /start
