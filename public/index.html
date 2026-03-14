@@ -3,84 +3,74 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-    <title>Loonx Gifts Premium</title>
+    <title>Loonx Gifts</title>
     
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="/socket.io/socket.io.js"></script>
-    <script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
 
     <style>
-        /* --- ПРЕМИАЛЬНЫЙ ДИЗАЙН (Apple Dark & Neon) --- */
-        :root {
-            --accent: #007aff;
-            --bg: #000;
-            --card: #1c1c1e;
-            --success: #34c759;
-            --error: #ff3b30;
-            --glow: 0 0 20px rgba(0, 122, 255, 0.4);
-            --text-main: #ffffff;
-            --text-secondary: #8e8e93;
-        }
-
-        * {
-            box-sizing: border-box;
-            -webkit-tap-highlight-color: transparent;
-            user-select: none;
-        }
-
+        /* БАЗОВЫЕ СТИЛИ ПОД ТВОЙ СКРИНШОТ */
         body {
             margin: 0;
             padding: 0;
-            background: var(--bg);
-            color: var(--text-main);
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #000;
+            color: #fff;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             overflow: hidden;
             height: 100vh;
+            display: flex;
+            flex-direction: column;
         }
 
         #stars-canvas {
             position: fixed;
             top: 0;
             left: 0;
-            z-index: -1;
+            z-index: 0;
+            pointer-events: none;
+        }
+
+        .content-wrapper {
+            position: relative;
+            z-index: 1;
+            display: flex;
+            flex-direction: column;
+            height: 100%;
         }
 
         /* --- ШАПКА --- */
         header {
-            padding: 15px 20px;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            background: rgba(20, 20, 22, 0.85);
-            backdrop-filter: blur(25px);
-            border-bottom: 0.5px solid #333;
-            z-index: 100;
+            padding: 15px 20px;
         }
 
         .u-info {
             display: flex;
             align-items: center;
-            gap: 12px;
+            gap: 10px;
         }
 
         .u-avatar {
-            width: 44px;
-            height: 44px;
+            width: 40px;
+            height: 40px;
             border-radius: 50%;
-            border: 2px solid var(--success);
-            box-shadow: 0 0 15px rgba(52, 199, 89, 0.4);
-            object-fit: cover;
+            border: 2px solid #34c759;
+        }
+
+        .u-meta {
+            display: flex;
+            flex-direction: column;
         }
 
         .u-meta b {
-            font-size: 1rem;
-            display: block;
+            font-size: 16px;
         }
 
         .u-meta span {
-            font-size: 0.7rem;
-            color: var(--success);
-            font-weight: 600;
+            font-size: 10px;
+            color: #34c759;
         }
 
         .balances {
@@ -88,318 +78,338 @@
         }
 
         .bal-ton {
-            color: var(--success);
-            font-weight: 900;
-            font-size: 1.3rem;
-            text-shadow: 0 0 10px rgba(52, 199, 89, 0.3);
+            color: #34c759;
+            font-weight: 800;
+            font-size: 20px;
         }
 
         .bal-demo {
-            color: var(--text-secondary);
-            font-size: 0.75rem;
-            font-weight: 600;
+            color: #8e8e93;
+            font-size: 10px;
         }
 
-        /* --- НАВИГАЦИЯ ИГР --- */
-        .games-nav {
+        /* --- ВЕРХНИЕ ВКЛАДКИ (Crash, Mines, Wallet) --- */
+        .top-tabs {
             display: flex;
-            gap: 12px;
-            padding: 20px;
-            overflow-x: auto;
-            scrollbar-width: none;
+            justify-content: center;
+            gap: 10px;
+            padding: 10px 20px;
         }
 
-        .g-btn {
-            background: var(--card);
-            min-width: 100px;
-            padding: 15px;
-            border-radius: 18px;
-            border: 1px solid #333;
-            text-align: center;
-            transition: 0.3s;
+        .tab-btn {
+            background: #1c1c1e;
+            color: #fff;
+            border: 2px solid transparent;
+            border-radius: 12px;
+            padding: 10px 20px;
+            font-size: 14px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            transition: 0.2s;
         }
 
-        .g-btn.active {
-            border-color: var(--accent);
-            box-shadow: var(--glow);
+        .tab-btn.active {
+            border-color: #007aff;
             background: rgba(0, 122, 255, 0.1);
         }
 
-        .g-btn span {
-            font-size: 0.85rem;
-            font-weight: 700;
-        }
-
-        /* --- КОНТЕНТ --- */
-        .view {
-            padding: 0 20px;
-            height: 50vh;
+        /* --- ОСНОВНОЙ КОНТЕНТ --- */
+        .main-view {
+            flex: 1;
+            padding: 10px 20px;
             display: none;
             overflow-y: auto;
         }
 
-        .view.active {
+        .main-view.active {
             display: block;
         }
 
-        /* CRASH */
+        /* CRASH VIEW */
         .history-row {
             display: flex;
-            gap: 8px;
-            margin-bottom: 20px;
+            gap: 5px;
             overflow-x: auto;
+            scrollbar-width: none;
+            margin-bottom: 20px;
         }
-
-        .h-node {
-            background: #2c2c2e;
-            padding: 6px 14px;
-            border-radius: 10px;
-            font-size: 0.8rem;
+        
+        .history-pill {
+            background: #1c1c1e;
+            padding: 6px 12px;
+            border-radius: 8px;
+            font-size: 12px;
             font-weight: 700;
-            color: var(--text-secondary);
-            border: 0.5px solid #444;
+            color: #8e8e93;
+            white-space: nowrap;
         }
 
-        .crash-display {
-            height: 180px;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
+        .crash-center {
+            text-align: center;
+            margin-top: 20px;
         }
 
-        #crash-mult {
-            font-size: 5.5rem;
+        .crash-label {
+            color: #007aff;
+            font-size: 14px;
+            font-weight: 700;
+            margin-bottom: 10px;
+        }
+
+        .crash-mult {
+            font-size: 80px;
             font-weight: 900;
             margin: 0;
-            transition: 0.1s;
+            line-height: 1;
         }
 
-        #crash-label {
-            font-weight: 800;
-            color: var(--accent);
-            letter-spacing: 2px;
-            font-size: 1.1rem;
+        .progress-bar-container {
+            width: 100%;
+            height: 20px;
+            background: #1c1c1e;
+            border-radius: 10px;
+            margin-top: 20px;
+            overflow: hidden;
         }
 
-        .live-bets {
-            background: var(--card);
-            border-radius: 20px;
-            padding: 15px;
-            border: 1px solid #333;
-            margin-top: 15px;
+        .progress-bar {
+            height: 100%;
+            background: #34c759;
+            width: 0%;
+            transition: width 0.1s linear;
         }
 
-        .bet-item {
-            display: flex;
-            justify-content: space-between;
-            padding: 10px 0;
-            border-bottom: 0.5px solid #333;
-            font-size: 0.9rem;
-        }
-
-        /* MINES */
+        /* MINES VIEW */
         .mines-grid {
             display: grid;
             grid-template-columns: repeat(5, 1fr);
-            gap: 10px;
-            max-width: 350px;
-            margin: 0 auto;
+            gap: 8px;
+            margin-top: 10px;
         }
 
-        .cell {
+        .mine-cell {
             aspect-ratio: 1;
-            background: #2c2c2e;
-            border-radius: 14px;
-            border: 1px solid #3a3a3c;
+            background: #0a1f10;
+            border-radius: 10px;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 1.8rem;
-            transition: 0.2s;
+            font-size: 20px;
         }
 
-        .cell.open {
-            background: rgba(52, 199, 89, 0.1);
-            border-color: var(--success);
-        }
-
-        /* ФУТЕР И КНОПКА СТАВКИ */
-        .bet-controls {
-            position: fixed;
-            bottom: 95px;
-            width: 100%;
-            padding: 0 20px;
-            background: linear-gradient(transparent, #000 50%);
-        }
-
-        .input-wrap {
-            display: flex;
+        .mine-cell.open {
             background: #1c1c1e;
-            border: 1.5px solid #333;
-            border-radius: 20px;
-            padding: 5px;
-            margin-bottom: 12px;
         }
 
-        input {
-            flex: 1;
+        /* --- НИЖНИЙ БЛОК СТАВКИ --- */
+        .bet-section {
+            padding: 15px 20px;
+            padding-bottom: 80px; /* Отступ для хотбара */
+        }
+
+        .bet-input-wrapper {
+            background: #1c1c1e;
+            border-radius: 12px;
+            margin-bottom: 15px;
+        }
+
+        .bet-input {
+            width: 100%;
             background: transparent;
             border: none;
-            padding: 15px;
             color: #fff;
-            font-size: 1.2rem;
-            font-weight: 700;
+            font-size: 16px;
+            padding: 15px;
             outline: none;
+            box-sizing: border-box;
         }
 
         .btn-play {
             width: 100%;
-            padding: 20px;
-            border-radius: 22px;
-            border: none;
-            background: var(--accent);
+            background: #007aff;
             color: #fff;
+            border: none;
+            padding: 18px;
+            border-radius: 15px;
+            font-size: 18px;
             font-weight: 800;
-            font-size: 1.2rem;
-            box-shadow: var(--glow);
-            transition: 0.2s;
         }
 
-        .btn-play:active {
-            transform: scale(0.97);
-            opacity: 0.8;
-        }
-
-        /* НИЖНИЙ ХОТБАР */
+        /* --- HOTBAR --- */
         .hotbar {
             position: fixed;
             bottom: 0;
             width: 100%;
-            height: 85px;
-            background: rgba(20, 20, 22, 0.98);
-            backdrop-filter: blur(20px);
+            background: #000;
             display: flex;
             justify-content: space-around;
-            padding-top: 15px;
-            border-top: 0.5px solid #333;
+            padding: 10px 0 20px 0;
+            border-top: 1px solid #1c1c1e;
+            z-index: 10;
         }
 
         .nav-item {
             text-align: center;
-            color: var(--text-secondary);
-            font-size: 0.75rem;
-            font-weight: 700;
-            transition: 0.3s;
+            color: #8e8e93;
+            font-size: 10px;
+            font-weight: 600;
         }
 
         .nav-item.active {
-            color: var(--success);
+            color: #007aff;
         }
 
         .nav-item i {
             display: block;
-            font-size: 1.6rem;
+            font-size: 18px;
             margin-bottom: 4px;
+        }
+
+        /* --- ВНУТРИИГРОВАЯ АДМИНКА --- */
+        #admin-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.95);
+            z-index: 9999;
+            display: none;
+            padding: 20px;
+            box-sizing: border-box;
+            overflow-y: auto;
+        }
+
+        .admin-title {
+            color: #fff;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .admin-stats {
+            background: #1c1c1e;
+            padding: 15px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .admin-btn {
+            width: 100%;
+            background: #2c2c2e;
+            color: #fff;
+            border: 1px solid #444;
+            padding: 15px;
+            border-radius: 10px;
+            font-size: 16px;
+            margin-bottom: 10px;
+            font-weight: bold;
+        }
+        
+        .admin-btn.red {
+            background: #ff3b30;
+            border-color: #ff3b30;
+            margin-top: 20px;
         }
     </style>
 </head>
 <body>
-
     <canvas id="stars-canvas"></canvas>
 
-    <header onclick="handleAdminTap()">
-        <div class="u-info">
-            <img src="" class="u-avatar" id="u-avatar">
-            <div class="u-meta">
-                <b id="u-name">Загрузка...</b>
-                <span>● Онлайн: <span id="online-count">1</span></span>
+    <div class="content-wrapper">
+        <header onclick="handleAdminTap()">
+            <div class="u-info">
+                <img src="https://via.placeholder.com/40" class="u-avatar" id="u-avatar">
+                <div class="u-meta">
+                    <b id="u-name">MsgP2P</b>
+                    <span>● Online</span>
+                </div>
             </div>
-        </div>
-        <div class="balances">
-            <div class="bal-ton" id="bal-real">0.00 TON</div>
-            <div class="bal-demo" id="bal-demo">DEMO: 5000</div>
-        </div>
-    </header>
+            <div class="balances">
+                <div class="bal-ton" id="bal-real">0.00 TON</div>
+                <div class="bal-demo">5000 DEMO</div>
+            </div>
+        </header>
 
-    <div class="games-nav">
-        <div class="g-btn active" onclick="switchView('crash', this)">
-            <span>🚀 CRASH</span>
-        </div>
-        <div class="g-btn" onclick="switchView('mines', this)">
-            <span>💣 MINES</span>
-        </div>
-        <div class="g-btn" onclick="switchView('flip', this)">
-            <span>🪙 FLIP</span>
-        </div>
-    </div>
-
-    <main>
-        <div id="v-crash" class="view active">
-            <div class="history-row" id="crash-history"></div>
-            <div class="crash-display">
-                <div id="crash-label">ОЖИДАНИЕ...</div>
-                <h1 id="crash-mult">1.00x</h1>
-            </div>
-            <div class="live-bets">
-                <div style="font-weight:800; color:var(--text-secondary); margin-bottom:12px; font-size:0.75rem;">LIVE СТАВКИ</div>
-                <div id="bets-list"></div>
-            </div>
+        <div class="top-tabs">
+            <div class="tab-btn active" onclick="switchTab('crash', this)">🚀 Crash</div>
+            <div class="tab-btn" onclick="switchTab('mines', this)">💣 Mines</div>
+            <div class="tab-btn" onclick="switchTab('wallet', this)">💼 Wallet</div>
         </div>
 
-        <div id="v-mines" class="view">
+        <div id="view-crash" class="main-view active">
+            <div class="history-row" id="crash-history">
+                <div class="history-pill">4.08x</div>
+                <div class="history-pill">3.03x</div>
+                <div class="history-pill">6.08x</div>
+                <div class="history-pill">5.59x</div>
+                <div class="history-pill">1.50x</div>
+            </div>
+            
+            <div class="crash-center">
+                <div class="crash-label" id="crash-label">ВЗЛЕТ ЧЕРЕЗ</div>
+                <div class="crash-mult" id="crash-mult">1.2</div>
+                <div class="progress-bar-container">
+                    <div class="progress-bar" id="crash-progress"></div>
+                </div>
+            </div>
+        </div>
+
+        <div id="view-mines" class="main-view">
             <div class="mines-grid" id="mines-container"></div>
         </div>
 
-        <div id="v-wallet" class="view" style="text-align:center;">
-            <div style="background:var(--card); padding:30px; border-radius:25px; margin-top:20px; border:1px solid #333;">
-                <h2 style="margin-top:0;">Кошелек</h2>
-                <p style="color:var(--text-secondary); font-size:0.9rem; margin-bottom:25px;">Подключите TON-кошелек для депозитов и выводов.</p>
-                <div id="ton-connect-btn"></div>
-            </div>
+        <div id="view-wallet" class="main-view">
+            <h3 style="text-align:center;">Кошелек</h3>
+            <p style="text-align:center; color:#8e8e93;">Подключите кошелек для игры</p>
+            <button class="btn-play" style="background:#34c759;">ПОДКЛЮЧИТЬ TON</button>
         </div>
-    </main>
 
-    <div class="bet-controls">
-        <div class="input-wrap">
-            <input type="number" id="bet-amt" value="10" placeholder="0.00">
-            <div style="padding:15px; color:var(--success); font-weight:900;">TON</div>
+        <div class="bet-section" id="bet-section">
+            <div class="bet-input-wrapper">
+                <input type="number" class="bet-input" id="bet-amt" value="10">
+            </div>
+            <button class="btn-play" onclick="placeBet()">ПОСТАВИТЬ</button>
         </div>
-        <button class="btn-play" onclick="handleMainAction()">СДЕЛАТЬ СТАВКУ</button>
     </div>
 
-    <nav class="hotbar">
-        <div class="nav-item active" onclick="switchView('crash')"><i>🎮</i><span>Игры</span></div>
-        <div class="nav-item"><i>🎁</i><span>Промо</span></div>
-        <div class="nav-item" onclick="switchView('wallet')"><i>💼</i><span>Кошелек</span></div>
-        <div class="nav-item"><i>👤</i><span>Профиль</span></div>
-    </nav>
+    <div class="hotbar">
+        <div class="nav-item active"><i>🎮</i>Игры</div>
+        <div class="nav-item"><i>🎁</i>Промо</div>
+        <div class="nav-item"><i>💼</i>Кошелек</div>
+        <div class="nav-item"><i>👤</i>Профиль</div>
+    </div>
+
+    <div id="admin-overlay">
+        <h2 class="admin-title">🛠 АДМИН-ПАНЕЛЬ</h2>
+        <div class="admin-stats">
+            <span style="font-size:24px;">📊</span><br>
+            Юзеров в базе: <b id="admin-users-count">10</b>
+        </div>
+        <button class="admin-btn" onclick="tg.showAlert('Функция создания промокода')">🎟 Создать Промо</button>
+        <button class="admin-btn" onclick="tg.showAlert('Изменение RTP')">📈 RTP: 90%</button>
+        <button class="admin-btn" onclick="promptGiveBalance()">👥 Выдать баланс юзеру</button>
+        
+        <button class="admin-btn red" onclick="closeAdmin()">Закрыть админку</button>
+    </div>
 
     <script>
         const tg = window.Telegram.WebApp;
         tg.expand();
-        const socket = io();
-        let currentTab = 'crash';
-        let adminTaps = 0;
-
-        // 1. ИНИЦИАЛИЗАЦИЯ TON CONNECT
-        const tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
-            manifestUrl: 'https://raw.githubusercontent.com/ton-community/tutorials/main/03-client/test/public/tonconnect-manifest.json',
-            buttonRootId: 'ton-connect-btn'
-        });
-
-        // 2. АНИМИРОВАННЫЙ ФОН (ЗВЕЗДЫ)
+        
+        // --- 1. АНИМАЦИЯ ЗВЕЗД ---
         const canvas = document.getElementById('stars-canvas');
         const ctx = canvas.getContext('2d');
         canvas.width = window.innerWidth;
         canvas.height = window.innerHeight;
-        let stars = Array.from({length: 120}, () => ({
+        let stars = Array.from({length: 100}, () => ({
             x: Math.random() * canvas.width,
             y: Math.random() * canvas.height,
             size: Math.random() * 2,
-            speed: 0.3 + Math.random() * 0.5
+            speed: 0.1 + Math.random() * 0.3
         }));
-
         function drawStars() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             ctx.fillStyle = "#fff";
@@ -414,111 +424,82 @@
         }
         drawStars();
 
-        // 3. СКРЫТАЯ АДМИНКА
-        function handleAdminTap() {
-            adminTaps++;
-            if(adminTaps >= 10) {
-                socket.emit('trigger_admin', tg.initDataUnsafe.user?.id || 12345);
-                tg.showAlert("🔐 Безопасный вход: Проверьте бота!");
-                adminTaps = 0;
-            }
-            setTimeout(() => adminTaps = 0, 5000);
+        // --- 2. ЛОГИКА ВКЛАДОК ---
+        function switchTab(tab, element) {
+            document.querySelectorAll('.main-view').forEach(v => v.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            
+            document.getElementById('view-' + tab).classList.add('active');
+            element.classList.add('active');
+
+            // Скрываем блок ставки в кошельке
+            document.getElementById('bet-section').style.display = (tab === 'wallet') ? 'none' : 'block';
+
+            if(tab === 'mines') renderMines();
         }
 
-        // 4. ЛОГИКА ПЕРЕКЛЮЧЕНИЯ ВКЛАДОК
-        function switchView(name, el) {
-            currentTab = name;
-            document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
-            document.getElementById('v-' + name).classList.add('active');
-
-            if(el) {
-                document.querySelectorAll('.g-btn').forEach(b => b.classList.remove('active'));
-                el.classList.add('active');
-            }
-
-            if(name === 'mines') initMines();
-        }
-
-        // 5. ЛОГИКА MINES (ВИЗУАЛ)
-        function initMines() {
+        // --- 3. ОТРИСОВКА МИН ---
+        function renderMines() {
             const container = document.getElementById('mines-container');
-            container.innerHTML = '';
+            if(container.innerHTML !== '') return; // уже отрисовано
+            
             for(let i=0; i<25; i++) {
-                const cell = document.createElement('div');
-                cell.className = 'cell';
+                let cell = document.createElement('div');
+                cell.className = 'mine-cell';
+                cell.innerHTML = '💎'; // По умолчанию бриллиант (как на скрине)
                 cell.onclick = () => {
                     cell.classList.add('open');
-                    cell.innerHTML = '💎';
                     tg.HapticFeedback.impactOccurred('medium');
                 };
                 container.appendChild(cell);
             }
         }
 
-        // 6. ОБРАБОТКА СТАВКИ
-        function handleMainAction() {
-            const amt = document.getElementById('bet-amt').value;
-            tg.HapticFeedback.impactOccurred('heavy');
+        // --- 4. ВНУТРИИГРОВАЯ АДМИНКА ---
+        let adminTaps = 0;
+        function handleAdminTap() {
+            adminTaps++;
+            if (adminTaps >= 10) {
+                adminTaps = 0;
+                // Запрашиваем пароль нативным окном
+                let pwd = prompt("ОБНАРУЖЕН ВХОД В АДМИНКУ.\nВведите пароль:");
+                if (pwd === "8877") {
+                    document.getElementById('admin-overlay').style.display = 'block';
+                    tg.HapticFeedback.notificationOccurred('success');
+                } else if (pwd !== null) {
+                    tg.showAlert("❌ Неверный пароль!");
+                    tg.HapticFeedback.notificationOccurred('error');
+                }
+            }
+            setTimeout(() => { adminTaps = 0; }, 5000);
+        }
 
-            if(currentTab === 'crash') {
-                socket.emit('place_bet', { 
-                    username: document.getElementById('u-name').innerText, 
-                    amount: amt 
-                });
-            } else {
-                tg.showAlert("Эта игра скоро будет доступна!");
+        function closeAdmin() {
+            document.getElementById('admin-overlay').style.display = 'none';
+        }
+
+        function promptGiveBalance() {
+            let user = prompt("Введите ID или Username юзера:");
+            if(user) {
+                let amount = prompt("Сколько TON выдать?");
+                if(amount) {
+                    tg.showAlert(`✅ Выдано ${amount} TON пользователю ${user}`);
+                }
             }
         }
 
-        // 7. SOCKET.IO РЕПСИВЕРЫ
-        window.onload = () => {
-            const user = tg.initDataUnsafe.user || { id: 8423153067, username: "Player", photo_url: "" };
-            socket.emit('auth', user);
-            if(user.photo_url) document.getElementById('u-avatar').src = user.photo_url;
-        };
-
-        socket.on('init', data => {
-            document.getElementById('u-name').innerText = data.user.username;
-            document.getElementById('bal-real').innerText = data.user.real_balance.toFixed(2) + ' TON';
-            document.getElementById('crash-history').innerHTML = data.crash.history.map(x => `<div class="h-node">${x}</div>`).join('');
-        });
-
-        socket.on('crash_timer', t => {
-            if(currentTab === 'crash') {
-                document.getElementById('crash-mult').innerText = t;
-                document.getElementById('crash-mult').style.color = "#fff";
-                document.getElementById('crash-label').innerText = "ВЗЛЕТ ЧЕРЕЗ";
-            }
-        });
-
-        socket.on('crash_tick', m => {
-            if(currentTab === 'crash') {
-                document.getElementById('crash-mult').innerText = m + 'x';
-                document.getElementById('crash-mult').style.color = "var(--success)";
-                document.getElementById('crash-label').innerText = "ПОЛЕТ";
-            }
-        });
-
-        socket.on('crash_end', data => {
-            if(currentTab === 'crash') {
-                document.getElementById('crash-mult').innerText = data.point + 'x';
-                document.getElementById('crash-mult').style.color = "var(--error)";
-                document.getElementById('crash-label').innerText = "КРАШ!";
-                document.getElementById('crash-history').innerHTML = data.history.map(x => `<div class="h-node">${x}</div>`).join('');
-                tg.HapticFeedback.notificationOccurred('error');
-            }
-        });
-
-        socket.on('update_bets', bets => {
-            document.getElementById('bets-list').innerHTML = bets.length ? 
-                bets.map(b => `<div class="bet-item"><span>👤 ${b.user}</span><span>${b.amount} TON</span></div>`).join('') :
-                '<div style="color:var(--text-secondary); font-size:0.8rem;">Ожидание ставок...</div>';
-        });
-
-        socket.on('bet_accepted', res => {
-            tg.showAlert(res.msg);
-        });
-
+        // --- 5. СТАВКА ---
+        function placeBet() {
+            let val = document.getElementById('bet-amt').value;
+            tg.HapticFeedback.impactOccurred('heavy');
+            // Здесь отправка на твой сервер Socket.io
+            console.log("Ставка:", val);
+            
+            // Тестовая анимация краша
+            document.getElementById('crash-label').innerText = "ПОЛЕТ";
+            document.getElementById('crash-label').style.color = "#34c759";
+            document.getElementById('crash-progress').style.width = "100%";
+        }
     </script>
 </body>
 </html>
