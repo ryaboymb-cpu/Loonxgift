@@ -6,9 +6,15 @@ let globalRtp = 90;
 
 const $ = id => document.getElementById(id);
 
+// ИСПРАВЛЕНО: Уведомления заменяют друг друга и не стакаются (Баг 5)
 function showToast(msg) {
-    const t = document.createElement('div'); t.className = 'toast'; t.innerText = msg;
-    $('toast-container').appendChild(t); setTimeout(() => t.remove(), 3000);
+    const container = $('toast-container');
+    container.innerHTML = ''; // Удаляем старые, чтобы не было спама на весь экран
+    const t = document.createElement('div'); 
+    t.className = 'toast'; 
+    t.innerText = msg;
+    container.appendChild(t); 
+    setTimeout(() => t.remove(), 3000);
 }
 
 function copyText(text) {
@@ -69,9 +75,8 @@ function nav(pageId, el) {
 }
 
 socket.on('online', c => $('online-c').innerText = c);
-socket.on('rtpUpdate', r => globalRtp = r); // Обновление RTP в реальном времени
+socket.on('rtpUpdate', r => globalRtp = r); 
 
-// Лента с аватарками
 socket.on('newLiveBet', b => {
     const d = document.createElement('div'); d.className = 'live-bet-item';
     d.innerHTML = `
@@ -85,7 +90,9 @@ socket.on('newLiveBet', b => {
 });
 
 // CRASH
-let curCrash = {}; let crBet = 0; let myCrashBetActive = false;
+let curCrash = {}; 
+// ИСПРАВЛЕНО: Массив для двух независимых ставок в краше (Баг 7)
+let myCrashBets = []; 
 
 socket.on('crashHistoryUpdate', hist => {
     $('cr-history').innerHTML = hist.map(x => `<div class="cr-badge ${parseFloat(x) >= 2.0 ? 'good' : 'bad'}">${x}x</div>`).join('');
@@ -105,14 +112,35 @@ socket.on('crashBetsUpdate', bets => {
 
 socket.on('crashData', d => {
     curCrash = d;
-    if(d.status === 'waiting') { $('cr-x').innerText = 'ЖДЕМ'; $('cr-timer').innerText = `СТАРТ: ${d.timer}с`; $('cr-x').style.color = '#fff'; }
-    if(d.status === 'running') { $('cr-x').innerText = d.multiplier + 'x'; $('cr-timer').innerText = '🚀 В ПОЛЕТЕ'; $('cr-x').style.color = 'var(--neon)'; }
+    const btn = $('cr-btn');
+    
+    if(d.status === 'waiting') { 
+        $('cr-x').innerText = 'ЖДЕМ'; $('cr-timer').innerText = `СТАРТ: ${d.timer}с`; $('cr-x').style.color = '#fff'; 
+        if(myCrashBets.length === 0) {
+            btn.innerText = 'ПОСТАВИТЬ'; btn.style.background = 'var(--neon)';
+        } else if (myCrashBets.length === 1) {
+            btn.innerText = 'ПОСТАВИТЬ 2-Ю СТАВКУ'; btn.style.background = 'var(--neon)';
+        } else {
+            btn.innerText = 'МАКС. СТАВОК (2)'; btn.style.background = '#555';
+        }
+    }
+    if(d.status === 'running') { 
+        $('cr-x').innerText = d.multiplier + 'x'; $('cr-timer').innerText = '🚀 В ПОЛЕТЕ'; $('cr-x').style.color = 'var(--neon)'; 
+        // ИСПРАВЛЕНО: Показываем сколько заберет первая ставка в очереди
+        if (myCrashBets.length > 0) {
+            const currentWin = (myCrashBets[0] * d.multiplier).toFixed(2);
+            btn.innerText = `ЗАБРАТЬ ${currentWin} TON`;
+            btn.style.background = 'var(--neon-red)';
+        } else {
+            btn.innerText = 'ОЖИДАНИЕ'; btn.style.background = '#555';
+        }
+    }
     if(d.status === 'crashed') { 
         $('cr-x').innerText = 'BOOM!'; $('cr-x').style.color = 'var(--neon-red)'; 
-        if(myCrashBetActive) { 
-            reqBet('Crash', crBet, 0); 
-            $('cr-btn').innerText = 'ПОСТАВИТЬ'; $('cr-btn').style.background = 'var(--neon)'; myCrashBetActive = false;
+        if(myCrashBets.length > 0) { 
+            myCrashBets = []; // Сброс ставок при краше
         } 
+        btn.innerText = 'ПОСТАВИТЬ'; btn.style.background = 'var(--neon)';
     }
 });
 
@@ -120,36 +148,59 @@ async function playCrash() {
     const btn = $('cr-btn');
     const curBal = mode === 'real' ? user.balance : user.demo_balance;
 
-    if(btn.innerText === 'ПОСТАВИТЬ') {
-        if(curCrash.status !== 'waiting') return showToast('Ставка пойдет на след. раунд');
-        crBet = parseFloat($('cr-bet').value); 
+    if(curCrash.status === 'waiting') {
+        if (myCrashBets.length >= 2) return showToast('Максимум 2 ставки за раунд!');
         
+        let crBet = parseFloat($('cr-bet').value); 
         if(isNaN(crBet) || crBet < 0.5 || crBet > 20) return showToast('Мин ставка 0.5, Макс 20 TON');
         if(crBet > curBal) return showToast('Недостаточно средств!');
         
         const r = await fetch('/api/bet', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id:user.id, game:'Crash', bet:crBet, win:0, mode}) });
         if(r.ok) { 
             user = await r.json(); updateUI();
-            btn.innerText = 'ЗАБРАТЬ'; btn.style.background = 'var(--neon-red)'; showToast('Ставка принята!');
-            myCrashBetActive = true;
+            myCrashBets.push(crBet);
+            if (myCrashBets.length === 1) {
+                btn.innerText = 'ПОСТАВИТЬ 2-Ю СТАВКУ'; 
+            } else {
+                btn.innerText = 'МАКС. СТАВОК (2)'; btn.style.background = '#555';
+            }
+            showToast('Ставка принята!');
         } else { showToast('Ошибка ставки!'); }
         
-    } else if(myCrashBetActive && curCrash.status === 'running') {
-        const win = crBet * curCrash.multiplier; 
+    } else if(curCrash.status === 'running' && myCrashBets.length > 0) {
+        const activeBet = myCrashBets[0]; // Берем самую первую ставку
+        const win = activeBet * curCrash.multiplier; 
         const r = await fetch('/api/bet', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id:user.id, game:'Crash', bet:0, win:win, mode}) });
         if(r.ok) {
             user = await r.json(); updateUI();
-            btn.innerText = 'ПОСТАВИТЬ'; btn.style.background = 'var(--neon)'; showToast(`Вывод: +${win.toFixed(2)} TON`);
-            myCrashBetActive = false;
+            myCrashBets.shift(); // Удаляем забранную ставку из массива
+            showToast(`Вы забрали ${win.toFixed(2)} TON!`); // Уведомление о выигрыше
+            
+            if (myCrashBets.length > 0) {
+                btn.innerText = `ЗАБРАТЬ ${(myCrashBets[0] * curCrash.multiplier).toFixed(2)} TON`;
+            } else {
+                btn.innerText = 'ОЖИДАНИЕ'; btn.style.background = '#555';
+            }
         }
     }
 }
 
 // MINES
-let miActive = false; let bombs = []; let miBet = 0;
+let miActive = false; let bombs = []; let miBet = 0; 
+let openedCells = 0; let currentMinesWin = 0; // ИСПРАВЛЕНО: Для точного расчета выигрыша (Баг 3)
+
 function playMines() {
     const curBal = mode === 'real' ? user.balance : user.demo_balance;
-    if(miActive) { reqBet('Mines', 0, miBet*1.5); miActive = false; $('mi-btn').innerText='ИГРАТЬ (5 МИН)'; showToast('Деньги забраны!'); return; }
+    if(miActive) { 
+        reqBet('Mines', 0, currentMinesWin).then(ok => {
+            if(ok) {
+                miActive = false; 
+                $('mi-btn').innerText='ИГРАТЬ (5 МИН)'; 
+                showToast(`Вы забрали ${currentMinesWin.toFixed(2)} TON!`); // ИСПРАВЛЕНО: Уведомление о выигрыше (Баг 2)
+            }
+        });
+        return; 
+    }
     miBet = parseFloat($('mi-bet').value); 
     
     if(isNaN(miBet) || miBet < 0.5 || miBet > 20) return showToast('Мин ставка 0.5, Макс 20 TON');
@@ -158,7 +209,12 @@ function playMines() {
     reqBet('Mines', miBet, 0).then(success => {
         if(success) {
             bombs = []; while(bombs.length<5) { let r=Math.floor(Math.random()*25); if(!bombs.includes(r)) bombs.push(r); }
-            miActive = true; $('mi-btn').innerText='ЗАБРАТЬ ДЕНЬГИ'; renderMines(); showToast('Ищи кристаллы!');
+            miActive = true; 
+            openedCells = 0;
+            currentMinesWin = miBet; // Изначальный выигрыш равен ставке (0 открытых = 1.0x)
+            $('mi-btn').innerText = `ЗАБРАТЬ ${currentMinesWin.toFixed(2)} TON`; // Кнопка показывает актуальную сумму
+            renderMines(); 
+            showToast('Ищи кристаллы!');
         }
     });
 }
@@ -167,16 +223,11 @@ function renderMines() {
     for(let i=0; i<25; i++) {
         let c = document.createElement('div'); c.className = 'm-cell';
         c.onclick = () => {
-            if(!miActive) return;
+            if(!miActive || c.classList.contains('open')) return;
             
-            // Внедрение RTP: шанс подсунуть бомбу, если игроку везет
             let hitBomb = bombs.includes(i);
             if (!hitBomb) {
-                // Если RTP 90, шанс искусственного проигрыша 10%
-                if (Math.random() > (globalRtp / 100)) {
-                    hitBomb = true;
-                    bombs[0] = i; // перемещаем бомбу сюда
-                }
+                if (Math.random() > (globalRtp / 100)) { hitBomb = true; bombs[0] = i; }
             }
 
             if(hitBomb) { 
@@ -184,6 +235,9 @@ function renderMines() {
                 $('mi-btn').innerText='ИГРАТЬ (5 МИН)'; showToast('БУМ! Проигрыш'); 
             } else { 
                 c.innerText='💎'; c.classList.add('open'); 
+                openedCells++;
+                currentMinesWin = miBet * (1 + openedCells * 0.2); // Добавляем коэфф за каждый кристалл (можно настроить 0.2)
+                $('mi-btn').innerText = `ЗАБРАТЬ ${currentMinesWin.toFixed(2)} TON`; // Обновляем кнопку сразу (Баг 2)
             }
         }; $('mine-grid').appendChild(c);
     }
@@ -202,8 +256,7 @@ async function playCoin() {
 
     isFlipping = true; $('co-btn').innerText = 'КРУТИМ...';
     
-    // Внедрение RTP для Coinflip
-    const winChance = globalRtp / 200; // Если RTP 90, шанс победы = 45% (0.45)
+    const winChance = globalRtp / 200; 
     const isWin = Math.random() < winChance;
     const result = isWin ? cSide : (cSide === 'L' ? 'X' : 'L');
     
@@ -215,7 +268,7 @@ async function playCoin() {
     
     setTimeout(async () => {
         const win = result === cSide ? bet*2 : 0;
-        showToast(win > 0 ? `Победа! Выпало ${result}` : `Проигрыш. Выпало ${result}`);
+        showToast(win > 0 ? `Победа! Вы забрали ${win.toFixed(2)} TON!` : `Проигрыш. Выпало ${result}`); // Уведомление о выигрыше
         await reqBet('Coinflip', bet, win);
         coin.style.transition = 'none'; coin.style.transform = `rotateY(${result === 'L' ? 0 : 180}deg)`; 
         setTimeout(() => coin.style.transition = 'transform 2s cubic-bezier(0.2, 0.8, 0.2, 1)', 50);
