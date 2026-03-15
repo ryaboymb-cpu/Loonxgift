@@ -57,7 +57,7 @@
                 <div id="cr-timer" style="color:var(--neon); font-size:14px; margin-bottom:10px; font-weight:bold;">ОЖИДАНИЕ...</div>
                 <div id="cr-x" style="font-size: 65px; font-weight: 900; text-shadow: 0 0 20px rgba(255,255,255,0.2);">1.00x</div>
             </div>
-            <input type="number" id="cr-bet" class="input-box" placeholder="Сумма ставки">
+            <input type="number" id="cr-bet" class="input-box" placeholder="Сумма (0.5 - 20 TON)">
             <button id="cr-btn" class="btn" onclick="playCrash()">ПОСТАВИТЬ</button>
             
             <div class="live-bets-container">
@@ -68,7 +68,7 @@
 
         <div id="page-mines" class="page">
             <div class="mines-grid" id="mine-grid"></div>
-            <input type="number" id="mi-bet" class="input-box" placeholder="Сумма ставки">
+            <input type="number" id="mi-bet" class="input-box" placeholder="Сумма (0.5 - 20 TON)">
             <button id="mi-btn" class="btn" onclick="playMines()">ИГРАТЬ (5 МИН)</button>
         </div>
 
@@ -83,7 +83,7 @@
                 <div id="side-l" class="c-side active" data-side="L" onclick="setSide('L')">Символ L</div>
                 <div id="side-x" class="c-side" data-side="X" onclick="setSide('X')">Символ X</div>
             </div>
-            <input type="number" id="co-bet" class="input-box" placeholder="Сумма ставки">
+            <input type="number" id="co-bet" class="input-box" placeholder="Сумма (0.5 - 20 TON)">
             <button id="co-btn" class="btn" onclick="playCoin()">КРУТИТЬ МОНЕТУ</button>
         </div>
 
@@ -98,13 +98,13 @@
         <div id="page-wallet" class="page">
             <div class="card" style="text-align: center;">
                 <h3 style="margin-bottom: 10px; color:var(--neon);">ПОПОЛНЕНИЕ (TON)</h3>
-                <p style="font-size:12px; color:var(--sub); margin-bottom: 15px;">Отправьте TON на кошелек ниже. Обязательно укажите ваш ID в комментарий (Memo)!</p>
+                <p style="font-size:12px; color:var(--sub); margin-bottom: 15px;">Отправьте TON на кошелек ниже. Обязательно укажите ваш ID в комментарий (Memo)! <br><span style="color:var(--neon)">Нажми, чтобы скопировать.</span></p>
                 
-                <div style="background:#1a1a1a; padding:10px; border-radius:8px; margin-bottom:10px; word-break: break-all; font-size: 11px; border: 1px solid #333;" id="dep-wallet">Загрузка...</div>
+                <div style="background:#1a1a1a; padding:10px; border-radius:8px; margin-bottom:10px; word-break: break-all; font-size: 11px; border: 1px solid #333; cursor: pointer;" id="dep-wallet" onclick="copyText(this.innerText)">Загрузка...</div>
                 
                 <div style="margin-bottom: 15px;">
                     <span style="font-size: 12px; color:var(--sub);">Ваш комментарий (MEMO):</span><br>
-                    <b id="dep-memo" style="font-size: 16px; color: var(--neon);">...</b>
+                    <b id="dep-memo" style="font-size: 16px; color: var(--neon); cursor: pointer;" onclick="copyText(this.innerText)">...</b>
                 </div>
 
                 <button class="btn" style="background:var(--neon-blue); color:#000;" onclick="checkRealDeposit()">ПРОВЕРИТЬ ОПЛАТУ</button>
@@ -131,8 +131,9 @@
                 <div><div style="color:var(--neon); font-size:11px; margin-bottom:5px;">Общий Плюс</div><b id="p-plus" style="font-size:16px;">0 TON</b></div>
                 <div><div style="color:var(--neon-red); font-size:11px; margin-bottom:5px;">Общий Минус</div><b id="p-minus" style="font-size:16px;">0 TON</b></div>
             </div>
-            <button class="btn" style="background:var(--neon-blue); color:#000; border: none; margin-bottom: 10px;" onclick="tg.openTelegramLink('https://t.me/ТВОЙ_КАНАЛ_СЮДА')">НАШ КАНАЛ</button>
-            <button class="btn" style="background:#222; color:#fff; border: 1px solid #444;" onclick="tg.openTelegramLink('https://t.me/msgp2p')">ТЕХ. ПОДДЕРЖКА</button>
+            <button class="btn" style="background:var(--neon-blue); color:#000; border: none; margin-bottom: 10px;" onclick="tg.openTelegramLink('https://t.me/Loonxnews')">📢 НАШ КАНАЛ</button>
+            <button class="btn" style="background:#222; color:#fff; border: 1px solid #444; margin-bottom: 10px;" onclick="tg.openTelegramLink('https://t.me/LoonxGift_Support')">💬 САППОРТ</button>
+            <button class="btn" style="background:var(--neon-red); color:#fff; border: none;" onclick="tg.openTelegramLink('https://t.me/msgp2p')">🐞 СООБЩИТЬ О БАГЕ</button>
         </div>
     </div>
 
