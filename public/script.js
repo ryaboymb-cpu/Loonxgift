@@ -2,11 +2,18 @@ const tg = window.Telegram.WebApp;
 const socket = io();
 let user = null; let mode = 'real';
 let adminPass = '';
+let globalRtp = 90;
 
 const $ = id => document.getElementById(id);
+
 function showToast(msg) {
     const t = document.createElement('div'); t.className = 'toast'; t.innerText = msg;
     $('toast-container').appendChild(t); setTimeout(() => t.remove(), 3000);
+}
+
+function copyText(text) {
+    if(!text) return;
+    navigator.clipboard.writeText(text).then(() => showToast('Скопировано!'));
 }
 
 const ctx = $('stars-bg').getContext('2d');
@@ -31,8 +38,8 @@ window.onload = async () => {
     });
     const data = await res.json();
     user = data.user;
+    globalRtp = data.rtp || 90;
     
-    // Подгрузка кошелька админа для депов
     $('dep-wallet').innerText = data.adminWallet || 'Кошелек не настроен на сервере';
     $('dep-memo').innerText = user.id;
 
@@ -62,6 +69,7 @@ function nav(pageId, el) {
 }
 
 socket.on('online', c => $('online-c').innerText = c);
+socket.on('rtpUpdate', r => globalRtp = r); // Обновление RTP в реальном времени
 
 // Лента с аватарками
 socket.on('newLiveBet', b => {
@@ -115,10 +123,10 @@ async function playCrash() {
     if(btn.innerText === 'ПОСТАВИТЬ') {
         if(curCrash.status !== 'waiting') return showToast('Ставка пойдет на след. раунд');
         crBet = parseFloat($('cr-bet').value); 
-        if(isNaN(crBet) || crBet <= 0) return showToast('Введите сумму');
+        
+        if(isNaN(crBet) || crBet < 0.5 || crBet > 20) return showToast('Мин ставка 0.5, Макс 20 TON');
         if(crBet > curBal) return showToast('Недостаточно средств!');
         
-        // Отправляем ставку на сервер (вычитаем баланс)
         const r = await fetch('/api/bet', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id:user.id, game:'Crash', bet:crBet, win:0, mode}) });
         if(r.ok) { 
             user = await r.json(); updateUI();
@@ -127,7 +135,6 @@ async function playCrash() {
         } else { showToast('Ошибка ставки!'); }
         
     } else if(myCrashBetActive && curCrash.status === 'running') {
-        // Забираем выигрыш
         const win = crBet * curCrash.multiplier; 
         const r = await fetch('/api/bet', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id:user.id, game:'Crash', bet:0, win:win, mode}) });
         if(r.ok) {
@@ -144,10 +151,10 @@ function playMines() {
     const curBal = mode === 'real' ? user.balance : user.demo_balance;
     if(miActive) { reqBet('Mines', 0, miBet*1.5); miActive = false; $('mi-btn').innerText='ИГРАТЬ (5 МИН)'; showToast('Деньги забраны!'); return; }
     miBet = parseFloat($('mi-bet').value); 
-    if(isNaN(miBet) || miBet<=0) return showToast('Введите ставку');
+    
+    if(isNaN(miBet) || miBet < 0.5 || miBet > 20) return showToast('Мин ставка 0.5, Макс 20 TON');
     if(miBet > curBal) return showToast('Недостаточно средств!');
     
-    // Снимаем деньги за старт
     reqBet('Mines', miBet, 0).then(success => {
         if(success) {
             bombs = []; while(bombs.length<5) { let r=Math.floor(Math.random()*25); if(!bombs.includes(r)) bombs.push(r); }
@@ -161,7 +168,18 @@ function renderMines() {
         let c = document.createElement('div'); c.className = 'm-cell';
         c.onclick = () => {
             if(!miActive) return;
-            if(bombs.includes(i)) { 
+            
+            // Внедрение RTP: шанс подсунуть бомбу, если игроку везет
+            let hitBomb = bombs.includes(i);
+            if (!hitBomb) {
+                // Если RTP 90, шанс искусственного проигрыша 10%
+                if (Math.random() > (globalRtp / 100)) {
+                    hitBomb = true;
+                    bombs[0] = i; // перемещаем бомбу сюда
+                }
+            }
+
+            if(hitBomb) { 
                 c.innerText='💣'; c.style.background='var(--neon-red)'; miActive=false; 
                 $('mi-btn').innerText='ИГРАТЬ (5 МИН)'; showToast('БУМ! Проигрыш'); 
             } else { 
@@ -178,13 +196,18 @@ async function playCoin() {
     if(isFlipping) return;
     const curBal = mode === 'real' ? user.balance : user.demo_balance;
     const bet = parseFloat($('co-bet').value); 
-    if(isNaN(bet) || bet<=0) return showToast('Введите ставку');
+    
+    if(isNaN(bet) || bet < 0.5 || bet > 20) return showToast('Мин ставка 0.5, Макс 20 TON');
     if(bet > curBal) return showToast('Недостаточно средств!');
 
     isFlipping = true; $('co-btn').innerText = 'КРУТИМ...';
     
+    // Внедрение RTP для Coinflip
+    const winChance = globalRtp / 200; // Если RTP 90, шанс победы = 45% (0.45)
+    const isWin = Math.random() < winChance;
+    const result = isWin ? cSide : (cSide === 'L' ? 'X' : 'L');
+    
     const coin = $('coin-3d');
-    const result = Math.random() > 0.5 ? 'L' : 'X';
     const turns = 5; 
     const rotation = result === 'L' ? (turns * 360) : (turns * 360 + 180);
     
@@ -254,7 +277,7 @@ async function loadAdminData() {
         adData = await r.json(); 
         $('admin-modal').style.display = 'block'; 
         showToast('Вход в Админку');
-        renderAdminContent('withdraws'); // По дефолту выводы
+        renderAdminContent('withdraws'); 
     } else { showToast('Неверный пароль'); }
 }
 
@@ -264,7 +287,7 @@ function renderAdminContent(tab) {
         if(!adData.withdraws.length) return c.innerHTML = 'Выводов нет';
         c.innerHTML = adData.withdraws.map(w => `
             <div style="background:#1a1a1a; padding:10px; border-radius:8px; margin-bottom:10px;">
-                <b>ID:</b> ${w.userId} <br> <b>Сумма:</b> ${w.amount} TON <br> <b style="font-size:10px; word-break:break-all;">${w.address}</b><br>
+                <b>ID:</b> ${w.userId} <br> <b>Сумма:</b> ${w.amount} TON <br> <b style="font-size:10px; word-break:break-all; cursor:pointer; color:var(--neon);" onclick="copyText('${w.address}')">${w.address}</b><br>
                 <button class="btn" style="padding:8px; margin-top:5px; background:var(--neon);" onclick="adminW('${w._id}', 'approve')">ОДОБРИТЬ</button>
                 <button class="btn" style="padding:8px; margin-top:5px; background:var(--neon-red);" onclick="adminW('${w._id}', 'reject')">ОТКЛОНИТЬ (ВЕРНУТЬ)</button>
             </div>
