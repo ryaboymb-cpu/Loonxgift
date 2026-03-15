@@ -31,7 +31,6 @@ const Withdraw = mongoose.model('Withdraw', WithdrawSchema);
 const Deposit = mongoose.model('Deposit', DepositSchema);
 const Settings = mongoose.model('Settings', SettingsSchema);
 
-// Инициализация RTP в БД если нет
 async function initSettings() {
     const rtp = await Settings.findOne({key: 'rtp'});
     if(!rtp) await Settings.create({key: 'rtp', value: 90});
@@ -39,10 +38,19 @@ async function initSettings() {
 initSettings();
 
 const bot = new TelegramBot(process.env.BOT_TOKEN, { polling: true });
+
 bot.on('message', (msg) => {
     if (msg.text === '/start' || msg.text === '/help') {
-        bot.sendMessage(msg.chat.id, `🚀 Привет, ${msg.from.first_name}! Добро пожаловать в Loonx Casino. Твой баланс и игры внутри.`, {
-            reply_markup: { inline_keyboard: [[{ text: "🎮 ОТКРЫТЬ ИГРЫ", web_app: { url: process.env.WEB_APP_URL } }]] }
+        const text = `🚀 Привет, ${msg.from.first_name}!\nДобро пожаловать в Loonx Gifts.\n\nТут ты можешь играть и выигрывать TON! Твой баланс и все игры находятся внутри Mini App.\n\nВыбирай действие в меню ниже:`;
+        
+        bot.sendMessage(msg.chat.id, text, {
+            reply_markup: {
+                inline_keyboard: [
+                    [{ text: "🎮 ИГРАТЬ (MINI APP)", web_app: { url: process.env.WEB_APP_URL } }],
+                    [{ text: "📢 Канал", url: "https://t.me/Loonxnews" }, { text: "💬 Саппорт", url: "https://t.me/LoonxGift_Support" }],
+                    [{ text: "🐞 Баги", url: "https://t.me/msgp2p" }]
+                ]
+            }
         });
     }
 });
@@ -66,7 +74,6 @@ async function runCrash() {
     crash.status = 'running'; crash.multiplier = 1.0;
     const rtpSetting = await Settings.findOne({key: 'rtp'});
     const rtp = rtpSetting ? rtpSetting.value : 90; 
-    // Простая генерация, зависящая от RTP
     const limit = Math.pow(100 / (100 - (Math.random() * rtp)), 0.9).toFixed(2);
     
     const r = setInterval(() => {
@@ -86,7 +93,7 @@ async function runCrash() {
 startCrash();
 
 let online = 0;
-io.on('connection', (socket) => {
+io.on('connection', async (socket) => {
     online++; io.emit('online', online);
     socket.emit('crashHistoryUpdate', crashHistory);
     socket.emit('crashBetsUpdate', crashLiveBets);
@@ -99,7 +106,9 @@ app.post('/api/auth', async (req, res) => {
     let user = await User.findOne({ id });
     if (!user) user = await User.create({ id, username: username || first_name, photo: photo_url });
     else { user.username = username || first_name; user.photo = photo_url; await user.save(); }
-    res.json({ user, adminWallet: process.env.ADMIN_WALLET });
+    
+    const rtpSetting = await Settings.findOne({key: 'rtp'});
+    res.json({ user, adminWallet: process.env.ADMIN_WALLET, rtp: rtpSetting ? rtpSetting.value : 90 });
 });
 
 app.post('/api/bet', async (req, res) => {
@@ -117,7 +126,7 @@ app.post('/api/bet', async (req, res) => {
     const avatar = user.photo || 'https://cdn-icons-png.flaticon.com/512/149/149071.png';
     io.emit('newLiveBet', { username: user.username, avatar: avatar, game, amount: win > 0 ? '+'+win : '-'+bet });
     
-    if(game === 'Crash' && win === 0) { // Ставка принята
+    if(game === 'Crash' && win === 0) {
         crashLiveBets.push({ id: user.id, username: user.username, avatar, bet: bet });
         io.emit('crashBetsUpdate', crashLiveBets);
     }
@@ -145,9 +154,8 @@ app.post('/api/check_deposit', async (req, res) => {
         for (let tx of data.result) {
             if (tx.in_msg && tx.in_msg.message === String(id) && tx.in_msg.value > 0) {
                 const txHash = tx.transaction_id.hash;
-                const amountTON = tx.in_msg.value / 1e9; // Из нанотонов в TON
+                const amountTON = tx.in_msg.value / 1e9; 
                 
-                // Проверяем, не зачислен ли уже этот хеш
                 const exists = await Deposit.findOne({ hash: txHash });
                 if(!exists) {
                     await Deposit.create({ hash: txHash, userId: id, amount: amountTON });
@@ -216,6 +224,7 @@ app.post('/api/admin/promo_create', checkAdmin, async (req, res) => {
 app.post('/api/admin/set_rtp', checkAdmin, async (req, res) => {
     const { value } = req.body;
     await Settings.updateOne({key: 'rtp'}, {value: Number(value)}, {upsert: true});
+    io.emit('rtpUpdate', Number(value)); // Отправляем новый RTP всем клиентам
     res.json({success: true});
 });
 
