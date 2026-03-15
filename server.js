@@ -116,17 +116,25 @@ app.post('/api/bet', async (req, res) => {
     const user = await User.findOne({ id });
     const field = mode === 'demo' ? 'demo_balance' : 'balance';
     
-    if (bet <= 0 || user[field] < bet) return res.status(400).json({error: 'No money'});
+    // ИСПРАВЛЕНИЕ БАГА: Разрешаем bet = 0 для забора выигрыша
+    if (bet < 0 || win < 0 || user[field] < bet) return res.status(400).json({error: 'No money'});
     
     user[field] = Number((user[field] - bet + win).toFixed(2));
-    user.stats.bets++;
-    if(win > 0) { user.stats.wins++; user.stats.plus += win; } else { user.stats.minus += bet; }
+    
+    // Считаем стату
+    if (bet > 0) user.stats.bets++; 
+    if(win > 0) { user.stats.wins++; user.stats.plus += win; } else if (bet > 0) { user.stats.minus += bet; }
     await user.save();
     
     const avatar = user.photo || 'https://cdn-icons-png.flaticon.com/512/149/149071.png';
-    io.emit('newLiveBet', { username: user.username, avatar: avatar, game, amount: win > 0 ? '+'+win : '-'+bet });
     
-    if(game === 'Crash' && win === 0) {
+    // Не спамим нулями в ленту при заборе
+    if (bet > 0 || win > 0) {
+        io.emit('newLiveBet', { username: user.username, avatar: avatar, game, amount: win > 0 ? '+'+win : '-'+bet });
+    }
+    
+    // В список Crash добавляем только когда реально ставим (bet > 0)
+    if(game === 'Crash' && win === 0 && bet > 0) {
         crashLiveBets.push({ id: user.id, username: user.username, avatar, bet: bet });
         io.emit('crashBetsUpdate', crashLiveBets);
     }
