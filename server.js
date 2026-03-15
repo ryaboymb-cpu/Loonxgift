@@ -11,7 +11,9 @@ const app = express();
 const server = http.createServer(app);
 const io = socketIo(server, { cors: { origin: "*" } });
 
-app.use(cors()); app.use(express.json()); app.use(express.static(path.join(__dirname, 'public')));
+app.use(cors()); 
+app.use(express.json()); 
+app.use(express.static(path.join(__dirname, 'public')));
 
 mongoose.connect(process.env.MONGO_URI).then(() => console.log('✅ DB Connected'));
 
@@ -23,7 +25,7 @@ const UserSchema = new mongoose.Schema({
 const PromoSchema = new mongoose.Schema({ code: String, amount: Number, limit: Number, usedBy: [String] });
 const WithdrawSchema = new mongoose.Schema({ userId: String, address: String, amount: Number, status: { type: String, default: 'pending' } });
 const DepositSchema = new mongoose.Schema({ hash: { type: String, unique: true }, userId: String, amount: Number });
-const SettingsSchema = new mongoose.Schema({ key: String, value: Number }); // Для RTP
+const SettingsSchema = new mongoose.Schema({ key: String, value: Number }); // Для раздельных RTP
 
 const User = mongoose.model('User', UserSchema);
 const Promo = mongoose.model('Promo', PromoSchema);
@@ -31,29 +33,37 @@ const Withdraw = mongoose.model('Withdraw', WithdrawSchema);
 const Deposit = mongoose.model('Deposit', DepositSchema);
 const Settings = mongoose.model('Settings', SettingsSchema);
 
+// ИСПРАВЛЕНО: Раздельные RTP для игр (Баг 4)
 async function initSettings() {
-    const rtp = await Settings.findOne({key: 'rtp'});
-    if(!rtp) await Settings.create({key: 'rtp', value: 90});
+    const defaultSettings = [
+        { key: 'rtp_crash', value: 90 },
+        { key: 'rtp_mines', value: 90 },
+        { key: 'rtp_coinflip', value: 90 }
+    ];
+    for (let setting of defaultSettings) {
+        const exists = await Settings.findOne({ key: setting.key });
+        if (!exists) await Settings.create(setting);
+    }
 }
 initSettings();
 
 const bot = new TelegramBot(process.env.BOT_TOKEN, { polling: true });
 
-bot.on('message', (msg) => {
-    if (msg.text === '/start' || msg.text === '/help') {
-        const text = `🚀 Привет, ${msg.from.first_name}!\nДобро пожаловать в Loonx Gifts.\n\nТут ты можешь играть и выигрывать TON! Твой баланс и все игры находятся внутри Mini App.\n\nВыбирай действие в меню ниже:`;
-        
-        bot.sendMessage(msg.chat.id, text, {
-            reply_markup: {
-                inline_keyboard: [
-                    [{ text: "🎮 ИГРАТЬ (MINI APP)", web_app: { url: process.env.WEB_APP_URL } }],
-                    [{ text: "📢 Канал", url: "https://t.me/Loonxnews" }, { text: "💬 Саппорт", url: "https://t.me/LoonxGift_Support" }],
-                    [{ text: "🐞 Баги", url: "https://t.me/msgp2p" }]
-                ]
-            }
-        });
-    }
+// ИСПРАВЛЕНО: Бот теперь надежно реагирует на команды (Баг 1)
+bot.onText(/\/(start|help)/, (msg) => {
+    const text = `🚀 Привет, ${msg.from.first_name}!\nДобро пожаловать в Loonx Gifts.\n\nТут ты можешь играть и выигрывать TON! Твой баланс и все игры находятся внутри Mini App.\n\nВыбирай действие в меню ниже:`;
+    
+    bot.sendMessage(msg.chat.id, text, {
+        reply_markup: {
+            inline_keyboard: [
+                [{ text: "🎮 ИГРАТЬ (MINI APP)", web_app: { url: process.env.WEB_APP_URL } }],
+                [{ text: "📢 Канал", url: "https://t.me/Loonxnews" }, { text: "💬 Саппорт", url: "https://t.me/LoonxGift_Support" }],
+                [{ text: "🐞 Баги", url: "https://t.me/msgp2p" }]
+            ]
+        }
+    });
 });
+
 bot.on('polling_error', (err) => console.log('Bot Error:', err));
 
 // CRASH Движок с историей и live ставками
@@ -72,7 +82,9 @@ async function startCrash() {
 
 async function runCrash() {
     crash.status = 'running'; crash.multiplier = 1.0;
-    const rtpSetting = await Settings.findOne({key: 'rtp'});
+    
+    // Берем RTP именно для Краша
+    const rtpSetting = await Settings.findOne({key: 'rtp_crash'});
     const rtp = rtpSetting ? rtpSetting.value : 90; 
     const limit = Math.pow(100 / (100 - (Math.random() * rtp)), 0.9).toFixed(2);
     
@@ -83,7 +95,10 @@ async function runCrash() {
             clearInterval(r); 
             crash.status = 'crashed'; 
             crashHistory.unshift(crash.multiplier);
-            if(crashHistory.length > 10) crashHistory.pop();
+            
+            // ИСПРАВЛЕНО: Ограничение истории до 5 ставок (Баг 6)
+            if(crashHistory.length > 5) crashHistory.pop();
+            
             io.emit('crashData', crash); 
             io.emit('crashHistoryUpdate', crashHistory);
             setTimeout(startCrash, 4000); 
@@ -107,8 +122,12 @@ app.post('/api/auth', async (req, res) => {
     if (!user) user = await User.create({ id, username: username || first_name, photo: photo_url });
     else { user.username = username || first_name; user.photo = photo_url; await user.save(); }
     
-    const rtpSetting = await Settings.findOne({key: 'rtp'});
-    res.json({ user, adminWallet: process.env.ADMIN_WALLET, rtp: rtpSetting ? rtpSetting.value : 90 });
+    // Отправляем все RTP при авторизации
+    const rtps = await Settings.find({key: /rtp_/});
+    const rtpData = {};
+    rtps.forEach(r => rtpData[r.key.replace('rtp_', '')] = r.value);
+    
+    res.json({ user, adminWallet: process.env.ADMIN_WALLET, rtp: rtpData });
 });
 
 app.post('/api/bet', async (req, res) => {
@@ -116,33 +135,47 @@ app.post('/api/bet', async (req, res) => {
     const user = await User.findOne({ id });
     const field = mode === 'demo' ? 'demo_balance' : 'balance';
     
-    // ИСПРАВЛЕНИЕ БАГА: Разрешаем bet = 0 для забора выигрыша
     if (bet < 0 || win < 0 || user[field] < bet) return res.status(400).json({error: 'No money'});
     
+    const avatar = user.photo || 'https://cdn-icons-png.flaticon.com/512/149/149071.png';
+
+    // ИСПРАВЛЕНО: Ограничение на 2 ставки в краше и логика забора по очереди (Баг 7)
+    if (game === 'Crash') {
+        if (win === 0 && bet > 0) {
+            // Проверяем сколько уже активных ставок у юзера
+            const activeUserBets = crashLiveBets.filter(b => b.id === user.id && !b.cashedOut);
+            if (activeUserBets.length >= 2) {
+                return res.status(400).json({error: 'Максимум 2 ставки за раунд'});
+            }
+            // Добавляем ставку
+            crashLiveBets.push({ id: user.id, username: user.username, avatar, bet: bet, cashedOut: false, win: 0 });
+            io.emit('crashBetsUpdate', crashLiveBets);
+        } 
+        else if (win > 0) {
+            // Ищем ПЕРВУЮ не забранную ставку этого юзера
+            const activeBet = crashLiveBets.find(b => b.id === user.id && !b.cashedOut);
+            if (activeBet) {
+                activeBet.cashedOut = true;
+                activeBet.win = win;
+                io.emit('crashBetsUpdate', crashLiveBets);
+            }
+        }
+    }
+
     user[field] = Number((user[field] - bet + win).toFixed(2));
     
-    // Считаем стату
     if (bet > 0) user.stats.bets++; 
     if(win > 0) { user.stats.wins++; user.stats.plus += win; } else if (bet > 0) { user.stats.minus += bet; }
     await user.save();
     
-    const avatar = user.photo || 'https://cdn-icons-png.flaticon.com/512/149/149071.png';
-    
-    // Не спамим нулями в ленту при заборе
     if (bet > 0 || win > 0) {
         io.emit('newLiveBet', { username: user.username, avatar: avatar, game, amount: win > 0 ? '+'+win : '-'+bet });
-    }
-    
-    // В список Crash добавляем только когда реально ставим (bet > 0)
-    if(game === 'Crash' && win === 0 && bet > 0) {
-        crashLiveBets.push({ id: user.id, username: user.username, avatar, bet: bet });
-        io.emit('crashBetsUpdate', crashLiveBets);
     }
     
     res.json(user);
 });
 
-// НАСТОЯЩИЙ ДЕПОЗИТ ЧЕРЕЗ TON CENTER
+// ДЕПОЗИТ ЧЕРЕЗ TON CENTER
 app.post('/api/check_deposit', async (req, res) => {
     const { id } = req.body;
     const adminWallet = process.env.ADMIN_WALLET;
@@ -218,9 +251,14 @@ const checkAdmin = (req, res, next) => {
 app.post('/api/admin/data', checkAdmin, async (req, res) => {
     const withdraws = await Withdraw.find({status: 'pending'});
     const users = await User.find().sort({balance: -1}).limit(20);
-    const rtp = await Settings.findOne({key: 'rtp'});
     const promos = await Promo.find().sort({_id: -1}).limit(10);
-    res.json({ withdraws, users, rtp: rtp ? rtp.value : 90, promos });
+    
+    // ИСПРАВЛЕНО: Выдаем все RTP в админку
+    const rtps = await Settings.find({key: /rtp_/});
+    const rtpData = {};
+    rtps.forEach(r => rtpData[r.key.replace('rtp_', '')] = r.value);
+
+    res.json({ withdraws, users, rtp: rtpData, promos });
 });
 
 app.post('/api/admin/promo_create', checkAdmin, async (req, res) => {
@@ -229,10 +267,14 @@ app.post('/api/admin/promo_create', checkAdmin, async (req, res) => {
     res.json({success: true});
 });
 
+// ИСПРАВЛЕНО: Установка RTP для конкретной игры
 app.post('/api/admin/set_rtp', checkAdmin, async (req, res) => {
-    const { value } = req.body;
-    await Settings.updateOne({key: 'rtp'}, {value: Number(value)}, {upsert: true});
-    io.emit('rtpUpdate', Number(value)); // Отправляем новый RTP всем клиентам
+    const { game, value } = req.body; // game должен приходить как 'crash', 'mines', или 'coinflip'
+    if (!['crash', 'mines', 'coinflip'].includes(game)) return res.status(400).json({error: 'Неверная игра'});
+    
+    const key = `rtp_${game}`;
+    await Settings.updateOne({key}, {value: Number(value)}, {upsert: true});
+    io.emit('rtpUpdate', { game, value: Number(value) });
     res.json({success: true});
 });
 
