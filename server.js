@@ -57,17 +57,15 @@ async function initSettings() {
 }
 initSettings();
 
-// --- ТЕЛЕГРАМ БОТ ---
+// --- ТЕЛЕГРАМ БОТ (ИСПРАВЛЕН) ---
 if (process.env.BOT_TOKEN) {
-    const bot = new TelegramBot(process.env.BOT_TOKEN);
+    // Надежный запуск через polling
+    const bot = new TelegramBot(process.env.BOT_TOKEN, { polling: true });
     
-    // ПРИНУДИТЕЛЬНО СБРАСЫВАЕМ WEBHOOK, ЧТОБЫ БОТ ОЖИЛ
-    bot.deleteWebHook().then(() => {
-        bot.startPolling();
-        console.log('🤖 Бот успешно запущен (Webhook очищен)');
-    }).catch(err => console.log('❌ Ошибка запуска бота:', err.message));
+    // Очищаем зависшие вебхуки, которые ломали бота
+    bot.deleteWebHook().catch(() => {});
 
-    bot.on('polling_error', (err) => console.log('❌ Ошибка поллинга:', err.message));
+    bot.on('polling_error', (err) => console.log('❌ Ошибка поллинга бота:', err.message));
 
     bot.onText(/\/(start|help)/, (msg) => {
         const text = `🚀 Привет, ${msg.from.first_name}!\nДобро пожаловать в Loonx Gifts.\n\nТут ты можешь играть и выигрывать TON! Твой баланс и все игры находятся внутри Mini App.\n\nВыбирай действие в меню ниже:`;
@@ -82,6 +80,7 @@ if (process.env.BOT_TOKEN) {
             }
         });
     });
+    console.log('🤖 Бот успешно запущен (Polling)');
 } else {
     console.log('❌ BOT_TOKEN не найден в .env');
 }
@@ -197,7 +196,6 @@ app.post('/api/bet', async (req, res) => {
     res.json(user);
 });
 
-// ИСПРАВЛЕНО: Проверка депозитов через нативный fetch (без ошибок сети)
 app.post('/api/check_deposit', async (req, res) => {
     const { id } = req.body;
     const adminWallet = process.env.ADMIN_WALLET;
@@ -283,10 +281,34 @@ app.post('/api/admin/promo_create', checkAdmin, async (req, res) => {
     res.json({success: true});
 });
 
+// НОВЫЙ ЭНДПОИНТ: УДАЛЕНИЕ ПРОМОКОДА
+app.post('/api/admin/promo_delete', checkAdmin, async (req, res) => {
+    await Promo.findByIdAndDelete(req.body.pId);
+    res.json({success: true});
+});
+
 app.post('/api/admin/set_rtp', checkAdmin, async (req, res) => {
     const { game, value } = req.body;
     const key = `rtp_${game}`;
     await Settings.updateOne({key}, {value: Number(value)}, {upsert: true});
+    res.json({success: true});
+});
+
+// НОВЫЙ ЭНДПОИНТ: ИЗМЕНЕНИЕ БАЛАНСА ИГРОКА
+app.post('/api/admin/edit_balance', checkAdmin, async (req, res) => {
+    const { userId, action, amount } = req.body;
+    const user = await User.findOne({id: userId});
+    if (!user) return res.status(404).json({error: 'User not found'});
+    
+    const val = Number(amount);
+    if (action === 'add') {
+        user.balance = Number((user.balance + val).toFixed(2));
+    } else if (action === 'sub') {
+        user.balance = Number((user.balance - val).toFixed(2));
+        if(user.balance < 0) user.balance = 0; // Защита от отрицательного баланса
+    }
+    
+    await user.save();
     res.json({success: true});
 });
 
