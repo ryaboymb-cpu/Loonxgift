@@ -16,7 +16,7 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Подключение к БД
-mongoose.connect(process.env.MONGO_URI).then(() => console.log('✅ DB Connected'));
+mongoose.connect(process.env.MONGO_URI).then(() => console.log('✅ DB Connected')).catch(err => console.log('❌ DB Error:', err));
 
 // --- МОДЕЛИ ДАННЫХ ---
 const UserSchema = new mongoose.Schema({
@@ -58,24 +58,33 @@ async function initSettings() {
 initSettings();
 
 // --- ТЕЛЕГРАМ БОТ ---
-const bot = new TelegramBot(process.env.BOT_TOKEN, { polling: true });
-
-// Ловим ошибки поллинга, чтобы бот не падал молча
-bot.on('polling_error', (err) => console.log('❌ Bot Polling Error:', err.message || err));
-
-bot.onText(/\/(start|help)/, (msg) => {
-    const text = `🚀 Привет, ${msg.from.first_name}!\nДобро пожаловать в Loonx Gifts.\n\nТут ты можешь играть и выигрывать TON! Твой баланс и все игры находятся внутри Mini App.\n\nВыбирай действие в меню ниже:`;
+if (process.env.BOT_TOKEN) {
+    const bot = new TelegramBot(process.env.BOT_TOKEN);
     
-    bot.sendMessage(msg.chat.id, text, {
-        reply_markup: {
-            inline_keyboard: [
-                [{ text: "🎮 ИГРАТЬ (MINI APP)", web_app: { url: process.env.WEB_APP_URL } }],
-                [{ text: "📢 Канал", url: "https://t.me/Loonxnews" }, { text: "💬 Саппорт", url: "https://t.me/LoonxGift_Support" }],
-                [{ text: "🐞 Баги", url: "https://t.me/msgp2p" }]
-            ]
-        }
+    // ПРИНУДИТЕЛЬНО СБРАСЫВАЕМ WEBHOOK, ЧТОБЫ БОТ ОЖИЛ
+    bot.deleteWebHook().then(() => {
+        bot.startPolling();
+        console.log('🤖 Бот успешно запущен (Webhook очищен)');
+    }).catch(err => console.log('❌ Ошибка запуска бота:', err.message));
+
+    bot.on('polling_error', (err) => console.log('❌ Ошибка поллинга:', err.message));
+
+    bot.onText(/\/(start|help)/, (msg) => {
+        const text = `🚀 Привет, ${msg.from.first_name}!\nДобро пожаловать в Loonx Gifts.\n\nТут ты можешь играть и выигрывать TON! Твой баланс и все игры находятся внутри Mini App.\n\nВыбирай действие в меню ниже:`;
+        
+        bot.sendMessage(msg.chat.id, text, {
+            reply_markup: {
+                inline_keyboard: [
+                    [{ text: "🎮 ИГРАТЬ (MINI APP)", web_app: { url: process.env.WEB_APP_URL } }],
+                    [{ text: "📢 Канал", url: "https://t.me/Loonxnews" }, { text: "💬 Саппорт", url: "https://t.me/LoonxGift_Support" }],
+                    [{ text: "🐞 Баги", url: "https://t.me/msgp2p" }]
+                ]
+            }
+        });
     });
-});
+} else {
+    console.log('❌ BOT_TOKEN не найден в .env');
+}
 
 // --- CRASH ENGINE ---
 let crash = { status: 'waiting', timer: 10, multiplier: 1.0 };
@@ -188,23 +197,24 @@ app.post('/api/bet', async (req, res) => {
     res.json(user);
 });
 
-// ИСПРАВЛЕНО: Увеличен лимит проверки до 50 и добавлен trim() для надежности
+// ИСПРАВЛЕНО: Проверка депозитов через нативный fetch (без ошибок сети)
 app.post('/api/check_deposit', async (req, res) => {
     const { id } = req.body;
     const adminWallet = process.env.ADMIN_WALLET;
     const apiKey = process.env.TON_API_KEY;
+    
+    if (!adminWallet || !apiKey) return res.status(500).json({error: 'Wallet or API key missing'});
+
     try {
-        const fetch = (await import('node-fetch')).default;
-        // Увеличил лимит до 50, чтобы находить старые платежи
         const response = await fetch(`https://toncenter.com/api/v2/getTransactions?address=${adminWallet}&limit=50&api_key=${apiKey}`);
         const data = await response.json();
+        
         if(!data.ok) return res.status(400).json({error: 'TonCenter error'});
         
         let foundNew = false;
         let totalAdded = 0;
         
         for (let tx of data.result) {
-            // trim() убирает случайные пробелы из комментария
             if (tx.in_msg && tx.in_msg.message && String(tx.in_msg.message).trim() === String(id).trim() && tx.in_msg.value > 0) {
                 const txHash = tx.transaction_id.hash;
                 const amountTON = tx.in_msg.value / 1e9; 
@@ -221,7 +231,10 @@ app.post('/api/check_deposit', async (req, res) => {
         }
         if(foundNew) res.json({ success: true, added: totalAdded });
         else res.status(400).json({ error: 'Новых оплат не найдено' });
-    } catch (e) { console.error(e); res.status(500).json({error: 'Network error'}); }
+    } catch (e) { 
+        console.error('Deposit check error:', e); 
+        res.status(500).json({error: 'Network error'}); 
+    }
 });
 
 app.post('/api/promo', async (req, res) => {
@@ -260,13 +273,12 @@ app.post('/api/admin/data', checkAdmin, async (req, res) => {
     const rtpData = {};
     rtps.forEach(r => rtpData[r.key.replace('rtp_', '')] = r.value);
     
-    // Отправляем всё, включая промокоды и раздельный RTP
     res.json({ withdraws, users, promos, rtp: rtpData });
 });
 
-// ВЕРНУЛ СОЗДАНИЕ ПРОМОКОДОВ
 app.post('/api/admin/promo_create', checkAdmin, async (req, res) => {
     const { code, amount, limit } = req.body;
+    if(!code || !amount || !limit) return res.status(400).json({error: 'Заполните все поля'});
     await Promo.create({ code, amount: Number(amount), limit: Number(limit) });
     res.json({success: true});
 });
@@ -294,4 +306,4 @@ app.post('/api/admin/withdraw_action', checkAdmin, async (req, res) => {
     res.json({success: true});
 });
 
-server.listen(process.env.PORT || 3000, () => console.log('🚀 Server Running'));
+server.listen(process.env.PORT || 3000, () => console.log('🚀 Server Running on port 3000'));
