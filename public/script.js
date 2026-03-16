@@ -6,10 +6,9 @@ let globalRtp = 90;
 
 const $ = id => document.getElementById(id);
 
-// ИСПРАВЛЕНО: Уведомления заменяют друг друга и не стакаются (Баг 5)
 function showToast(msg) {
     const container = $('toast-container');
-    container.innerHTML = ''; // Удаляем старые, чтобы не было спама на весь экран
+    container.innerHTML = ''; 
     const t = document.createElement('div'); 
     t.className = 'toast'; 
     t.innerText = msg;
@@ -91,7 +90,6 @@ socket.on('newLiveBet', b => {
 
 // CRASH
 let curCrash = {}; 
-// ИСПРАВЛЕНО: Массив для двух независимых ставок в краше (Баг 7)
 let myCrashBets = []; 
 
 socket.on('crashHistoryUpdate', hist => {
@@ -126,7 +124,6 @@ socket.on('crashData', d => {
     }
     if(d.status === 'running') { 
         $('cr-x').innerText = d.multiplier + 'x'; $('cr-timer').innerText = '🚀 В ПОЛЕТЕ'; $('cr-x').style.color = 'var(--neon)'; 
-        // ИСПРАВЛЕНО: Показываем сколько заберет первая ставка в очереди
         if (myCrashBets.length > 0) {
             const currentWin = (myCrashBets[0] * d.multiplier).toFixed(2);
             btn.innerText = `ЗАБРАТЬ ${currentWin} TON`;
@@ -138,7 +135,7 @@ socket.on('crashData', d => {
     if(d.status === 'crashed') { 
         $('cr-x').innerText = 'BOOM!'; $('cr-x').style.color = 'var(--neon-red)'; 
         if(myCrashBets.length > 0) { 
-            myCrashBets = []; // Сброс ставок при краше
+            myCrashBets = []; 
         } 
         btn.innerText = 'ПОСТАВИТЬ'; btn.style.background = 'var(--neon)';
     }
@@ -152,7 +149,7 @@ async function playCrash() {
         if (myCrashBets.length >= 2) return showToast('Максимум 2 ставки за раунд!');
         
         let crBet = parseFloat($('cr-bet').value); 
-        if(isNaN(crBet) || crBet < 0.5 || crBet > 20) return showToast('Мин ставка 0.5, Макс 20 TON');
+        if(isNaN(crBet) || crBet < 0.1 || crBet > 25) return showToast('Мин ставка 0.1, Макс 25 TON');
         if(crBet > curBal) return showToast('Недостаточно средств!');
         
         const r = await fetch('/api/bet', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id:user.id, game:'Crash', bet:crBet, win:0, mode}) });
@@ -168,13 +165,13 @@ async function playCrash() {
         } else { showToast('Ошибка ставки!'); }
         
     } else if(curCrash.status === 'running' && myCrashBets.length > 0) {
-        const activeBet = myCrashBets[0]; // Берем самую первую ставку
+        const activeBet = myCrashBets[0]; 
         const win = activeBet * curCrash.multiplier; 
         const r = await fetch('/api/bet', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id:user.id, game:'Crash', bet:0, win:win, mode}) });
         if(r.ok) {
             user = await r.json(); updateUI();
-            myCrashBets.shift(); // Удаляем забранную ставку из массива
-            showToast(`Вы забрали ${win.toFixed(2)} TON!`); // Уведомление о выигрыше
+            myCrashBets.shift(); 
+            showToast(`Вы забрали ${win.toFixed(2)} TON!`); 
             
             if (myCrashBets.length > 0) {
                 btn.innerText = `ЗАБРАТЬ ${(myCrashBets[0] * curCrash.multiplier).toFixed(2)} TON`;
@@ -187,7 +184,7 @@ async function playCrash() {
 
 // MINES
 let miActive = false; let bombs = []; let miBet = 0; 
-let openedCells = 0; let currentMinesWin = 0; // ИСПРАВЛЕНО: Для точного расчета выигрыша (Баг 3)
+let openedCells = 0; let currentMinesWin = 0; 
 
 function playMines() {
     const curBal = mode === 'real' ? user.balance : user.demo_balance;
@@ -196,14 +193,14 @@ function playMines() {
             if(ok) {
                 miActive = false; 
                 $('mi-btn').innerText='ИГРАТЬ (5 МИН)'; 
-                showToast(`Вы забрали ${currentMinesWin.toFixed(2)} TON!`); // ИСПРАВЛЕНО: Уведомление о выигрыше (Баг 2)
+                showToast(`Вы забрали ${currentMinesWin.toFixed(2)} TON!`); 
             }
         });
         return; 
     }
     miBet = parseFloat($('mi-bet').value); 
     
-    if(isNaN(miBet) || miBet < 0.5 || miBet > 20) return showToast('Мин ставка 0.5, Макс 20 TON');
+    if(isNaN(miBet) || miBet < 0.1 || miBet > 25) return showToast('Мин ставка 0.1, Макс 25 TON');
     if(miBet > curBal) return showToast('Недостаточно средств!');
     
     reqBet('Mines', miBet, 0).then(success => {
@@ -211,8 +208,8 @@ function playMines() {
             bombs = []; while(bombs.length<5) { let r=Math.floor(Math.random()*25); if(!bombs.includes(r)) bombs.push(r); }
             miActive = true; 
             openedCells = 0;
-            currentMinesWin = miBet; // Изначальный выигрыш равен ставке (0 открытых = 1.0x)
-            $('mi-btn').innerText = `ЗАБРАТЬ ${currentMinesWin.toFixed(2)} TON`; // Кнопка показывает актуальную сумму
+            currentMinesWin = miBet; 
+            $('mi-btn').innerText = `ЗАБРАТЬ ${currentMinesWin.toFixed(2)} TON`; 
             renderMines(); 
             showToast('Ищи кристаллы!');
         }
@@ -236,8 +233,8 @@ function renderMines() {
             } else { 
                 c.innerText='💎'; c.classList.add('open'); 
                 openedCells++;
-                currentMinesWin = miBet * (1 + openedCells * 0.2); // Добавляем коэфф за каждый кристалл (можно настроить 0.2)
-                $('mi-btn').innerText = `ЗАБРАТЬ ${currentMinesWin.toFixed(2)} TON`; // Обновляем кнопку сразу (Баг 2)
+                currentMinesWin = miBet * (1 + openedCells * 0.2); 
+                $('mi-btn').innerText = `ЗАБРАТЬ ${currentMinesWin.toFixed(2)} TON`; 
             }
         }; $('mine-grid').appendChild(c);
     }
@@ -251,7 +248,7 @@ async function playCoin() {
     const curBal = mode === 'real' ? user.balance : user.demo_balance;
     const bet = parseFloat($('co-bet').value); 
     
-    if(isNaN(bet) || bet < 0.5 || bet > 20) return showToast('Мин ставка 0.5, Макс 20 TON');
+    if(isNaN(bet) || bet < 0.1 || bet > 25) return showToast('Мин ставка 0.1, Макс 25 TON');
     if(bet > curBal) return showToast('Недостаточно средств!');
 
     isFlipping = true; $('co-btn').innerText = 'КРУТИМ...';
@@ -268,7 +265,7 @@ async function playCoin() {
     
     setTimeout(async () => {
         const win = result === cSide ? bet*2 : 0;
-        showToast(win > 0 ? `Победа! Вы забрали ${win.toFixed(2)} TON!` : `Проигрыш. Выпало ${result}`); // Уведомление о выигрыше
+        showToast(win > 0 ? `Победа! Вы забрали ${win.toFixed(2)} TON!` : `Проигрыш. Выпало ${result}`); 
         await reqBet('Coinflip', bet, win);
         coin.style.transition = 'none'; coin.style.transform = `rotateY(${result === 'L' ? 0 : 180}deg)`; 
         setTimeout(() => coin.style.transition = 'transform 2s cubic-bezier(0.2, 0.8, 0.2, 1)', 50);
@@ -353,36 +350,68 @@ function renderAdminContent(tab) {
             <input type="number" id="ad-pr-lim" class="input-box" style="padding:10px; font-size:14px;" placeholder="Лимит активаций">
             <button class="btn" style="padding:10px;" onclick="adminPromo()">СОЗДАТЬ ПРОМО</button>
             <hr style="border-color:#333; margin:15px 0;">
-            ${adData.promos.map(p => `<div style="padding:5px; border-bottom:1px solid #222;">${p.code} - ${p.amount} TON (Лимит: ${p.limit})</div>`).join('')}
+            ${adData.promos.map(p => `
+                <div style="padding:8px; border-bottom:1px solid #222; display:flex; justify-content:space-between; align-items:center;">
+                    <div><b>${p.code}</b> - ${p.amount} TON <span style="color:#888; font-size:10px;">(Лим: ${p.limit})</span></div>
+                    <button style="background:var(--neon-red); color:#fff; border:none; padding:4px 8px; border-radius:4px; cursor:pointer;" onclick="adminDelPromo('${p._id}')">Удалить</button>
+                </div>
+            `).join('')}
         `;
     }
     if(tab === 'rtp') {
         c.innerHTML = `
-            <p style="color:var(--sub); margin-bottom:10px;">Текущий RTP: <b style="color:var(--neon)">${adData.rtp}%</b></p>
-            <input type="number" id="ad-rtp-val" class="input-box" style="padding:10px; font-size:14px;" placeholder="Новый RTP (например 85)">
-            <button class="btn" style="padding:10px;" onclick="adminRTP()">СОХРАНИТЬ RTP</button>
+            <div style="margin-bottom:10px;"><b>Crash RTP (%):</b> <input type="number" id="rtp-crash" value="${adData.rtp.crash||90}" class="input-box" style="padding:5px; font-size:14px; width:70px; display:inline-block; margin:0 5px;"> <button class="btn" style="padding:5px 10px; width:auto; display:inline-block;" onclick="adminRTP('crash')">OK</button></div>
+            <div style="margin-bottom:10px;"><b>Mines RTP (%):</b> <input type="number" id="rtp-mines" value="${adData.rtp.mines||90}" class="input-box" style="padding:5px; font-size:14px; width:70px; display:inline-block; margin:0 5px;"> <button class="btn" style="padding:5px 10px; width:auto; display:inline-block;" onclick="adminRTP('mines')">OK</button></div>
+            <div style="margin-bottom:10px;"><b>Coinflip RTP (%):</b> <input type="number" id="rtp-coinflip" value="${adData.rtp.coinflip||90}" class="input-box" style="padding:5px; font-size:14px; width:70px; display:inline-block; margin:0 5px;"> <button class="btn" style="padding:5px 10px; width:auto; display:inline-block;" onclick="adminRTP('coinflip')">OK</button></div>
         `;
     }
     if(tab === 'users') {
         c.innerHTML = adData.users.map(u => `
-            <div style="padding:8px; border-bottom:1px solid #222; display:flex; justify-content:space-between;">
-                <span>${u.username}</span> <b style="color:var(--neon)">${u.balance.toFixed(2)} TON</b>
+            <div style="padding:10px; border-bottom:1px solid #222;">
+                <div style="display:flex; justify-content:space-between; margin-bottom: 8px;">
+                    <span><b>${u.username}</b> <span style="font-size:10px;color:#888;">(${u.id})</span></span> 
+                    <b style="color:var(--neon)">${u.balance.toFixed(2)} TON</b>
+                </div>
+                <div style="display:flex; gap:5px; align-items:center;">
+                    <input type="number" id="u-bal-${u.id}" placeholder="Сумма" class="input-box" style="width:100px; padding:5px; margin:0; font-size:12px;">
+                    <button class="btn" style="padding:6px; margin:0; width:40px; background:var(--neon);" onclick="adminEditBalance('${u.id}', 'add')">+</button>
+                    <button class="btn" style="padding:6px; margin:0; width:40px; background:var(--neon-red);" onclick="adminEditBalance('${u.id}', 'sub')">-</button>
+                </div>
             </div>
         `).join('');
     }
+}
+
+// Новая функция редактирования баланса
+async function adminEditBalance(userId, action) {
+    const amount = document.getElementById(`u-bal-${userId}`).value;
+    if(!amount || amount <= 0) return showToast('Введите сумму');
+    await fetch('/api/admin/edit_balance', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({pass: adminPass, userId, action, amount}) });
+    loadAdminData();
+    showToast('Баланс обновлен!');
 }
 
 async function adminW(wId, action) {
     await fetch('/api/admin/withdraw_action', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({pass: adminPass, wId, action}) });
     loadAdminData();
 }
+
 async function adminPromo() {
     const code = $('ad-pr-code').value; const amount = $('ad-pr-sum').value; const limit = $('ad-pr-lim').value;
     await fetch('/api/admin/promo_create', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({pass: adminPass, code, amount, limit}) });
     loadAdminData();
 }
-async function adminRTP() {
-    const value = $('ad-rtp-val').value;
-    await fetch('/api/admin/set_rtp', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({pass: adminPass, value}) });
+
+// Новая функция удаления промо
+async function adminDelPromo(pId) {
+    if(!confirm('Удалить этот промокод?')) return;
+    await fetch('/api/admin/promo_delete', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({pass: adminPass, pId}) });
     loadAdminData();
 }
+
+async function adminRTP(game) {
+    const value = $(`rtp-${game}`).value;
+    await fetch('/api/admin/set_rtp', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({pass: adminPass, game, value}) });
+    loadAdminData();
+    showToast('RTP сохранен!');
+    }
