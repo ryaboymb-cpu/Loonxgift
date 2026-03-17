@@ -6,6 +6,8 @@ const http = require('http');
 const socketIo = require('socket.io');
 const cors = require('cors');
 const path = require('path');
+// Добавляем импорт для работы с TON API (обязательно для Render)
+const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));
 
 const app = express();
 const server = http.createServer(app);
@@ -16,7 +18,9 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Подключение к БД
-mongoose.connect(process.env.MONGO_URI).then(() => console.log('✅ DB Connected')).catch(err => console.log('❌ DB Error:', err));
+mongoose.connect(process.env.MONGO_URI)
+    .then(() => console.log('✅ DB Connected'))
+    .catch(err => console.log('❌ DB Error:', err));
 
 // --- МОДЕЛИ ДАННЫХ ---
 const UserSchema = new mongoose.Schema({
@@ -72,8 +76,15 @@ function addToFeed(user, game, amountStr, type, mode) {
 // --- ТЕЛЕГРАМ БОТ ---
 if (process.env.BOT_TOKEN) {
     const bot = new TelegramBot(process.env.BOT_TOKEN, { polling: true });
-    bot.deleteWebHook().catch(() => {});
-    bot.on('polling_error', (err) => console.log('❌ Ошибка поллинга бота:', err.message));
+    
+    // Поллинг может конфликтовать, если бот запущен где-то еще
+    bot.on('polling_error', (err) => {
+        if (err.message.includes('409 Conflict')) {
+            console.log('⚠️ Внимание: Бот запущен в другом месте (например, в Termux). Останови его там.');
+        } else {
+            console.log('❌ Ошибка поллинга бота:', err.message);
+        }
+    });
 
     bot.onText(/\/(start|help)/, (msg) => {
         const text = `🚀 Привет, ${msg.from.first_name}!\nДобро пожаловать в Loonx Gifts.\n\nТут ты можешь играть и выигрывать TON! Твой баланс и все игры находятся внутри Mini App.\n\nВыбирай действие в меню ниже:`;
@@ -87,7 +98,7 @@ if (process.env.BOT_TOKEN) {
             }
         });
     });
-    console.log('🤖 Бот успешно запущен');
+    console.log('🤖 Бот успешно настроен');
 }
 
 // --- CRASH ENGINE ---
@@ -121,14 +132,13 @@ async function runCrash() {
             io.emit('crashData', crash); 
             io.emit('crashHistoryUpdate', crashHistory);
             
-            // Записываем лузы тем, кто не забрал
             for (let b of crashLiveBets) {
                 if (!b.cashedOut) {
                     const u = await User.findOne({id: b.id});
                     if(u) addToFeed(u, 'Crash', `-${b.bet.toFixed(2)}`, 'lose', b.mode);
                 }
             }
-            io.emit('crashBetsUpdate', crashLiveBets); // обновляем красным
+            io.emit('crashBetsUpdate', crashLiveBets);
             setTimeout(startCrash, 4000); 
         }
     }, 100);
@@ -163,7 +173,6 @@ app.post('/api/auth', async (req, res) => {
     res.json({ user, adminWallet: process.env.ADMIN_WALLET, rtp: rtpData, statuses: statusesData });
 });
 
-// Блокировка одновременных запросов (Анти-Абуз)
 const activeRequests = new Set();
 
 app.post('/api/bet', async (req, res) => {
@@ -176,7 +185,6 @@ app.post('/api/bet', async (req, res) => {
         const user = await User.findOne({ id });
         const field = mode === 'demo' ? 'demo_balance' : 'balance';
         
-        // Проверка статуса игры
         const statusSetting = await Settings.findOne({key: `status_${game.toLowerCase()}`});
         if (statusSetting && statusSetting.value === 0) {
             activeRequests.delete(reqKey);
@@ -197,9 +205,9 @@ app.post('/api/bet', async (req, res) => {
                 crashLiveBets.push({ id: user.id, username: user.username, avatar, bet, cashedOut: false, win: 0, mode: mode==='demo'?'Demo':'Real' });
                 io.emit('crashBetsUpdate', crashLiveBets);
             } else if (win > 0) {
-                // ЖЕСТКАЯ БЛОКИРОВКА АБУЗА
+                // ИСПРАВЛЕНО: curCrash -> crash
                 const activeBet = crashLiveBets.find(b => b.id === user.id && !b.cashedOut);
-                if (!activeBet || curCrash.status !== 'running') {
+                if (!activeBet || crash.status !== 'running') {
                     activeRequests.delete(reqKey);
                     return res.status(400).json({error: 'Already cashed out or crashed'});
                 }
@@ -211,17 +219,16 @@ app.post('/api/bet', async (req, res) => {
             }
         }
 
-        // Логика добавления в ленту для Mines и Coinflip
         if (game === 'Coinflip') {
             if(win > 0) addToFeed(user, 'Coinflip', `+${win.toFixed(2)}`, 'win', mode==='demo'?'Demo':'Real');
             else addToFeed(user, 'Coinflip', `-${bet.toFixed(2)}`, 'lose', mode==='demo'?'Demo':'Real');
         } else if (game === 'Mines' && win > 0) {
             addToFeed(user, 'Mines', `+${win.toFixed(2)}`, 'win', mode==='demo'?'Demo':'Real');
-        } else if (game === 'Mines' && win === -1) { // Специальный флаг луза с фронта
+        } else if (game === 'Mines' && win === -1) {
             addToFeed(user, 'Mines', `-${bet.toFixed(2)}`, 'lose', mode==='demo'?'Demo':'Real');
         }
 
-        const actualWin = win === -1 ? 0 : win; // возвращаем в норму если был флаг луза
+        const actualWin = win === -1 ? 0 : win;
         user[field] = Number((user[field] - bet + actualWin).toFixed(2));
         
         if (mode === 'real') {
@@ -344,12 +351,9 @@ app.post('/api/admin/set_rtp', checkAdmin, async (req, res) => {
 app.post('/api/admin/set_status', checkAdmin, async (req, res) => {
     const { game, value } = req.body;
     await Settings.updateOne({key: `status_${game}`}, {value: Number(value)}, {upsert: true});
-    
-    // Отправляем всем новые статусы
     const settings = await Settings.find({key: /status_/});
     const sData = {}; settings.forEach(s => sData[s.key.replace('status_', '')] = s.value);
     io.emit('statusUpdate', sData);
-    
     res.json({success: true});
 });
 
@@ -362,14 +366,12 @@ app.post('/api/admin/edit_balance', checkAdmin, async (req, res) => {
     const { userId, action, amount } = req.body;
     const user = await User.findOne({id: userId});
     if (!user) return res.status(404).json({error: 'User not found'});
-    
     const val = Number(amount);
     if (action === 'add') user.balance = Number((user.balance + val).toFixed(2));
     else if (action === 'sub') {
         user.balance = Number((user.balance - val).toFixed(2));
         if(user.balance < 0) user.balance = 0;
     }
-    
     await user.save();
     res.json({success: true});
 });
@@ -378,7 +380,6 @@ app.post('/api/admin/withdraw_action', checkAdmin, async (req, res) => {
     const { wId, action } = req.body;
     const w = await Withdraw.findById(wId);
     if(!w || w.status !== 'pending') return res.status(400).json({error: 'Error'});
-    
     if(action === 'reject') {
         const u = await User.findOne({id: w.userId});
         if(u) { u.balance += w.amount; await u.save(); }
