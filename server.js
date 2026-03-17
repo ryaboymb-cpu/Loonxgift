@@ -15,6 +15,10 @@ app.use(cors());
 app.use(express.json()); 
 app.use(express.static(path.join(__dirname, 'public')));
 
+// --- ИСПРАВЛЕНИЕ: Защита от падения сервера при необработанных ошибках ---
+process.on('uncaughtException', (err) => console.error('Критическая ошибка:', err));
+process.on('unhandledRejection', (reason, promise) => console.error('Необработанный промис:', reason));
+
 // Подключение к БД
 mongoose.connect(process.env.MONGO_URI).then(() => console.log('✅ DB Connected')).catch(err => console.log('❌ DB Error:', err));
 
@@ -73,17 +77,32 @@ async function initSettings() {
 }
 initSettings();
 
-// --- ТЕЛЕГРАМ БОТ ---
+// --- ТЕЛЕГРАМ БОТ (ИСПРАВЛЕННЫЙ) ---
 if (process.env.BOT_TOKEN) {
     const bot = new TelegramBot(process.env.BOT_TOKEN, { polling: true });
+    
     bot.deleteWebHook().catch(() => {});
-    bot.on('polling_error', (err) => console.log('❌ Ошибка поллинга бота:', err.message));
+
+    // ИСПРАВЛЕНИЕ: Обработка конфликта (ошибка 409)
+    bot.on('polling_error', (err) => {
+        if (err.message.includes('409 Conflict')) {
+            console.log('⚠️ Конфликт: Бот уже запущен в другом месте (например, в Termux). Останови его там.');
+        } else {
+            console.log('❌ Ошибка поллинга бота:', err.message);
+        }
+    });
+
+    // ИСПРАВЛЕНИЕ: Защита от ошибки 400 (пустой url)
     bot.onText(/\/(start|help)/, (msg) => {
         const text = `🚀 Привет, ${msg.from.first_name}!\nДобро пожаловать в Loonx Gifts.\n\nТут ты можешь играть и выигрывать TON! Твой баланс и все игры находятся внутри Mini App.\n\nВыбирай действие в меню ниже:`;
+        
+        // Проверяем, есть ли URL, чтобы не упасть с ошибкой 400
+        const appUrl = process.env.WEB_APP_URL || "https://loonxgift.onrender.com/";
+
         bot.sendMessage(msg.chat.id, text, {
             reply_markup: {
                 inline_keyboard: [
-                    [{ text: "🎮 ИГРАТЬ (MINI APP)", web_app: { url: process.env.WEB_APP_URL } }],
+                    [{ text: "🎮 ИГРАТЬ (MINI APP)", web_app: { url: appUrl } }],
                     [{ text: "📢 Канал", url: "https://t.me/Loonxnews" }, { text: "💬 Саппорт", url: "https://t.me/LoonxGift_Support" }],
                     [{ text: "🐞 Баги", url: "https://t.me/msgp2p" }]
                 ]
@@ -127,7 +146,6 @@ async function runCrash() {
             io.emit('crashData', crash); 
             io.emit('crashHistoryUpdate', crashHistory);
             
-            // Записываем проигрыши в историю
             for (let b of crashLiveBets) {
                 if (!b.cashedOut) {
                     const u = await User.findOne({id: b.id});
@@ -138,7 +156,6 @@ async function runCrash() {
                     }
                 }
             }
-            
             setTimeout(startCrash, 4000); 
         }
     }, 100);
@@ -171,9 +188,13 @@ app.post('/api/auth', async (req, res) => {
     const allSettings = await Settings.find();
     const rtpData = {};
     const maintenanceData = {};
+
+    // ИСПРАВЛЕНИЕ: Защита от TypeError (startsWith of undefined)
     allSettings.forEach(s => {
-        if (s.key.startsWith('rtp_')) rtpData[s.key.replace('rtp_', '')] = s.value;
-        if (s.key.startsWith('maintenance_')) maintenanceData[s.key.replace('maintenance_', '')] = s.value;
+        if (s && s.key) {
+            if (s.key.startsWith('rtp_')) rtpData[s.key.replace('rtp_', '')] = s.value;
+            if (s.key.startsWith('maintenance_')) maintenanceData[s.key.replace('maintenance_', '')] = s.value;
+        }
     });
     
     res.json({ user, adminWallet: process.env.ADMIN_WALLET, rtp: rtpData, maintenance: maintenanceData });
@@ -188,27 +209,22 @@ app.post('/api/bet', async (req, res) => {
     
     const avatar = user.photo || 'https://cdn-icons-png.flaticon.com/512/149/149071.png';
 
-    // Логика Краша
     if (game === 'Crash') {
         if (win === 0 && bet > 0) {
-            // Ставка
             const activeUserBets = crashLiveBets.filter(b => b.id === user.id && !b.cashedOut);
             if (activeUserBets.length >= 2) return res.status(400).json({error: 'Max 2 bets'});
             crashLiveBets.push({ id: user.id, username: user.username, avatar, bet, cashedOut: false, win: 0, mode: mode });
             io.emit('crashBetsUpdate', crashLiveBets);
             
-            // Баланс снимаем сразу, но в историю пока не пишем!
             user[field] = Number((user[field] - bet).toFixed(2));
             if (mode === 'real') { user.stats.bets++; user.stats.minus += bet; }
             await user.save();
             return res.json(user);
             
         } else if (win > 0) {
-            // Вывод из краша
             const activeBet = crashLiveBets.find(b => b.id === user.id && !b.cashedOut);
             if (!activeBet) return res.status(400).json({error: 'Already cashed out or not found'});
             
-            // ЗАЩИТА ОТ БАГА x4: Сразу меняем статус в памяти
             activeBet.cashedOut = true;
             activeBet.win = win;
             io.emit('crashBetsUpdate', crashLiveBets);
@@ -217,7 +233,6 @@ app.post('/api/bet', async (req, res) => {
             if (mode === 'real') { user.stats.wins++; user.stats.plus += win; }
             await user.save();
             
-            // Запись в историю вывода
             const profit = win - activeBet.bet;
             const newBetEntry = new Bet({ userId: user.id, username: user.username, avatar, game: 'Crash', amount: activeBet.bet, result: profit, mode: mode });
             await newBetEntry.save();
@@ -227,7 +242,6 @@ app.post('/api/bet', async (req, res) => {
         }
     }
 
-    // Для остальных игр (Mines, Coinflip)
     const profit = win > 0 ? (win - bet) : -bet;
     const newBetEntry = new Bet({
         userId: user.id, username: user.username, avatar, game: game,
@@ -239,7 +253,6 @@ app.post('/api/bet', async (req, res) => {
 
     user[field] = Number((user[field] - bet + win).toFixed(2));
     
-    // Обновляем стату только если REAL
     if (mode === 'real') {
         if (bet > 0) user.stats.bets++; 
         if (win > 0) { user.stats.wins++; user.stats.plus += win; } 
@@ -294,7 +307,7 @@ app.post('/api/promo', async (req, res) => {
     const user = await User.findOne({ id });
     
     user.balance = Number((user.balance + promo.amount).toFixed(2)); 
-    user.stats.promo += promo.amount; // Записываем получено с промо
+    user.stats.promo += promo.amount; 
     promo.usedBy.push(id);
     
     await user.save(); await promo.save();
@@ -325,31 +338,34 @@ app.post('/api/admin/data', checkAdmin, async (req, res) => {
     const allSettings = await Settings.find();
     const rtpData = {};
     const maintenanceData = {};
+
+    // ИСПРАВЛЕНИЕ: Защита от TypeError в админке
     allSettings.forEach(s => {
-        if (s.key.startsWith('rtp_')) rtpData[s.key.replace('rtp_', '')] = s.value;
-        if (s.key.startsWith('maintenance_')) maintenanceData[s.key.replace('maintenance_', '')] = s.value;
+        if (s && s.key) {
+            if (s.key.startsWith('rtp_')) rtpData[s.key.replace('rtp_', '')] = s.value;
+            if (s.key.startsWith('maintenance_')) maintenanceData[s.key.replace('maintenance_', '')] = s.value;
+        }
     });
     
     res.json({ withdraws, users, promos, rtp: rtpData, maintenance: maintenanceData });
 });
 
-// Глобальное уведомление
 app.post('/api/admin/broadcast', checkAdmin, (req, res) => {
     const { text } = req.body;
     if(text) io.emit('global_alert', text);
     res.json({success: true});
 });
 
-// Выключение игр
 app.post('/api/admin/maintenance', checkAdmin, async (req, res) => {
     const { game, state } = req.body;
     const key = `maintenance_${game}`;
     await Settings.updateOne({key}, {value: state}, {upsert: true});
     
-    // Обновляем локально и отправляем всем
     const allSettings = await Settings.find({key: /maintenance_/});
     const mData = {};
-    allSettings.forEach(s => mData[s.key.replace('maintenance_', '')] = s.value);
+    allSettings.forEach(s => {
+        if (s && s.key) mData[s.key.replace('maintenance_', '')] = s.value;
+    });
     io.emit('maintenanceUpdate', mData);
     
     res.json({success: true});
