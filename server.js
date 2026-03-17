@@ -15,16 +15,25 @@ app.use(cors());
 app.use(express.json()); 
 app.use(express.static(path.join(__dirname, 'public')));
 
-// --- ИСПРАВЛЕНИЕ: Защита от падения сервера при необработанных ошибках ---
+// Защита от падения сервера
 process.on('uncaughtException', (err) => console.error('Критическая ошибка:', err));
 process.on('unhandledRejection', (reason, promise) => console.error('Необработанный промис:', reason));
 
 // Подключение к БД
 mongoose.connect(process.env.MONGO_URI).then(() => console.log('✅ DB Connected')).catch(err => console.log('❌ DB Error:', err));
 
+// --- 1. TON CONNECT MANIFEST ---
+app.get('/tonconnect-manifest.json', (req, res) => {
+    res.json({
+        url: process.env.WEB_APP_URL || "https://loonxgift.onrender.com",
+        name: "Loonx Gifts",
+        iconUrl: "https://cdn-icons-png.flaticon.com/512/149/149071.png" // Можешь заменить на логотип твоего проекта
+    });
+});
+
 // --- МОДЕЛИ ДАННЫХ ---
 const UserSchema = new mongoose.Schema({
-    id: String, username: String, photo: String,
+    id: String, username: String, photo: String, // 7. Аватарка уже тут сохраняется
     balance: { type: Number, default: 0 }, demo_balance: { type: Number, default: 5000 },
     stats: { 
         bets: {type:Number, default:0}, 
@@ -41,7 +50,7 @@ const BetSchema = new mongoose.Schema({
     createdAt: { type: Date, default: Date.now }
 });
 
-const PromoSchema = new mongoose.Schema({ code: String, amount: Number, limit: Number, usedBy: [String] });
+const PromoSchema = new mongoose.Schema({ code: String, amount: Number, limit: Number, usedBy: [String] }); // 6. usedBy и limit для админки
 const WithdrawSchema = new mongoose.Schema({ userId: String, address: String, amount: Number, status: { type: String, default: 'pending' } });
 const DepositSchema = new mongoose.Schema({ hash: { type: String, unique: true }, userId: String, amount: Number });
 const SettingsSchema = new mongoose.Schema({ key: String, value: mongoose.Schema.Types.Mixed });
@@ -53,7 +62,6 @@ const Withdraw = mongoose.model('Withdraw', WithdrawSchema);
 const Deposit = mongoose.model('Deposit', DepositSchema);
 const Settings = mongoose.model('Settings', SettingsSchema);
 
-// Глобальная переменная для истории ставок в памяти
 let globalBetHistory = [];
 
 // --- ИНИЦИАЛИЗАЦИЯ НАСТРОЕК ---
@@ -61,7 +69,7 @@ async function initSettings() {
     const defaultSettings = [
         { key: 'rtp_crash', value: 90 },
         { key: 'rtp_mines', value: 90 },
-        { key: 'rtp_coinflip', value: 90 },
+        { key: 'rtp_coinflip', value: 90 }, // 4. RTP Коинфлипа сохранен
         { key: 'maintenance_crash', value: false },
         { key: 'maintenance_mines', value: false },
         { key: 'maintenance_coinflip', value: false }
@@ -71,32 +79,32 @@ async function initSettings() {
         if (!exists) await Settings.create(setting);
     }
     
-    // Загрузка последних ставок в память
     const lastBets = await Bet.find().sort({createdAt: -1}).limit(10);
-    globalBetHistory = lastBets.reverse();
+    // 3. Добавляем время МСК при загрузке старых ставок
+    globalBetHistory = lastBets.reverse().map(b => {
+        const obj = b.toObject();
+        obj.timeMsk = new Date(b.createdAt).toLocaleTimeString("ru-RU", {timeZone: "Europe/Moscow"});
+        return obj;
+    });
 }
 initSettings();
 
-// --- ТЕЛЕГРАМ БОТ (ИСПРАВЛЕННЫЙ) ---
+// --- ТЕЛЕГРАМ БОТ ---
+let bot;
 if (process.env.BOT_TOKEN) {
-    const bot = new TelegramBot(process.env.BOT_TOKEN, { polling: true });
-    
+    bot = new TelegramBot(process.env.BOT_TOKEN, { polling: true });
     bot.deleteWebHook().catch(() => {});
-
-    // ИСПРАВЛЕНИЕ: Обработка конфликта (ошибка 409)
+    
     bot.on('polling_error', (err) => {
         if (err.message.includes('409 Conflict')) {
-            console.log('⚠️ Конфликт: Бот уже запущен в другом месте (например, в Termux). Останови его там.');
+            console.log('⚠️ Конфликт: Бот уже запущен в другом месте. Останови его там.');
         } else {
             console.log('❌ Ошибка поллинга бота:', err.message);
         }
     });
 
-    // ИСПРАВЛЕНИЕ: Защита от ошибки 400 (пустой url)
     bot.onText(/\/(start|help)/, (msg) => {
         const text = `🚀 Привет, ${msg.from.first_name}!\nДобро пожаловать в Loonx Gifts.\n\nТут ты можешь играть и выигрывать TON! Твой баланс и все игры находятся внутри Mini App.\n\nВыбирай действие в меню ниже:`;
-        
-        // Проверяем, есть ли URL, чтобы не упасть с ошибкой 400
         const appUrl = process.env.WEB_APP_URL || "https://loonxgift.onrender.com/";
 
         bot.sendMessage(msg.chat.id, text, {
@@ -150,12 +158,15 @@ async function runCrash() {
                 if (!b.cashedOut) {
                     const u = await User.findOne({id: b.id});
                     if (u) {
-                        const newBet = new Bet({ userId: u.id, username: u.username, avatar: b.avatar, game: 'Crash', amount: b.bet, result: -b.bet, mode: b.mode });
+                        // 2. Жесткая фиксация режима (Demo/Real) в краше
+                        const actualMode = b.mode === 'demo' ? 'Demo' : 'Real';
+                        const newBet = new Bet({ userId: u.id, username: u.username, avatar: b.avatar, game: 'Crash', amount: b.bet, result: -b.bet, mode: actualMode });
                         await newBet.save();
                         pushToGlobalHistory(newBet);
                     }
                 }
             }
+            
             setTimeout(startCrash, 4000); 
         }
     }, 100);
@@ -163,9 +174,15 @@ async function runCrash() {
 startCrash();
 
 function pushToGlobalHistory(betObj) {
-    globalBetHistory.push(betObj);
+    // 3. Форматируем время по МСК перед пушем в историю
+    const betWithTime = {
+        ...(betObj.toObject ? betObj.toObject() : betObj),
+        timeMsk: new Date(betObj.createdAt || Date.now()).toLocaleTimeString("ru-RU", {timeZone: "Europe/Moscow"})
+    };
+    
+    globalBetHistory.push(betWithTime);
     if(globalBetHistory.length > 10) globalBetHistory.shift();
-    io.emit('newHistoryEntry', betObj);
+    io.emit('newHistoryEntry', betWithTime);
 }
 
 // --- СОКЕТЫ ---
@@ -188,8 +205,6 @@ app.post('/api/auth', async (req, res) => {
     const allSettings = await Settings.find();
     const rtpData = {};
     const maintenanceData = {};
-
-    // ИСПРАВЛЕНИЕ: Защита от TypeError (startsWith of undefined)
     allSettings.forEach(s => {
         if (s && s.key) {
             if (s.key.startsWith('rtp_')) rtpData[s.key.replace('rtp_', '')] = s.value;
@@ -203,21 +218,25 @@ app.post('/api/auth', async (req, res) => {
 app.post('/api/bet', async (req, res) => {
     const { id, game, bet, win, multiplier, mode } = req.body;
     const user = await User.findOne({ id });
-    const field = mode === 'demo' ? 'demo_balance' : 'balance';
+    
+    // 2. Жесткая фиксация режима
+    const actualMode = mode === 'demo' ? 'demo' : 'real';
+    const field = actualMode === 'demo' ? 'demo_balance' : 'balance';
     
     if (bet < 0 || win < 0 || user[field] < bet) return res.status(400).json({error: 'No money'});
     
+    // 7. Если нет аватарки, ставим дефолтную
     const avatar = user.photo || 'https://cdn-icons-png.flaticon.com/512/149/149071.png';
 
     if (game === 'Crash') {
         if (win === 0 && bet > 0) {
             const activeUserBets = crashLiveBets.filter(b => b.id === user.id && !b.cashedOut);
             if (activeUserBets.length >= 2) return res.status(400).json({error: 'Max 2 bets'});
-            crashLiveBets.push({ id: user.id, username: user.username, avatar, bet, cashedOut: false, win: 0, mode: mode });
+            crashLiveBets.push({ id: user.id, username: user.username, avatar, bet, cashedOut: false, win: 0, mode: actualMode });
             io.emit('crashBetsUpdate', crashLiveBets);
             
             user[field] = Number((user[field] - bet).toFixed(2));
-            if (mode === 'real') { user.stats.bets++; user.stats.minus += bet; }
+            if (actualMode === 'real') { user.stats.bets++; user.stats.minus += bet; }
             await user.save();
             return res.json(user);
             
@@ -230,11 +249,11 @@ app.post('/api/bet', async (req, res) => {
             io.emit('crashBetsUpdate', crashLiveBets);
             
             user[field] = Number((user[field] + win).toFixed(2));
-            if (mode === 'real') { user.stats.wins++; user.stats.plus += win; }
+            if (actualMode === 'real') { user.stats.wins++; user.stats.plus += win; }
             await user.save();
             
             const profit = win - activeBet.bet;
-            const newBetEntry = new Bet({ userId: user.id, username: user.username, avatar, game: 'Crash', amount: activeBet.bet, result: profit, mode: mode });
+            const newBetEntry = new Bet({ userId: user.id, username: user.username, avatar, game: 'Crash', amount: activeBet.bet, result: profit, mode: actualMode === 'demo' ? 'Demo' : 'Real' });
             await newBetEntry.save();
             pushToGlobalHistory(newBetEntry);
             
@@ -246,14 +265,14 @@ app.post('/api/bet', async (req, res) => {
     const newBetEntry = new Bet({
         userId: user.id, username: user.username, avatar, game: game,
         amount: bet, multiplier: multiplier || (bet > 0 ? (win / bet).toFixed(2) : 0),
-        result: Number(profit.toFixed(2)), mode: mode === 'demo' ? 'Demo' : 'Real'
+        result: Number(profit.toFixed(2)), mode: actualMode === 'demo' ? 'Demo' : 'Real'
     });
     await newBetEntry.save();
     pushToGlobalHistory(newBetEntry);
 
     user[field] = Number((user[field] - bet + win).toFixed(2));
     
-    if (mode === 'real') {
+    if (actualMode === 'real') {
         if (bet > 0) user.stats.bets++; 
         if (win > 0) { user.stats.wins++; user.stats.plus += win; } 
         else if (bet > 0) { user.stats.minus += bet; }
@@ -332,14 +351,14 @@ const checkAdmin = (req, res, next) => {
 
 app.post('/api/admin/data', checkAdmin, async (req, res) => {
     const withdraws = await Withdraw.find({status: 'pending'});
-    const users = await User.find().sort({balance: -1}).limit(20);
+    // 5. Увеличено до 2000 юзеров
+    const users = await User.find().sort({balance: -1}).limit(2000); 
     const promos = await Promo.find().sort({_id: -1}).limit(10);
     
     const allSettings = await Settings.find();
     const rtpData = {};
     const maintenanceData = {};
 
-    // ИСПРАВЛЕНИЕ: Защита от TypeError в админке
     allSettings.forEach(s => {
         if (s && s.key) {
             if (s.key.startsWith('rtp_')) rtpData[s.key.replace('rtp_', '')] = s.value;
@@ -350,10 +369,64 @@ app.post('/api/admin/data', checkAdmin, async (req, res) => {
     res.json({ withdraws, users, promos, rtp: rtpData, maintenance: maintenanceData });
 });
 
+// 5. Поиск пользователей в админке
+app.post('/api/admin/search_user', checkAdmin, async (req, res) => {
+    const { query } = req.body;
+    if (!query) return res.json({ users: [] });
+    
+    const users = await User.find({
+        $or: [
+            { id: new RegExp(query, 'i') },
+            { username: new RegExp(query, 'i') }
+        ]
+    }).limit(50);
+    
+    res.json({ users });
+});
+
+// Глобальное уведомление (в мини-апп)
 app.post('/api/admin/broadcast', checkAdmin, (req, res) => {
     const { text } = req.body;
     if(text) io.emit('global_alert', text);
     res.json({success: true});
+});
+
+// 9. Рассылка уведомлений прямо в бота Telegram
+app.post('/api/admin/bot_broadcast', checkAdmin, async (req, res) => {
+    const { text } = req.body;
+    if(!text || !bot) return res.status(400).json({error: 'Текст пуст или бот не запущен'});
+    
+    const users = await User.find({}, 'id');
+    let sentCount = 0;
+    
+    for(let u of users) {
+        try {
+            await bot.sendMessage(u.id, text);
+            sentCount++;
+        } catch(e) {
+            // Игнорируем тех, кто заблокировал бота
+        }
+    }
+    res.json({success: true, sentCount});
+});
+
+// 8. Обнуление профилей и истории (чтобы начать заново)
+app.post('/api/admin/reset_all_stats', checkAdmin, async (req, res) => {
+    try {
+        await User.updateMany({}, { 
+            $set: { 
+                balance: 0, 
+                demo_balance: 5000, 
+                stats: { bets: 0, wins: 0, plus: 0, minus: 0, promo: 0 } 
+            } 
+        });
+        await Bet.deleteMany({});
+        globalBetHistory = [];
+        io.emit('init_history', globalBetHistory);
+        res.json({success: true, message: 'Все профили и история ставок успешно обнулены!'});
+    } catch (error) {
+        res.status(500).json({error: 'Ошибка при обнулении данных'});
+    }
 });
 
 app.post('/api/admin/maintenance', checkAdmin, async (req, res) => {
