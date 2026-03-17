@@ -46,27 +46,56 @@ function draw() {
     requestAnimationFrame(draw);
 } draw();
 
+// --- ИСПРАВЛЕННАЯ ФУНКЦИЯ ЗАГРУЗКИ ---
 window.onload = async () => {
     tg.expand();
-    const res = await fetch('/api/auth', {
-        method: 'POST', headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify(tg.initDataUnsafe.user || {id: "1", first_name: "Dev", username: "DevUser"})
-    });
-    const data = await res.json();
-    user = data.user;
-    globalRtp = data.rtp || 90;
-    if (data.statuses) gameStatuses = data.statuses;
     
-    $('dep-wallet').innerText = data.adminWallet || 'Кошелек не настроен на сервере';
-    $('dep-memo').innerText = user.id;
+    try {
+        // Устанавливаем таймаут на запрос, чтобы не ждать вечно (10 сек)
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000); 
 
-    $('loader').style.opacity = '0'; setTimeout(() => $('loader').style.display = 'none', 500);
-    
-    const avaUrl = user.photo || 'https://cdn-icons-png.flaticon.com/512/149/149071.png';
-    $('user-ava').src = avaUrl; $('profile-ava').src = avaUrl;
-    $('profile-name').innerText = user.username || 'Игрок';
-    updateUI();
+        const res = await fetch('/api/auth', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(tg.initDataUnsafe.user || {id: "1", first_name: "Dev", username: "DevUser"}),
+            signal: controller.signal
+        });
+
+        clearTimeout(timeoutId);
+
+        if (!res.ok) throw new Error('Ошибка сервера');
+
+        const data = await res.json();
+        user = data.user;
+        globalRtp = data.rtp || 90;
+        if (data.statuses) gameStatuses = data.statuses;
+        
+        $('dep-wallet').innerText = data.adminWallet || 'Кошелек не настроен на сервере';
+        $('dep-memo').innerText = user.id;
+
+        const avaUrl = user.photo || 'https://cdn-icons-png.flaticon.com/512/149/149071.png';
+        $('user-ava').src = avaUrl; 
+        $('profile-ava').src = avaUrl;
+        $('profile-name').innerText = user.username || 'Игрок';
+        
+        updateUI();
+
+    } catch (err) {
+        console.error("Auth Error:", err);
+        showToast("Не удалось связаться с сервером");
+        // Создаем фейкового юзера, чтобы интерфейс не сломался
+        user = { id: "1", balance: 0, demo_balance: 0, stats: {bets:0, wins:0, plus:0, minus:0} };
+        updateUI();
+    } finally {
+        // Убираем лоадер в ЛЮБОМ случае (успех или ошибка)
+        $('loader').style.opacity = '0'; 
+        setTimeout(() => {
+            $('loader').style.display = 'none';
+        }, 500);
+    }
 };
+// ------------------------------------
 
 function updateUI() {
     const bal = mode === 'real' ? user.balance : user.demo_balance;
