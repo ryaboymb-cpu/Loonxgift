@@ -3,6 +3,9 @@ const socket = io();
 let user = null; let mode = 'real';
 let adminPass = '';
 let globalRtp = 90;
+let gameStatuses = { crash: 1, mines: 1, coinflip: 1 };
+let isReqPending = false; // Анти-абуз блокировка кликов
+let tonConnectUI = null;
 
 const $ = id => document.getElementById(id);
 
@@ -20,6 +23,14 @@ function copyText(text) {
     if(!text) return;
     navigator.clipboard.writeText(text).then(() => showToast('Скопировано!'));
 }
+
+// Инициализация TON Connect
+setTimeout(() => {
+    tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
+        manifestUrl: 'https://raw.githubusercontent.com/ton-community/tutorials/main/03-client/test/public/tonconnect-manifest.json',
+        buttonRootId: 'ton-connect'
+    });
+}, 500);
 
 const ctx = $('stars-bg').getContext('2d');
 let w = $('stars-bg').width = window.innerWidth;
@@ -44,6 +55,7 @@ window.onload = async () => {
     const data = await res.json();
     user = data.user;
     globalRtp = data.rtp || 90;
+    if (data.statuses) gameStatuses = data.statuses;
     
     $('dep-wallet').innerText = data.adminWallet || 'Кошелек не настроен на сервере';
     $('dep-memo').innerText = user.id;
@@ -69,24 +81,66 @@ function updateUI() {
 function toggleMode() { mode = mode === 'real' ? 'demo' : 'real'; updateUI(); showToast(`Включен ${mode} режим`); }
 
 function nav(pageId, el) {
+    // Проверка тех. перерыва
+    const keyMap = {crash: 'crash', mines: 'mines', coin: 'coinflip'};
+    if (keyMap[pageId] && gameStatuses[keyMap[pageId]] === 0) {
+        return showToast('Временно тех. перерыв!');
+    }
+
     document.querySelectorAll('.page').forEach(p => p.classList.remove('active')); $('page-'+pageId).classList.add('active');
     if(el) { document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active')); el.classList.add('active'); }
 }
 
+function playBattleRullet() {
+    showToast('Игра в разработке и скоро будет добавлена!');
+}
+
 socket.on('online', c => $('online-c').innerText = c);
 socket.on('rtpUpdate', r => globalRtp = r); 
+socket.on('statusUpdate', s => gameStatuses = s); 
 
+// Уведомление от админа
+socket.on('notification', msg => {
+    $('notification-text').innerText = msg;
+    $('notification-modal').style.display = 'flex';
+});
+
+// Инициализация ленты (при заходе)
+socket.on('init_feed', feed => {
+    $('feed-list').innerHTML = '';
+    feed.forEach(renderFeedItem);
+});
+
+// Новая ставка в ленте (только завершенные)
 socket.on('newLiveBet', b => {
+    renderFeedItem(b, true);
+});
+
+function renderFeedItem(b, prepend = false) {
+    const isWin = b.type === 'win';
+    const color = isWin ? 'var(--neon)' : 'var(--neon-red)';
+    const modeBadge = b.mode === 'Real' 
+        ? `<span style="background:rgba(0,152,234,0.2); color:#0098EA; padding:2px 4px; border-radius:4px; font-size:8px; margin-left:5px;">REAL</span>`
+        : `<span style="background:rgba(255,255,255,0.1); color:#aaa; padding:2px 4px; border-radius:4px; font-size:8px; margin-left:5px;">DEMO</span>`;
+        
     const d = document.createElement('div'); d.className = 'live-bet-item';
     d.innerHTML = `
         <div class="live-user">
             <img src="${b.avatar}" class="live-ava">
-            <span>${b.username} <b style="color:var(--sub); font-size:10px;">(${b.game})</b></span>
+            <span style="display:flex; align-items:center;">
+                ${b.username} <b style="color:var(--sub); font-size:10px; margin-left:5px;">(${b.game})</b>
+                ${modeBadge}
+            </span>
         </div>
-        <span style="font-weight:bold; color:${b.amount.includes('+')?'var(--neon)':'var(--neon-red)'}">${b.amount}</span>
+        <span style="font-weight:bold; color:${color}">${b.amount}</span>
     `;
-    $('feed-list').prepend(d); if($('feed-list').children.length > 8) $('feed-list').lastChild.remove();
-});
+    if (prepend) {
+        $('feed-list').prepend(d); 
+        if($('feed-list').children.length > 15) $('feed-list').lastChild.remove();
+    } else {
+        $('feed-list').appendChild(d);
+    }
+}
 
 // CRASH
 let curCrash = {}; 
@@ -101,8 +155,10 @@ socket.on('crashBetsUpdate', bets => {
     else {
         $('cr-live-bets').innerHTML = bets.map(b => `
             <div class="live-bet-item">
-                <div class="live-user"><img src="${b.avatar}" class="live-ava"> <span>${b.username}</span></div>
-                <span style="color:var(--neon);">${b.bet} TON</span>
+                <div class="live-user"><img src="${b.avatar}" class="live-ava"> <span>${b.username} <span style="font-size:8px; color:#888;">${b.mode==='Real'?'REAL':'DEMO'}</span></span></div>
+                <span style="color:${b.cashedOut ? 'var(--neon)' : (curCrash.status === 'crashed' ? 'var(--neon-red)' : 'var(--sub)')}; font-weight:bold;">
+                    ${b.cashedOut ? `Забрал: ${b.cashoutMult}x` : (curCrash.status === 'crashed' ? 'Разбился' : `${b.bet} TON`)}
+                </span>
             </div>
         `).join('');
     }
@@ -142,17 +198,20 @@ socket.on('crashData', d => {
 });
 
 async function playCrash() {
+    if(isReqPending) return;
     const btn = $('cr-btn');
     const curBal = mode === 'real' ? user.balance : user.demo_balance;
 
     if(curCrash.status === 'waiting') {
         if (myCrashBets.length >= 2) return showToast('Максимум 2 ставки за раунд!');
-        
         let crBet = parseFloat($('cr-bet').value); 
         if(isNaN(crBet) || crBet < 0.1 || crBet > 25) return showToast('Мин ставка 0.1, Макс 25 TON');
         if(crBet > curBal) return showToast('Недостаточно средств!');
         
+        isReqPending = true;
         const r = await fetch('/api/bet', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id:user.id, game:'Crash', bet:crBet, win:0, mode}) });
+        isReqPending = false;
+        
         if(r.ok) { 
             user = await r.json(); updateUI();
             myCrashBets.push(crBet);
@@ -162,12 +221,16 @@ async function playCrash() {
                 btn.innerText = 'МАКС. СТАВОК (2)'; btn.style.background = '#555';
             }
             showToast('Ставка принята!');
-        } else { showToast('Ошибка ставки!'); }
+        } else { const e = await r.json(); showToast(e.error || 'Ошибка ставки!'); }
         
     } else if(curCrash.status === 'running' && myCrashBets.length > 0) {
         const activeBet = myCrashBets[0]; 
         const win = activeBet * curCrash.multiplier; 
+        
+        isReqPending = true;
         const r = await fetch('/api/bet', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id:user.id, game:'Crash', bet:0, win:win, mode}) });
+        isReqPending = false;
+        
         if(r.ok) {
             user = await r.json(); updateUI();
             myCrashBets.shift(); 
@@ -178,6 +241,8 @@ async function playCrash() {
             } else {
                 btn.innerText = 'ОЖИДАНИЕ'; btn.style.background = '#555';
             }
+        } else {
+            const e = await r.json(); showToast(e.error || 'Ошибка вывода!');
         }
     }
 }
@@ -187,6 +252,7 @@ let miActive = false; let bombs = []; let miBet = 0;
 let openedCells = 0; let currentMinesWin = 0; 
 
 function playMines() {
+    if(isReqPending) return;
     const curBal = mode === 'real' ? user.balance : user.demo_balance;
     if(miActive) { 
         reqBet('Mines', 0, currentMinesWin).then(ok => {
@@ -220,7 +286,7 @@ function renderMines() {
     for(let i=0; i<25; i++) {
         let c = document.createElement('div'); c.className = 'm-cell';
         c.onclick = () => {
-            if(!miActive || c.classList.contains('open')) return;
+            if(!miActive || c.classList.contains('open') || isReqPending) return;
             
             let hitBomb = bombs.includes(i);
             if (!hitBomb) {
@@ -229,7 +295,9 @@ function renderMines() {
 
             if(hitBomb) { 
                 c.innerText='💣'; c.style.background='var(--neon-red)'; miActive=false; 
-                $('mi-btn').innerText='ИГРАТЬ (5 МИН)'; showToast('БУМ! Проигрыш'); 
+                $('mi-btn').innerText='ИГРАТЬ (5 МИН)'; 
+                showToast('БУМ! Проигрыш');
+                reqBet('Mines', miBet, -1); // Отправляем -1 для записи луза в ленту
             } else { 
                 c.innerText='💎'; c.classList.add('open'); 
                 openedCells++;
@@ -244,7 +312,7 @@ function renderMines() {
 let cSide = 'L'; let isFlipping = false;
 function setSide(s) { if(isFlipping) return; cSide = s; $('side-l').classList.toggle('active', s==='L'); $('side-x').classList.toggle('active', s==='X'); }
 async function playCoin() {
-    if(isFlipping) return;
+    if(isFlipping || isReqPending) return;
     const curBal = mode === 'real' ? user.balance : user.demo_balance;
     const bet = parseFloat($('co-bet').value); 
     
@@ -274,6 +342,49 @@ async function playCoin() {
 }
 
 // ФИНАНСЫ И ПРОМО
+function switchPay(method) {
+    if(method === 'tc') {
+        $('pay-tc-block').style.display = 'block';
+        $('pay-transfer-block').style.display = 'none';
+        $('btn-pay-tc').style.background = 'var(--neon)'; $('btn-pay-tc').style.color = '#000';
+        $('btn-pay-transfer').style.background = '#222'; $('btn-pay-transfer').style.color = '#fff';
+    } else {
+        $('pay-transfer-block').style.display = 'block';
+        $('pay-tc-block').style.display = 'none';
+        $('btn-pay-transfer').style.background = 'var(--neon)'; $('btn-pay-transfer').style.color = '#000';
+        $('btn-pay-tc').style.background = '#222'; $('btn-pay-tc').style.color = '#fff';
+    }
+}
+
+async function sendTonConnect() {
+    if (!tonConnectUI || !tonConnectUI.connected) return showToast("Сначала подключите кошелек кнопкой выше!");
+    const amount = parseFloat($('tc-amount').value);
+    if(isNaN(amount) || amount <= 0) return showToast("Введите корректную сумму");
+
+    try {
+        const tonweb = new window.TonWeb();
+        const cell = new tonweb.boc.Cell();
+        cell.bits.writeUint(0, 32);
+        cell.bits.writeString(user.id.toString()); // Комментарий
+        const payload = tonweb.utils.bytesToBase64(await cell.toBoc());
+
+        const adminWallet = $('dep-wallet').innerText;
+
+        const tx = {
+            validUntil: Math.floor(Date.now() / 1000) + 300,
+            messages: [
+                { address: adminWallet, amount: (amount * 1000000000).toString(), payload: payload }
+            ]
+        };
+
+        await tonConnectUI.sendTransaction(tx);
+        showToast("Транзакция отправлена! Жмите 'Проверить оплату' через минуту.");
+    } catch(e) {
+        console.error(e);
+        showToast("Отмена или ошибка транзакции.");
+    }
+}
+
 async function checkRealDeposit() {
     const btn = event.target;
     btn.innerText = "ПРОВЕРЯЕМ...";
@@ -300,9 +411,11 @@ async function activatePromo() {
 }
 
 async function reqBet(game, bet, win) {
+    isReqPending = true;
     const r = await fetch('/api/bet', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id:user.id, game, bet, win, mode}) });
+    isReqPending = false;
     if(r.ok) { user = await r.json(); updateUI(); return true; } 
-    else { showToast('Недостаточно средств!'); return false; }
+    else { const e = await r.json(); showToast(e.error || 'Ошибка!'); return false; }
 }
 
 // ADMIN PANEL LOGIC
@@ -363,6 +476,17 @@ function renderAdminContent(tab) {
             <div style="margin-bottom:10px;"><b>Crash RTP (%):</b> <input type="number" id="rtp-crash" value="${adData.rtp.crash||90}" class="input-box" style="padding:5px; font-size:14px; width:70px; display:inline-block; margin:0 5px;"> <button class="btn" style="padding:5px 10px; width:auto; display:inline-block;" onclick="adminRTP('crash')">OK</button></div>
             <div style="margin-bottom:10px;"><b>Mines RTP (%):</b> <input type="number" id="rtp-mines" value="${adData.rtp.mines||90}" class="input-box" style="padding:5px; font-size:14px; width:70px; display:inline-block; margin:0 5px;"> <button class="btn" style="padding:5px 10px; width:auto; display:inline-block;" onclick="adminRTP('mines')">OK</button></div>
             <div style="margin-bottom:10px;"><b>Coinflip RTP (%):</b> <input type="number" id="rtp-coinflip" value="${adData.rtp.coinflip||90}" class="input-box" style="padding:5px; font-size:14px; width:70px; display:inline-block; margin:0 5px;"> <button class="btn" style="padding:5px 10px; width:auto; display:inline-block;" onclick="adminRTP('coinflip')">OK</button></div>
+            
+            <hr style="border-color:#333; margin:15px 0;">
+            <h3 style="color:var(--neon); margin-bottom:10px;">Статус игр (Вкл/Выкл)</h3>
+            <div style="display:flex; justify-content:space-between; margin-bottom:10px; align-items:center;"><b>Crash:</b> <button class="btn" style="width:auto; margin:0; padding:5px 10px; background:${adData.statuses.crash ? 'var(--neon)' : 'var(--neon-red)'}" onclick="adminToggleGame('crash', ${adData.statuses.crash ? 0 : 1})">${adData.statuses.crash ? 'ВКЛЮЧЕНО' : 'ВЫКЛЮЧЕНО'}</button></div>
+            <div style="display:flex; justify-content:space-between; margin-bottom:10px; align-items:center;"><b>Mines:</b> <button class="btn" style="width:auto; margin:0; padding:5px 10px; background:${adData.statuses.mines ? 'var(--neon)' : 'var(--neon-red)'}" onclick="adminToggleGame('mines', ${adData.statuses.mines ? 0 : 1})">${adData.statuses.mines ? 'ВКЛЮЧЕНО' : 'ВЫКЛЮЧЕНО'}</button></div>
+            <div style="display:flex; justify-content:space-between; margin-bottom:10px; align-items:center;"><b>Coinflip:</b> <button class="btn" style="width:auto; margin:0; padding:5px 10px; background:${adData.statuses.coinflip ? 'var(--neon)' : 'var(--neon-red)'}" onclick="adminToggleGame('coinflip', ${adData.statuses.coinflip ? 0 : 1})">${adData.statuses.coinflip ? 'ВКЛЮЧЕНО' : 'ВЫКЛЮЧЕНО'}</button></div>
+
+            <hr style="border-color:#333; margin:15px 0;">
+            <h3 style="color:var(--neon-blue); margin-bottom:10px;">Рассылка уведомления</h3>
+            <textarea id="ad-broadcast-msg" class="input-box" style="height:60px; font-size:14px; padding:10px;" placeholder="Текст уведомления..."></textarea>
+            <button class="btn" style="padding:10px; background:var(--neon-blue); color:#000;" onclick="adminBroadcast()">ОТПРАВИТЬ ВСЕМ</button>
         `;
     }
     if(tab === 'users') {
@@ -371,6 +495,11 @@ function renderAdminContent(tab) {
                 <div style="display:flex; justify-content:space-between; margin-bottom: 8px;">
                     <span><b>${u.username}</b> <span style="font-size:10px;color:#888;">(${u.id})</span></span> 
                     <b style="color:var(--neon)">${u.balance.toFixed(2)} TON</b>
+                </div>
+                <div style="font-size:10px; color:#aaa; margin-bottom:8px;">
+                    Выиграл (Реал): <span style="color:var(--neon)">${(u.stats.realWon||0).toFixed(2)}</span> | 
+                    Проиграл (Реал): <span style="color:var(--neon-red)">${(u.stats.realLost||0).toFixed(2)}</span> | 
+                    Промо: <span style="color:var(--neon-blue)">${(u.stats.promoTon||0).toFixed(2)}</span>
                 </div>
                 <div style="display:flex; gap:5px; align-items:center;">
                     <input type="number" id="u-bal-${u.id}" placeholder="Сумма" class="input-box" style="width:100px; padding:5px; margin:0; font-size:12px;">
@@ -382,7 +511,6 @@ function renderAdminContent(tab) {
     }
 }
 
-// Новая функция редактирования баланса
 async function adminEditBalance(userId, action) {
     const amount = document.getElementById(`u-bal-${userId}`).value;
     if(!amount || amount <= 0) return showToast('Введите сумму');
@@ -402,7 +530,6 @@ async function adminPromo() {
     loadAdminData();
 }
 
-// Новая функция удаления промо
 async function adminDelPromo(pId) {
     if(!confirm('Удалить этот промокод?')) return;
     await fetch('/api/admin/promo_delete', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({pass: adminPass, pId}) });
@@ -414,4 +541,18 @@ async function adminRTP(game) {
     await fetch('/api/admin/set_rtp', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({pass: adminPass, game, value}) });
     loadAdminData();
     showToast('RTP сохранен!');
-    }
+}
+
+async function adminToggleGame(game, value) {
+    await fetch('/api/admin/set_status', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({pass: adminPass, game, value}) });
+    loadAdminData();
+    showToast('Статус изменен!');
+}
+
+async function adminBroadcast() {
+    const msg = $('ad-broadcast-msg').value;
+    if(!msg) return showToast('Введите текст!');
+    await fetch('/api/admin/broadcast', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({pass: adminPass, message: msg}) });
+    $('ad-broadcast-msg').value = '';
+    showToast('Уведомление отправлено всем!');
+}
