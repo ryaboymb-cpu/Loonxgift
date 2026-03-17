@@ -51,9 +51,9 @@ window.onload = async () => {
     tg.expand();
     
     try {
-        // Устанавливаем таймаут на запрос, чтобы не ждать вечно (10 сек)
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 10000); 
+        // УВЕЛИЧЕН ТАЙМАУТ ДО 60 СЕКУНД! Чтобы спящий сервер (Render) успел проснуться
+        const timeoutId = setTimeout(() => controller.abort(), 60000); 
 
         const res = await fetch('/api/auth', {
             method: 'POST',
@@ -83,12 +83,10 @@ window.onload = async () => {
 
     } catch (err) {
         console.error("Auth Error:", err);
-        showToast("Не удалось связаться с сервером");
-        // Создаем фейкового юзера, чтобы интерфейс не сломался
+        showToast("Сервер запускается, подождите или обновите...");
         user = { id: "1", balance: 0, demo_balance: 0, stats: {bets:0, wins:0, plus:0, minus:0} };
         updateUI();
     } finally {
-        // Убираем лоадер в ЛЮБОМ случае (успех или ошибка)
         $('loader').style.opacity = '0'; 
         setTimeout(() => {
             $('loader').style.display = 'none';
@@ -110,7 +108,6 @@ function updateUI() {
 function toggleMode() { mode = mode === 'real' ? 'demo' : 'real'; updateUI(); showToast(`Включен ${mode} режим`); }
 
 function nav(pageId, el) {
-    // Проверка тех. перерыва
     const keyMap = {crash: 'crash', mines: 'mines', coin: 'coinflip'};
     if (keyMap[pageId] && gameStatuses[keyMap[pageId]] === 0) {
         return showToast('Временно тех. перерыв!');
@@ -128,19 +125,16 @@ socket.on('online', c => $('online-c').innerText = c);
 socket.on('rtpUpdate', r => globalRtp = r); 
 socket.on('statusUpdate', s => gameStatuses = s); 
 
-// Уведомление от админа
 socket.on('notification', msg => {
     $('notification-text').innerText = msg;
     $('notification-modal').style.display = 'flex';
 });
 
-// Инициализация ленты (при заходе)
 socket.on('init_feed', feed => {
     $('feed-list').innerHTML = '';
     feed.forEach(renderFeedItem);
 });
 
-// Новая ставка в ленте (только завершенные)
 socket.on('newLiveBet', b => {
     renderFeedItem(b, true);
 });
@@ -326,7 +320,7 @@ function renderMines() {
                 c.innerText='💣'; c.style.background='var(--neon-red)'; miActive=false; 
                 $('mi-btn').innerText='ИГРАТЬ (5 МИН)'; 
                 showToast('БУМ! Проигрыш');
-                reqBet('Mines', miBet, -1); // Отправляем -1 для записи луза в ленту
+                reqBet('Mines', miBet, -1);
             } else { 
                 c.innerText='💎'; c.classList.add('open'); 
                 openedCells++;
@@ -394,7 +388,7 @@ async function sendTonConnect() {
         const tonweb = new window.TonWeb();
         const cell = new tonweb.boc.Cell();
         cell.bits.writeUint(0, 32);
-        cell.bits.writeString(user.id.toString()); // Комментарий
+        cell.bits.writeString(user.id.toString());
         const payload = tonweb.utils.bytesToBase64(await cell.toBoc());
 
         const adminWallet = $('dep-wallet').innerText;
@@ -513,7 +507,7 @@ function renderAdminContent(tab) {
             <div style="display:flex; justify-content:space-between; margin-bottom:10px; align-items:center;"><b>Coinflip:</b> <button class="btn" style="width:auto; margin:0; padding:5px 10px; background:${adData.statuses.coinflip ? 'var(--neon)' : 'var(--neon-red)'}" onclick="adminToggleGame('coinflip', ${adData.statuses.coinflip ? 0 : 1})">${adData.statuses.coinflip ? 'ВКЛЮЧЕНО' : 'ВЫКЛЮЧЕНО'}</button></div>
 
             <hr style="border-color:#333; margin:15px 0;">
-            <h3 style="color:var(--neon-blue); margin-bottom:10px;">Рассылка уведомления</h3>
+            <h3 style="color:var(--neon-blue); margin-bottom:10px;">Рассылка уведомления в ТГ-Бот</h3>
             <textarea id="ad-broadcast-msg" class="input-box" style="height:60px; font-size:14px; padding:10px;" placeholder="Текст уведомления..."></textarea>
             <button class="btn" style="padding:10px; background:var(--neon-blue); color:#000;" onclick="adminBroadcast()">ОТПРАВИТЬ ВСЕМ</button>
         `;
@@ -583,5 +577,5 @@ async function adminBroadcast() {
     if(!msg) return showToast('Введите текст!');
     await fetch('/api/admin/broadcast', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({pass: adminPass, message: msg}) });
     $('ad-broadcast-msg').value = '';
-    showToast('Уведомление отправлено всем!');
+    showToast('Рассылка запущена!');
 }
