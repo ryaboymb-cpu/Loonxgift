@@ -6,7 +6,8 @@ const http = require('http');
 const socketIo = require('socket.io');
 const cors = require('cors');
 const path = require('path');
-// Добавляем импорт для работы с TON API (обязательно для Render)
+
+// Исправленный импорт fetch для стабильной работы на Render
 const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));
 
 const app = express();
@@ -73,32 +74,38 @@ function addToFeed(user, game, amountStr, type, mode) {
     io.emit('newLiveBet', entry);
 }
 
-// --- ТЕЛЕГРАМ БОТ ---
+// --- ТЕЛЕГРАМ БОТ (с фиксом конфликта 409) ---
 if (process.env.BOT_TOKEN) {
-    const bot = new TelegramBot(process.env.BOT_TOKEN, { polling: true });
+    console.log('⏳ Подготовка к запуску бота (пауза 10с для Render)...');
     
-    // Поллинг может конфликтовать, если бот запущен где-то еще
-    bot.on('polling_error', (err) => {
-        if (err.message.includes('409 Conflict')) {
-            console.log('⚠️ Внимание: Бот запущен в другом месте (например, в Termux). Останови его там.');
-        } else {
-            console.log('❌ Ошибка поллинга бота:', err.message);
-        }
-    });
+    setTimeout(() => {
+        const bot = new TelegramBot(process.env.BOT_TOKEN, { polling: true });
+        
+        // Очищаем вебхуки перед стартом, чтобы не было конфликтов
+        bot.deleteWebHook().catch(() => {});
 
-    bot.onText(/\/(start|help)/, (msg) => {
-        const text = `🚀 Привет, ${msg.from.first_name}!\nДобро пожаловать в Loonx Gifts.\n\nТут ты можешь играть и выигрывать TON! Твой баланс и все игры находятся внутри Mini App.\n\nВыбирай действие в меню ниже:`;
-        bot.sendMessage(msg.chat.id, text, {
-            reply_markup: {
-                inline_keyboard: [
-                    [{ text: "🎮 ИГРАТЬ (MINI APP)", web_app: { url: process.env.WEB_APP_URL } }],
-                    [{ text: "📢 Канал", url: "https://t.me/Loonxnews" }, { text: "💬 Саппорт", url: "https://t.me/LoonxGift_Support" }],
-                    [{ text: "🐞 Баги", url: "https://t.me/msgp2p" }]
-                ]
+        bot.on('polling_error', (err) => {
+            if (err.message.includes('409 Conflict')) {
+                console.log('⚠️ Конфликт токена: Старая копия сервера еще активна. Ждем завершения.');
+            } else {
+                console.log('❌ Ошибка бота:', err.message);
             }
         });
-    });
-    console.log('🤖 Бот успешно настроен');
+
+        bot.onText(/\/(start|help)/, (msg) => {
+            const text = `🚀 Привет, ${msg.from.first_name}!\nДобро пожаловать в Loonx Gifts.\n\nТут ты можешь играть и выигрывать TON! Твой баланс и все игры находятся внутри Mini App.\n\nВыбирай действие в меню ниже:`;
+            bot.sendMessage(msg.chat.id, text, {
+                reply_markup: {
+                    inline_keyboard: [
+                        [{ text: "🎮 ИГРАТЬ (MINI APP)", web_app: { url: process.env.WEB_APP_URL } }],
+                        [{ text: "📢 Канал", url: "https://t.me/Loonxnews" }, { text: "💬 Саппорт", url: "https://t.me/LoonxGift_Support" }],
+                        [{ text: "🐞 Баги", url: "https://t.me/msgp2p" }]
+                    ]
+                }
+            });
+        });
+        console.log('🤖 Бот успешно запущен');
+    }, 10000); // 10 секунд ожидания
 }
 
 // --- CRASH ENGINE ---
@@ -205,7 +212,7 @@ app.post('/api/bet', async (req, res) => {
                 crashLiveBets.push({ id: user.id, username: user.username, avatar, bet, cashedOut: false, win: 0, mode: mode==='demo'?'Demo':'Real' });
                 io.emit('crashBetsUpdate', crashLiveBets);
             } else if (win > 0) {
-                // ИСПРАВЛЕНО: curCrash -> crash
+                // ИСПРАВЛЕНО: была ошибка curCrash, заменено на crash
                 const activeBet = crashLiveBets.find(b => b.id === user.id && !b.cashedOut);
                 if (!activeBet || crash.status !== 'running') {
                     activeRequests.delete(reqKey);
