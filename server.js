@@ -7,6 +7,7 @@ const socketIo = require('socket.io');
 const cors = require('cors');
 const path = require('path');
 
+// Исправленный импорт fetch для Node.js
 const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));
 
 const app = express();
@@ -16,6 +17,9 @@ const io = socketIo(server, { cors: { origin: "*" } });
 app.use(cors()); 
 app.use(express.json()); 
 app.use(express.static(path.join(__dirname, 'public')));
+
+// Эндпоинт для самопрозвона
+app.get('/ping', (req, res) => res.send('pong'));
 
 mongoose.connect(process.env.MONGO_URI)
     .then(() => console.log('✅ DB Connected'))
@@ -73,37 +77,32 @@ function addToFeed(user, game, amountStr, type, mode) {
 }
 
 // --- ТЕЛЕГРАМ БОТ ---
-let bot; // Делаем бота глобальным, чтобы его видела функция рассылки
-
+let bot; 
 if (process.env.BOT_TOKEN) {
-    console.log('⏳ Подготовка к запуску бота (пауза 10с для Render)...');
-    
+    console.log('⏳ Подготовка бота...');
     setTimeout(() => {
         bot = new TelegramBot(process.env.BOT_TOKEN, { polling: true });
-        
         bot.deleteWebHook().catch(() => {});
-
         bot.on('polling_error', (err) => {
             if (err.message.includes('409 Conflict')) {
-                console.log('⚠️ Конфликт токена: Старая копия сервера еще активна. Ждем завершения.');
-            } else {
-                console.log('❌ Ошибка бота:', err.message);
+                console.log('⚠️ Токен занят, ждем освобождения...');
             }
         });
 
         bot.onText(/\/(start|help)/, (msg) => {
-            const text = `🚀 Привет, ${msg.from.first_name}!\nДобро пожаловать в Loonx Gifts.\n\nТут ты можешь играть и выигрывать TON! Твой баланс и все игры находятся внутри Mini App.\n\nВыбирай действие в меню ниже:`;
+            const appUrl = process.env.WEB_APP_URL || "https://t.me/your_bot"; 
+            const text = `🚀 Привет, ${msg.from.first_name}!\nДобро пожаловать в Loonx Gifts.\n\nТут ты можешь играть и выигрывать TON!`;
             bot.sendMessage(msg.chat.id, text, {
                 reply_markup: {
                     inline_keyboard: [
-                        [{ text: "🎮 ИГРАТЬ (MINI APP)", web_app: { url: process.env.WEB_APP_URL } }],
+                        [{ text: "🎮 ИГРАТЬ (MINI APP)", web_app: { url: appUrl } }],
                         [{ text: "📢 Канал", url: "https://t.me/Loonxnews" }, { text: "💬 Саппорт", url: "https://t.me/LoonxGift_Support" }],
                         [{ text: "🐞 Баги", url: "https://t.me/msgp2p" }]
                     ]
                 }
             });
         });
-        console.log('🤖 Бот успешно запущен');
+        console.log('🤖 Бот активен');
     }, 10000); 
 }
 
@@ -158,17 +157,14 @@ io.on('connection', async (socket) => {
     socket.emit('crashHistoryUpdate', crashHistory);
     socket.emit('crashBetsUpdate', crashLiveBets);
     socket.emit('init_feed', globalFeed);
-
     socket.on('disconnect', () => { online--; io.emit('online', online); });
 });
 
-// --- API ЭНДПОИНТЫ ---
+// --- API ---
 app.post('/api/auth', async (req, res) => {
     try {
         const { id, username, first_name, photo_url } = req.body;
-        // Защита от падения, если id передан в неправильном формате
         const userId = String(id);
-        
         let user = await User.findOne({ id: userId });
         if (!user) user = await User.create({ id: userId, username: username || first_name, photo: photo_url });
         else { user.username = username || first_name; user.photo = photo_url; await user.save(); }
@@ -176,21 +172,21 @@ app.post('/api/auth', async (req, res) => {
         const settings = await Settings.find();
         const rtpData = {}; const statusesData = {};
         settings.forEach(s => {
-            if(s.key.startsWith('rtp_')) rtpData[s.key.replace('rtp_', '')] = s.value;
-            if(s.key.startsWith('status_')) statusesData[s.key.replace('status_', '')] = s.value;
+            // ФИКС ОШИБКИ startsWith
+            if(s.key && typeof s.key === 'string') {
+                if(s.key.startsWith('rtp_')) rtpData[s.key.replace('rtp_', '')] = s.value;
+                if(s.key.startsWith('status_')) statusesData[s.key.replace('status_', '')] = s.value;
+            }
         });
-        
         res.json({ user, adminWallet: process.env.ADMIN_WALLET, rtp: rtpData, statuses: statusesData });
     } catch (err) {
-        console.error("Auth server error:", err);
         res.status(500).json({error: "Server connection error"});
     }
 });
 
 const activeRequests = new Set();
-
 app.post('/api/bet', async (req, res) => {
-    const { id, game, bet, win, multiplier, mode } = req.body;
+    const { id, game, bet, win, mode } = req.body;
     const reqKey = `${id}_${game}`;
     if(activeRequests.has(reqKey)) return res.status(400).json({error: 'Подождите...'});
     activeRequests.add(reqKey);
@@ -202,10 +198,10 @@ app.post('/api/bet', async (req, res) => {
         const statusSetting = await Settings.findOne({key: `status_${game.toLowerCase()}`});
         if (statusSetting && statusSetting.value === 0) {
             activeRequests.delete(reqKey);
-            return res.status(400).json({error: 'Игра временно отключена'});
+            return res.status(400).json({error: 'Тех. перерыв'});
         }
         
-        if (bet < 0 || user[field] < bet) {
+        if (bet > 0 && user[field] < bet) {
             activeRequests.delete(reqKey);
             return res.status(400).json({error: 'No money'});
         }
@@ -220,12 +216,8 @@ app.post('/api/bet', async (req, res) => {
                 io.emit('crashBetsUpdate', crashLiveBets);
             } else if (win > 0) {
                 const activeBet = crashLiveBets.find(b => b.id === user.id && !b.cashedOut);
-                if (!activeBet || crash.status !== 'running') {
-                    activeRequests.delete(reqKey);
-                    return res.status(400).json({error: 'Already cashed out or crashed'});
-                }
-                activeBet.cashedOut = true;
-                activeBet.win = win;
+                if (!activeBet || crash.status !== 'running') { activeRequests.delete(reqKey); return res.status(400).json({error: 'Error'}); }
+                activeBet.cashedOut = true; activeBet.win = win;
                 activeBet.cashoutMult = (win / activeBet.bet).toFixed(2);
                 io.emit('crashBetsUpdate', crashLiveBets);
                 addToFeed(user, 'Crash', `+${win.toFixed(2)}`, 'win', mode==='demo'?'Demo':'Real');
@@ -246,14 +238,8 @@ app.post('/api/bet', async (req, res) => {
         
         if (mode === 'real') {
             if (bet > 0) user.stats.bets++; 
-            if (actualWin > 0) { 
-                user.stats.wins++; 
-                user.stats.plus += actualWin; 
-                user.stats.realWon += actualWin;
-            } else if (bet > 0) { 
-                user.stats.minus += bet; 
-                user.stats.realLost += bet;
-            }
+            if (actualWin > 0) { user.stats.wins++; user.stats.plus += actualWin; user.stats.realWon += actualWin; }
+            else if (bet > 0) { user.stats.minus += bet; user.stats.realLost += bet; }
         }
 
         await user.save();
@@ -269,43 +255,35 @@ app.post('/api/check_deposit', async (req, res) => {
     const { id } = req.body;
     const adminWallet = process.env.ADMIN_WALLET;
     const apiKey = process.env.TON_API_KEY;
-    
-    if (!adminWallet || !apiKey) return res.status(500).json({error: 'Wallet or API key missing'});
+    if (!adminWallet || !apiKey) return res.status(500).json({error: 'Config error'});
 
     try {
         const response = await fetch(`https://toncenter.com/api/v2/getTransactions?address=${adminWallet}&limit=50&api_key=${apiKey}`);
         const data = await response.json();
-        if(!data.ok) return res.status(400).json({error: 'TonCenter error'});
+        if(!data.ok) return res.status(400).json({error: 'API error'});
         
         let foundNew = false; let totalAdded = 0;
-        
         for (let tx of data.result) {
-            if (tx.in_msg && tx.in_msg.message && String(tx.in_msg.message).trim() === String(id).trim() && tx.in_msg.value > 0) {
+            if (tx.in_msg && tx.in_msg.message && String(tx.in_msg.message).trim() === String(id).trim()) {
                 const txHash = tx.transaction_id.hash;
                 const amountTON = tx.in_msg.value / 1e9; 
                 const exists = await Deposit.findOne({ hash: txHash });
                 if(!exists) {
                     await Deposit.create({ hash: txHash, userId: String(id), amount: amountTON });
                     const user = await User.findOne({ id: String(id) });
-                    if(user) {
-                        user.balance = Number((user.balance + amountTON).toFixed(2));
-                        await user.save();
-                        foundNew = true; totalAdded += amountTON;
-                    }
+                    if(user) { user.balance = Number((user.balance + amountTON).toFixed(2)); await user.save(); foundNew = true; totalAdded += amountTON; }
                 }
             }
         }
         if(foundNew) res.json({ success: true, added: totalAdded, user: await User.findOne({id: String(id)}) });
-        else res.status(400).json({ error: 'Новых оплат не найдено' });
-    } catch (e) { 
-        res.status(500).json({error: 'Network error'}); 
-    }
+        else res.status(400).json({ error: 'Оплат нет' });
+    } catch (e) { res.status(500).json({error: 'Error'}); }
 });
 
 app.post('/api/promo', async (req, res) => {
     const { id, code } = req.body;
     const promo = await Promo.findOne({ code });
-    if(!promo || promo.usedBy.length >= promo.limit || promo.usedBy.includes(String(id))) return res.status(400).json({error: 'Invalid promo'});
+    if(!promo || promo.usedBy.length >= promo.limit || promo.usedBy.includes(String(id))) return res.status(400).json({error: 'Invalid'});
     const user = await User.findOne({ id: String(id) });
     if(user) {
         user.balance = Number((user.balance + promo.amount).toFixed(2)); 
@@ -313,8 +291,6 @@ app.post('/api/promo', async (req, res) => {
         promo.usedBy.push(String(id));
         await user.save(); await promo.save();
         res.json(user);
-    } else {
-        res.status(400).json({error: 'User not found'});
     }
 });
 
@@ -328,9 +304,9 @@ app.post('/api/withdraw', async (req, res) => {
     res.json(user);
 });
 
-// --- АДМИН ПАНЕЛЬ ---
+// --- АДМИНКА ---
 const checkAdmin = (req, res, next) => {
-    if(req.body.pass !== (process.env.ADMIN_PASS || '1234')) return res.status(403).json({error: 'Wrong pass'});
+    if(req.body.pass !== (process.env.ADMIN_PASS || '1234')) return res.status(403).json({error: 'Pass'});
     next();
 };
 
@@ -338,21 +314,17 @@ app.post('/api/admin/data', checkAdmin, async (req, res) => {
     const withdraws = await Withdraw.find({status: 'pending'});
     const users = await User.find().sort({balance: -1}).limit(30);
     const promos = await Promo.find().sort({_id: -1}).limit(10);
-    
     const settings = await Settings.find();
     const rtpData = {}; const statusesData = {};
     settings.forEach(s => {
         if(s.key.startsWith('rtp_')) rtpData[s.key.replace('rtp_', '')] = s.value;
         if(s.key.startsWith('status_')) statusesData[s.key.replace('status_', '')] = s.value;
     });
-    
     res.json({ withdraws, users, promos, rtp: rtpData, statuses: statusesData });
 });
 
 app.post('/api/admin/promo_create', checkAdmin, async (req, res) => {
-    const { code, amount, limit } = req.body;
-    if(!code || !amount || !limit) return res.status(400).json({error: 'Заполните все поля'});
-    await Promo.create({ code, amount: Number(amount), limit: Number(limit) });
+    await Promo.create({ code: req.body.code, amount: Number(req.body.amount), limit: Number(req.body.limit) });
     res.json({success: true});
 });
 
@@ -362,71 +334,54 @@ app.post('/api/admin/promo_delete', checkAdmin, async (req, res) => {
 });
 
 app.post('/api/admin/set_rtp', checkAdmin, async (req, res) => {
-    const { game, value } = req.body;
-    await Settings.updateOne({key: `rtp_${game}`}, {value: Number(value)}, {upsert: true});
+    await Settings.updateOne({key: `rtp_${req.body.game}`}, {value: Number(req.body.value)}, {upsert: true});
     res.json({success: true});
 });
 
 app.post('/api/admin/set_status', checkAdmin, async (req, res) => {
-    const { game, value } = req.body;
-    await Settings.updateOne({key: `status_${game}`}, {value: Number(value)}, {upsert: true});
+    await Settings.updateOne({key: `status_${req.body.game}`}, {value: Number(req.body.value)}, {upsert: true});
     const settings = await Settings.find({key: /status_/});
     const sData = {}; settings.forEach(s => sData[s.key.replace('status_', '')] = s.value);
     io.emit('statusUpdate', sData);
     res.json({success: true});
 });
 
-// ИСПРАВЛЕННЫЙ ЭНДПОИНТ РАССЫЛКИ 
 app.post('/api/admin/broadcast', checkAdmin, async (req, res) => {
     const msg = req.body.message;
-    
-    // Оставляем уведомление внутри Mini App (чтобы те кто онлайн тоже увидели сразу)
     io.emit('notification', msg);
-    
-    // Рассылка через Telegram бота ВСЕМ пользователям из базы
     if (bot) {
-        try {
-            const users = await User.find({}, 'id');
-            for (let u of users) {
-                try {
-                    await bot.sendMessage(u.id, msg);
-                } catch (e) {
-                    // Игнорируем ошибку, если пользователь заблокировал бота
-                }
-            }
-        } catch (dbErr) {
-            console.error("Ошибка при рассылке:", dbErr);
-        }
+        const users = await User.find({}, 'id');
+        for (let u of users) { try { await bot.sendMessage(u.id, msg); } catch (e) {} }
     }
-    
     res.json({success: true});
 });
 
 app.post('/api/admin/edit_balance', checkAdmin, async (req, res) => {
-    const { userId, action, amount } = req.body;
-    const user = await User.findOne({id: String(userId)});
-    if (!user) return res.status(404).json({error: 'User not found'});
-    const val = Number(amount);
-    if (action === 'add') user.balance = Number((user.balance + val).toFixed(2));
-    else if (action === 'sub') {
-        user.balance = Number((user.balance - val).toFixed(2));
-        if(user.balance < 0) user.balance = 0;
-    }
+    const user = await User.findOne({id: String(req.body.userId)});
+    const val = Number(req.body.amount);
+    if (req.body.action === 'add') user.balance += val;
+    else user.balance = Math.max(0, user.balance - val);
     await user.save();
     res.json({success: true});
 });
 
 app.post('/api/admin/withdraw_action', checkAdmin, async (req, res) => {
-    const { wId, action } = req.body;
-    const w = await Withdraw.findById(wId);
-    if(!w || w.status !== 'pending') return res.status(400).json({error: 'Error'});
-    if(action === 'reject') {
+    const w = await Withdraw.findById(req.body.wId);
+    if(req.body.action === 'reject') {
         const u = await User.findOne({id: String(w.userId)});
         if(u) { u.balance += w.amount; await u.save(); }
         w.status = 'rejected';
-    } else { w.status = 'approved'; }
+    } else w.status = 'approved';
     await w.save();
     res.json({success: true});
 });
 
-server.listen(process.env.PORT || 3000, () => console.log('🚀 Server Running on port 3000'));
+// --- АНТИ-СОН (KEEP-ALIVE) ---
+setInterval(() => {
+    const host = process.env.RENDER_EXTERNAL_HOSTNAME;
+    if (host) {
+        fetch(`https://${host}.onrender.com/ping`).catch(() => {});
+    }
+}, 300000); // 5 минут
+
+server.listen(process.env.PORT || 3000, () => console.log('🚀 Server Up'));
