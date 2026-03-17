@@ -9,7 +9,7 @@ let adminWalletAddress = '';
 
 // TON Connect UI Инициализация
 const tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
-    manifestUrl: 'https://loonx.ru/tonconnect-manifest.json', // Замени на свой реальный манифест, если есть, или оставь заглушку
+    manifestUrl: 'tonconnect-manifest.json', // Замени на свой реальный манифест, если есть, или оставь заглушку
     buttonRootId: 'ton-connect-btn'
 });
 
