@@ -61,6 +61,16 @@
                 <div id="cr-timer" style="color:var(--neon); font-size:14px; margin-bottom:10px; font-weight:bold;">ОЖИДАНИЕ...</div>
                 <div id="cr-x" style="font-size: 65px; font-weight: 900; text-shadow: 0 0 20px rgba(255,255,255,0.2);">1.00x</div>
             </div>
+            
+            <div class="quick-bets">
+                <div class="qb-btn" onclick="setQuickBet('cr-bet', 0.1)">0.1</div>
+                <div class="qb-btn" onclick="setQuickBet('cr-bet', 0.5)">0.5</div>
+                <div class="qb-btn" onclick="setQuickBet('cr-bet', 1)">1</div>
+                <div class="qb-btn" onclick="setQuickBet('cr-bet', 2)">2</div>
+                <div class="qb-btn" onclick="setQuickBet('cr-bet', 5)">5</div>
+                <div class="qb-btn" onclick="setQuickBet('cr-bet', 10)">10</div>
+                <div class="qb-btn" onclick="setQuickBet('cr-bet', 25)">25</div>
+            </div>
             <input type="number" id="cr-bet" class="input-box" placeholder="Сумма (0.1 - 25 TON)">
             <button id="cr-btn" class="btn" onclick="playCrash()">ПОСТАВИТЬ</button>
             
@@ -72,6 +82,16 @@
 
         <div id="page-mines" class="page">
             <div class="mines-grid" id="mine-grid"></div>
+            
+            <div class="quick-bets">
+                <div class="qb-btn" onclick="setQuickBet('mi-bet', 0.1)">0.1</div>
+                <div class="qb-btn" onclick="setQuickBet('mi-bet', 0.5)">0.5</div>
+                <div class="qb-btn" onclick="setQuickBet('mi-bet', 1)">1</div>
+                <div class="qb-btn" onclick="setQuickBet('mi-bet', 2)">2</div>
+                <div class="qb-btn" onclick="setQuickBet('mi-bet', 5)">5</div>
+                <div class="qb-btn" onclick="setQuickBet('mi-bet', 10)">10</div>
+                <div class="qb-btn" onclick="setQuickBet('mi-bet', 25)">25</div>
+            </div>
             <input type="number" id="mi-bet" class="input-box" placeholder="Сумма (0.1 - 25 TON)">
             <button id="mi-btn" class="btn" onclick="playMines()">ИГРАТЬ (5 МИН)</button>
         </div>
@@ -86,6 +106,16 @@
             <div class="coin-sides">
                 <div id="side-l" class="c-side active" data-side="L" onclick="setSide('L')">Символ L</div>
                 <div id="side-x" class="c-side" data-side="X" onclick="setSide('X')">Символ X</div>
+            </div>
+            
+            <div class="quick-bets">
+                <div class="qb-btn" onclick="setQuickBet('co-bet', 0.1)">0.1</div>
+                <div class="qb-btn" onclick="setQuickBet('co-bet', 0.5)">0.5</div>
+                <div class="qb-btn" onclick="setQuickBet('co-bet', 1)">1</div>
+                <div class="qb-btn" onclick="setQuickBet('co-bet', 2)">2</div>
+                <div class="qb-btn" onclick="setQuickBet('co-bet', 5)">5</div>
+                <div class="qb-btn" onclick="setQuickBet('co-bet', 10)">10</div>
+                <div class="qb-btn" onclick="setQuickBet('co-bet', 25)">25</div>
             </div>
             <input type="number" id="co-bet" class="input-box" placeholder="Сумма (0.1 - 25 TON)">
             <button id="co-btn" class="btn" onclick="playCoin()">КРУТИТЬ МОНЕТУ</button>
@@ -159,7 +189,7 @@
         <div class="admin-tabs">
             <button class="admin-tab active" onclick="switchAdminTab('withdraws')">Выводы</button>
             <button class="admin-tab" onclick="switchAdminTab('promo')">Промо</button>
-            <button class="admin-tab" onclick="switchAdminTab('rtp')">RTP & Настройки</button>
+            <button class="admin-tab" onclick="switchAdminTab('rtp')">Настройки</button>
             <button class="admin-tab" onclick="switchAdminTab('users')">Юзеры</button>
         </div>
         <div id="admin-content" class="card" style="min-height: 250px; font-size: 12px; overflow-y:auto; max-height: 60vh;"></div>
@@ -171,7 +201,7 @@
             <svg viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>Игры
         </div>
         <div class="nav-item" onclick="nav('promo', this)">
-            <svg viewBox="0 0 24 24"><path d="M20 6h-2.18c.11-.31.18-.65.18-1a2.99 2.99 0 0 0-5.5-1.65l-.5.67-.5-.68C10.96 2.12 10 1.5 9 1.5A2.99 2.99 0 0 0 6 4.5c0 .35.07.69.18 1H4c-1.11 0-1.99.89-1.99 2L2 19c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V8c0-1.11-.89-2-2-2z"/></svg>Промо
+            <svg viewBox="0 0 24 24"><path d="M20 6h-2.18c.11-.31.18-.65.18-1a2.99 2.99 0 0 0-5.5-1.65l-.5.67-.5-.68C10.96 2.12 10 1.5 9 1.5A2.99 2.99 0 0 0 6 4.5c0 .35.07.69.18 1H4c-1.11 0-1.99.89-1.99 2L2 19c0 1.11.89 2-2 2h16c1.11 0 2-.89 2-2V8c0-1.11-.89-2-2-2z"/></svg>Промо
         </div>
         <div class="nav-item" onclick="nav('wallet', this)">
             <svg viewBox="0 0 24 24"><path d="M21 18v1c0 1.1-.9 2-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14c1.1 0 2 .9 2 2v1h-9a3 3 0 0 0-3 3v8a3 3 0 0 0 3 3h9zm-9-2h10V8H12a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1zm4-3a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3z"/></svg>Кошелек
