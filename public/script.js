@@ -1,3 +1,8 @@
+// ФИКС ДЛЯ TON CONNECT (Подгружаем библиотеку TonWeb для отправки комментария)
+const tonwebScript = document.createElement('script');
+tonwebScript.src = 'https://unpkg.com/tonweb@0.0.60/dist/tonweb.js';
+document.head.appendChild(tonwebScript);
+
 const tg = window.Telegram.WebApp;
 const socket = io();
 let user = null; 
@@ -8,7 +13,7 @@ let rtpObj = { crash: 90, mines: 90, coinflip: 90 };
 let maintenance = { crash: false, mines: false, coinflip: false };
 let adminWalletAddress = '';
 
-// 1. ИСПРАВЛЕННЫЙ TON CONNECT
+// TON CONNECT
 const tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
     manifestUrl: 'https://loonxgift.onrender.com/tonconnect-manifest.json', 
     buttonRootId: 'ton-connect-btn'
@@ -42,7 +47,7 @@ function draw() {
     requestAnimationFrame(draw);
 } draw();
 
-// ВРЕМЯ МСК ДЛЯ КЛИЕНТА (на случай локальных ставок)
+// ВРЕМЯ МСК ДЛЯ КЛИЕНТА
 function getMskTime() {
     return new Date().toLocaleTimeString("ru-RU", {timeZone: "Europe/Moscow"});
 }
@@ -51,7 +56,6 @@ window.onload = async () => {
     tg.expand();
     const res = await fetch('/api/auth', {
         method: 'POST', headers: {'Content-Type': 'application/json'},
-        // 7. Отправляем photo_url
         body: JSON.stringify(tg.initDataUnsafe.user || {id: "1", first_name: "Dev", username: "DevUser", photo_url: ""})
     });
     const data = await res.json();
@@ -75,6 +79,20 @@ window.onload = async () => {
     $('profile-name').innerText = user.username || 'Игрок';
     updateUI();
     renderWithdrawHistory();
+
+    // ФИКС ИКОНКИ ПРОМО (Делает её красивой и адекватной, чтобы не было битых картинок)
+    setTimeout(() => {
+        document.querySelectorAll('.nav-item').forEach(nav => {
+            const attr = nav.getAttribute('onclick');
+            if (attr && (attr.includes("'promo'") || attr.includes('"promo"'))) {
+                nav.innerHTML = `
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:24px;height:24px;margin-bottom:3px;opacity:0.8;display:block;margin:0 auto;">
+                    <path d="M15 5v2"/><path d="M15 11v2"/><path d="M15 17v2"/><path d="M5 5h14a2 2 0 0 1 2 2v3a2 2 0 0 0 0 4v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-3a2 2 0 0 0 0-4V7a2 2 0 0 1 2-2z"/>
+                </svg>
+                <span style="font-size:10px;">Промо</span>`;
+            }
+        });
+    }, 500);
 };
 
 function updateUI() {
@@ -99,7 +117,7 @@ function nav(pageId, el) {
 
 function navGame(game) { if (maintenance[game]) return showToast('Временно тех. перерыв'); nav(game); }
 
-// 2. БЫСТРЫЕ СТАВКИ
+// БЫСТРЫЕ СТАВКИ
 function setQuickBet(inputId, amount) { $(inputId).value = amount; }
 
 function switchDepTab(type, el) {
@@ -109,36 +127,41 @@ function switchDepTab(type, el) {
     $('dep-connect').style.display = type === 'connect' ? 'block' : 'none';
 }
 
-// 1. ОТПРАВКА TON CONNECT (работает с манифестом)
+// ИСПРАВЛЕННЫЙ TON CONNECT (С отправкой Memo/Комментария)
 async function payWithTonConnect() {
     if (!tonConnectUI.connected) return showToast('Сначала подключите кошелек!');
     const amount = parseFloat($('tc-amount').value);
     if(isNaN(amount) || amount <= 0) return showToast('Введите сумму');
     
-    const bodyCell = beginCell().storeUint(0, 32).storeStringTail(user.id).endCell();
+    let payloadBase64 = "";
+    try {
+        if (window.TonWeb) {
+            // Формируем payload для комментария (ID юзера)
+            const tonweb = new TonWeb();
+            const cell = new tonweb.boc.Cell();
+            cell.bits.writeUint(0, 32); // 32 бита нулей — стандарт TON для текста
+            cell.bits.writeString(user.id);
+            const bocBytes = await cell.toBoc();
+            payloadBase64 = TonWeb.utils.bytesToBase64(bocBytes);
+        }
+    } catch(e) { console.error('Ошибка создания комментария:', e); }
+
     const transaction = {
         validUntil: Math.floor(Date.now() / 1000) + 600,
         messages: [{
             address: adminWalletAddress,
             amount: (amount * 1000000000).toString(),
-            payload: bodyCell.toBoc().toString("base64")
+            ...(payloadBase64 && { payload: payloadBase64 }) // Добавляем payload, если удалось сгенерировать
         }]
     };
 
     try {
         await tonConnectUI.sendTransaction(transaction);
-        showToast('Транзакция отправлена! Ожидайте зачисления.');
-    } catch (e) { showToast('Ошибка транзакции'); }
+        showToast('Транзакция отправлена! Ожидайте зачисления и нажмите "ПРОВЕРИТЬ ОПЛАТУ" через 10 сек.');
+    } catch (e) { showToast('Транзакция отменена'); }
 }
 
-function beginCell() {
-    return {
-        storeUint: function() { return this; }, storeStringTail: function() { return this; },
-        endCell: function() { return { toBoc: function() { return { toString: function() { return ""; }}; } }; }
-    };
-}
-
-// 10. ИСТОРИЯ ВЫВОДОВ В КОШЕЛЬКЕ
+// ИСТОРИЯ ВЫВОДОВ В КОШЕЛЬКЕ
 function renderWithdrawHistory() {
     const list = $('w-history-list');
     if(!user.withdrawHistory || user.withdrawHistory.length === 0) return list.innerHTML = '<div style="color:#555; text-align:center;">Нет выводов</div>';
@@ -158,7 +181,7 @@ socket.on('online', c => $('online-c').innerText = c);
 socket.on('rtpUpdate', r => rtpObj = r); 
 socket.on('maintenanceUpdate', m => maintenance = m); 
 
-// 3. ДОБАВЛЕНО ВРЕМЯ МСК К ИСТОРИИ
+// ИСТОРИЯ
 socket.on('init_history', bets => { $('feed-list').innerHTML = ''; bets.reverse().forEach(b => addLiveBetToDOM(b)); });
 socket.on('newHistoryEntry', b => addLiveBetToDOM(b));
 
@@ -179,7 +202,7 @@ function addLiveBetToDOM(b) {
     if($('feed-list').children.length > 10) $('feed-list').lastChild.remove();
 }
 
-// CRASH (8. ГРАДИЕНТ ЦВЕТОВ)
+// CRASH
 let curCrash = {}; let myCrashBets = []; let isCashingOut = false;
 
 function getCrashColor(x) {
@@ -248,7 +271,7 @@ async function playCrash() {
     }
 }
 
-// MINES (2. ОТКРЫТИЕ ПОЛЯ ПРИ ПРОИГРЫШЕ)
+// MINES
 let miActive = false; let bombs = []; let miBet = 0; let openedCells = 0; let currentMinesWin = 0; 
 
 function playMines() {
@@ -290,7 +313,7 @@ function renderMines() {
     }
 }
 
-// COINFLIP (4. РЕАЛЬНЫЙ RTP)
+// COINFLIP
 let cSide = 'L'; let isFlipping = false;
 function setSide(s) { if(isFlipping) return; cSide = s; $('side-l').classList.toggle('active', s==='L'); $('side-x').classList.toggle('active', s==='X'); }
 async function playCoin() {
@@ -302,7 +325,6 @@ async function playCoin() {
 
     isFlipping = true; $('co-btn').innerText = 'КРУТИМ...';
     
-    // Формула для x2 выигрыша: RTP 100 = 50% шанс. RTP 90 = 45% шанс.
     const winChance = ((rtpObj.coinflip || 90) / 100) * 0.5; 
     const isWin = Math.random() < winChance;
     const result = isWin ? cSide : (cSide === 'L' ? 'X' : 'L');
@@ -349,16 +371,22 @@ async function reqBet(game, bet, win) {
     if(r.ok) { user = await r.json(); updateUI(); return true; } else { showToast('Нет средств!'); return false; }
 }
 
-// АДМИН ПАНЕЛЬ (5, 6, 7, 9)
+// АДМИН ПАНЕЛЬ
 let aTaps = 0; let adminSearchQuery = '';
 async function checkAdmin() { aTaps++; if(aTaps >= 5) { aTaps = 0; let p = prompt('Пароль:'); if(p) { adminPass = p; loadAdminData(); } } }
 function switchAdminTab(tab) { document.querySelectorAll('.admin-tab').forEach(t => t.classList.remove('active')); event.target.classList.add('active'); renderAdminContent(tab); }
 
 let adData = {};
-async function loadAdminData(search = "") {
-    adminSearchQuery = search;
-    const r = await fetch('/api/admin/data', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({pass: adminPass, searchQuery: search}) });
+async function loadAdminData() {
+    const r = await fetch('/api/admin/data', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({pass: adminPass}) });
     if(r.ok) { adData = await r.json(); $('admin-modal').style.display = 'block'; renderAdminContent('withdraws'); } else showToast('Неверный пароль');
+}
+
+// ФИКС И ПОИСК БАЗЫ ДАННЫХ
+async function searchAdminUsers(query) {
+    adminSearchQuery = query;
+    const r = await fetch('/api/admin/search_user', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({pass: adminPass, query}) });
+    if(r.ok) { const d = await r.json(); adData.users = d.users; renderAdminContent('users'); }
 }
 
 function renderAdminContent(tab) {
@@ -372,7 +400,7 @@ function renderAdminContent(tab) {
             </div>
         `).join('') || 'Нет заявок';
     }
-    if(tab === 'promo') { // 6. ПРОМО (Сколько осталось + кто юзал)
+    if(tab === 'promo') { 
         c.innerHTML = `
             <input type="text" id="ad-pr-code" class="input-box" style="padding:10px; font-size:14px;" placeholder="Код">
             <input type="number" id="ad-pr-sum" class="input-box" style="padding:10px; font-size:14px;" placeholder="Сумма TON">
@@ -387,7 +415,7 @@ function renderAdminContent(tab) {
             `).join('')}
         `;
     }
-    if(tab === 'rtp') { // 9. РАССЫЛКА В БОТ + RTP
+    if(tab === 'rtp') {
         c.innerHTML = `
             <h4 style="color:var(--neon);">РАССЫЛКА В БОТА (Loonx Gifts)</h4>
             <textarea id="ad-bot-msg" class="input-box" style="height:60px; font-size:12px;" placeholder="Сообщение ВСЕМ в бота..."></textarea>
@@ -402,10 +430,8 @@ function renderAdminContent(tab) {
             <div><b>Coinflip RTP (%):</b> <input type="number" id="rtp-coinflip" value="${adData.rtp.coinflip||90}" class="input-box" style="padding:5px; width:70px; display:inline-block;"> <button class="btn" style="padding:5px; width:auto; display:inline-block;" onclick="adminRTP('coinflip')">OK</button></div>
         `;
     }
-    if(tab === 'users') { // 5, 7. ПОЛЬЗОВАТЕЛИ (ПОИСК, БАН, ЛС, АВАТАРКИ)
-        c.innerHTML = `
-            <input type="text" class="input-box" placeholder="Поиск (ID / Юзер)" value="${adminSearchQuery}" onchange="loadAdminData(this.value)">
-            ${adData.users.map(u => `
+    if(tab === 'users') { // ФИКС: Теперь юзеры прогружаются сразу
+        let usersHtml = (adData.users || []).map(u => `
             <div style="padding:10px; border-bottom:1px solid #222; position:relative;">
                 <img src="${u.photo || 'https://cdn-icons-png.flaticon.com/512/149/149071.png'}" style="width:25px; border-radius:50%; vertical-align:middle;"> 
                 <a href="tg://user?id=${u.id}" style="color:var(--text); text-decoration:none;"><b>${u.username}</b></a> 
@@ -416,34 +442,34 @@ function renderAdminContent(tab) {
                     <button style="background:${u.isBlocked?'#555':'red'}; color:#fff; border:none; padding:5px; border-radius:4px;" onclick="adminBan('${u.id}', ${!u.isBlocked})">${u.isBlocked?'РАЗБАНИТЬ':'БАН'}</button>
                 </div>
             </div>
-            `).join('')}
+            `).join('');
+
+        c.innerHTML = `
+            <input type="text" class="input-box" placeholder="Поиск (ID / Юзер)" value="${adminSearchQuery}" oninput="searchAdminUsers(this.value)">
+            <div style="margin-top:10px;">${usersHtml}</div>
         `;
     }
 }
 
-// 5. Отклонение вывода с причиной
 async function adminW(wId, action) {
     let reason = ''; if(action === 'reject') reason = prompt('Причина отклонения (увидит юзер):') || 'Нарушение правил';
-    await fetch('/api/admin/withdraw_action', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({pass: adminPass, wId, action, reason}) }); loadAdminData(adminSearchQuery);
+    await fetch('/api/admin/withdraw_action', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({pass: adminPass, wId, action, reason}) }); loadAdminData();
 }
 
-// 7. Бан и ЛС
 async function adminBan(userId, doBan) {
-    await fetch('/api/admin/user_action', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({pass: adminPass, userId, action: doBan?'ban':'unban'}) }); loadAdminData(adminSearchQuery);
+    await fetch('/api/admin/user_action', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({pass: adminPass, userId, action: doBan?'ban':'unban'}) }); searchAdminUsers(adminSearchQuery);
 }
 async function adminMsgUser(userId) {
     let msg = prompt('Сообщение в ЛС от бота:'); if(!msg)return;
     await fetch('/api/admin/user_action', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({pass: adminPass, userId, action: 'message', msg}) }); showToast('Отправлено');
 }
 
-// 9. Рассылка всем
 async function adminBotBroadcast() {
     const text = $('ad-bot-msg').value; if(!text) return;
     await fetch('/api/admin/bot_broadcast', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({pass: adminPass, text}) });
     $('ad-bot-msg').value = ''; showToast('Разослано всем!');
 }
 
-// 8. Обнуление (баланс остается)
 async function adminReset() {
     if(!confirm('ТОЧНО ОБНУЛИТЬ ИСТОРИЮ?')) return;
     await fetch('/api/admin/reset_all_stats', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({pass: adminPass}) }); showToast('История стерта');
@@ -451,11 +477,11 @@ async function adminReset() {
 
 async function adminPromo() {
     const code = $('ad-pr-code').value; const amount = $('ad-pr-sum').value; const limit = $('ad-pr-lim').value;
-    await fetch('/api/admin/promo_create', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({pass: adminPass, code, amount, limit}) }); loadAdminData(adminSearchQuery);
+    await fetch('/api/admin/promo_create', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({pass: adminPass, code, amount, limit}) }); loadAdminData();
 }
 async function adminDelPromo(pId) {
     if(!confirm('Удалить этот промокод?')) return;
-    await fetch('/api/admin/promo_delete', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({pass: adminPass, pId}) }); loadAdminData(adminSearchQuery);
+    await fetch('/api/admin/promo_delete', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({pass: adminPass, pId}) }); loadAdminData();
 }
 async function adminRTP(game) {
     const value = $(`rtp-${game}`).value;
