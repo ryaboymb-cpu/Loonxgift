@@ -27,21 +27,35 @@ app.get('/tonconnect-manifest.json', (req, res) => {
     res.json({
         url: process.env.WEB_APP_URL || "https://loonxgift.onrender.com",
         name: "Loonx Gifts",
-        iconUrl: "https://cdn-icons-png.flaticon.com/512/149/149071.png" // Можешь заменить на логотип твоего проекта
+        iconUrl: "https://cdn-icons-png.flaticon.com/512/149/149071.png"
     });
 });
 
+// --- ВРЕМЯ МСК ---
+const getMskTime = () => new Date().toLocaleString("ru-RU", { timeZone: "Europe/Moscow", hour12: false });
+
 // --- МОДЕЛИ ДАННЫХ ---
 const UserSchema = new mongoose.Schema({
-    id: String, username: String, photo: String, // 7. Аватарка уже тут сохраняется
-    balance: { type: Number, default: 0 }, demo_balance: { type: Number, default: 5000 },
+    id: String, 
+    username: String, 
+    photo: String, 
+    isBlocked: { type: Boolean, default: false }, // Для бана
+    balance: { type: Number, default: 0 }, 
+    demo_balance: { type: Number, default: 5000 },
     stats: { 
         bets: {type:Number, default:0}, 
         wins: {type:Number, default:0}, 
         plus: {type:Number, default:0}, 
         minus: {type:Number, default:0},
         promo: {type:Number, default:0}
-    }
+    },
+    withdrawHistory: [{ // История выводов для профиля
+        amount: Number, 
+        address: String, 
+        status: String, 
+        reason: String, 
+        time: String 
+    }]
 });
 
 const BetSchema = new mongoose.Schema({
@@ -50,8 +64,8 @@ const BetSchema = new mongoose.Schema({
     createdAt: { type: Date, default: Date.now }
 });
 
-const PromoSchema = new mongoose.Schema({ code: String, amount: Number, limit: Number, usedBy: [String] }); // 6. usedBy и limit для админки
-const WithdrawSchema = new mongoose.Schema({ userId: String, address: String, amount: Number, status: { type: String, default: 'pending' } });
+const PromoSchema = new mongoose.Schema({ code: String, amount: Number, limit: Number, usedBy: [String] });
+const WithdrawSchema = new mongoose.Schema({ userId: String, address: String, amount: Number, status: { type: String, default: 'pending' }, reason: String, time: String });
 const DepositSchema = new mongoose.Schema({ hash: { type: String, unique: true }, userId: String, amount: Number });
 const SettingsSchema = new mongoose.Schema({ key: String, value: mongoose.Schema.Types.Mixed });
 
@@ -69,7 +83,7 @@ async function initSettings() {
     const defaultSettings = [
         { key: 'rtp_crash', value: 90 },
         { key: 'rtp_mines', value: 90 },
-        { key: 'rtp_coinflip', value: 90 }, // 4. RTP Коинфлипа сохранен
+        { key: 'rtp_coinflip', value: 90 }, 
         { key: 'maintenance_crash', value: false },
         { key: 'maintenance_mines', value: false },
         { key: 'maintenance_coinflip', value: false }
@@ -80,7 +94,6 @@ async function initSettings() {
     }
     
     const lastBets = await Bet.find().sort({createdAt: -1}).limit(10);
-    // 3. Добавляем время МСК при загрузке старых ставок
     globalBetHistory = lastBets.reverse().map(b => {
         const obj = b.toObject();
         obj.timeMsk = new Date(b.createdAt).toLocaleTimeString("ru-RU", {timeZone: "Europe/Moscow"});
@@ -143,7 +156,8 @@ async function runCrash() {
     const limit = Math.pow(100 / (100 - (Math.random() * rtp)), 0.9).toFixed(2);
     
     const r = setInterval(async () => {
-        crash.multiplier = (parseFloat(crash.multiplier) + 0.01).toFixed(2);
+        // Ускоряем краш (Пункт 8)
+        crash.multiplier = (parseFloat(crash.multiplier) + 0.015).toFixed(2);
         io.emit('crashData', crash);
         
         if(parseFloat(crash.multiplier) >= limit) { 
@@ -158,7 +172,6 @@ async function runCrash() {
                 if (!b.cashedOut) {
                     const u = await User.findOne({id: b.id});
                     if (u) {
-                        // 2. Жесткая фиксация режима (Demo/Real) в краше
                         const actualMode = b.mode === 'demo' ? 'Demo' : 'Real';
                         const newBet = new Bet({ userId: u.id, username: u.username, avatar: b.avatar, game: 'Crash', amount: b.bet, result: -b.bet, mode: actualMode });
                         await newBet.save();
@@ -174,10 +187,9 @@ async function runCrash() {
 startCrash();
 
 function pushToGlobalHistory(betObj) {
-    // 3. Форматируем время по МСК перед пушем в историю
     const betWithTime = {
         ...(betObj.toObject ? betObj.toObject() : betObj),
-        timeMsk: new Date(betObj.createdAt || Date.now()).toLocaleTimeString("ru-RU", {timeZone: "Europe/Moscow"})
+        timeMsk: getMskTime() // МСК время
     };
     
     globalBetHistory.push(betWithTime);
@@ -202,6 +214,8 @@ app.post('/api/auth', async (req, res) => {
     if (!user) user = await User.create({ id, username: username || first_name, photo: photo_url });
     else { user.username = username || first_name; user.photo = photo_url; await user.save(); }
     
+    if(user.isBlocked) return res.status(403).json({ error: "BLOCKED" }); // Блок
+
     const allSettings = await Settings.find();
     const rtpData = {};
     const maintenanceData = {};
@@ -218,14 +232,12 @@ app.post('/api/auth', async (req, res) => {
 app.post('/api/bet', async (req, res) => {
     const { id, game, bet, win, multiplier, mode } = req.body;
     const user = await User.findOne({ id });
+    if(!user || user.isBlocked) return res.status(403).send();
     
-    // 2. Жесткая фиксация режима
     const actualMode = mode === 'demo' ? 'demo' : 'real';
     const field = actualMode === 'demo' ? 'demo_balance' : 'balance';
     
     if (bet < 0 || win < 0 || user[field] < bet) return res.status(400).json({error: 'No money'});
-    
-    // 7. Если нет аватарки, ставим дефолтную
     const avatar = user.photo || 'https://cdn-icons-png.flaticon.com/512/149/149071.png';
 
     if (game === 'Crash') {
@@ -338,8 +350,12 @@ app.post('/api/withdraw', async (req, res) => {
     const user = await User.findOne({ id });
     if (user.balance < amount || amount < 5) return res.status(400).json({error: 'Min 5 TON'});
     user.balance = Number((user.balance - amount).toFixed(2)); 
+    
+    // Пишем в историю юзера
+    user.withdrawHistory.unshift({ amount, address, status: 'В обработке', reason: '', time: getMskTime() });
     await user.save();
-    await Withdraw.create({ userId: id, address, amount });
+
+    await Withdraw.create({ userId: id, address, amount, time: getMskTime() });
     res.json(user);
 });
 
@@ -351,14 +367,11 @@ const checkAdmin = (req, res, next) => {
 
 app.post('/api/admin/data', checkAdmin, async (req, res) => {
     const withdraws = await Withdraw.find({status: 'pending'});
-    // 5. Увеличено до 2000 юзеров
-    const users = await User.find().sort({balance: -1}).limit(2000); 
     const promos = await Promo.find().sort({_id: -1}).limit(10);
     
     const allSettings = await Settings.find();
     const rtpData = {};
     const maintenanceData = {};
-
     allSettings.forEach(s => {
         if (s && s.key) {
             if (s.key.startsWith('rtp_')) rtpData[s.key.replace('rtp_', '')] = s.value;
@@ -366,67 +379,63 @@ app.post('/api/admin/data', checkAdmin, async (req, res) => {
         }
     });
     
-    res.json({ withdraws, users, promos, rtp: rtpData, maintenance: maintenanceData });
+    res.json({ withdraws, promos, rtp: rtpData, maintenance: maintenanceData });
 });
 
-// 5. Поиск пользователей в админке
+// 5. Поиск пользователей (до 2000)
 app.post('/api/admin/search_user', checkAdmin, async (req, res) => {
     const { query } = req.body;
-    if (!query) return res.json({ users: [] });
-    
-    const users = await User.find({
-        $or: [
-            { id: new RegExp(query, 'i') },
-            { username: new RegExp(query, 'i') }
-        ]
-    }).limit(50);
-    
+    let filter = {};
+    if (query) {
+        filter = {
+            $or: [
+                { id: new RegExp(query, 'i') },
+                { username: new RegExp(query, 'i') }
+            ]
+        };
+    }
+    const users = await User.find(filter).sort({balance: -1}).limit(2000);
     res.json({ users });
 });
 
-// Глобальное уведомление (в мини-апп)
+// 7. Бан / Сообщения
+app.post('/api/admin/user_action', checkAdmin, async (req, res) => {
+    const { userId, action, msg } = req.body;
+    const user = await User.findOne({ id: String(userId) });
+    if(!user) return res.status(400).send();
+
+    if(action === 'ban') user.isBlocked = true;
+    if(action === 'unban') user.isBlocked = false;
+    await user.save();
+
+    if(action === 'message' && bot) {
+        bot.sendMessage(userId, `📩 Сообщение от Администрации:\n\n${msg}`).catch(()=>{});
+    }
+    res.json({ success: true });
+});
+
 app.post('/api/admin/broadcast', checkAdmin, (req, res) => {
     const { text } = req.body;
     if(text) io.emit('global_alert', text);
     res.json({success: true});
 });
 
-// 9. Рассылка уведомлений прямо в бота Telegram
+// 9. Рассылка в ТГ бота
 app.post('/api/admin/bot_broadcast', checkAdmin, async (req, res) => {
     const { text } = req.body;
-    if(!text || !bot) return res.status(400).json({error: 'Текст пуст или бот не запущен'});
-    
-    const users = await User.find({}, 'id');
-    let sentCount = 0;
-    
-    for(let u of users) {
-        try {
-            await bot.sendMessage(u.id, text);
-            sentCount++;
-        } catch(e) {
-            // Игнорируем тех, кто заблокировал бота
-        }
-    }
-    res.json({success: true, sentCount});
+    if(!text || !bot) return res.status(400).json({error: 'Текст пуст'});
+    const users = await User.find({ isBlocked: false });
+    for(let u of users) { bot.sendMessage(u.id, text).catch(()=>{}); }
+    res.json({success: true});
 });
 
-// 8. Обнуление профилей и истории (чтобы начать заново)
+// 8. Сброс истории (баланс остается)
 app.post('/api/admin/reset_all_stats', checkAdmin, async (req, res) => {
-    try {
-        await User.updateMany({}, { 
-            $set: { 
-                balance: 0, 
-                demo_balance: 5000, 
-                stats: { bets: 0, wins: 0, plus: 0, minus: 0, promo: 0 } 
-            } 
-        });
-        await Bet.deleteMany({});
-        globalBetHistory = [];
-        io.emit('init_history', globalBetHistory);
-        res.json({success: true, message: 'Все профили и история ставок успешно обнулены!'});
-    } catch (error) {
-        res.status(500).json({error: 'Ошибка при обнулении данных'});
-    }
+    await User.updateMany({}, { $set: { betHistory: [], demo_balance: 5000, stats: { bets: 0, wins: 0, plus: 0, minus: 0, promo: 0 } } });
+    await Bet.deleteMany({});
+    globalBetHistory = [];
+    io.emit('init_history', globalBetHistory);
+    res.json({success: true});
 });
 
 app.post('/api/admin/maintenance', checkAdmin, async (req, res) => {
@@ -436,11 +445,8 @@ app.post('/api/admin/maintenance', checkAdmin, async (req, res) => {
     
     const allSettings = await Settings.find({key: /maintenance_/});
     const mData = {};
-    allSettings.forEach(s => {
-        if (s && s.key) mData[s.key.replace('maintenance_', '')] = s.value;
-    });
+    allSettings.forEach(s => { if (s && s.key) mData[s.key.replace('maintenance_', '')] = s.value; });
     io.emit('maintenanceUpdate', mData);
-    
     res.json({success: true});
 });
 
@@ -469,30 +475,36 @@ app.post('/api/admin/edit_balance', checkAdmin, async (req, res) => {
     if (!user) return res.status(404).json({error: 'User not found'});
     
     const val = Number(amount);
-    if (action === 'add') {
-        user.balance = Number((user.balance + val).toFixed(2));
-    } else if (action === 'sub') {
-        user.balance = Number((user.balance - val).toFixed(2));
-        if(user.balance < 0) user.balance = 0;
-    }
+    if (action === 'add') user.balance = Number((user.balance + val).toFixed(2));
+    else if (action === 'sub') { user.balance = Number((user.balance - val).toFixed(2)); if(user.balance < 0) user.balance = 0; }
     
     await user.save();
     res.json({success: true});
 });
 
+// Отклонение вывода с причиной
 app.post('/api/admin/withdraw_action', checkAdmin, async (req, res) => {
-    const { wId, action } = req.body;
+    const { wId, action, reason } = req.body;
     const w = await Withdraw.findById(wId);
     if(!w || w.status !== 'pending') return res.status(400).json({error: 'Error'});
     
-    if(action === 'reject') {
-        const u = await User.findOne({id: w.userId});
-        if(u) { u.balance += w.amount; await u.save(); }
-        w.status = 'rejected';
-    } else {
-        w.status = 'approved';
+    const u = await User.findOne({id: w.userId});
+    if(u) {
+        // Обновляем статус в профиле пользователя
+        let uHist = u.withdrawHistory.find(h => h.time === w.time && h.amount === w.amount);
+        if(action === 'reject') {
+            u.balance += w.amount; 
+            if(uHist) { uHist.status = 'Отклонено'; uHist.reason = reason; }
+        } else {
+            if(uHist) { uHist.status = 'Подтверждено'; }
+        }
+        await u.save();
     }
+    
+    if(action === 'reject') { w.status = 'rejected'; w.reason = reason; } 
+    else { w.status = 'approved'; }
     await w.save();
+    
     res.json({success: true});
 });
 
