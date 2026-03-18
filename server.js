@@ -310,6 +310,7 @@ app.post('/api/check_deposit', async (req, res) => {
         let totalAdded = 0;
         
         for (let tx of data.result) {
+            // Проверяем, есть ли комментарий и совпадает ли он с ID юзера
             if (tx.in_msg && tx.in_msg.message && String(tx.in_msg.message).trim() === String(id).trim() && tx.in_msg.value > 0) {
                 const txHash = tx.transaction_id.hash;
                 const amountTON = tx.in_msg.value / 1e9; 
@@ -368,6 +369,8 @@ const checkAdmin = (req, res, next) => {
 app.post('/api/admin/data', checkAdmin, async (req, res) => {
     const withdraws = await Withdraw.find({status: 'pending'});
     const promos = await Promo.find().sort({_id: -1}).limit(10);
+    // ФИКС БАЗЫ ДАННЫХ: Теперь сразу отправляем топ 100 юзеров, чтобы вкладка не багалась
+    const users = await User.find().sort({balance: -1}).limit(100);
     
     const allSettings = await Settings.find();
     const rtpData = {};
@@ -379,10 +382,10 @@ app.post('/api/admin/data', checkAdmin, async (req, res) => {
         }
     });
     
-    res.json({ withdraws, promos, rtp: rtpData, maintenance: maintenanceData });
+    res.json({ withdraws, promos, users, rtp: rtpData, maintenance: maintenanceData });
 });
 
-// 5. Поиск пользователей (до 2000)
+// Поиск пользователей
 app.post('/api/admin/search_user', checkAdmin, async (req, res) => {
     const { query } = req.body;
     let filter = {};
@@ -394,11 +397,11 @@ app.post('/api/admin/search_user', checkAdmin, async (req, res) => {
             ]
         };
     }
-    const users = await User.find(filter).sort({balance: -1}).limit(2000);
+    const users = await User.find(filter).sort({balance: -1}).limit(500);
     res.json({ users });
 });
 
-// 7. Бан / Сообщения
+// Бан / Сообщения
 app.post('/api/admin/user_action', checkAdmin, async (req, res) => {
     const { userId, action, msg } = req.body;
     const user = await User.findOne({ id: String(userId) });
@@ -420,7 +423,7 @@ app.post('/api/admin/broadcast', checkAdmin, (req, res) => {
     res.json({success: true});
 });
 
-// 9. Рассылка в ТГ бота
+// Рассылка в ТГ бота
 app.post('/api/admin/bot_broadcast', checkAdmin, async (req, res) => {
     const { text } = req.body;
     if(!text || !bot) return res.status(400).json({error: 'Текст пуст'});
@@ -429,7 +432,7 @@ app.post('/api/admin/bot_broadcast', checkAdmin, async (req, res) => {
     res.json({success: true});
 });
 
-// 8. Сброс истории (баланс остается)
+// Сброс истории (баланс остается)
 app.post('/api/admin/reset_all_stats', checkAdmin, async (req, res) => {
     await User.updateMany({}, { $set: { betHistory: [], demo_balance: 5000, stats: { bets: 0, wins: 0, plus: 0, minus: 0, promo: 0 } } });
     await Bet.deleteMany({});
