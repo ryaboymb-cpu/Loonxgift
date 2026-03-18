@@ -43,6 +43,14 @@ header { padding: 15px; display: flex; justify-content: space-between; align-ite
 .cr-badge.good { color: var(--neon); border: 1px solid var(--neon); }
 .cr-badge.bad { color: var(--neon-red); border: 1px solid var(--neon-red); }
 
+#cr-x { transition: color 0.3s ease, text-shadow 0.3s ease; } /* Плавная смена цвета для краша */
+
+/* Меню быстрых ставок */
+.quick-bets { display: flex; gap: 5px; margin-bottom: 10px; overflow-x: auto; padding-bottom: 5px; }
+.quick-bets::-webkit-scrollbar { display: none; }
+.qb-btn { flex: 0 0 auto; padding: 10px 15px; background: #1a1a1a; border: 1px solid #333; border-radius: 10px; font-size: 14px; font-weight: bold; color: #fff; cursor: pointer; transition: 0.2s; }
+.qb-btn:active { background: var(--neon); color: #000; border-color: var(--neon); }
+
 .live-bets-container { margin-top: 15px; background: #0a0a0a; border-radius: 14px; border: 1px solid #222; padding: 10px; max-height: 150px; overflow-y: auto; }
 .live-bet-item { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #1a1a1a; font-size: 13px; }
 .live-bet-item:last-child { border-bottom: none; }
