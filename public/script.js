@@ -684,64 +684,264 @@ function renderAdminContent(tab) {
             <div><b>Coinflip RTP (%):</b> <input type="number" id="rtp-coinflip" value="${adData.rtp.coinflip||90}" class="input-box" style="padding:5px; width:70px; display:inline-block;"> <button class="btn" style="padding:5px; width:auto; display:inline-block;" onclick="adminRTP('coinflip')">OK</button></div>
             <hr>
             <h4 style="color:var(--neon); margin-bottom:10px;">ОТКЛЮЧЕНИЕ ИГР (Тех. Перерыв)</h4>
-            <div><b>Crash:</b> <button onclick="adminMaint('crash', ${!maintenance.crash})">${maintenance.crash ? 'ВКЛЮЧИТЬ' : 'ОТКЛЮЧИТЬ'}</button></div>
+            <div><b>Crash:</b> <button onclick="adminMaint('crash', ${!maintenance.crash})">${maintenance.crash ? 'ВКЛЮЧИТЬ' : 'ОТКЛЮЧИТЬ'}</button></div> 
             <div><b>Mines:</b> <button onclick="adminMaint('mines', ${!maintenance.mines})">${maintenance.mines ? 'ВКЛЮЧИТЬ' : 'ОТКЛЮЧИТЬ'}</button></div>
-            <div><b>Coinflip:</b> <button onclick="adminMaint('coinflip', ${!maintenance.coinflip})">${maintenance.coinflip ? 'ВКЛЮЧИТЬ' : 'ОТКЛЮЧИТЬ'}</button></div>
-            <div><b>Battle:</b> <button onclick="adminMaint('battle', ${!maintenance.battle})">${maintenance.battle ? 'ВКЛЮЧИТЬ' : 'ОТКЛЮЧИТЬ'}</button></div>
-        `;
-    }
-    if(tab === 'users') { 
-        let usersHtml = (adData.users || []).map(u => `
-            <div style="padding:10px; border-bottom:1px solid #222; position:relative;">
-                <img src="${u.photo || 'https://cdn-icons-png.flaticon.com/512/149/149071.png'}" style="width:25px; border-radius:50%; vertical-align:middle;"> 
-                <a href="tg://user?id=${u.id}" style="color:var(--text); text-decoration:none;"><b>${u.username}</b></a> 
-                (${u.balance.toFixed(2)} TON)
-                ${u.isBlocked ? '<span style="background:red; padding:2px 5px; border-radius:4px; font-size:10px;">ЗАБАНЕН</span>' : ''}
-                <div style="margin-top:5px; display:flex; gap:5px;">
-                    <button style="background:var(--neon-blue); color:#000; border:none; padding:5px; border-radius:4px;" onclick="adminMsgUser('${u.id}')">В ЛС БОТА</button>
-                    <button style="background:${u.isBlocked?'#555':'red'}; color:#fff; border:none; padding:5px; border-radius:4px;" onclick="adminBan('${u.id}', ${!u.isBlocked})">${u.isBlocked?'РАЗБАНИТЬ':'БАН'}</button>
-                </div>
-            </div>
-            `).join('');
+let aTaps = 0; 
+let adminSearchQuery = ''; 
+let currentFilter = 'all';
+let currentAdminTab = 'withdraws';
 
-        c.innerHTML = `
-            <input type="text" class="input-box" placeholder="Поиск (ID / Юзер)" value="${adminSearchQuery}" oninput="searchAdminUsers(this.value)">
-            <div style="margin-top:10px;">${usersHtml}</div>
-        `;
+async function checkAdmin() { 
+    aTaps++; 
+    if(aTaps >= 5) { 
+        aTaps = 0; 
+        let p = prompt('Пароль:'); 
+        if(p) { adminPass = p; loadAdminData(); } 
+    } 
+}
+
+let adData = { users: [], withdraws: [], promos: [], rtp: {}, totalDeps: 0, totalWiths: 0, usersCount: 0 };
+
+async function loadAdminData() {
+    const r = await fetch('/api/admin/data', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({pass: adminPass}) });
+    if(r.ok) { 
+        adData = await r.json(); 
+        $('admin-modal').style.display = 'flex'; 
+        if($('adm-total-dep')) $('adm-total-dep').innerText = adData.totalDeps.toFixed(2) + ' TON';
+        if($('adm-total-with')) $('adm-total-with').innerText = adData.totalWiths.toFixed(2) + ' TON';
+        if($('adm-u-count')) $('adm-u-count').innerText = adData.usersCount;
+        renderAdminContent(currentAdminTab); 
+    } else showToast('Неверный пароль');
+}
+
+async function searchAdminUsers(query) {
+    adminSearchQuery = query;
+    const r = await fetch('/api/admin/search_user', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({pass: adminPass, query, filterType: currentFilter}) });
+    if(r.ok) { 
+        const d = await r.json(); 
+        adData.users = d.users; 
+        if(currentAdminTab === 'users') renderUsersList(); 
     }
 }
 
-async function adminW(wId, action) {
-    let reason = ''; if(action === 'reject') reason = prompt('Причина отклонения (увидит юзер):') || 'Нарушение правил';
-    await fetch('/api/admin/withdraw_action', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({pass: adminPass, wId, action, reason}) }); loadAdminData();
+function switchAdminTab(tab) { 
+    currentAdminTab = tab;
+    document.querySelectorAll('.admin-tab').forEach(t => t.classList.remove('active')); 
+    if(event && event.target) event.target.classList.add('active');
+    renderAdminContent(tab); 
 }
 
+function renderAdminContent(tab) {
+    const c = $('admin-content');
 async function adminBan(userId, doBan) {
-    await fetch('/api/admin/user_action', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({pass: adminPass, userId, action: doBan?'ban':'unban'}) }); searchAdminUsers(adminSearchQuery);
+    await fetch('/api/admin/user_action', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({pass: adminPass, userId, action: doBan?'ban':'unban'}) }); 
+    searchAdminUsers(adminSearchQuery);
 }
+
 async function adminMsgUser(userId) {
-    let msg = prompt('Сообщение в ЛС от бота:'); if(!msg)return;
-    await fetch('/api/admin/user_action', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({pass: adminPass, userId, action: 'message', msg}) }); showToast('Отправлено');
+    let msg = prompt('Сообщение в ЛС от бота:'); if(!msg) return;
+    await fetch('/api/admin/user_action', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({pass: adminPass, userId, action: 'message', msg}) }); 
+    showToast('Отправлено');
 }
 
 async function adminBotBroadcast() {
     const text = $('ad-bot-msg').value; if(!text) return;
     await fetch('/api/admin/bot_broadcast', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({pass: adminPass, text}) });
-    $('ad-bot-msg').value = ''; showToast('Разослано всем!');
+    $('ad-bot-msg').value = ''; showToast('Разослано!');
 }
 
 async function adminPromo() {
-    const code = $('ad-pr-code').value; const amount = $('ad-pr-sum').value; const limit = $('ad-pr-lim').value;
-    await fetch('/api/admin/promo_create', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({pass: adminPass, code, amount, limit}) }); loadAdminData();
+    const code = $('ad-pr-code').value; 
+    const amount = $('ad-pr-sum').value; 
+    const limit = $('ad-pr-lim').value;
+    await fetch('/api/admin/promo_create', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({pass: adminPass, code, amount, limit}) }); 
+    loadAdminData();
 }
+
 async function adminDelPromo(pId) {
-    if(!confirm('Удалить этот промокод?')) return;
-    await fetch('/api/admin/promo_delete', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({pass: adminPass, pId}) }); loadAdminData();
+    if(!confirm('Удалить промокод?')) return;
+    await fetch('/api/admin/promo_delete', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({pass: adminPass, pId}) }); 
+    loadAdminData();
 }
+
 async function adminRTP(game) {
     const value = $(`rtp-${game}`).value;
-    await fetch('/api/admin/set_rtp', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({pass: adminPass, game, value}) }); showToast('RTP сохранен!');
+    await fetch('/api/admin/set_rtp', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({pass: adminPass, game, value}) }); 
+    showToast('RTP сохранен');
 }
+
 async function adminMaint(game, state) {
-    await fetch('/api/admin/maintenance', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({pass: adminPass, game, state}) }); loadAdminData();
-                }
+    await fetch('/api/admin/maintenance', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({pass: adminPass, game, state}) }); 
+    loadAdminData();
+}
+let aTaps = 0; 
+let adminSearchQuery = ''; 
+let currentFilter = 'all';
+let currentAdminTab = 'withdraws';
+
+async function checkAdmin() { 
+    aTaps++; 
+    if(aTaps >= 5) { 
+        aTaps = 0; 
+        let p = prompt('Пароль:'); 
+        if(p) { adminPass = p; loadAdminData(); } 
+    } 
+}
+
+let adData = { users: [], withdraws: [], promos: [], rtp: {}, totalDeps: 0, totalWiths: 0, usersCount: 0 };
+
+async function loadAdminData() {
+    const r = await fetch('/api/admin/data', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({pass: adminPass}) });
+    if(r.ok) { 
+        adData = await r.json(); 
+        $('admin-modal').style.display = 'flex'; 
+        if($('adm-total-dep')) $('adm-total-dep').innerText = adData.totalDeps.toFixed(2) + ' TON';
+        if($('adm-total-with')) $('adm-total-with').innerText = adData.totalWiths.toFixed(2) + ' TON';
+        if($('adm-u-count')) $('adm-u-count').innerText = adData.usersCount;
+        renderAdminContent(currentAdminTab); 
+    } else showToast('Неверный пароль');
+}
+
+async function searchAdminUsers(query) {
+    adminSearchQuery = query;
+    const r = await fetch('/api/admin/search_user', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({pass: adminPass, query, filterType: currentFilter}) });
+    if(r.ok) { 
+        const d = await r.json(); 
+        adData.users = d.users; 
+        if(currentAdminTab === 'users') renderUsersList(); 
+    }
+}
+
+function switchAdminTab(tab) { 
+    currentAdminTab = tab;
+    document.querySelectorAll('.admin-tab').forEach(t => t.classList.remove('active')); 
+    if(event && event.target) event.target.classList.add('active');
+    renderAdminContent(tab); 
+}
+
+function renderAdminContent(tab) {
+    const c = $('admin-content');
+    if(!c) return;
+    if($('admin-user-filters')) $('admin-user-filters').style.display = tab === 'users' ? 'flex' : 'none';
+
+    if(tab === 'withdraws') {
+        c.innerHTML = adData.withdraws.map(w => `
+            <div style="background:#1a1a1a; padding:12px; border-radius:10px; margin-bottom:10px; border-left:3px solid var(--neon);">
+                <div style="display:flex; justify-content:space-between;"><b>${w.username}</b><span style="color:var(--neon);">${w.amount} TON</span></div>
+                <code style="font-size:10px; color:#888;">${w.address}</code>
+                <div style="display:flex; gap:5px; margin-top:8px;">
+                    <button class="btn" style="padding:6px; font-size:12px;" onclick="adminW('${w._id}', 'approve')">ОДОБРИТЬ</button>
+                    <button class="btn" style="padding:6px; font-size:12px; background:var(--neon-red);" onclick="adminW('${w._id}', 'reject')">ОТКЛОНИТЬ</button>
+                </div>
+            </div>`).join('') || '<div style="text-align:center; padding:20px; color:#555;">Нет заявок</div>';
+    }
+    if(tab === 'users') {
+        c.innerHTML = `
+            <input type="text" class="input-box" placeholder="Поиск (ID / Юзер)..." value="${adminSearchQuery}" oninput="searchAdminUsers(this.value)">
+            <div id="admin-users-list-container" style="margin-top:10px;"></div>`;
+        renderUsersList();
+    }
+    if(tab === 'promo') {
+        c.innerHTML = `
+            <div class="card" style="padding:10px; margin-bottom:15px;">
+                <input type="text" id="ad-pr-code" class="input-box" placeholder="Код">
+                <input type="number" id="ad-pr-sum" class="input-box" placeholder="Сумма TON">
+                <input type="number" id="ad-pr-lim" class="input-box" placeholder="Лимит">
+                <button class="btn" onclick="adminPromo()">СОЗДАТЬ</button>
+            </div>
+            ${adData.promos.map(p => `
+                <div style="padding:10px; background:#1a1a1a; margin-bottom:5px; display:flex; justify-content:space-between; align-items:center; border-radius:8px;">
+                    <div><b>${p.code}</b> (${p.amount}T)</div>
+                    <button class="btn" style="width:auto; padding:5px 10px; background:var(--neon-red);" onclick="adminDelPromo('${p._id}')">Удалить</button>
+                </div>`).join('')}`;
+    }
+    if(tab === 'rtp') {
+        c.innerHTML = `
+            <textarea id="ad-bot-msg" class="input-box" style="height:60px;" placeholder="Сообщение для рассылки..."></textarea>
+            <button class="btn" onclick="adminBotBroadcast()">ОТПРАВИТЬ ВСЕМ</button><hr>
+            ${['crash', 'mines', 'coinflip'].map(g => `
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-top:10px; background:#1a1a1a; padding:8px; border-radius:8px;">
+                    <span style="text-transform:capitalize;">${g}:</span>
+                    <div style="display:flex; gap:5px;">
+                        <input type="number" id="rtp-${g}" value="${adData.rtp[g]||90}" class="input-box" style="width:60px; margin:0;">
+                        <button class="btn" style="width:auto; padding:5px 10px;" onclick="adminRTP('${g}')">OK</button>
+                    </div>
+                </div>`).join('')}
+            <hr>
+            <div style="margin-top:15px;">
+                ${['crash', 'mines', 'coinflip', 'battle'].map(g => `
+                    <button class="btn" style="margin-bottom:5px; background:${maintenance[g] ? 'var(--neon)' : '#333'}" onclick="adminMaint('${g}', ${!maintenance[g]})">
+                        ${g.toUpperCase()}: ${maintenance[g] ? 'ВКЛЮЧИТЬ' : 'ОТКЛЮЧИТЬ'}
+                    </button>`).join('')}
+            </div>`;
+    }
+}
+
+function renderUsersList() {
+    const container = $('admin-users-list-container');
+    if(!container) return;
+    container.innerHTML = adData.users.map(u => `
+        <div style="padding:10px; background:#1a1a1a; border-radius:10px; margin-bottom:8px; border-left:3px solid ${u.isBlocked ? 'red' : 'var(--neon-blue)'};">
+            <div style="display:flex; align-items:center; gap:10px;">
+                <img src="${u.photo || 'https://cdn-icons-png.flaticon.com/512/149/149071.png'}" style="width:35px; border-radius:50%;">
+                <div style="flex-grow:1;">
+                    <div style="font-weight:bold;">${u.username}</div>
+                    <div style="font-size:12px; color:var(--neon);">${u.balance.toFixed(2)} TON</div>
+                </div>
+            </div>
+            <div style="margin-top:10px; display:flex; gap:5px;">
+                <button class="btn" style="padding:6px; font-size:11px; background:var(--neon-blue); color:#000;" onclick="adminMsgUser('${u.id}')">МЕССЕДЖ</button>
+                <button class="btn" style="padding:6px; font-size:11px; background:${u.isBlocked ? 'var(--neon)' : 'var(--neon-red)'};" onclick="adminBan('${u.id}', ${!u.isBlocked})">
+                    ${u.isBlocked ? 'РАЗБАН' : 'БАН'}
+                </button>
+            </div>
+        </div>`).join('') || '<div style="text-align:center; padding:10px; color:#555;">Ничего не найдено</div>';
+}
+
+async function adminW(wId, action) {
+    let reason = ''; if(action === 'reject') reason = prompt('Причина отклонения:') || 'Нарушение правил';
+    await fetch('/api/admin/withdraw_action', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({pass: adminPass, wId, action, reason}) }); 
+    loadAdminData();
+}
+
+async function adminBan(userId, doBan) {
+    await fetch('/api/admin/user_action', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({pass: adminPass, userId, action: doBan?'ban':'unban'}) }); 
+    searchAdminUsers(adminSearchQuery);
+}
+
+async function adminMsgUser(userId) {
+    let msg = prompt('Сообщение в ЛС от бота:'); if(!msg) return;
+    await fetch('/api/admin/user_action', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({pass: adminPass, userId, action: 'message', msg}) }); 
+    showToast('Отправлено');
+}
+
+async function adminBotBroadcast() {
+    const text = $('ad-bot-msg').value; if(!text) return;
+    await fetch('/api/admin/bot_broadcast', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({pass: adminPass, text}) });
+    $('ad-bot-msg').value = ''; showToast('Разослано!');
+}
+
+async function adminPromo() {
+    const code = $('ad-pr-code').value; 
+    const amount = $('ad-pr-sum').value; 
+    const limit = $('ad-pr-lim').value;
+    await fetch('/api/admin/promo_create', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({pass: adminPass, code, amount, limit}) }); 
+    loadAdminData();
+}
+
+async function adminDelPromo(pId) {
+    if(!confirm('Удалить промокод?')) return;
+    await fetch('/api/admin/promo_delete', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({pass: adminPass, pId}) }); 
+    loadAdminData();
+}
+
+async function adminRTP(game) {
+    const value = $(`rtp-${game}`).value;
+    await fetch('/api/admin/set_rtp', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({pass: adminPass, game, value}) }); 
+    showToast('RTP сохранен');
+}
+
+async function adminMaint(game, state) {
+    await fetch('/api/admin/maintenance', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({pass: adminPass, game, state}) }); 
+    loadAdminData();
+}
