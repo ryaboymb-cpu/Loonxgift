@@ -31,6 +31,10 @@ header { padding: 15px; display: flex; justify-content: space-between; align-ite
 .mi { background: linear-gradient(135deg, #00ff88, #00ccff); box-shadow: 0 0 15px rgba(0,255,136,0.3); }
 .co { background: linear-gradient(135deg, #ffcc00, #ff9900); box-shadow: 0 0 15px rgba(255,204,0,0.3); }
 
+/* ПУНКТ 10: GLOW ЭФФЕКТЫ */
+.glow-card { border-color: var(--neon) !important; box-shadow: 0 0 20px rgba(0,255,136,0.1); }
+#cr-x { transition: color 0.3s ease, text-shadow 0.3s ease; }
+
 .btn { width: 100%; padding: 16px; border-radius: 14px; border: none; background: var(--neon); color: #000; font-weight: 800; font-size: 16px; cursor: pointer; transition: 0.2s; margin-top: 10px; box-shadow: 0 0 15px rgba(0,255,136,0.2); }
 .btn:active { transform: scale(0.95); }
 .btn:disabled { background: #555 !important; box-shadow: none !important; color: #888 !important; cursor: not-allowed; }
@@ -43,9 +47,6 @@ header { padding: 15px; display: flex; justify-content: space-between; align-ite
 .cr-badge.good { color: var(--neon); border: 1px solid var(--neon); }
 .cr-badge.bad { color: var(--neon-red); border: 1px solid var(--neon-red); }
 
-#cr-x { transition: color 0.3s ease, text-shadow 0.3s ease; } /* Плавная смена цвета для краша */
-
-/* Меню быстрых ставок */
 .quick-bets { display: flex; gap: 5px; margin-bottom: 10px; overflow-x: auto; padding-bottom: 5px; }
 .quick-bets::-webkit-scrollbar { display: none; }
 .qb-btn { flex: 0 0 auto; padding: 10px 15px; background: #1a1a1a; border: 1px solid #333; border-radius: 10px; font-size: 14px; font-weight: bold; color: #fff; cursor: pointer; transition: 0.2s; }
