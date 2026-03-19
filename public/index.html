@@ -9,40 +9,38 @@
     <script src="/socket.io/socket.io.js"></script>
     <script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
     <style>
-        /* Добавил только стили для новых элементов админки, твой CSS не трогал */
-        .admin-search {
-            width: 100%;
-            padding: 8px;
-            background: #1a1a1a;
-            border: 1px solid #333;
-            color: #fff;
-            border-radius: 5px;
-            margin-bottom: 10px;
+        /* Строгие стили для админки, чтобы ничего не ломалось */
+        #admin-modal {
+            display: none; /* Скрыто по умолчанию */
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: #0a0a0a;
+            z-index: 10000;
+            overflow-y: auto;
+            padding: 20px;
         }
-        .admin-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 8px;
-            border-bottom: 1px solid #222;
+        .admin-header {
+            display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;
         }
-        .toggle-switch {
-            position: relative;
-            display: inline-block;
-            width: 40px;
-            height: 20px;
+        .admin-tabs {
+            display: flex; overflow-x: auto; gap: 10px; margin-bottom: 20px; padding-bottom: 5px;
         }
+        .admin-tab {
+            background: #222; color: #fff; border: 1px solid #444; padding: 10px 15px; border-radius: 8px; white-space: nowrap; cursor: pointer;
+        }
+        .admin-tab.active { background: var(--neon); color: #000; border-color: var(--neon); font-weight: bold; }
+        .admin-search { width: 100%; padding: 12px; background: #1a1a1a; border: 1px solid #333; color: #fff; border-radius: 8px; margin-bottom: 15px; }
+        .admin-item { background: #1a1a1a; padding: 12px; border-radius: 8px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; border: 1px solid #222; }
+        
+        /* Тумблеры */
+        .toggle-switch { position: relative; display: inline-block; width: 44px; height: 24px; }
         .toggle-switch input { opacity: 0; width: 0; height: 0; }
-        .slider {
-            position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0;
-            background-color: #333; transition: .4s; border-radius: 20px;
-        }
-        .slider:before {
-            position: absolute; content: ""; height: 14px; width: 14px;
-            left: 3px; bottom: 3px; background-color: white; transition: .4s; border-radius: 50%;
-        }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #333; transition: .4s; border-radius: 24px; }
+        .slider:before { position: absolute; content: ""; height: 18px; width: 18px; left: 3px; bottom: 3px; background-color: white; transition: .4s; border-radius: 50%; }
         input:checked + .slider { background-color: var(--neon); }
         input:checked + .slider:before { transform: translateX(20px); }
+
+        #stars-bg { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: -1; background: #000; }
     </style>
 </head>
 <body>
@@ -52,7 +50,7 @@
 
     <header>
         <div class="h-left">
-            <img src="" id="user-ava" class="avatar" onclick="checkAdmin()">
+            <img src="" id="user-ava" class="avatar" onclick="openAdmin()">
             <div>
                 <div style="font-weight: 900; font-size: 15px; letter-spacing: 1px;">LOONX GIFT</div>
                 <div style="font-size: 11px; color: var(--neon);">● Онлайн: <span id="online-c">1</span></div>
@@ -85,9 +83,9 @@
                 <div class="g-icon co">🪙</div>
                 <div><b style="font-size: 16px;">COINFLIP</b><br><span style="color:var(--sub); font-size:12px">Крути монету (L или X)</span></div>
             </div>
-            <div class="card game-card disabled" onclick="showToast('Игра в разработке и скоро будет добавлена')">
-                <div class="g-icon" style="background: #333; filter: grayscale(100%);">⚔️</div>
-                <div><b style="font-size: 16px; color:#aaa;">BATTLE RULLET</b><br><span style="color:#666; font-size:12px">В разработке...</span></div>
+            <div class="card game-card" id="card-battle" onclick="navGame('battle')">
+                <div class="g-icon" style="background: #e74c3c;">⚔️</div>
+                <div><b style="font-size: 16px;">BATTLE RULLET</b><br><span style="color:var(--sub); font-size:12px">Битва игроков</span></div>
             </div>
         </div>
 
@@ -157,6 +155,18 @@
             <button id="co-btn" class="btn" onclick="playCoin()">КРУТИТЬ МОНЕТУ</button>
         </div>
 
+        <div id="page-battle" class="page">
+            <div class="card" style="text-align:center;">
+                <h3 style="color:var(--neon);">BATTLE RULLET</h3>
+                <p style="color:var(--sub); font-size:12px; margin-top:10px;">Секция рулетки загружена</p>
+                <div style="width: 150px; height: 150px; border: 5px solid var(--neon); border-radius: 50%; margin: 20px auto; display:flex; align-items:center; justify-content:center;">
+                    Вращение
+                </div>
+                <input type="number" id="ba-bet" class="input-box" placeholder="Сумма ставки">
+                <button class="btn" onclick="playBattle()">ВСТУПИТЬ В БОЙ</button>
+            </div>
+        </div>
+
         <div id="page-promo" class="page">
             <div class="card">
                 <h3 style="text-align:center; color:var(--neon);">ПРОМОКОД</h3>
@@ -220,17 +230,32 @@
         </div>
     </div>
 
-    <div id="admin-modal" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); width:95%; height:80%; background:#000; border:2px solid var(--neon); z-index:10000; border-radius:20px; padding:15px; overflow:hidden; display: flex; flex-direction: column;">
-        <h2 style="color:var(--neon); margin-bottom: 15px; text-align:center;">ADMIN PANEL</h2>
-        <div class="admin-tabs" style="display:flex; overflow-x:auto; gap:5px; margin-bottom:10px;">
-            <button class="admin-tab active" onclick="switchAdminTab('withdraws', this)">Выводы</button>
-            <button class="admin-tab" onclick="switchAdminTab('promo', this)">Промо</button>
-            <button class="admin-tab" onclick="switchAdminTab('rtp', this)">Игры</button>
-            <button class="admin-tab" onclick="switchAdminTab('users', this)">Юзеры</button>
+    <div id="admin-modal">
+        <div class="admin-header">
+            <h2 style="color:var(--neon); margin: 0;">АДМИН ПАНЕЛЬ</h2>
+            <button onclick="closeAdmin()" style="background:var(--neon-red); color:#fff; border:none; padding:8px 15px; border-radius:8px; font-weight:bold;">ЗАКРЫТЬ</button>
         </div>
-        <div id="admin-content" class="card" style="flex-grow:1; font-size: 12px; overflow-y:auto; border-color:#333; background:#0a0a0a;">
+        
+        <div class="admin-tabs">
+            <div class="admin-tab active" onclick="switchAdminTab('users', this)">Юзеры</div>
+            <div class="admin-tab" onclick="switchAdminTab('promo', this)">Промо</div>
+            <div class="admin-tab" onclick="switchAdminTab('rtp', this)">Игры и RTP</div>
+            <div class="admin-tab" onclick="switchAdminTab('withdraws', this)">Выводы</div>
+        </div>
+
+        <div id="admin-content" style="font-size: 14px; padding-bottom: 50px;">
+            <input type="text" class="admin-search" placeholder="Поиск по ID или имени..." onkeyup="filterAdminUsers(this.value)">
+            <div id="admin-user-list">
+                <div class="admin-item">
+                    <div><b style="font-size:16px;">ID: 12345678</b><br><span style="color:var(--sub); font-size:12px;">Имя: Player1</span><br><span style="color:var(--neon); font-size:12px;">Депов: 15.5 TON</span></div>
+                    <button class="btn" style="width:auto; padding:8px 15px; font-size:12px;">Ред.</button>
+                </div>
+                <div class="admin-item">
+                    <div><b style="font-size:16px;">ID: 87654321</b><br><span style="color:var(--sub); font-size:12px;">Имя: TestUser</span><br><span style="color:var(--neon); font-size:12px;">Депов: 0 TON</span></div>
+                    <button class="btn" style="width:auto; padding:8px 15px; font-size:12px;">Ред.</button>
+                </div>
             </div>
-        <button class="btn" style="background:var(--neon-red); margin-top:10px; min-height:45px;" onclick="document.getElementById('admin-modal').style.display='none'">ЗАКРЫТЬ</button>
+        </div>
     </div>
 
     <div class="hotbar">
@@ -252,10 +277,46 @@
         const tg = window.Telegram.WebApp;
         tg.ready();
         
-        // Скрываем лоадер сразу как все готово
-        window.onload = () => { document.getElementById('loader').style.display = 'none'; };
+        // Гарантированно скрываем лоадер
+        window.onload = () => { 
+            const loader = document.getElementById('loader');
+            if(loader) loader.style.display = 'none'; 
+        };
 
-        // Логика переключения вкладок админки
+        // Анимация звезд на фоне (чтобы работал canvas)
+        const canvas = document.getElementById('stars-bg');
+        const ctx = canvas.getContext('2d');
+        let stars = [];
+        function initStars() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            stars = [];
+            for(let i=0; i<80; i++) {
+                stars.push({ x: Math.random() * canvas.width, y: Math.random() * canvas.height, size: Math.random() * 1.5, speed: Math.random() * 0.5 + 0.1 });
+            }
+        }
+        function drawStars() {
+            ctx.clearRect(0,0, canvas.width, canvas.height);
+            ctx.fillStyle = "#fff";
+            stars.forEach(s => {
+                ctx.beginPath(); ctx.arc(s.x, s.y, s.size, 0, Math.PI*2); ctx.fill();
+                s.y += s.speed; if(s.y > canvas.height) s.y = 0;
+            });
+            requestAnimationFrame(drawStars);
+        }
+        window.onresize = initStars;
+        initStars(); drawStars();
+
+        // Управление Админкой
+        function openAdmin() {
+            document.getElementById('admin-modal').style.display = 'block';
+        }
+
+        function closeAdmin() {
+            document.getElementById('admin-modal').style.display = 'none';
+        }
+
+        // Логика вкладок админки с версткой
         function switchAdminTab(type, el) {
             document.querySelectorAll('.admin-tab').forEach(t => t.classList.remove('active'));
             if(el) el.classList.add('active');
@@ -266,49 +327,75 @@
                 cont.innerHTML = `
                     <input type="text" class="admin-search" placeholder="Поиск по ID или имени..." onkeyup="filterAdminUsers(this.value)">
                     <div id="admin-user-list">
-                        <div class="admin-item"><span>ID: 12345 (User)</span><button onclick="editUser(12345)">⚙️</button></div>
+                        <div class="admin-item"><div><b style="font-size:16px;">ID: 12345678</b><br><span style="color:var(--sub); font-size:12px;">Имя: Player1</span><br><span style="color:var(--neon); font-size:12px;">Депов: 15.5 TON</span></div><button class="btn" style="width:auto; padding:8px 15px; font-size:12px;">Ред.</button></div>
+                        <div class="admin-item"><div><b style="font-size:16px;">ID: 87654321</b><br><span style="color:var(--sub); font-size:12px;">Имя: TestUser</span><br><span style="color:var(--neon); font-size:12px;">Депов: 0 TON</span></div><button class="btn" style="width:auto; padding:8px 15px; font-size:12px;">Ред.</button></div>
                     </div>`;
             } else if(type === 'rtp') {
                 cont.innerHTML = `
-                    <div style="padding:10px;">
-                        <h4 style="color:var(--neon)">УПРАВЛЕНИЕ ИГРАМИ</h4>
-                        <div class="admin-item"><span>Crash Active</span><label class="toggle-switch"><input type="checkbox" checked onchange="toggleGame('crash', this.checked)"><span class="slider"></span></label></div>
-                        <div class="admin-item"><span>Mines Active</span><label class="toggle-switch"><input type="checkbox" checked onchange="toggleGame('mines', this.checked)"><span class="slider"></span></label></div>
-                        <div class="admin-item"><span>Coinflip Active</span><label class="toggle-switch"><input type="checkbox" checked onchange="toggleGame('coin', this.checked)"><span class="slider"></span></label></div>
+                    <h4 style="color:var(--neon); margin-bottom:15px;">ОТКЛЮЧЕНИЕ ИГР</h4>
+                    <div class="admin-item"><span>Crash</span><label class="toggle-switch"><input type="checkbox" checked onchange="toggleGame('crash', this.checked)"><span class="slider"></span></label></div>
+                    <div class="admin-item"><span>Mines</span><label class="toggle-switch"><input type="checkbox" checked onchange="toggleGame('mines', this.checked)"><span class="slider"></span></label></div>
+                    <div class="admin-item"><span>Coinflip</span><label class="toggle-switch"><input type="checkbox" checked onchange="toggleGame('coin', this.checked)"><span class="slider"></span></label></div>
+                    <div class="admin-item"><span>Battle Rullet</span><label class="toggle-switch"><input type="checkbox" checked onchange="toggleGame('battle', this.checked)"><span class="slider"></span></label></div>
+                    
+                    <h4 style="color:var(--neon); margin-top:25px; margin-bottom:15px;">НАСТРОЙКА RTP (%)</h4>
+                    <div class="admin-item" style="display:block;">
+                        <div style="margin-bottom:8px;">Общий RTP проекта</div>
+                        <input type="number" class="input-box" value="95" style="margin:0;">
+                        <button class="btn" style="margin-top:10px; background:var(--neon-blue); color:#000;">Сохранить RTP</button>
                     </div>`;
             } else if(type === 'promo') {
-                cont.innerHTML = `<div style="padding:10px;"><button class="btn">Создать Промо</button><div id="promo-list"></div></div>`;
+                cont.innerHTML = `
+                    <div class="admin-item" style="display:block;">
+                        <h4 style="color:var(--neon); margin-bottom:10px; margin-top:0;">СОЗДАТЬ ПРОМОКОД</h4>
+                        <input type="text" id="new-promo-code" class="input-box" placeholder="Сам код (например: LOONX100)">
+                        <input type="number" id="new-promo-sum" class="input-box" placeholder="Сумма награды (TON)" style="margin-top:10px;">
+                        <input type="number" id="new-promo-uses" class="input-box" placeholder="Количество активаций" style="margin-top:10px;">
+                        <button class="btn" style="margin-top:10px;" onclick="alert('Промокод создан!')">Создать</button>
+                    </div>
+                    <h4 style="color:var(--sub); margin-top:20px;">АКТИВНЫЕ ПРОМОКОДЫ</h4>
+                    <div class="admin-item"><div><b>NEWYEAR</b><br><span style="color:var(--sub); font-size:12px;">Осталось: 5/10 активаций</span><br><span style="color:var(--neon); font-size:12px;">Сумма: 1 TON</span></div><button class="btn" style="width:auto; padding:8px 15px; font-size:12px; background:var(--neon-red);">Удалить</button></div>`;
             } else if(type === 'withdraws') {
-                cont.innerHTML = `<div style="padding:10px;"><div id="withdraw-list">Список пуст</div></div>`;
+                cont.innerHTML = `
+                    <div class="admin-item" style="display:block; border-left: 3px solid var(--neon-blue);">
+                        <div style="display:flex; justify-content:space-between; margin-bottom:10px;"><b>ID: 12345</b><b style="color:var(--neon)">2.5 TON</b></div>
+                        <div style="color:var(--sub); font-size:12px; margin-bottom:10px;">Кошелек: UQ...AbCd</div>
+                        <div style="display:flex; gap:10px;">
+                            <button class="btn" style="background:var(--neon); color:#000; padding:8px; font-size:12px;">Одобрить</button>
+                            <button class="btn" style="background:var(--neon-red); color:#fff; padding:8px; font-size:12px;">Отклонить</button>
+                        </div>
+                    </div>`;
             }
         }
 
+        // Фильтр юзеров в админке
         function filterAdminUsers(val) {
-            console.log("Searching for:", val);
-            // Тут логика фильтрации списка
+            console.log("Поиск юзера:", val);
+            // Заглушка, тут будет логика взаимодействия с твоим script.js
         }
 
+        // Отключение карточек игр
         function toggleGame(game, status) {
             const card = document.getElementById('card-' + game);
+            if(!card) return;
             if(!status) {
                 card.classList.add('disabled');
-                card.style.opacity = "0.5";
-                card.onclick = () => showToast('Игра временно отключена админом');
+                card.style.opacity = "0.4";
+                card.style.pointerEvents = "none";
+                alert(game.toUpperCase() + ' выключена');
             } else {
                 card.classList.remove('disabled');
                 card.style.opacity = "1";
-                card.onclick = () => navGame(game);
+                card.style.pointerEvents = "auto";
+                alert(game.toUpperCase() + ' включена');
             }
-            showToast(game.toUpperCase() + (status ? ' Включен' : ' Отключен'));
         }
 
-        function checkAdmin() {
-            // В твоем скрипте будет проверка прав, здесь просто открытие
-            document.getElementById('admin-modal').style.display = 'flex';
-            switchAdminTab('withdraws');
+        function navGame(game) {
+            document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+            document.getElementById('page-' + game).classList.add('active');
         }
 
-        // Остальные функции (нав, ставки и т.д.) подхватятся из твоего script.js
     </script>
     <script src="script.js"></script>
 </body>
