@@ -22,6 +22,7 @@ const tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
 const $ = id => document.getElementById(id);
 
 function showToast(msg, dur = 3000) {
+    if(!msg) return;
     const container = $('toast-container');
     const t = document.createElement('div'); 
     t.className = 'toast'; 
@@ -69,14 +70,15 @@ window.onload = async () => {
     maintenance = data.maintenance || { crash: false, mines: false, coinflip: false };
     
     adminWalletAddress = data.adminWallet || '';
-    $('dep-wallet').innerText = adminWalletAddress || 'Кошелек не настроен на сервере';
-    $('dep-memo').innerText = user.id;
+    if($('dep-wallet')) $('dep-wallet').innerText = adminWalletAddress || 'Кошелек не настроен на сервере';
+    if($('dep-memo')) $('dep-memo').innerText = user.id;
 
-    $('loader').style.opacity = '0'; setTimeout(() => $('loader').style.display = 'none', 500);
+    if($('loader')) { $('loader').style.opacity = '0'; setTimeout(() => $('loader').style.display = 'none', 500); }
     
     const avaUrl = user.photo || 'https://cdn-icons-png.flaticon.com/512/149/149071.png';
-    $('user-ava').src = avaUrl; $('profile-ava').src = avaUrl;
-    $('profile-name').innerText = user.username || 'Игрок';
+    if($('user-ava')) $('user-ava').src = avaUrl; 
+    if($('profile-ava')) $('profile-ava').src = avaUrl;
+    if($('profile-name')) $('profile-name').innerText = user.username || 'Игрок';
     updateUI();
     renderWithdrawHistory();
 
@@ -96,35 +98,39 @@ window.onload = async () => {
 };
 
 function updateUI() {
+    if(!user) return;
     const bal = mode === 'real' ? user.balance : user.demo_balance;
-    $('bal-val').innerText = bal.toFixed(2);
-    $('bal-mode').innerText = mode === 'real' ? 'REAL TON' : 'DEMO TON';
-    $('bal-mode').style.color = mode === 'demo' ? 'var(--neon-blue)' : 'var(--neon)';
-    $('bal-mode').style.borderColor = mode === 'demo' ? 'var(--neon-blue)' : 'var(--neon)';
+    if($('bal-val')) $('bal-val').innerText = bal.toFixed(2);
+    if($('bal-mode')) {
+        $('bal-mode').innerText = mode === 'real' ? 'REAL TON' : 'DEMO TON';
+        $('bal-mode').style.color = mode === 'demo' ? 'var(--neon-blue)' : 'var(--neon)';
+        $('bal-mode').style.borderColor = mode === 'demo' ? 'var(--neon-blue)' : 'var(--neon)';
+    }
     
-    $('p-bets').innerText = user.stats.bets; 
-    $('p-wins').innerText = user.stats.wins;
-    $('p-plus').innerText = user.stats.plus.toFixed(2) + ' TON'; 
-    $('p-minus').innerText = user.stats.minus.toFixed(2) + ' TON';
+    if($('p-bets')) $('p-bets').innerText = user.stats.bets; 
+    if($('p-wins')) $('p-wins').innerText = user.stats.wins;
+    if($('p-plus')) $('p-plus').innerText = user.stats.plus.toFixed(2) + ' TON'; 
+    if($('p-minus')) $('p-minus').innerText = user.stats.minus.toFixed(2) + ' TON';
 }
 
 function toggleMode() { mode = mode === 'real' ? 'demo' : 'real'; updateUI(); showToast(`Включен ${mode} режим`); }
 
 function nav(pageId, el) {
-    document.querySelectorAll('.page').forEach(p => p.classList.remove('active')); $('page-'+pageId).classList.add('active');
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active')); 
+    if($('page-'+pageId)) $('page-'+pageId).classList.add('active');
     if(el) { document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active')); el.classList.add('active'); }
 }
 
 function navGame(game) { if (maintenance[game]) return showToast('Временно тех. перерыв'); nav(game); }
 
 // БЫСТРЫЕ СТАВКИ
-function setQuickBet(inputId, amount) { $(inputId).value = amount; }
+function setQuickBet(inputId, amount) { if($(inputId)) $(inputId).value = amount; }
 
 function switchDepTab(type, el) {
     document.querySelectorAll('.w-tab').forEach(b => { b.classList.remove('active'); b.style.background='#222'; b.style.color='#fff'; });
     el.classList.add('active'); el.style.background='var(--neon)'; el.style.color='#000';
-    $('dep-manual').style.display = type === 'manual' ? 'block' : 'none';
-    $('dep-connect').style.display = type === 'connect' ? 'block' : 'none';
+    if($('dep-manual')) $('dep-manual').style.display = type === 'manual' ? 'block' : 'none';
+    if($('dep-connect')) $('dep-connect').style.display = type === 'connect' ? 'block' : 'none';
 }
 
 // ИСПРАВЛЕННЫЙ TON CONNECT (С отправкой Memo/Комментария)
@@ -164,6 +170,7 @@ async function payWithTonConnect() {
 // ИСТОРИЯ ВЫВОДОВ В КОШЕЛЬКЕ
 function renderWithdrawHistory() {
     const list = $('w-history-list');
+    if(!list) return;
     if(!user.withdrawHistory || user.withdrawHistory.length === 0) return list.innerHTML = '<div style="color:#555; text-align:center;">Нет выводов</div>';
     
     list.innerHTML = user.withdrawHistory.map(w => {
@@ -177,15 +184,19 @@ function renderWithdrawHistory() {
     }).join('');
 }
 
-socket.on('online', c => $('online-c').innerText = c);
+if($('online-c')) socket.on('online', c => $('online-c').innerText = c);
 socket.on('rtpUpdate', r => rtpObj = r); 
 socket.on('maintenanceUpdate', m => maintenance = m); 
 
 // ИСТОРИЯ
-socket.on('init_history', bets => { $('feed-list').innerHTML = ''; bets.reverse().forEach(b => addLiveBetToDOM(b)); });
+socket.on('init_history', bets => { 
+    if($('feed-list')) { $('feed-list').innerHTML = ''; bets.reverse().forEach(b => addLiveBetToDOM(b)); }
+});
 socket.on('newHistoryEntry', b => addLiveBetToDOM(b));
 
 function addLiveBetToDOM(b) {
+    const list = $('feed-list');
+    if(!list) return;
     const d = document.createElement('div'); d.className = 'live-bet-item';
     const isWin = b.result > 0;
     const modeTag = b.mode === 'Demo' ? '<span style="color:var(--neon-blue); font-size:9px;">[DEMO]</span>' : '<span style="color:var(--neon); font-size:9px;">[REAL]</span>';
@@ -198,8 +209,8 @@ function addLiveBetToDOM(b) {
         </div>
         <span style="font-weight:bold; color:${isWin?'var(--neon)':'var(--neon-red)'}">${isWin ? '+'+b.result : b.result}</span>
     `;
-    $('feed-list').prepend(d); 
-    if($('feed-list').children.length > 10) $('feed-list').lastChild.remove();
+    list.prepend(d); 
+    if(list.children.length > 10) list.lastChild.remove();
 }
 
 // CRASH
@@ -214,10 +225,11 @@ function getCrashColor(x) {
 }
 
 socket.on('crashHistoryUpdate', hist => {
-    $('cr-history').innerHTML = hist.map(x => `<div class="cr-badge" style="color:${getCrashColor(x)}; border-color:${getCrashColor(x)};">${x}x</div>`).join('');
+    if($('cr-history')) $('cr-history').innerHTML = hist.map(x => `<div class="cr-badge" style="color:${getCrashColor(x)}; border-color:${getCrashColor(x)};">${x}x</div>`).join('');
 });
 
 socket.on('crashBetsUpdate', bets => {
+    if(!$('cr-live-bets')) return;
     if(bets.length === 0) $('cr-live-bets').innerHTML = '<div style="text-align:center; color:#555; padding:10px;">Ставок пока нет</div>';
     else {
         $('cr-live-bets').innerHTML = bets.map(b => {
@@ -232,20 +244,23 @@ socket.on('crashBetsUpdate', bets => {
 
 socket.on('crashData', d => {
     curCrash = d; const btn = $('cr-btn');
+    if(!btn) return;
     if(d.status === 'waiting') { 
-        $('cr-x').innerText = 'ЖДЕМ'; $('cr-timer').innerText = `СТАРТ: ${d.timer}с`; $('cr-x').style.color = '#fff'; $('cr-x').style.textShadow = 'none';
+        if($('cr-x')) { $('cr-x').innerText = 'ЖДЕМ'; $('cr-x').style.color = '#fff'; $('cr-x').style.textShadow = 'none'; }
+        if($('cr-timer')) $('cr-timer').innerText = `СТАРТ: ${d.timer}с`; 
         if(myCrashBets.length === 0) { btn.innerText = 'ПОСТАВИТЬ'; btn.style.background = 'var(--neon)'; btn.disabled = false; } 
         else if (myCrashBets.length === 1) { btn.innerText = 'ПОСТАВИТЬ 2-Ю СТАВКУ'; btn.style.background = 'var(--neon)'; btn.disabled = false; } 
         else { btn.innerText = 'МАКС. СТАВОК (2)'; btn.style.background = '#555'; btn.disabled = true; }
     }
     if(d.status === 'running') { 
         const col = getCrashColor(d.multiplier);
-        $('cr-x').innerText = d.multiplier + 'x'; $('cr-timer').innerText = '🚀 В ПОЛЕТЕ'; $('cr-x').style.color = col; $('cr-x').style.textShadow = `0 0 20px ${col}40`;
+        if($('cr-x')) { $('cr-x').innerText = d.multiplier + 'x'; $('cr-x').style.color = col; $('cr-x').style.textShadow = `0 0 20px ${col}40`; }
+        if($('cr-timer')) $('cr-timer').innerText = '🚀 В ПОЛЕТЕ'; 
         if (myCrashBets.length > 0) { btn.innerText = `ЗАБРАТЬ ${(myCrashBets[0] * d.multiplier).toFixed(2)} TON`; btn.style.background = 'var(--neon-red)'; btn.disabled = false; } 
         else { btn.innerText = 'ОЖИДАНИЕ'; btn.style.background = '#555'; btn.disabled = true; }
     }
     if(d.status === 'crashed') { 
-        $('cr-x').innerText = 'BOOM!'; $('cr-x').style.color = 'var(--neon-red)'; $('cr-x').style.textShadow = `0 0 20px rgba(255,0,85,0.4)`;
+        if($('cr-x')) { $('cr-x').innerText = 'BOOM!'; $('cr-x').style.color = 'var(--neon-red)'; $('cr-x').style.textShadow = `0 0 20px rgba(255,0,85,0.4)`; }
         if(myCrashBets.length > 0) myCrashBets = []; 
         btn.innerText = 'ПОСТАВИТЬ'; btn.style.background = 'var(--neon)'; btn.disabled = false; isCashingOut = false;
     }
@@ -289,6 +304,7 @@ function playMines() {
 }
 
 function renderMines() {
+    if(!$('mine-grid')) return;
     $('mine-grid').innerHTML = '';
     for(let i=0; i<25; i++) {
         let c = document.createElement('div'); c.className = 'm-cell';
@@ -331,15 +347,20 @@ async function playCoin() {
     
     const coin = $('coin-3d');
     const rotation = result === 'L' ? 1800 : 1980;
+    coin.style.transition = 'transform 2s cubic-bezier(0.2, 0.8, 0.2, 1)';
     coin.style.transform = `rotateY(${rotation}deg)`;
     
     setTimeout(async () => {
         const win = result === cSide ? bet*2 : 0;
         showToast(win > 0 ? `Победа! +${win.toFixed(2)}` : `Проигрыш: ${result}`); 
         await reqBet('Coinflip', bet, win);
-        coin.style.transition = 'none'; coin.style.transform = `rotateY(${result === 'L' ? 0 : 180}deg)`; 
-        setTimeout(() => coin.style.transition = 'transform 2s', 50);
-        isFlipping = false; $('co-btn').innerText = 'КРУТИТЬ';
+        
+        // Reset rotation seamlessly
+        setTimeout(() => {
+            coin.style.transition = 'none'; 
+            coin.style.transform = `rotateY(${result === 'L' ? 0 : 180}deg)`; 
+            isFlipping = false; $('co-btn').innerText = 'КРУТИТЬ';
+        }, 500);
     }, 2000);
 }
 
@@ -352,10 +373,15 @@ async function checkRealDeposit(btn) {
 }
 
 async function withdraw() {
-    const a = parseFloat($('with-amount').value); const ad = $('with-addr').value;
+    const a = parseFloat($('with-amount').value); 
+    const ad = $('with-addr').value;
+    
+    // ДОБАВЛЕНО: Проверка на пустой адрес кошелька
+    if(!ad || !ad.trim()) return showToast('Введите адрес кошелька!');
     if(a > user.balance || a < 5) return showToast('Ошибка (Мин 5 TON)');
+    
     const r = await fetch('/api/withdraw', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id:user.id, address:ad, amount:a}) });
-    if(r.ok) { user = await r.json(); updateUI(); renderWithdrawHistory(); showToast('Заявка создана!'); $('with-amount').value=''; } 
+    if(r.ok) { user = await r.json(); updateUI(); renderWithdrawHistory(); showToast('Заявка создана!'); $('with-amount').value=''; $('with-addr').value=''; } 
     else showToast('Ошибка вывода');
 }
 
@@ -486,4 +512,4 @@ async function adminDelPromo(pId) {
 async function adminRTP(game) {
     const value = $(`rtp-${game}`).value;
     await fetch('/api/admin/set_rtp', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({pass: adminPass, game, value}) }); showToast('RTP сохранен!');
-}
+       }
