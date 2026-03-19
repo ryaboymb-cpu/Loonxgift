@@ -8,6 +8,42 @@
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="/socket.io/socket.io.js"></script>
     <script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
+    <style>
+        /* Фикс приплюснутой админки */
+        #admin-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #0a0a0a;
+            z-index: 9999;
+            padding: 20px;
+            box-sizing: border-box;
+            overflow-y: auto;
+        }
+        .admin-tabs {
+            display: flex;
+            gap: 5px;
+            margin-bottom: 15px;
+            overflow-x: auto;
+        }
+        .admin-tab {
+            flex: 1;
+            padding: 10px 5px;
+            background: #1a1a1a;
+            border: 1px solid #333;
+            color: #fff;
+            border-radius: 8px;
+            font-size: 11px;
+            white-space: nowrap;
+        }
+        .admin-tab.active {
+            border-color: var(--neon);
+            color: var(--neon);
+        }
+    </style>
 </head>
 <body>
     <div id="loader"><div class="spinner"></div><h2 style="color:var(--neon); letter-spacing: 3px;">LOONX</h2></div>
@@ -49,9 +85,9 @@
                 <div class="g-icon co">🪙</div>
                 <div><b style="font-size: 16px;">COINFLIP</b><br><span style="color:var(--sub); font-size:12px">Крути монету (L или X)</span></div>
             </div>
-            <div class="card game-card disabled" onclick="showToast('Игра в разработке и скоро будет добавлена')">
-                <div class="g-icon" style="background: #333; filter: grayscale(100%);">⚔️</div>
-                <div><b style="font-size: 16px; color:#aaa;">BATTLE RULLET</b><br><span style="color:#666; font-size:12px">В разработке...</span></div>
+            <div class="card game-card" onclick="navGame('battle')">
+                <div class="g-icon" style="background: #e74c3c;">⚔️</div>
+                <div><b style="font-size: 16px;">BATTLE RULLET</b><br><span style="color:var(--sub); font-size:12px">Битва игроков</span></div>
             </div>
         </div>
 
@@ -121,6 +157,13 @@
             <button id="co-btn" class="btn" onclick="playCoin()">КРУТИТЬ МОНЕТУ</button>
         </div>
 
+        <div id="page-battle" class="page">
+            <div class="card" style="text-align:center;">
+                <h3 style="color:var(--neon);">BATTLE ARENA</h3>
+                <div id="battle-content"></div>
+            </div>
+        </div>
+
         <div id="page-promo" class="page">
             <div class="card">
                 <h3 style="text-align:center; color:var(--neon);">ПРОМОКОД</h3>
@@ -185,7 +228,7 @@
     </div>
 
     <div id="admin-modal">
-        <h2 style="color:var(--neon); margin-bottom: 15px; text-align:center;">ADMIN PANEL</h2>
+        <h2 style="color:var(--neon); margin-bottom: 15px; text-align:center;">Лоникс дай 30к</h2>
         <div class="admin-tabs">
             <button class="admin-tab active" onclick="switchAdminTab('withdraws')">Выводы</button>
             <button class="admin-tab" onclick="switchAdminTab('promo')">Промо</button>
