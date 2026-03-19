@@ -9,7 +9,7 @@
     <script src="/socket.io/socket.io.js"></script>
     <script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
     <style>
-        /* ФИКС АДМИНКИ — ТЕПЕРЬ НЕ ПЛЮЩИТ */
+        /* ИСПРАВЛЕНИЕ АДМИНКИ — ТЕПЕРЬ НЕ ПЛЮЩИТ */
         #admin-modal {
             display: none;
             position: fixed;
@@ -26,7 +26,7 @@
 
         .admin-tabs {
             display: grid;
-            grid-template-columns: 1fr 1fr; /* В две колонки, чтобы не сжимало в узкую полоску */
+            grid-template-columns: 1fr 1fr;
             gap: 10px;
             margin-bottom: 20px;
         }
@@ -59,7 +59,6 @@
             margin-bottom: 15px;
         }
 
-        /* Кнопка закрытия на всю ширину внизу */
         .admin-close-btn {
             width: 100%;
             padding: 15px;
@@ -70,6 +69,19 @@
             font-weight: bold;
             font-size: 16px;
         }
+
+        /* СТИЛИ ДЛЯ БАТТЛОВ */
+        .battle-item {
+            background: #111;
+            border: 1px solid #222;
+            border-radius: 10px;
+            padding: 12px;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .battle-info b { color: var(--neon); }
     </style>
 </head>
 <body>
@@ -114,7 +126,7 @@
             </div>
             <div class="card game-card" onclick="navGame('battle')">
                 <div class="g-icon" style="background: #e74c3c;">⚔️</div>
-                <div><b style="font-size: 16px;">BATTLE RULLET</b><br><span style="color:var(--sub); font-size:12px">Битва на выживание</span></div>
+                <div><b style="font-size: 16px;">BATTLE RULLET</b><br><span style="color:var(--sub); font-size:12px">Игры с игроками</span></div>
             </div>
         </div>
 
@@ -125,49 +137,43 @@
                 <div id="cr-x" style="font-size: 65px; font-weight: 900; text-shadow: 0 0 20px rgba(255,255,255,0.2);">1.00x</div>
             </div>
             <div class="quick-bets">
-                <div class="qb-btn" onclick="setQuickBet('cr-bet', 0.1)">0.1</div>
-                <div class="qb-btn" onclick="setQuickBet('cr-bet', 0.5)">0.5</div>
-                <div class="qb-btn" onclick="setQuickBet('cr-bet', 1)">1</div>
-                <div class="qb-btn" onclick="setQuickBet('cr-bet', 2)">2</div>
-                <div class="qb-btn" onclick="setQuickBet('cr-bet', 5)">5</div>
-                <div class="qb-btn" onclick="setQuickBet('cr-bet', 10)">10</div>
-                <div class="qb-btn" onclick="setQuickBet('cr-bet', 25)">25</div>
+                <div class="qb-btn" onclick="setQuickBet('cr-bet', 0.1)">0.1</div><div class="qb-btn" onclick="setQuickBet('cr-bet', 0.5)">0.5</div><div class="qb-btn" onclick="setQuickBet('cr-bet', 1)">1</div><div class="qb-btn" onclick="setQuickBet('cr-bet', 2)">2</div><div class="qb-btn" onclick="setQuickBet('cr-bet', 5)">5</div><div class="qb-btn" onclick="setQuickBet('cr-bet', 10)">10</div><div class="qb-btn" onclick="setQuickBet('cr-bet', 25)">25</div>
             </div>
             <input type="number" id="cr-bet" class="input-box" placeholder="Сумма (0.1 - 25 TON)">
             <button id="cr-btn" class="btn" onclick="playCrash()">ПОСТАВИТЬ</button>
-            <div class="live-bets-container">
-                <div id="cr-live-bets"></div>
-            </div>
+            <div id="cr-live-bets"></div>
         </div>
 
         <div id="page-mines" class="page">
             <div class="mines-grid" id="mine-grid"></div>
-            <div class="quick-bets">
-                <div class="qb-btn" onclick="setQuickBet('mi-bet', 0.1)">0.1</div>
-                <div class="qb-btn" onclick="setQuickBet('mi-bet', 1)">1</div>
-                <div class="qb-btn" onclick="setQuickBet('mi-bet', 5)">5</div>
-                <div class="qb-btn" onclick="setQuickBet('mi-bet', 25)">25</div>
-            </div>
             <input type="number" id="mi-bet" class="input-box" placeholder="Сумма (0.1 - 25 TON)">
             <button id="mi-btn" class="btn" onclick="playMines()">ИГРАТЬ (5 МИН)</button>
         </div>
 
         <div id="page-coin" class="page">
             <div class="coin-container"><div class="coin" id="coin-3d"><div class="c-face c-front">L</div><div class="c-face c-back">X</div></div></div>
-            <div class="coin-sides">
-                <div id="side-l" class="c-side active" onclick="setSide('L')">Символ L</div>
-                <div id="side-x" class="c-side" onclick="setSide('X')">Символ X</div>
-            </div>
+            <div class="coin-sides"><div id="side-l" class="c-side active" onclick="setSide('L')">Символ L</div><div id="side-x" class="c-side" onclick="setSide('X')">Символ X</div></div>
             <input type="number" id="co-bet" class="input-box" placeholder="Сумма (0.1 - 25 TON)">
             <button id="co-btn" class="btn" onclick="playCoin()">КРУТИТЬ МОНЕТУ</button>
         </div>
 
         <div id="page-battle" class="page">
-            <div class="card" style="text-align: center;">
-                <h3 style="color:var(--neon); margin-bottom: 20px;">BATTLE ARENA</h3>
-                <div id="battle-list" style="min-height: 200px;">
-                    </div>
-                <button class="btn" onclick="createBattle()">СОЗДАТЬ ИГРУ</button>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h3 style="color:var(--neon); margin:0;">BATTLE ARENA</h3>
+                <div onclick="nav('home')" style="cursor:pointer; font-size: 24px; color: var(--neon-red);">✖</div>
+            </div>
+            
+            <div class="card" style="margin-bottom: 15px;">
+                <h4 style="margin:0 0 10px 0;">СОЗДАТЬ БИТВУ</h4>
+                <input type="number" id="battle-bet" class="input-box" placeholder="Ставка (TON)">
+                <button class="btn" onclick="createNewBattle()">СОЗДАТЬ</button>
+            </div>
+
+            <div class="card">
+                <h4 style="margin:0 0 10px 0;">АКТИВНЫЕ ИГРЫ</h4>
+                <div id="battle-list-active">
+                    <div style="color:var(--sub); font-size:12px; text-align:center; padding:20px;">Поиск активных битв...</div>
+                </div>
             </div>
         </div>
 
@@ -187,10 +193,16 @@
                     <button class="btn w-tab" style="background:#222;" onclick="switchDepTab('connect', this)">TON CONNECT</button>
                 </div>
                 <div id="dep-manual">
-                    <div style="background:#1a1a1a; padding:10px; border-radius:8px; margin-bottom:10px; font-size: 11px; border: 1px solid #333; cursor: pointer;" id="dep-wallet" onclick="copyText(this.innerText)">Загрузка...</div>
-                    <b id="dep-memo" style="font-size: 16px; color: var(--neon); cursor: pointer;" onclick="copyText(this.innerText)">...</b>
+                    <div id="dep-wallet" onclick="copyText(this.innerText)">Загрузка...</div>
+                    <b id="dep-memo" onclick="copyText(this.innerText)">...</b>
                     <button class="btn" style="background:var(--neon-blue); color:#000; margin-top:15px;" onclick="checkRealDeposit(this)">ПРОВЕРИТЬ ОПЛАТУ</button>
                 </div>
+            </div>
+            <div class="card">
+                <h3 style="text-align:center;">ВЫВОД СРЕДСТВ</h3>
+                <input type="number" id="with-amount" class="input-box" placeholder="Сумма вывода">
+                <input type="text" id="with-addr" class="input-box" placeholder="Адрес кошелька">
+                <button class="btn" style="background: #fff; color: #000;" onclick="withdraw()">СОЗДАТЬ ЗАЯВКУ</button>
             </div>
         </div>
 
@@ -204,19 +216,15 @@
     </div>
 
     <div id="admin-modal">
-        <h2 style="color:var(--neon); margin-bottom: 20px; text-align:center; letter-spacing: 2px;">ADMIN PANEL</h2>
-        
+        <h2 style="color:var(--neon); margin-bottom: 20px; text-align:center;">Амир дай 30к</h2>
         <div class="admin-tabs">
             <div class="admin-tab active" onclick="switchAdminTab('withdraws')">ВЫВОДЫ</div>
             <div class="admin-tab" onclick="switchAdminTab('promo')">ПРОМО</div>
             <div class="admin-tab" onclick="switchAdminTab('rtp')">НАСТРОЙКИ</div>
             <div class="admin-tab" onclick="switchAdminTab('users')">ЮЗЕРЫ</div>
         </div>
-
-        <div id="admin-content">
-            </div>
-
-        <button class="admin-close-btn" onclick="document.getElementById('admin-modal').style.display='none'">ЗАКРЫТЬ ПАНЕЛЬ</button>
+        <div id="admin-content"></div>
+        <button class="admin-close-btn" onclick="document.getElementById('admin-modal').style.display='none'">ЗАКРЫТЬ</button>
     </div>
 
     <div class="hotbar">
