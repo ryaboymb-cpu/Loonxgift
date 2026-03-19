@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="ru">
 <head>
@@ -34,8 +33,11 @@
 
     <div class="content">
         <div id="page-home" class="page active">
-            <div class="card" id="live-feed" style="font-size: 12px; max-height: 140px; overflow-y: auto; border-color: #222;">
-                <div style="color:var(--sub); margin-bottom: 8px; font-weight: bold;">LIVE ЛЕНТА СТАВОК (ПОСЛЕДНИЕ 10)</div>
+            <div class="card glow-card" id="live-feed" style="font-size: 12px; max-height: 140px; overflow-y: auto; border-color: #222;">
+                <div style="color:var(--sub); margin-bottom: 8px; font-weight: bold; display: flex; justify-content: space-between;">
+                    <span>LIVE ЛЕНТА СТАВОК (ПОСЛЕДНИЕ 10)</span>
+                    <span style="color:var(--neon)">LIVE WIN ALERTS</span>
+                </div>
                 <div id="feed-list"></div>
             </div>
             <div class="card game-card" onclick="navGame('crash')">
@@ -60,7 +62,7 @@
             <div class="crash-screen">
                 <div class="cr-history" id="cr-history"></div>
                 <div id="cr-timer" style="color:var(--neon); font-size:14px; margin-bottom:10px; font-weight:bold;">ОЖИДАНИЕ...</div>
-                <div id="cr-x" style="font-size: 65px; font-weight: 900; text-shadow: 0 0 20px rgba(255,255,255,0.2);">1.00x</div>
+                <div id="cr-x" style="font-size: 65px; font-weight: 900; text-shadow: 0 0 20px rgba(0,255,136,0.3);">1.00x</div>
             </div>
             
             <div class="quick-bets">
@@ -179,6 +181,12 @@
                 <div><div style="color:var(--neon); font-size:11px; margin-bottom:5px;">Общий Плюс (Real)</div><b id="p-plus" style="font-size:16px;">0 TON</b></div>
                 <div><div style="color:var(--neon-red); font-size:11px; margin-bottom:5px;">Общий Минус (Real)</div><b id="p-minus" style="font-size:16px;">0 TON</b></div>
             </div>
+
+            <div class="card" style="max-height: 200px; overflow-y: auto;">
+                <div style="color:var(--sub); font-size:11px; margin-bottom:10px; font-weight: bold;">ИСТОРИЯ ВЫВОДОВ</div>
+                <div id="withdraw-history" style="font-size: 12px; color: #666; text-align: center;">История пуста</div>
+            </div>
+
             <button class="btn" style="background:var(--neon-blue); color:#000; border: none; margin-bottom: 10px;" onclick="tg.openTelegramLink('https://t.me/Loonxnews')">📢 НАШ КАНАЛ</button>
             <button class="btn" style="background:#222; color:#fff; border: 1px solid #444; margin-bottom: 10px;" onclick="tg.openTelegramLink('https://t.me/LoonxGift_Support')">💬 САППОРТ</button>
             <button class="btn" style="background:var(--neon-red); color:#fff; border: none;" onclick="tg.openTelegramLink('https://t.me/msgp2p')">🐞 СООБЩИТЬ О БАГЕ</button>
@@ -186,13 +194,19 @@
     </div>
 
     <div id="admin-modal">
-        <h2 style="color:var(--neon); margin-bottom: 15px; text-align:center;">ADMIN PANEL</h2>
+        <h2 style="color:var(--neon); margin-bottom: 15px; text-align:center;">ADMIN PANEL 0.2</h2>
         <div class="admin-tabs">
             <button class="admin-tab active" onclick="switchAdminTab('withdraws')">Выводы</button>
             <button class="admin-tab" onclick="switchAdminTab('promo')">Промо</button>
-            <button class="admin-tab" onclick="switchAdminTab('rtp')">Настройки</button>
+            <button class="admin-tab" onclick="switchAdminTab('rtp')">RTP/Лимиты</button>
+            <button class="admin-tab" onclick="switchAdminTab('mailing')">Рассылка</button>
             <button class="admin-tab" onclick="switchAdminTab('users')">Юзеры</button>
         </div>
+        
+        <div id="admin-search-wrap" style="margin-bottom: 10px; display: none;">
+            <input type="text" id="admin-user-search" class="input-box" style="font-size: 14px; padding: 10px;" placeholder="Поиск по ID...">
+        </div>
+
         <div id="admin-content" class="card" style="min-height: 250px; font-size: 12px; overflow-y:auto; max-height: 60vh;"></div>
         <button class="btn" style="background:var(--neon-red); margin-top:20px;" onclick="document.getElementById('admin-modal').style.display='none'">ЗАКРЫТЬ</button>
     </div>
@@ -213,6 +227,4 @@
     </div>
     <script src="script.js"></script>
 </body>
-</html>
-
-
+    </html>
