@@ -945,3 +945,4 @@ async function adminMaint(game, state) {
     await fetch('/api/admin/maintenance', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({pass: adminPass, game, state}) }); 
     loadAdminData();
 }
+}; 
