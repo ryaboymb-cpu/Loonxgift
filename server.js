@@ -19,8 +19,15 @@ app.use(express.static(path.join(__dirname, 'public')));
 process.on('uncaughtException', (err) => console.error('Критическая ошибка:', err));
 process.on('unhandledRejection', (reason, promise) => console.error('Необработанный промис:', reason));
 
+// --- АНТИ-СОН СЕРВЕРА (Пункт 5 и 8) ---
+setInterval(() => {
+    http.get(`http://localhost:${process.env.PORT || 3000}/tonconnect-manifest.json`).on("error", (err) => {
+        console.log("Anti-sleep ping error:", err.message);
+    });
+}, 5 * 60 * 1000); // Каждые 5 минут
+
 // Подключение к БД
-mongoose.connect(process.env.MONGO_URI).then(() => console.log('✅ DB Connected')).catch(err => console.log('❌ DB Error:', err));
+mongoose.connect(process.env.MONGO_URI).then(() => console.log('DB Connected')).catch(err => console.log('DB Error:', err));
 
 // --- 1. TON CONNECT MANIFEST ---
 app.get('/tonconnect-manifest.json', (req, res) => {
@@ -39,7 +46,7 @@ const UserSchema = new mongoose.Schema({
     id: String, 
     username: String, 
     photo: String, 
-    isBlocked: { type: Boolean, default: false }, // Для бана
+    isBlocked: { type: Boolean, default: false },
     balance: { type: Number, default: 0 }, 
     demo_balance: { type: Number, default: 5000 },
     stats: { 
@@ -49,14 +56,21 @@ const UserSchema = new mongoose.Schema({
         minus: {type:Number, default:0},
         promo: {type:Number, default:0}
     },
-    withdrawHistory: [{ // История выводов для профиля
-        withdrawId: String, // ДОБАВЛЕНО для надежной связи заявок
+    depositHistory: [{ // Добавлено для Пункта 3
+        amount: Number,
+        hash: String,
+        status: { type: String, default: 'Успешно' },
+        time: String
+    }],
+    withdrawHistory: [{ 
+        withdrawId: String,
         amount: Number, 
         address: String, 
         status: String, 
         reason: String, 
         time: String 
-    }]
+    }],
+    createdAt: { type: Date, default: Date.now } // Для фильтра новых
 });
 
 const BetSchema = new mongoose.Schema({
@@ -67,8 +81,18 @@ const BetSchema = new mongoose.Schema({
 
 const PromoSchema = new mongoose.Schema({ code: String, amount: Number, limit: Number, usedBy: [String] });
 const WithdrawSchema = new mongoose.Schema({ userId: String, address: String, amount: Number, status: { type: String, default: 'pending' }, reason: String, time: String });
-const DepositSchema = new mongoose.Schema({ hash: { type: String, unique: true }, userId: String, amount: Number });
+const DepositSchema = new mongoose.Schema({ hash: { type: String, unique: true }, userId: String, amount: Number, time: String });
 const SettingsSchema = new mongoose.Schema({ key: String, value: mongoose.Schema.Types.Mixed });
+
+// Модель для Battle Roulette (Пункт 4)
+const BattleSchema = new mongoose.Schema({
+    creatorId: String, creatorName: String, creatorAvatar: String,
+    amount: Number, minBet: Number, maxLimit: Number,
+    players: [{ userId: String, username: String, avatar: String, bet: Number, color: String }],
+    status: { type: String, default: 'waiting' }, // waiting, spinning, finished
+    startTime: Date,
+    createdAt: { type: Date, default: Date.now }
+});
 
 const User = mongoose.model('User', UserSchema);
 const Bet = mongoose.model('Bet', BetSchema);
@@ -76,8 +100,10 @@ const Promo = mongoose.model('Promo', PromoSchema);
 const Withdraw = mongoose.model('Withdraw', WithdrawSchema);
 const Deposit = mongoose.model('Deposit', DepositSchema);
 const Settings = mongoose.model('Settings', SettingsSchema);
+const Battle = mongoose.model('Battle', BattleSchema);
 
 let globalBetHistory = [];
+const BATTLE_COLORS = ['#ffcc00', '#ffffff', '#ff0055', '#00ff88'];
 
 // --- ИНИЦИАЛИЗАЦИЯ НАСТРОЕК ---
 async function initSettings() {
@@ -87,7 +113,8 @@ async function initSettings() {
         { key: 'rtp_coinflip', value: 90 }, 
         { key: 'maintenance_crash', value: false },
         { key: 'maintenance_mines', value: false },
-        { key: 'maintenance_coinflip', value: false }
+        { key: 'maintenance_coinflip', value: false },
+        { key: 'maintenance_battle', value: false } // Добавлено для Батл рулетки
     ];
     for (let setting of defaultSettings) {
         const exists = await Settings.findOne({ key: setting.key });
@@ -111,29 +138,29 @@ if (process.env.BOT_TOKEN) {
     
     bot.on('polling_error', (err) => {
         if (err.message.includes('409 Conflict')) {
-            console.log('⚠️ Конфликт: Бот уже запущен в другом месте. Останови его там.');
+            console.log('Конфликт: Бот уже запущен в другом месте. Останови его там.');
         } else {
-            console.log('❌ Ошибка поллинга бота:', err.message);
+            console.log('Ошибка поллинга бота:', err.message);
         }
     });
 
     bot.onText(/\/(start|help)/, (msg) => {
-        const text = `🚀 Привет, ${msg.from.first_name}!\nДобро пожаловать в Loonx Gifts.\n\nТут ты можешь играть и выигрывать TON! Твой баланс и все игры находятся внутри Mini App.\n\nВыбирай действие в меню ниже:`;
+        const text = `Привет, ${msg.from.first_name}!\nДобро пожаловать в Loonx Gifts.\n\nТут ты можешь играть и выигрывать TON! Твой баланс и все игры находятся внутри Mini App.\n\nВыбирай действие в меню ниже:`;
         const appUrl = process.env.WEB_APP_URL || "https://loonxgift.onrender.com/";
 
         bot.sendMessage(msg.chat.id, text, {
             reply_markup: {
                 inline_keyboard: [
-                    [{ text: "🎮 ИГРАТЬ (MINI APP)", web_app: { url: appUrl } }],
-                    [{ text: "📢 Канал", url: "https://t.me/Loonxnews" }, { text: "💬 Саппорт", url: "https://t.me/LoonxGift_Support" }],
-                    [{ text: "🐞 Баги", url: "https://t.me/msgp2p" }]
+                    [{ text: "ИГРАТЬ (MINI APP)", web_app: { url: appUrl } }],
+                    [{ text: "Канал", url: "https://t.me/Loonxnews" }, { text: "Саппорт", url: "https://t.me/LoonxGift_Support" }],
+                    [{ text: "Баги", url: "https://t.me/msgp2p" }]
                 ]
             }
         });
     });
-    console.log('🤖 Бот успешно запущен (Polling)');
+    console.log('Бот успешно запущен (Polling)');
 } else {
-    console.log('❌ BOT_TOKEN не найден в .env');
+    console.log('BOT_TOKEN не найден в .env');
 }
 
 // --- CRASH ENGINE ---
@@ -157,7 +184,6 @@ async function runCrash() {
     const limit = Math.pow(100 / (100 - (Math.random() * rtp)), 0.9).toFixed(2);
     
     const r = setInterval(async () => {
-        // Ускоряем краш (Пункт 8)
         crash.multiplier = (parseFloat(crash.multiplier) + 0.015).toFixed(2);
         io.emit('crashData', crash);
         
@@ -190,13 +216,58 @@ startCrash();
 function pushToGlobalHistory(betObj) {
     const betWithTime = {
         ...(betObj.toObject ? betObj.toObject() : betObj),
-        timeMsk: getMskTime() // МСК время
+        timeMsk: getMskTime()
     };
     
-    globalBetHistory.push(betWithTime);
-    if(globalBetHistory.length > 10) globalBetHistory.shift();
+    globalBetHistory.unshift(betWithTime); // Пункт 1: добавляем наверх
+    if(globalBetHistory.length > 10) globalBetHistory.pop();
     io.emit('newHistoryEntry', betWithTime);
 }
+
+// --- BATTLE ROULETTE ENGINE (Пункт 4) ---
+setInterval(async () => {
+    // 1. Возврат лобби через 24 часа
+    const expired = await Battle.find({ status: 'waiting', createdAt: { $lt: new Date(Date.now() - 24 * 60 * 60 * 1000) } });
+    for (let b of expired) {
+        for (let p of b.players) {
+            await User.updateOne({ id: p.userId }, { $inc: { balance: p.bet } });
+        }
+        await Battle.findByIdAndDelete(b._id);
+        io.emit('battleUpdate');
+    }
+
+    // 2. Запуск рулетки (2 минуты с момента подключения второго игрока)
+    const readyToSpin = await Battle.find({ status: 'waiting', startTime: { $lte: new Date() } });
+    for (let b of readyToSpin) {
+        b.status = 'spinning'; await b.save();
+        io.emit('battleSpinStart', b);
+        
+        let totalPool = b.players.reduce((sum, p) => sum + p.bet, 0);
+        let winFee = totalPool * 0.3; // 30% сгорает
+        let winPool = totalPool - winFee;
+        
+        let rand = Math.random() * totalPool;
+        let current = 0; let winner = b.players[0];
+        for (let p of b.players) {
+            current += p.bet;
+            if (rand <= current) { winner = p; break; }
+        }
+
+        setTimeout(async () => {
+            b.status = 'finished'; await b.save();
+            await User.updateOne({ id: winner.userId }, { $inc: { balance: winPool, 'stats.plus': winPool, 'stats.wins': 1 } });
+            io.emit('battleFinished', { lobbyId: b._id, winner, winPool, players: b.players });
+            
+            // История
+            const h = { userId: winner.userId, username: winner.username, avatar: winner.avatar, game: 'Battle', amount: totalPool, result: winPool, mode: 'Real', timeMsk: getMskTime() };
+            globalBetHistory.unshift(h);
+            if(globalBetHistory.length>10) globalBetHistory.pop();
+            io.emit('newHistoryEntry', h);
+            
+            setTimeout(() => { Battle.findByIdAndDelete(b._id).then(()=>io.emit('battleUpdate')); }, 10000);
+        }, 5000); // Время анимации
+    }
+}, 2000);
 
 // --- СОКЕТЫ ---
 let online = 0;
@@ -205,6 +276,11 @@ io.on('connection', async (socket) => {
     socket.emit('crashHistoryUpdate', crashHistory);
     socket.emit('crashBetsUpdate', crashLiveBets);
     socket.emit('init_history', globalBetHistory);
+    
+    // Отправка активных лобби
+    const lobbies = await Battle.find({ status: 'waiting' });
+    socket.emit('init_battles', lobbies);
+
     socket.on('disconnect', () => { online--; io.emit('online', online); });
 });
 
@@ -215,7 +291,7 @@ app.post('/api/auth', async (req, res) => {
     if (!user) user = await User.create({ id, username: username || first_name, photo: photo_url });
     else { user.username = username || first_name; user.photo = photo_url; await user.save(); }
     
-    if(user.isBlocked) return res.status(403).json({ error: "BLOCKED" }); // Блок
+    if(user.isBlocked) return res.status(403).json({ error: "BLOCKED" });
 
     const allSettings = await Settings.find();
     const rtpData = {};
@@ -295,6 +371,72 @@ app.post('/api/bet', async (req, res) => {
     res.json(user);
 });
 
+// BATTLE ROULETTE API (Пункт 4)
+app.post('/api/battle/create', async (req, res) => {
+    const { id, amount, minBet, maxLimit } = req.body;
+    const user = await User.findOne({ id });
+    if (!user || user.balance < amount) return res.status(400).json({ error: 'Недостаточно средств' });
+    if (amount < 1 || amount > 150) return res.status(400).json({ error: 'Ставка от 1 до 150 TON' });
+
+    user.balance = Number((user.balance - amount).toFixed(2));
+    await user.save();
+
+    const lobby = await Battle.create({
+        creatorId: id, creatorName: user.username, creatorAvatar: user.photo,
+        amount, minBet, maxLimit,
+        players: [{ userId: id, username: user.username, avatar: user.photo, bet: amount, color: BATTLE_COLORS[0] }]
+    });
+
+    const lobbies = await Battle.find({ status: 'waiting' });
+    io.emit('battleUpdate', lobbies);
+    res.json(user);
+});
+
+app.post('/api/battle/join', async (req, res) => {
+    const { id, lobbyId, amount } = req.body;
+    const user = await User.findOne({ id });
+    const lobby = await Battle.findById(lobbyId);
+
+    if (!user || !lobby || lobby.status !== 'waiting') return res.status(400).json({ error: 'Лобби недоступно' });
+    if (user.balance < amount) return res.status(400).json({ error: 'Недостаточно средств' });
+    if (amount < lobby.minBet || amount > lobby.maxLimit) return res.status(400).json({ error: 'Неверная сумма ставки' });
+    if (lobby.players.length >= 4) return res.status(400).json({ error: 'Лобби заполнено' });
+    if (lobby.players.find(p => p.userId === id)) return res.status(400).json({ error: 'Вы уже в лобби' });
+
+    user.balance = Number((user.balance - amount).toFixed(2));
+    await user.save();
+
+    lobby.players.push({ userId: id, username: user.username, avatar: user.photo, bet: amount, color: BATTLE_COLORS[lobby.players.length] });
+    
+    if (lobby.players.length === 2 && !lobby.startTime) {
+        lobby.startTime = new Date(Date.now() + 2 * 60 * 1000); // 2 минуты таймер
+    }
+    await lobby.save();
+
+    if (bot) {
+        bot.sendMessage(lobby.creatorId, `Игрок ${user.username} присоединился к вашей ставке! Размер: ${amount} TON.`).catch(()=>{});
+    }
+
+    const lobbies = await Battle.find({ status: 'waiting' });
+    io.emit('battleUpdate', lobbies);
+    res.json(user);
+});
+
+app.post('/api/battle/delete', async (req, res) => {
+    const { id, lobbyId } = req.body;
+    const lobby = await Battle.findById(lobbyId);
+    if (!lobby || lobby.creatorId !== id || lobby.players.length > 1) return res.status(400).json({ error: 'Нельзя удалить' });
+
+    const user = await User.findOne({ id });
+    user.balance = Number((user.balance + lobby.amount).toFixed(2));
+    await user.save();
+    await Battle.findByIdAndDelete(lobbyId);
+
+    const lobbies = await Battle.find({ status: 'waiting' });
+    io.emit('battleUpdate', lobbies);
+    res.json(user);
+});
+
 app.post('/api/check_deposit', async (req, res) => {
     const { id } = req.body;
     const adminWallet = process.env.ADMIN_WALLET;
@@ -311,34 +453,39 @@ app.post('/api/check_deposit', async (req, res) => {
         let totalAdded = 0;
         
         for (let tx of data.result) {
-            // Проверяем, есть ли комментарий и совпадает ли он с ID юзера
             if (tx.in_msg && tx.in_msg.message && String(tx.in_msg.message).trim() === String(id).trim() && tx.in_msg.value > 0) {
                 const txHash = tx.transaction_id.hash;
                 const amountTON = tx.in_msg.value / 1e9; 
                 const exists = await Deposit.findOne({ hash: txHash });
                 if(!exists) {
-                    await Deposit.create({ hash: txHash, userId: id, amount: amountTON });
+                    const timeStr = getMskTime();
+                    await Deposit.create({ hash: txHash, userId: id, amount: amountTON, time: timeStr });
                     const user = await User.findOne({ id });
                     user.balance = Number((user.balance + amountTON).toFixed(2));
+                    user.depositHistory.unshift({ amount: amountTON, hash: txHash, status: 'Успешно', time: timeStr }); // Пункт 3
                     await user.save();
                     foundNew = true;
                     totalAdded += amountTON;
                 }
             }
         }
-        if(foundNew) res.json({ success: true, added: totalAdded });
-        else res.status(400).json({ error: 'Новых оплат не найдено' });
+        if(foundNew) {
+            const updatedUser = await User.findOne({ id });
+            res.json({ success: true, added: totalAdded, user: updatedUser });
+        } else res.status(400).json({ error: 'Новых оплат не найдено' });
     } catch (e) { 
         res.status(500).json({error: 'Network error'}); 
     }
 });
 
+// ПРОМОКОДЫ (Пункт 7)
 app.post('/api/promo', async (req, res) => {
     const { id, code } = req.body;
     const promo = await Promo.findOne({ code });
-    if(!promo || promo.usedBy.length >= promo.limit || promo.usedBy.includes(id)) return res.status(400).json({error: 'Invalid promo'});
-    const user = await User.findOne({ id });
+    if(!promo) return res.status(400).json({error: 'Неверный промокод'});
+    if(promo.usedBy.length >= promo.limit || promo.usedBy.includes(id)) return res.status(400).json({error: 'Лимит активаций исчерпан'});
     
+    const user = await User.findOne({ id });
     user.balance = Number((user.balance + promo.amount).toFixed(2)); 
     user.stats.promo += promo.amount; 
     promo.usedBy.push(id);
@@ -353,17 +500,14 @@ app.post('/api/withdraw', async (req, res) => {
     if (user.balance < amount || amount < 5) return res.status(400).json({error: 'Min 5 TON'});
     user.balance = Number((user.balance - amount).toFixed(2)); 
     
-    // ИСПРАВЛЕНО: Теперь сохраняем withdrawId заявки для 100% точного мэтчинга при отклонении
     const newW = await Withdraw.create({ userId: id, address, amount, time: getMskTime() });
-    
-    // Пишем в историю юзера
     user.withdrawHistory.unshift({ withdrawId: newW._id, amount, address, status: 'В обработке', reason: '', time: newW.time });
     await user.save();
 
     res.json(user);
 });
 
-// --- АДМИН ПАНЕЛЬ ---
+// --- АДМИН ПАНЕЛЬ (Пункт 2) ---
 const checkAdmin = (req, res, next) => {
     if(req.body.pass !== (process.env.ADMIN_PASS || '1234')) return res.status(403).json({error: 'Wrong pass'});
     next();
@@ -372,8 +516,20 @@ const checkAdmin = (req, res, next) => {
 app.post('/api/admin/data', checkAdmin, async (req, res) => {
     const withdraws = await Withdraw.find({status: 'pending'});
     const promos = await Promo.find().sort({_id: -1}).limit(10);
-    // ФИКС БАЗЫ ДАННЫХ: Теперь сразу отправляем топ 100 юзеров, чтобы вкладка не багалась
     const users = await User.find().sort({balance: -1}).limit(100);
+    
+    // Агрегация депозитов и выводов (Пункт 2)
+    const allDeps = await Deposit.find();
+    const totalDeps = allDeps.reduce((acc, d) => acc + d.amount, 0);
+    const allWiths = await Withdraw.find({status: 'approved'});
+    const totalWiths = allWiths.reduce((acc, w) => acc + w.amount, 0);
+    const usersCount = await User.countDocuments();
+
+    // Добавляем юзернеймы к депозитам для админки
+    const populatedWithdraws = await Promise.all(withdraws.map(async w => {
+        const u = await User.findOne({id: w.userId});
+        return { ...w.toObject(), username: u ? u.username : 'Неизвестно' };
+    }));
     
     const allSettings = await Settings.find();
     const rtpData = {};
@@ -385,26 +541,25 @@ app.post('/api/admin/data', checkAdmin, async (req, res) => {
         }
     });
     
-    res.json({ withdraws, promos, users, rtp: rtpData, maintenance: maintenanceData });
+    res.json({ withdraws: populatedWithdraws, promos, users, rtp: rtpData, maintenance: maintenanceData, totalDeps, totalWiths, usersCount });
 });
 
-// Поиск пользователей
 app.post('/api/admin/search_user', checkAdmin, async (req, res) => {
-    const { query } = req.body;
+    const { query, filterType } = req.body;
     let filter = {};
     if (query) {
-        filter = {
-            $or: [
-                { id: new RegExp(query, 'i') },
-                { username: new RegExp(query, 'i') }
-            ]
-        };
+        filter = { $or: [{ id: new RegExp(query, 'i') }, { username: new RegExp(query, 'i') }] };
+    } else if (filterType === 'ban') {
+        filter = { isBlocked: true };
     }
-    const users = await User.find(filter).sort({balance: -1}).limit(500);
+    
+    let sort = {balance: -1};
+    if (filterType === 'new') sort = {createdAt: -1};
+
+    const users = await User.find(filter).sort(sort).limit(100);
     res.json({ users });
 });
 
-// Бан / Сообщения
 app.post('/api/admin/user_action', checkAdmin, async (req, res) => {
     const { userId, action, msg } = req.body;
     const user = await User.findOne({ id: String(userId) });
@@ -415,32 +570,16 @@ app.post('/api/admin/user_action', checkAdmin, async (req, res) => {
     await user.save();
 
     if(action === 'message' && bot) {
-        bot.sendMessage(userId, `📩 Сообщение от Администрации:\n\n${msg}`).catch(()=>{});
+        bot.sendMessage(userId, `Сообщение от Администрации:\n\n${msg}`).catch(()=>{});
     }
     res.json({ success: true });
 });
 
-app.post('/api/admin/broadcast', checkAdmin, (req, res) => {
-    const { text } = req.body;
-    if(text) io.emit('global_alert', text);
-    res.json({success: true});
-});
-
-// Рассылка в ТГ бота
 app.post('/api/admin/bot_broadcast', checkAdmin, async (req, res) => {
     const { text } = req.body;
     if(!text || !bot) return res.status(400).json({error: 'Текст пуст'});
     const users = await User.find({ isBlocked: false });
     for(let u of users) { bot.sendMessage(u.id, text).catch(()=>{}); }
-    res.json({success: true});
-});
-
-// Сброс истории (баланс остается)
-app.post('/api/admin/reset_all_stats', checkAdmin, async (req, res) => {
-    await User.updateMany({}, { $set: { betHistory: [], demo_balance: 5000, stats: { bets: 0, wins: 0, plus: 0, minus: 0, promo: 0 } } });
-    await Bet.deleteMany({});
-    globalBetHistory = [];
-    io.emit('init_history', globalBetHistory);
     res.json({success: true});
 });
 
@@ -475,20 +614,6 @@ app.post('/api/admin/set_rtp', checkAdmin, async (req, res) => {
     res.json({success: true});
 });
 
-app.post('/api/admin/edit_balance', checkAdmin, async (req, res) => {
-    const { userId, action, amount } = req.body;
-    const user = await User.findOne({id: userId});
-    if (!user) return res.status(404).json({error: 'User not found'});
-    
-    const val = Number(amount);
-    if (action === 'add') user.balance = Number((user.balance + val).toFixed(2));
-    else if (action === 'sub') { user.balance = Number((user.balance - val).toFixed(2)); if(user.balance < 0) user.balance = 0; }
-    
-    await user.save();
-    res.json({success: true});
-});
-
-// Отклонение вывода с причиной
 app.post('/api/admin/withdraw_action', checkAdmin, async (req, res) => {
     const { wId, action, reason } = req.body;
     const w = await Withdraw.findById(wId);
@@ -496,11 +621,8 @@ app.post('/api/admin/withdraw_action', checkAdmin, async (req, res) => {
     
     const u = await User.findOne({id: w.userId});
     if(u) {
-        // ИСПРАВЛЕНО: надежный поиск по withdrawId (фоллбэк на старый метод если заявка была создана до обновления)
         let uHist = u.withdrawHistory.find(h => h.withdrawId ? h.withdrawId.toString() === w._id.toString() : (h.time === w.time && h.amount === w.amount));
-        
         if(action === 'reject') {
-            // ИСПРАВЛЕНО: строгое ограничение до 2-х знаков, чтобы не было бага флоатов
             u.balance = Number((u.balance + w.amount).toFixed(2)); 
             if(uHist) { uHist.status = 'Отклонено'; uHist.reason = reason; }
         } else {
@@ -516,4 +638,4 @@ app.post('/api/admin/withdraw_action', checkAdmin, async (req, res) => {
     res.json({success: true});
 });
 
-server.listen(process.env.PORT || 3000, () => console.log('🚀 Server Running on port 3000'));
+server.listen(process.env.PORT || 3000, () => console.log('Server Running on port 3000'));
