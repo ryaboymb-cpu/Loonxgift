@@ -50,6 +50,7 @@ const UserSchema = new mongoose.Schema({
         promo: {type:Number, default:0}
     },
     withdrawHistory: [{ // История выводов для профиля
+        withdrawId: String, // ДОБАВЛЕНО для надежной связи заявок
         amount: Number, 
         address: String, 
         status: String, 
@@ -352,11 +353,13 @@ app.post('/api/withdraw', async (req, res) => {
     if (user.balance < amount || amount < 5) return res.status(400).json({error: 'Min 5 TON'});
     user.balance = Number((user.balance - amount).toFixed(2)); 
     
+    // ИСПРАВЛЕНО: Теперь сохраняем withdrawId заявки для 100% точного мэтчинга при отклонении
+    const newW = await Withdraw.create({ userId: id, address, amount, time: getMskTime() });
+    
     // Пишем в историю юзера
-    user.withdrawHistory.unshift({ amount, address, status: 'В обработке', reason: '', time: getMskTime() });
+    user.withdrawHistory.unshift({ withdrawId: newW._id, amount, address, status: 'В обработке', reason: '', time: newW.time });
     await user.save();
 
-    await Withdraw.create({ userId: id, address, amount, time: getMskTime() });
     res.json(user);
 });
 
@@ -493,10 +496,12 @@ app.post('/api/admin/withdraw_action', checkAdmin, async (req, res) => {
     
     const u = await User.findOne({id: w.userId});
     if(u) {
-        // Обновляем статус в профиле пользователя
-        let uHist = u.withdrawHistory.find(h => h.time === w.time && h.amount === w.amount);
+        // ИСПРАВЛЕНО: надежный поиск по withdrawId (фоллбэк на старый метод если заявка была создана до обновления)
+        let uHist = u.withdrawHistory.find(h => h.withdrawId ? h.withdrawId.toString() === w._id.toString() : (h.time === w.time && h.amount === w.amount));
+        
         if(action === 'reject') {
-            u.balance += w.amount; 
+            // ИСПРАВЛЕНО: строгое ограничение до 2-х знаков, чтобы не было бага флоатов
+            u.balance = Number((u.balance + w.amount).toFixed(2)); 
             if(uHist) { uHist.status = 'Отклонено'; uHist.reason = reason; }
         } else {
             if(uHist) { uHist.status = 'Подтверждено'; }
