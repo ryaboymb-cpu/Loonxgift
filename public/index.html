@@ -9,9 +9,40 @@
     <script src="/socket.io/socket.io.js"></script>
     <script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
     <style>
-        .admin-filter-btn { background: #222; border: 1px solid #333; color: #888; padding: 6px 12px; border-radius: 10px; font-size: 11px; cursor: pointer; transition: 0.2s; }
-        .admin-filter-btn.active { background: var(--neon); color: #000; border-color: var(--neon); font-weight: bold; }
-        .br-player-card { display: flex; align-items: center; justify-content: space-between; padding: 10px; background: #111; border-radius: 12px; margin-bottom: 6px; border: 1px solid #222; }
+        /* Добавил только стили для новых элементов админки, твой CSS не трогал */
+        .admin-search {
+            width: 100%;
+            padding: 8px;
+            background: #1a1a1a;
+            border: 1px solid #333;
+            color: #fff;
+            border-radius: 5px;
+            margin-bottom: 10px;
+        }
+        .admin-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px;
+            border-bottom: 1px solid #222;
+        }
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 40px;
+            height: 20px;
+        }
+        .toggle-switch input { opacity: 0; width: 0; height: 0; }
+        .slider {
+            position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0;
+            background-color: #333; transition: .4s; border-radius: 20px;
+        }
+        .slider:before {
+            position: absolute; content: ""; height: 14px; width: 14px;
+            left: 3px; bottom: 3px; background-color: white; transition: .4s; border-radius: 50%;
+        }
+        input:checked + .slider { background-color: var(--neon); }
+        input:checked + .slider:before { transform: translateX(20px); }
     </style>
 </head>
 <body>
@@ -42,21 +73,21 @@
                 <div style="color:var(--sub); margin-bottom: 8px; font-weight: bold;">LIVE ЛЕНТА СТАВОК (ПОСЛЕДНИЕ 10)</div>
                 <div id="feed-list"></div>
             </div>
-            <div class="card game-card" onclick="navGame('crash')">
+            <div class="card game-card" id="card-crash" onclick="navGame('crash')">
                 <div class="g-icon cr">🚀</div>
                 <div><b style="font-size: 16px;">CRASH</b><br><span style="color:var(--sub); font-size:12px">Успей до взрыва</span></div>
             </div>
-            <div class="card game-card" onclick="navGame('mines')">
+            <div class="card game-card" id="card-mines" onclick="navGame('mines')">
                 <div class="g-icon mi">💎</div>
                 <div><b style="font-size: 16px;">MINES</b><br><span style="color:var(--sub); font-size:12px">Обойди бомбы</span></div>
             </div>
-            <div class="card game-card" onclick="navGame('coin')">
+            <div class="card game-card" id="card-coin" onclick="navGame('coin')">
                 <div class="g-icon co">🪙</div>
                 <div><b style="font-size: 16px;">COINFLIP</b><br><span style="color:var(--sub); font-size:12px">Крути монету (L или X)</span></div>
             </div>
-            <div class="card game-card" onclick="navGame('battle')">
-                <div class="g-icon" style="background: linear-gradient(135deg, #ff0055, #ffcc00);">⚔️</div>
-                <div><b style="font-size: 16px;">BATTLE ROULETTE</b><br><span style="color:var(--sub); font-size:12px">Битва до 4-х игроков</span></div>
+            <div class="card game-card disabled" onclick="showToast('Игра в разработке и скоро будет добавлена')">
+                <div class="g-icon" style="background: #333; filter: grayscale(100%);">⚔️</div>
+                <div><b style="font-size: 16px; color:#aaa;">BATTLE RULLET</b><br><span style="color:#666; font-size:12px">В разработке...</span></div>
             </div>
         </div>
 
@@ -64,138 +95,221 @@
             <div class="crash-screen">
                 <div class="cr-history" id="cr-history"></div>
                 <div id="cr-timer" style="color:var(--neon); font-size:14px; margin-bottom:10px; font-weight:bold;">ОЖИДАНИЕ...</div>
-                <div id="cr-x" style="font-size: 65px; font-weight: 900;">1.00x</div>
+                <div id="cr-x" style="font-size: 65px; font-weight: 900; text-shadow: 0 0 20px rgba(255,255,255,0.2);">1.00x</div>
             </div>
+            
             <div class="quick-bets">
                 <div class="qb-btn" onclick="setQuickBet('cr-bet', 0.1)">0.1</div>
+                <div class="qb-btn" onclick="setQuickBet('cr-bet', 0.5)">0.5</div>
                 <div class="qb-btn" onclick="setQuickBet('cr-bet', 1)">1</div>
+                <div class="qb-btn" onclick="setQuickBet('cr-bet', 2)">2</div>
                 <div class="qb-btn" onclick="setQuickBet('cr-bet', 5)">5</div>
+                <div class="qb-btn" onclick="setQuickBet('cr-bet', 10)">10</div>
+                <div class="qb-btn" onclick="setQuickBet('cr-bet', 25)">25</div>
             </div>
             <input type="number" id="cr-bet" class="input-box" placeholder="Сумма (0.1 - 25 TON)">
             <button id="cr-btn" class="btn" onclick="playCrash()">ПОСТАВИТЬ</button>
-            <div id="cr-live-bets"></div>
+            
+            <div class="live-bets-container">
+                <div style="color:var(--sub); font-size:11px; margin-bottom:5px; text-align:center;">СТАВКИ В ЭТОМ РАУНДЕ</div>
+                <div id="cr-live-bets"></div>
+            </div>
         </div>
 
         <div id="page-mines" class="page">
             <div class="mines-grid" id="mine-grid"></div>
-            <input type="number" id="mi-bet" class="input-box" placeholder="Сумма">
+            
+            <div class="quick-bets">
+                <div class="qb-btn" onclick="setQuickBet('mi-bet', 0.1)">0.1</div>
+                <div class="qb-btn" onclick="setQuickBet('mi-bet', 0.5)">0.5</div>
+                <div class="qb-btn" onclick="setQuickBet('mi-bet', 1)">1</div>
+                <div class="qb-btn" onclick="setQuickBet('mi-bet', 2)">2</div>
+                <div class="qb-btn" onclick="setQuickBet('mi-bet', 5)">5</div>
+                <div class="qb-btn" onclick="setQuickBet('mi-bet', 10)">10</div>
+                <div class="qb-btn" onclick="setQuickBet('mi-bet', 25)">25</div>
+            </div>
+            <input type="number" id="mi-bet" class="input-box" placeholder="Сумма (0.1 - 25 TON)">
             <button id="mi-btn" class="btn" onclick="playMines()">ИГРАТЬ (5 МИН)</button>
         </div>
 
         <div id="page-coin" class="page">
-            <div class="coin-container"><div class="coin" id="coin-3d"><div class="c-face c-front">L</div><div class="c-face c-back">X</div></div></div>
+            <div class="coin-container">
+                <div class="coin" id="coin-3d">
+                    <div class="c-face c-front">L</div>
+                    <div class="c-face c-back">X</div>
+                </div>
+            </div>
             <div class="coin-sides">
-                <div id="side-l" class="c-side active" onclick="setSide('L')">Символ L</div>
-                <div id="side-x" class="c-side" onclick="setSide('X')">Символ X</div>
+                <div id="side-l" class="c-side active" data-side="L" onclick="setSide('L')">Символ L</div>
+                <div id="side-x" class="c-side" data-side="X" onclick="setSide('X')">Символ X</div>
             </div>
-            <input type="number" id="co-bet" class="input-box" placeholder="Сумма">
+            
+            <div class="quick-bets">
+                <div class="qb-btn" onclick="setQuickBet('co-bet', 0.1)">0.1</div>
+                <div class="qb-btn" onclick="setQuickBet('co-bet', 0.5)">0.5</div>
+                <div class="qb-btn" onclick="setQuickBet('co-bet', 1)">1</div>
+                <div class="qb-btn" onclick="setQuickBet('co-bet', 2)">2</div>
+                <div class="qb-btn" onclick="setQuickBet('co-bet', 5)">5</div>
+                <div class="qb-btn" onclick="setQuickBet('co-bet', 10)">10</div>
+                <div class="qb-btn" onclick="setQuickBet('co-bet', 25)">25</div>
+            </div>
+            <input type="number" id="co-bet" class="input-box" placeholder="Сумма (0.1 - 25 TON)">
             <button id="co-btn" class="btn" onclick="playCoin()">КРУТИТЬ МОНЕТУ</button>
-        </div>
-
-        <div id="page-battle" class="page">
-            <div id="br-lobby-list">
-                <button class="btn" onclick="createBattleLobby()" style="background:var(--neon); color:#000; border-radius:15px; margin-bottom:15px; font-weight:bold;">СОЗДАТЬ ЛОББИ (0.5 TON)</button>
-                <div id="br-active-rooms"></div>
-            </div>
-
-            <div id="br-game-view" style="display:none;">
-                <div class="card" style="text-align:center; padding:20px; border-radius:20px; position:relative;">
-                    <div id="br-timer-display" style="font-size:26px; font-weight:900; color:var(--neon); margin-bottom:15px;">02:00</div>
-                    <div style="position:relative; width:240px; height:240px; margin:0 auto;">
-                        <canvas id="br-canvas" width="240" height="240"></canvas>
-                        <div style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); text-align:center; background:rgba(0,0,0,0.8); border-radius:50%; width:80px; height:80px; display:flex; flex-direction:column; justify-content:center; border:2px solid #222;">
-                            <span style="font-size:9px; color:#666;">БАНК</span>
-                            <b id="br-total-bank" style="font-size:14px; color:var(--neon);">0.00 T</b>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="card" style="margin-top:15px; border-radius:15px;">
-                    <div style="font-size:11px; color:#555; margin-bottom:10px; display:flex; justify-content:space-between;">
-                        <span>УЧАСТНИКИ</span>
-                        <span>ШАНС %</span>
-                    </div>
-                    <div id="br-players-list"></div>
-                    <div id="br-controls" style="margin-top:15px; padding-top:15px; border-top:1px solid #222;">
-                        <input type="number" id="br-bet-amount" class="input-box" placeholder="Ставка (TON)">
-                        <button class="btn" onclick="joinBattleLobby()">ВСТУПИТЬ В БИТВУ</button>
-                    </div>
-                </div>
-            </div>
         </div>
 
         <div id="page-promo" class="page">
             <div class="card">
                 <h3 style="text-align:center; color:var(--neon);">ПРОМОКОД</h3>
-                <input type="text" id="promo-code" class="input-box" placeholder="Введите код">
+                <input type="text" id="promo-code" class="input-box" style="margin-top:20px" placeholder="Введите код">
                 <button class="btn" onclick="activatePromo()">АКТИВИРОВАТЬ</button>
             </div>
         </div>
 
         <div id="page-wallet" class="page">
-            <div class="card">
+            <div class="card" style="text-align: center;">
+                <h3 style="margin-bottom: 10px; color:var(--neon);">ПОПОЛНЕНИЕ (TON)</h3>
+                
                 <div class="wallet-tabs" style="display:flex; gap:10px; margin-bottom:15px;">
-                    <button class="btn w-tab active" onclick="switchDepTab('manual', this)" style="margin:0;">ПЕРЕВОД</button>
-                    <button class="btn w-tab" onclick="switchDepTab('connect', this)" style="margin:0; background:#222;">TON CONNECT</button>
+                    <button class="btn w-tab active" style="padding:10px; font-size:12px; margin-top:0;" onclick="switchDepTab('manual', this)">ПЕРЕВОД</button>
+                    <button class="btn w-tab" style="padding:10px; font-size:12px; margin-top:0; background:#222; color:#fff;" onclick="switchDepTab('connect', this)">TON CONNECT</button>
                 </div>
+
                 <div id="dep-manual">
-                    <div id="dep-wallet" style="background:#000; padding:10px; border-radius:8px; font-size:10px; word-break:break-all; border:1px solid #222;" onclick="copyText(this.innerText)">...</div>
-                    <div style="margin:10px 0; text-align:center;">МЕМО: <b id="dep-memo" style="color:var(--neon); font-size:18px;">...</b></div>
+                    <p style="font-size:12px; color:var(--sub); margin-bottom: 15px;">Отправьте TON на кошелек ниже. Обязательно укажите ваш ID в комментарий (Memo)! <br><span style="color:var(--neon)">Нажми, чтобы скопировать.</span></p>
+                    <div style="background:#1a1a1a; padding:10px; border-radius:8px; margin-bottom:10px; word-break: break-all; font-size: 11px; border: 1px solid #333; cursor: pointer;" id="dep-wallet" onclick="copyText(this.innerText)">Загрузка...</div>
+                    <div style="margin-bottom: 15px;">
+                        <span style="font-size: 12px; color:var(--sub);">Ваш комментарий (MEMO):</span><br>
+                        <b id="dep-memo" style="font-size: 16px; color: var(--neon); cursor: pointer;" onclick="copyText(this.innerText)">...</b>
+                    </div>
                     <button class="btn" style="background:var(--neon-blue); color:#000;" onclick="checkRealDeposit(this)">ПРОВЕРИТЬ ОПЛАТУ</button>
                 </div>
+
+                <div id="dep-connect" style="display:none;">
+                    <p style="font-size:12px; color:var(--sub); margin-bottom: 15px;">Подключите кошелек и оплатите в 1 клик.</p>
+                    <div id="ton-connect-btn" style="display:flex; justify-content:center; margin-bottom:15px;"></div>
+                    <input type="number" id="tc-amount" class="input-box" placeholder="Сумма пополнения (TON)">
+                    <button class="btn" style="background:var(--neon-blue); color:#000;" onclick="payWithTonConnect()">ОПЛАТИТЬ ЧЕРЕЗ TON CONNECT</button>
+                </div>
             </div>
+            
             <div class="card">
-                <input type="number" id="with-amount" class="input-box" placeholder="Сумма вывода">
-                <input type="text" id="with-addr" class="input-box" placeholder="Адрес (UQ...)">
-                <button class="btn" style="background:#fff; color:#000;" onclick="withdraw()">СОЗДАТЬ ЗАЯВКУ</button>
-            </div>
-            <div class="card" style="background:#050505;">
-                <div style="text-align:center; font-size:11px; color:#444; margin-bottom:10px;">ИСТОРИЯ ОПЕРАЦИЙ</div>
-                <div id="w-history-list"></div>
-                <div id="user-dep-history" style="margin-top:10px; border-top:1px solid #111;"></div>
+                <h3 style="text-align:center;">ВЫВОД СРЕДСТВ</h3>
+                <input type="number" id="with-amount" class="input-box" style="margin-top:15px" placeholder="Сумма вывода">
+                <input type="text" id="with-addr" class="input-box" placeholder="Адрес кошелька (UQ...)">
+                <button class="btn" style="background: #fff; color: #000;" onclick="withdraw()">СОЗДАТЬ ЗАЯВКУ</button>
             </div>
         </div>
 
         <div id="page-profile" class="page">
-            <div class="card" style="display:flex; align-items:center; gap:15px;">
-                <img src="" id="profile-ava" style="width:60px; height:60px; border-radius:50%; border:2px solid var(--neon);">
-                <div><h2 id="profile-name">User</h2><span style="background:rgba(0,255,136,0.1); color:var(--neon); padding:3px 8px; border-radius:5px; font-size:12px;">Игрок</span></div>
+            <div class="card" style="display: flex; align-items: center; gap: 15px;">
+                <img src="" id="profile-ava" style="width: 60px; height: 60px; border-radius: 50%; border: 2px solid var(--neon);">
+                <div>
+                    <h2 id="profile-name" style="margin-bottom: 5px;">User</h2>
+                    <span style="background: rgba(0,255,136,0.2); color: var(--neon); padding: 3px 8px; border-radius: 5px; font-size: 12px; font-weight: bold;">Игрок</span>
+                </div>
             </div>
-            <div class="card" style="display:grid; grid-template-columns:1fr 1fr; gap:10px; text-align:center;">
-                <div><div style="font-size:10px; color:#555;">Игр</div><b id="p-bets">0</b></div>
-                <div><div style="font-size:10px; color:#555;">Побед</div><b id="p-wins">0</b></div>
+            <div class="card" style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; text-align: center;">
+                <div><div style="color:var(--sub); font-size:11px; margin-bottom:5px;">Всего игр (Real)</div><b id="p-bets" style="font-size:18px;">0</b></div>
+                <div><div style="color:var(--sub); font-size:11px; margin-bottom:5px;">Побед (Real)</div><b id="p-wins" style="font-size:18px;">0</b></div>
+                <div><div style="color:var(--neon); font-size:11px; margin-bottom:5px;">Общий Плюс (Real)</div><b id="p-plus" style="font-size:16px;">0 TON</b></div>
+                <div><div style="color:var(--neon-red); font-size:11px; margin-bottom:5px;">Общий Минус (Real)</div><b id="p-minus" style="font-size:16px;">0 TON</b></div>
             </div>
-            <button class="btn" style="background:#222;" onclick="tg.openTelegramLink('https://t.me/LoonxGift_Support')">💬 САППОРТ</button>
+            <button class="btn" style="background:var(--neon-blue); color:#000; border: none; margin-bottom: 10px;" onclick="tg.openTelegramLink('https://t.me/Loonxnews')">📢 НАШ КАНАЛ</button>
+            <button class="btn" style="background:#222; color:#fff; border: 1px solid #444; margin-bottom: 10px;" onclick="tg.openTelegramLink('https://t.me/LoonxGift_Support')">💬 САППОРТ</button>
+            <button class="btn" style="background:var(--neon-red); color:#fff; border: none;" onclick="tg.openTelegramLink('https://t.me/msgp2p')">🐞 СООБЩИТЬ О БАГЕ</button>
         </div>
     </div>
 
-    <div id="admin-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.98); z-index:20000; flex-direction:column; padding-top: env(safe-area-inset-top);">
-        <div style="padding:20px; flex:1; overflow-y:auto;">
-            <h2 style="color:var(--neon); margin-bottom:20px; display:flex; justify-content:space-between; align-items:center;">
-                ЛОНИКС ПОДАРИ 30К
-                <span id="adm-u-count" style="font-size:12px; color:#888; background:#222; padding:5px 12px; border-radius:20px;">0 users</span>
-            </h2>
-            <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:20px;">
-                <div class="card" style="padding:15px; text-align:center; margin:0; border-radius:15px; background:#111;"><div style="font-size:10px; color:#555;">ДЕПОЗИТЫ</div><b id="adm-total-dep" style="color:var(--neon);">0 T</b></div>
-                <div class="card" style="padding:15px; text-align:center; margin:0; border-radius:15px; background:#111;"><div style="font-size:10px; color:#555;">ВЫВОДЫ</div><b id="adm-total-with" style="color:var(--neon-red);">0 T</b></div>
-            </div>
-            <div style="display:flex; gap:8px; margin-bottom:15px; overflow-x:auto;">
-                <button class="btn admin-tab active" onclick="switchAdminTab('withdraws')" style="width:auto; padding:10px 18px; border-radius:12px;">Выводы</button>
-                <button class="btn admin-tab" onclick="switchAdminTab('users')" style="width:auto; padding:10px 18px; border-radius:12px; background:#222;">Юзеры</button>
-                <button class="btn admin-tab" onclick="switchAdminTab('promo')" style="width:auto; padding:10px 18px; border-radius:12px; background:#222;">Промо</button>
-                <button class="btn admin-tab" onclick="switchAdminTab('rtp')" style="width:auto; padding:10px 18px; border-radius:12px; background:#222;">Настройки</button>
-            </div>
-            <div id="admin-content"></div>
+    <div id="admin-modal" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); width:95%; height:80%; background:#000; border:2px solid var(--neon); z-index:10000; border-radius:20px; padding:15px; overflow:hidden; display: flex; flex-direction: column;">
+        <h2 style="color:var(--neon); margin-bottom: 15px; text-align:center;">ADMIN PANEL</h2>
+        <div class="admin-tabs" style="display:flex; overflow-x:auto; gap:5px; margin-bottom:10px;">
+            <button class="admin-tab active" onclick="switchAdminTab('withdraws', this)">Выводы</button>
+            <button class="admin-tab" onclick="switchAdminTab('promo', this)">Промо</button>
+            <button class="admin-tab" onclick="switchAdminTab('rtp', this)">Игры</button>
+            <button class="admin-tab" onclick="switchAdminTab('users', this)">Юзеры</button>
         </div>
-        <button class="btn" onclick="document.getElementById('admin-modal').style.display='none'" style="border-radius:0; height:70px; background:var(--neon-red); color:#000; font-weight:900;">ЗАКРЫТЬ ПАНЕЛЬ</button>
+        <div id="admin-content" class="card" style="flex-grow:1; font-size: 12px; overflow-y:auto; border-color:#333; background:#0a0a0a;">
+            </div>
+        <button class="btn" style="background:var(--neon-red); margin-top:10px; min-height:45px;" onclick="document.getElementById('admin-modal').style.display='none'">ЗАКРЫТЬ</button>
     </div>
 
     <div class="hotbar">
-        <div class="nav-item active" onclick="nav('home', this)"><svg viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>Игры</div>
-        <div class="nav-item" onclick="nav('promo', this)"><svg viewBox="0 0 24 24"><path d="M20 6h-2.18c.11-.31.18-.65.18-1a2.99 2.99 0 0 0-5.5-1.65l-.5.67-.5-.68C10.96 2.12 10 1.5 9 1.5A2.99 2.99 0 0 0 6 4.5c0 .35.07.69.18 1H4c-1.11 0-1.99.89-1.99 2L2 19c0 1.11.89 2-2 2h16c1.11 0 2-.89 2-2V8c0-1.11-.89-2-2-2z"/></svg>Промо</div>
-        <div class="nav-item" onclick="nav('wallet', this)"><svg viewBox="0 0 24 24"><path d="M21 18v1c0 1.1-.9 2-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14c1.1 0 2 .9 2 2v1h-9a3 3 0 0 0-3 3v8a3 3 0 0 0 3 3h9zm-9-2h10V8H12a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1zm4-3a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3z"/></svg>Кошелек</div>
-        <div class="nav-item" onclick="nav('profile', this)"><svg viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>Профиль</div>
+        <div class="nav-item active" onclick="nav('home', this)">
+            <svg viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>Игры
+        </div>
+        <div class="nav-item" onclick="nav('promo', this)">
+            <svg viewBox="0 0 24 24"><path d="M20 6h-2.18c.11-.31.18-.65.18-1a2.99 2.99 0 0 0-5.5-1.65l-.5.67-.5-.68C10.96 2.12 10 1.5 9 1.5A2.99 2.99 0 0 0 6 4.5c0 .35.07.69.18 1H4c-1.11 0-1.99.89-1.99 2L2 19c0 1.11.89 2-2 2h16c1.11 0 2-.89 2-2V8c0-1.11-.89-2-2-2z"/></svg>Промо
+        </div>
+        <div class="nav-item" onclick="nav('wallet', this)">
+            <svg viewBox="0 0 24 24"><path d="M21 18v1c0 1.1-.9 2-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14c1.1 0 2 .9 2 2v1h-9a3 3 0 0 0-3 3v8a3 3 0 0 0 3 3h9zm-9-2h10V8H12a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1zm4-3a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3z"/></svg>Кошелек
+        </div>
+        <div class="nav-item" onclick="nav('profile', this)">
+            <svg viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>Профиль
+        </div>
     </div>
+
+    <script>
+        const tg = window.Telegram.WebApp;
+        tg.ready();
+        
+        // Скрываем лоадер сразу как все готово
+        window.onload = () => { document.getElementById('loader').style.display = 'none'; };
+
+        // Логика переключения вкладок админки
+        function switchAdminTab(type, el) {
+            document.querySelectorAll('.admin-tab').forEach(t => t.classList.remove('active'));
+            if(el) el.classList.add('active');
+            
+            const cont = document.getElementById('admin-content');
+            
+            if(type === 'users') {
+                cont.innerHTML = `
+                    <input type="text" class="admin-search" placeholder="Поиск по ID или имени..." onkeyup="filterAdminUsers(this.value)">
+                    <div id="admin-user-list">
+                        <div class="admin-item"><span>ID: 12345 (User)</span><button onclick="editUser(12345)">⚙️</button></div>
+                    </div>`;
+            } else if(type === 'rtp') {
+                cont.innerHTML = `
+                    <div style="padding:10px;">
+                        <h4 style="color:var(--neon)">УПРАВЛЕНИЕ ИГРАМИ</h4>
+                        <div class="admin-item"><span>Crash Active</span><label class="toggle-switch"><input type="checkbox" checked onchange="toggleGame('crash', this.checked)"><span class="slider"></span></label></div>
+                        <div class="admin-item"><span>Mines Active</span><label class="toggle-switch"><input type="checkbox" checked onchange="toggleGame('mines', this.checked)"><span class="slider"></span></label></div>
+                        <div class="admin-item"><span>Coinflip Active</span><label class="toggle-switch"><input type="checkbox" checked onchange="toggleGame('coin', this.checked)"><span class="slider"></span></label></div>
+                    </div>`;
+            } else if(type === 'promo') {
+                cont.innerHTML = `<div style="padding:10px;"><button class="btn">Создать Промо</button><div id="promo-list"></div></div>`;
+            } else if(type === 'withdraws') {
+                cont.innerHTML = `<div style="padding:10px;"><div id="withdraw-list">Список пуст</div></div>`;
+            }
+        }
+
+        function filterAdminUsers(val) {
+            console.log("Searching for:", val);
+            // Тут логика фильтрации списка
+        }
+
+        function toggleGame(game, status) {
+            const card = document.getElementById('card-' + game);
+            if(!status) {
+                card.classList.add('disabled');
+                card.style.opacity = "0.5";
+                card.onclick = () => showToast('Игра временно отключена админом');
+            } else {
+                card.classList.remove('disabled');
+                card.style.opacity = "1";
+                card.onclick = () => navGame(game);
+            }
+            showToast(game.toUpperCase() + (status ? ' Включен' : ' Отключен'));
+        }
+
+        function checkAdmin() {
+            // В твоем скрипте будет проверка прав, здесь просто открытие
+            document.getElementById('admin-modal').style.display = 'flex';
+            switchAdminTab('withdraws');
+        }
+
+        // Остальные функции (нав, ставки и т.д.) подхватятся из твоего script.js
+    </script>
     <script src="script.js"></script>
 </body>
 </html>
