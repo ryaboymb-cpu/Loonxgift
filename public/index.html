@@ -9,7 +9,7 @@
     <script src="/socket.io/socket.io.js"></script>
     <script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
     <style>
-        /* Фикс админки: теперь это полноценное окно поверх всего */
+        /* ИСПРАВЛЕНИЕ АДМИНКИ — ТЕПЕРЬ НЕ ПЛЮЩИТ */
         #admin-modal {
             display: none;
             position: fixed;
@@ -28,39 +28,56 @@
             margin-bottom: 15px;
         }
         .admin-tab {
-            padding: 10px;
-            background: #1a1a1a;
+            padding: 12px;
+            background: #111;
             border: 1px solid #333;
             color: #fff;
-            border-radius: 8px;
-            font-size: 12px;
+            border-radius: 10px;
+            font-size: 13px;
             text-align: center;
+            font-weight: bold;
         }
-        .admin-tab.active { border-color: var(--neon); color: var(--neon); }
-        
-        /* История выводов */
+        .admin-tab.active { border-color: var(--neon); color: var(--neon); background: rgba(0, 255, 136, 0.05); }
+
+        /* ИСТОРИЯ ВЫВОДОВ */
         .withdraw-history {
             margin-top: 15px;
-            background: #111;
-            border-radius: 10px;
-            padding: 10px;
+            background: #0a0a0a;
+            border-radius: 12px;
+            padding: 12px;
             border: 1px solid #222;
         }
         .wh-item {
             display: flex;
             justify-content: space-between;
-            padding: 8px 0;
-            border-bottom: 1px solid #222;
-            font-size: 11px;
+            align-items: center;
+            padding: 10px 0;
+            border-bottom: 1px solid #1a1a1a;
+            font-size: 12px;
         }
         .wh-item:last-child { border: none; }
-        .st-p { color: #ffa500; } /* В обработке */
+        .st-p { color: #f39c12; } /* В обработке */
         .st-a { color: var(--neon); } /* Принято */
         .st-r { color: var(--neon-red); } /* Отказано */
+
+        /* КРЕСТИК ДЛЯ ВЫХОДА ИЗ БАТТЛА */
+        .battle-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        .close-btn {
+            font-size: 24px;
+            color: var(--sub);
+            padding: 5px;
+            line-height: 1;
+        }
     </style>
 </head>
 <body>
     <div id="loader"><div class="spinner"></div><h2 style="color:var(--neon); letter-spacing: 3px;">LOONX</h2></div>
+    
     <div id="toast-container"></div>
     <canvas id="stars-bg"></canvas>
 
@@ -101,7 +118,7 @@
             </div>
             <div class="card game-card" onclick="navGame('battle')">
                 <div class="g-icon" style="background: #e74c3c;">⚔️</div>
-                <div><b style="font-size: 16px;">BATTLE RULLET</b><br><span style="color:var(--sub); font-size:12px">Сражайся с гоями за TON</span></div>
+                <div><b style="font-size: 16px;">BATTLE RULLET</b><br><span style="color:var(--sub); font-size:12px">Битвы с игроками</span></div>
             </div>
         </div>
 
@@ -110,11 +127,6 @@
                 <div class="cr-history" id="cr-history"></div>
                 <div id="cr-timer" style="color:var(--neon); font-size:14px; margin-bottom:10px; font-weight:bold;">ОЖИДАНИЕ...</div>
                 <div id="cr-x" style="font-size: 65px; font-weight: 900; text-shadow: 0 0 20px rgba(255,255,255,0.2);">1.00x</div>
-            </div>
-            <div class="quick-bets">
-                <div class="qb-btn" onclick="setQuickBet('cr-bet', 0.1)">0.1</div>
-                <div class="qb-btn" onclick="setQuickBet('cr-bet', 1)">1</div>
-                <div class="qb-btn" onclick="setQuickBet('cr-bet', 10)">10</div>
             </div>
             <input type="number" id="cr-bet" class="input-box" placeholder="Сумма (0.1 - 25 TON)">
             <button id="cr-btn" class="btn" onclick="playCrash()">ПОСТАВИТЬ</button>
@@ -129,26 +141,24 @@
 
         <div id="page-coin" class="page">
             <div class="coin-container"><div class="coin" id="coin-3d"><div class="c-face c-front">L</div><div class="c-face c-back">X</div></div></div>
-            <div class="coin-sides">
-                <div id="side-l" class="c-side active" onclick="setSide('L')">Символ L</div>
-                <div id="side-x" class="c-side" onclick="setSide('X')">Символ X</div>
-            </div>
             <input type="number" id="co-bet" class="input-box" placeholder="Сумма (0.1 - 25 TON)">
             <button id="co-btn" class="btn" onclick="playCoin()">КРУТИТЬ МОНЕТУ</button>
         </div>
 
         <div id="page-battle" class="page">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+            <div class="battle-header">
                 <h3 style="color:var(--neon); margin:0;">BATTLE ARENA</h3>
-                <b onclick="nav('home')" style="color:var(--neon-red); font-size:20px; cursor:pointer;">✕</b>
+                <div class="close-btn" onclick="nav('home')">✕</div>
             </div>
             <div class="card">
-                <input type="number" id="battle-bet-sum" class="input-box" placeholder="Ставка TON">
+                <h4 style="margin:0 0 10px 0; font-size:14px;">СОЗДАТЬ ИГРУ</h4>
+                <input type="number" id="battle-bet-sum" class="input-box" placeholder="Ставка (TON)">
                 <button class="btn" onclick="createBattle()">СОЗДАТЬ БИТВУ</button>
             </div>
             <div class="card" style="margin-top:15px;">
                 <div style="color:var(--sub); font-size:12px; margin-bottom:10px;">АКТИВНЫЕ БАТТЛЫ</div>
-                <div id="battle-list"></div>
+                <div id="battle-list">
+                    </div>
             </div>
         </div>
 
@@ -179,8 +189,7 @@
                 <div class="withdraw-history">
                     <div style="font-size:10px; color:var(--sub); margin-bottom:8px; font-weight:bold;">ИСТОРИЯ ВЫВОДОВ</div>
                     <div id="withdraw-list">
-                        <div style="text-align:center; color:#444; font-size:10px;">Пусто</div>
-                    </div>
+                        </div>
                 </div>
             </div>
         </div>
@@ -188,32 +197,29 @@
         <div id="page-profile" class="page">
             <div class="card" style="display: flex; align-items: center; gap: 15px;">
                 <img src="" id="profile-ava" style="width: 60px; height: 60px; border-radius: 50%; border: 2px solid var(--neon);">
-                <div>
-                    <h2 id="profile-name">User</h2>
-                    <span style="background: rgba(0,255,136,0.2); color: var(--neon); padding: 3px 8px; border-radius: 5px; font-size: 12px; font-weight: bold;">Игрок</span>
-                </div>
+                <h2 id="profile-name">User</h2>
             </div>
             <button class="btn" style="background:var(--neon-blue); color:#000;" onclick="tg.openTelegramLink('https://t.me/Loonxnews')">📢 НАШ КАНАЛ</button>
         </div>
     </div>
 
     <div id="admin-modal">
-        <h2 style="color:var(--neon); margin-bottom: 15px; text-align:center;">Лоникс подари 30к</h2>
+        <h2 style="color:var(--neon); margin-bottom: 15px; text-align:center;">ADMIN PANEL</h2>
         <div class="admin-tabs">
-            <button class="admin-tab active" onclick="switchAdminTab('withdraws')">Выводы</button>
-            <button class="admin-tab" onclick="switchAdminTab('promo')">Промо</button>
-            <button class="admin-tab" onclick="switchAdminTab('rtp')">Настройки</button>
-            <button class="admin-tab" onclick="switchAdminTab('users')">Юзеры</button>
+            <div class="admin-tab active" onclick="switchAdminTab('withdraws')">ВЫВОДЫ</div>
+            <div class="admin-tab" onclick="switchAdminTab('promo')">ПРОМО</div>
+            <div class="admin-tab" onclick="switchAdminTab('rtp')">RTP</div>
+            <div class="admin-tab" onclick="switchAdminTab('users')">ЮЗЕРЫ</div>
         </div>
-        <div id="admin-content" class="card" style="min-height: 250px; font-size: 12px; overflow-y:auto; max-height: 60vh;"></div>
-        <button class="btn" style="background:var(--neon-red); margin-top:20px;" onclick="document.getElementById('admin-modal').style.display='none'">ЗАКРЫТЬ</button>
+        <div id="admin-content" style="min-height: 300px;"></div>
+        <button class="btn" style="background:var(--neon-red); margin-top:20px;" onclick="document.getElementById('admin-modal').style.display='none'">ЗАКРЫТЬ ПАНЕЛЬ</button>
     </div>
 
     <div class="hotbar">
-        <div class="nav-item active" onclick="nav('home', this)"><svg viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>Игры</div>
-        <div class="nav-item" onclick="nav('promo', this)"><svg viewBox="0 0 24 24"><path d="M20 6h-2.18c.11-.31.18-.65.18-1a2.99 2.99 0 0 0-5.5-1.65l-.5.67-.5-.68C10.96 2.12 10 1.5 9 1.5A2.99 2.99 0 0 0 6 4.5c0 .35.07.69.18 1H4c-1.11 0-1.99.89-1.99 2L2 19c0 1.11.89 2-2 2h16c1.11 0 2-.89 2-2V8c0-1.11-.89-2-2-2z"/></svg>Промо</div>
-        <div class="nav-item" onclick="nav('wallet', this)"><svg viewBox="0 0 24 24"><path d="M21 18v1c0 1.1-.9 2-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14c1.1 0 2 .9 2 2v1h-9a3 3 0 0 0-3 3v8a3 3 0 0 0 3 3h9zm-9-2h10V8H12a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1zm4-3a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3z"/></svg>Кошелек</div>
-        <div class="nav-item" onclick="nav('profile', this)"><svg viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>Профиль</div>
+        <div class="nav-item active" onclick="nav('home', this)">Игры</div>
+        <div class="nav-item" onclick="nav('promo', this)">Промо</div>
+        <div class="nav-item" onclick="nav('wallet', this)">Кошелек</div>
+        <div class="nav-item" onclick="nav('profile', this)">Профиль</div>
     </div>
     <script src="script.js"></script>
 </body>
