@@ -183,17 +183,40 @@
             <button class="btn" style="background:var(--neon-red); color:#fff; border: none;" onclick="tg.openTelegramLink('https://t.me/msgp2p')">🐞 СООБЩИТЬ О БАГЕ</button>
         </div>
     </div>
+    
+    <div id="admin-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.98); z-index:10000; flex-direction:column; padding-top: env(safe-area-inset-top);">
+        <div style="padding: 20px; flex: 1; overflow-y: auto;">
+            <h2 style="color:var(--neon); margin-bottom:15px; display:flex; justify-content:space-between; align-items:center; font-family: sans-serif;">
+                ADMIN PANEL 0.2
+                <span id="adm-u-count" style="font-size:14px; color:#888; font-weight:normal;">0 users</span>
+            </h2>
 
-    <div id="admin-modal">
-        <h2 style="color:var(--neon); margin-bottom: 15px; text-align:center;">ADMIN PANEL</h2>
-        <div class="admin-tabs">
-            <button class="admin-tab active" onclick="switchAdminTab('withdraws')">Выводы</button>
-            <button class="admin-tab" onclick="switchAdminTab('promo')">Промо</button>
-            <button class="admin-tab" onclick="switchAdminTab('rtp')">Настройки</button>
-            <button class="admin-tab" onclick="switchAdminTab('users')">Юзеры</button>
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-bottom:20px;">
+                <div class="card" style="padding:10px; text-align:center; margin:0; background:#111;">
+                    <div style="font-size:10px; color:#888; margin-bottom:5px;">ДЕПОЗИТЫ</div>
+                    <b id="adm-total-dep" style="color:var(--neon); font-size:14px;">0 TON</b>
+                </div>
+                <div class="card" style="padding:10px; text-align:center; margin:0; background:#111;">
+                    <div style="font-size:10px; color:#888; margin-bottom:5px;">ВЫВОДЫ</div>
+                    <b id="adm-total-with" style="color:var(--neon-red); font-size:14px;">0 TON</b>
+                </div>
+            </div>
+            
+            <div style="display:flex; gap:5px; margin-bottom:15px; overflow-x:auto; padding-bottom:5px; -webkit-overflow-scrolling: touch;">
+                <button class="btn admin-tab active" onclick="switchAdminTab('withdraws')" style="padding:8px 15px; font-size:12px; width:auto; margin:0; flex-shrink:0;">Выводы</button>
+                <button class="btn admin-tab" onclick="switchAdminTab('users')" style="padding:8px 15px; font-size:12px; width:auto; margin:0; flex-shrink:0;">Юзеры</button>
+                <button class="btn admin-tab" onclick="switchAdminTab('promo')" style="padding:8px 15px; font-size:12px; width:auto; margin:0; flex-shrink:0;">Промо</button>
+                <button class="btn admin-tab" onclick="switchAdminTab('rtp')" style="padding:8px 15px; font-size:12px; width:auto; margin:0; flex-shrink:0;">Настройки</button>
+            </div>
+
+            <div id="admin-content" style="min-height: 200px;">
+                <div style="text-align:center; color:#555; padding-top:50px;">Загрузка данных...</div>
+            </div>
         </div>
-        <div id="admin-content" class="card" style="min-height: 250px; font-size: 12px; overflow-y:auto; max-height: 60vh;"></div>
-        <button class="btn" style="background:var(--neon-red); margin-top:20px;" onclick="document.getElementById('admin-modal').style.display='none'">ЗАКРЫТЬ</button>
+
+        <button class="btn" onclick="document.getElementById('admin-modal').style.display='none'" style="border-radius:0; height:65px; background:var(--neon-red); color:#000; font-weight:900; font-size:16px; margin:0; border:none; padding-bottom: env(safe-area-inset-bottom);">
+            ЗАКРЫТЬ ПАНЕЛЬ
+        </button>
     </div>
 
     <div class="hotbar">
