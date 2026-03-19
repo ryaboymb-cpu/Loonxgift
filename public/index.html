@@ -3,20 +3,24 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Loonx Gift</title>
+    <title>Loonx Gifts</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="/socket.io/socket.io.js"></script>
     <script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
 </head>
 <body>
-    <div id="loader"><div class="spinner"></div><h2 style="color:var(--neon); letter-spacing: 3px;">LOONX</h2></div>
+    <div id="loader">
+        <div class="spinner"></div>
+        <h2 style="color:var(--neon); letter-spacing: 5px; margin-top: 20px;">LOONX</h2>
+    </div>
+
     <div id="toast-container"></div>
     <canvas id="stars-bg"></canvas>
 
     <header>
         <div class="h-left">
-            <img src="" id="user-ava" class="avatar" onclick="checkAdmin()">
+            <img src="" id="user-ava" class="avatar" onclick="openAdmin()">
             <div>
                 <div style="font-weight: 900; font-size: 15px; letter-spacing: 1px;">LOONX GIFT</div>
                 <div style="font-size: 11px; color: var(--neon);">● Онлайн: <span id="online-c">1</span></div>
@@ -25,124 +29,183 @@
         <div style="text-align: right;">
             <div class="bal-wrap">
                 <span id="bal-val">0.00</span>
-                <svg class="ton-icon" viewBox="0 0 24 24"><path d="M12 2L2 22h20L12 2zm0 3.5l6.5 13h-13L12 5.5z"/></svg>
+                <svg class="ton-icon" viewBox="0 0 24 24" style="width:20px; fill:#0098EA;"><path d="M12 2L2 22h20L12 2zm0 3.5l6.5 13h-13L12 5.5z"/></svg>
             </div>
             <div id="bal-mode" class="mode-btn" onclick="toggleMode()">REAL TON</div>
         </div>
     </header>
 
     <div class="content">
+        
         <div id="page-home" class="page active">
-            <div class="card" id="live-feed" style="font-size: 12px; max-height: 140px; overflow-y: auto;">
-                <div style="color:var(--sub); margin-bottom: 8px; font-weight: bold; position: sticky; top:0; background:var(--card);">LIVE ЛЕНТА СТАВОК</div>
-                <div id="feed-list"></div>
+            <div class="card" id="live-feed" style="font-size: 12px; max-height: 150px; overflow-y: auto;">
+                <div style="color:var(--sub); margin-bottom: 8px; font-weight: bold; position: sticky; top:0; background:var(--card); z-index:2;">LIVE ЛЕНТА СТАВОК</div>
+                <div id="feed-list" style="display: flex; flex-direction: column-reverse;"></div>
             </div>
-            <div class="card game-card" onclick="navGame('crash')">
+
+            <div class="card game-card" onclick="navPage('crash')">
                 <div class="g-icon cr">🚀</div>
-                <div><b>CRASH</b><br><span style="color:var(--sub); font-size:12px">Успей до взрыва</span></div>
+                <div><b style="font-size: 16px;">CRASH</b><br><span style="color:var(--sub); font-size:12px">Успей забрать до взрыва</span></div>
             </div>
-            <div class="card game-card" onclick="navGame('mines')">
+
+            <div class="card game-card" onclick="navPage('mines')">
                 <div class="g-icon mi">💎</div>
-                <div><b>MINES</b><br><span style="color:var(--sub); font-size:12px">Обойди бомбы</span></div>
+                <div><b style="font-size: 16px;">MINES</b><br><span style="color:var(--sub); font-size:12px">Найди алмазы, обойди бомбы</span></div>
             </div>
-            <div class="card game-card" onclick="navGame('coin')">
+
+            <div class="card game-card" onclick="navPage('coin')">
                 <div class="g-icon co">🪙</div>
-                <div><b>COINFLIP</b><br><span style="color:var(--sub); font-size:12px">Крути монету</span></div>
+                <div><b style="font-size: 16px;">COINFLIP</b><br><span style="color:var(--sub); font-size:12px">Орел (L) или Решка (X)</span></div>
             </div>
-            <div class="card game-card" onclick="navGame('battle')">
+
+            <div class="card game-card" onclick="navPage('battle')">
                 <div class="g-icon ba">⚔️</div>
-                <div><b>BATTLE ROULETTE</b><br><span style="color:var(--sub); font-size:12px">Онлайн битва 1x1</span></div>
+                <div><b style="font-size: 16px;">BATTLE ROULETTE</b><br><span style="color:var(--sub); font-size:12px">PvP сражения онлайн</span></div>
             </div>
         </div>
 
         <div id="page-crash" class="page">
-            <div class="crash-screen">
-                <div class="cr-history" id="cr-history"></div>
+            <div class="crash-screen" style="text-align: center; background: #0a0a0a; padding: 30px; border-radius: 20px; border: 1px solid #222; margin-bottom: 15px;">
+                <div class="cr-history" id="cr-history" style="display:flex; gap:5px; overflow-x:auto; margin-bottom:15px;"></div>
                 <div id="cr-timer" style="color:var(--neon); font-size:14px; font-weight:bold;">ОЖИДАНИЕ...</div>
-                <div id="cr-x" style="font-size: 65px; font-weight: 900;">1.00x</div>
+                <div id="cr-x" style="font-size: 60px; font-weight: 900; margin: 10px 0;">1.00x</div>
             </div>
-            <input type="number" id="cr-bet" class="input-box" placeholder="Ставка (TON)">
+
+            <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 10px;">
+                <button class="qb-btn" onclick="setBetVal(1)">1</button>
+                <button class="qb-btn" onclick="setBetVal(5)">5</button>
+                <button class="qb-btn" onclick="setBetVal(10)">10</button>
+                <button class="qb-btn" style="background:#1c75ff" onclick="setBetVal('all')">All In</button>
+            </div>
+            
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 15px;">
+                <button class="act-btn" onclick="openCrSettings()">📝 Настроить</button>
+                <button class="act-btn" onclick="toggleAuto()">+ Автоплей</button>
+            </div>
+
+            <input type="number" id="cr-input" class="input-box" placeholder="Сумма (TON)">
             <button id="cr-btn" class="btn" onclick="playCrash()">ПОСТАВИТЬ</button>
-            <div id="cr-live-bets" style="margin-top:15px;"></div>
+            
+            <div id="cr-live-bets" style="margin-top:20px;"></div>
+        </div>
+
+        <div id="page-mines" class="page">
+            <div class="mines-grid" id="mine-grid" style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin-bottom: 15px;"></div>
+            <input type="number" id="mi-bet" class="input-box" placeholder="Сумма (TON)">
+            <button id="mi-btn" class="btn" onclick="playMines()">НАЧАТЬ ИГРУ</button>
+        </div>
+
+        <div id="page-coin" class="page">
+            <div class="coin-container" style="margin: 40px auto; width: 120px; height: 120px; perspective: 1000px;">
+                <div class="coin" id="coin-3d" style="width:100%; height:100%; position:relative; transform-style:preserve-3d; transition:2s;">
+                    <div class="c-face c-front" style="position:absolute; width:100%; height:100%; border-radius:50%; background:#111; border:4px solid var(--neon); display:flex; align-items:center; justify-content:center; font-size:40px; backface-visibility:hidden;">L</div>
+                    <div class="c-face c-back" style="position:absolute; width:100%; height:100%; border-radius:50%; background:#111; border:4px solid var(--neon-red); display:flex; align-items:center; justify-content:center; font-size:40px; backface-visibility:hidden; transform: rotateY(180deg);">X</div>
+                </div>
+            </div>
+            <div class="coin-sides" style="display:flex; gap:10px; margin-bottom:20px;">
+                <div id="side-l" class="c-side active" onclick="setCoinSide('L')" style="flex:1; text-align:center; padding:15px; border:2px solid #333; border-radius:15px;">L</div>
+                <div id="side-x" class="c-side" onclick="setCoinSide('X')" style="flex:1; text-align:center; padding:15px; border:2px solid #333; border-radius:15px;">X</div>
+            </div>
+            <input type="number" id="co-bet" class="input-box" placeholder="Сумма (TON)">
+            <button id="co-btn" class="btn" onclick="playCoin()">КРУТИТЬ</button>
         </div>
 
         <div id="page-battle" class="page">
-            <button class="btn" style="background:var(--neon-blue);" onclick="createBattleLobby()">СОЗДАТЬ ЛОББИ</button>
-            <div style="margin-top:15px;">
-                <div style="display:flex; justify-content:space-between; font-size:12px; color:var(--sub); margin-bottom:10px;">
-                    <span>ДОСТУПНЫЕ ИГРЫ</span>
-                    <span>Мои лобби вверху ↑</span>
+            <button class="btn" style="background:var(--neon-blue); margin-bottom:20px;" onclick="createBattleLobby()">СОЗДАТЬ БИТВУ</button>
+            <div style="display:flex; justify-content:space-between; font-size:12px; color:var(--sub); margin-bottom:10px;">
+                <span>ОТКРЫТЫЕ ЛОББИ</span>
+                <span>Твои сверху ↑</span>
+            </div>
+            <div id="br-lobbies"></div>
+            
+            <div id="br-game-screen" style="display:none; text-align:center;">
+                <div class="br-wheel-container">
+                    <div class="br-pointer"></div>
+                    <canvas id="br-wheel" width="300" height="300"></canvas>
                 </div>
-                <div id="br-lobbies"></div>
+                <div id="br-status" style="margin-top:15px; font-weight:bold; color:var(--neon);">Ожидание противника...</div>
             </div>
         </div>
 
         <div id="page-wallet" class="page">
             <div class="card" style="text-align: center;">
-                <h3 style="color:var(--neon);">ДЕПОЗИТ</h3>
-                <div style="background:#1a1a1a; padding:10px; border-radius:10px; margin:15px 0; font-size:11px;" id="dep-wallet" onclick="copyText(this.innerText)">UQ...</div>
-                <p style="font-size:12px;">Memo: <b id="dep-memo" style="color:var(--neon);">...</b></p>
-                <button class="btn" onclick="checkRealDeposit()">ПРОВЕРИТЬ</button>
+                <h3 style="color:var(--neon);">ПОПОЛНЕНИЕ</h3>
+                <div id="dep-wallet" style="background:#1a1a1a; padding:12px; border-radius:12px; margin:15px 0; font-size:11px; border:1px solid #333; word-break:break-all;">UQ...</div>
+                <div style="margin-bottom:15px;">Memo: <b id="dep-memo" style="color:var(--neon); font-size:18px;">...</b></div>
+                <button class="btn" onclick="checkRealDeposit()">ПРОВЕРИТЬ ОПЛАТУ</button>
             </div>
+
             <div class="card">
-                <h4 style="font-size:12px; color:var(--sub); margin-bottom:10px;">ИСТОРИЯ ОПЕРАЦИЙ</h4>
-                <div id="user-history-list"></div>
+                <h4 style="font-size:12px; color:var(--sub); margin-bottom:10px;">ИСТОРИЯ ДЕПОЗИТОВ</h4>
+                <div id="user-dep-history"></div>
             </div>
+
             <div class="card">
                 <h3 style="text-align:center;">ВЫВОД</h3>
-                <input type="number" id="with-amount" class="input-box" placeholder="Сумма">
-                <input type="text" id="with-addr" class="input-box" placeholder="Адрес">
-                <button class="btn" style="background:#fff; color:#000;" onclick="withdraw()">ВЫВЕСТИ</button>
+                <input type="number" id="with-amount" class="input-box" style="margin-top:15px;" placeholder="Сумма">
+                <input type="text" id="with-addr" class="input-box" placeholder="Адрес (UQ...)">
+                <button class="btn" style="background:#fff; color:#000;" onclick="withdraw()">СОЗДАТЬ ЗАЯВКУ</button>
             </div>
         </div>
 
         <div id="page-promo" class="page">
             <div class="card">
-                <h3 style="text-align:center;">АКТИВАЦИЯ ПРОМО</h3>
-                <input type="text" id="promo-code" class="input-box" style="margin-top:15px;" placeholder="Код">
-                <button class="btn" onclick="activatePromo()">ОК</button>
+                <h3 style="text-align:center; color:var(--neon);">АКТИВАЦИЯ ПРОМО</h3>
+                <input type="text" id="promo-code" class="input-box" style="margin-top:20px;" placeholder="Введите код">
+                <button class="btn" onclick="activatePromo()">ПОДТВЕРДИТЬ</button>
             </div>
         </div>
 
         <div id="page-profile" class="page">
             <div class="card" style="display:flex; align-items:center; gap:15px;">
-                <img src="" id="profile-ava" style="width:60px; height:60px; border-radius:50%;">
-                <h2 id="profile-name">User</h2>
+                <img src="" id="profile-ava" style="width:70px; height:70px; border-radius:50%; border:2px solid var(--neon);">
+                <div>
+                    <h2 id="profile-name">Загрузка...</h2>
+                    <span style="background:rgba(0,255,136,0.1); color:var(--neon); padding:4px 10px; border-radius:8px; font-size:12px;">Игрок</span>
+                </div>
             </div>
             <div class="card" style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; text-align:center;">
-                <div><div style="color:var(--sub); font-size:10px;">Игр</div><b id="p-bets">0</b></div>
-                <div><div style="color:var(--sub); font-size:10px;">Побед</div><b id="p-wins">0</b></div>
+                <div><div style="color:var(--sub); font-size:11px;">Всего игр</div><b id="p-bets" style="font-size:20px;">0</b></div>
+                <div><div style="color:var(--sub); font-size:11px;">Побед</div><b id="p-wins" style="font-size:20px;">0</b></div>
             </div>
         </div>
     </div>
 
-    <div id="admin-modal">
-        <h2 style="color:var(--neon); text-align:center;">ADMIN</h2>
-        <div class="admin-stats-grid">
-            <div class="stat-box">Депы: <br><b id="adm-total-dep">0</b></div>
-            <div class="stat-box">Выводы: <br><b id="adm-total-with">0</b></div>
+    <div id="admin-modal" style="position:fixed; inset:0; background:var(--bg); z-index:10000; display:none; flex-direction:column; padding:20px; overflow-y:auto;">
+        <h2 style="color:var(--neon); text-align:center; margin-bottom:20px;">LOONX ADMIN</h2>
+        
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-bottom:20px;">
+            <div style="background:#1a1a1a; padding:15px; border-radius:15px; text-align:center; border:1px solid #333;">
+                Депы:<br><b id="adm-total-dep" style="color:var(--neon)">0</b>
+            </div>
+            <div style="background:#1a1a1a; padding:15px; border-radius:15px; text-align:center; border:1px solid #333;">
+                Выводы:<br><b id="adm-total-with" style="color:var(--neon-red)">0</b>
+            </div>
         </div>
-        <div class="admin-tabs">
+
+        <div class="admin-tabs" style="display:flex; gap:5px; margin-bottom:15px; overflow-x:auto;">
             <button class="admin-tab active" onclick="switchAdminTab('withdraws')">Выводы</button>
             <button class="admin-tab" onclick="switchAdminTab('users')">Юзеры</button>
             <button class="admin-tab" onclick="switchAdminTab('promo')">Промо</button>
-            <button class="admin-tab" onclick="switchAdminTab('rtp')">РТП</button>
+            <button class="admin-tab" onclick="switchAdminTab('rtp')">RTP</button>
         </div>
-        <div id="admin-user-filters" style="display:none;" class="user-filter-tabs">
-            <div class="filter-chip active" onclick="filterAdm('all')">Все (<span id="adm-u-count">0</span>)</div>
-            <div class="filter-chip" onclick="filterAdm('top')">Топ баланс</div>
-            <div class="filter-chip" onclick="filterAdm('new')">Новые</div>
-            <div class="filter-chip" onclick="filterAdm('ban')">Бан</div>
+
+        <div id="admin-user-filters" style="display:none; margin-bottom:15px; gap:8px;">
+            <div class="filter-chip active" onclick="loadUsers('all')">Все (<span id="adm-u-count">0</span>)</div>
+            <div class="filter-chip" onclick="loadUsers('top')">Топ</div>
+            <div class="filter-chip" onclick="loadUsers('ban')">Бан</div>
         </div>
-        <div id="admin-content" class="card" style="min-height:250px; overflow-y:auto;"></div>
-        <button class="btn" style="background:var(--neon-red);" onclick="closeAdmin()">ЗАКРЫТЬ</button>
+
+        <div id="admin-content" class="card" style="flex:1; min-height:300px; overflow-y:auto; font-size:12px;"></div>
+        
+        <button class="btn" style="background:var(--neon-red); color:#fff;" onclick="closeAdmin()">ЗАКРЫТЬ АДМИНКУ</button>
     </div>
 
     <div class="hotbar">
-        <div class="nav-item active" onclick="nav('home', this)"><svg viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>Игры</div>
-        <div class="nav-item" onclick="nav('promo', this)"><svg viewBox="0 0 24 24"><path d="M20 6h-2.18c.11-.31.18-.65.18-1a2.99 2.99 0 0 0-5.5-1.65l-.5.67-.5-.68C10.96 2.12 10 1.5 9 1.5A2.99 2.99 0 0 0 6 4.5c0 .35.07.69.18 1H4c-1.11 0-1.99.89-1.99 2L2 19c0 1.11.89 2-2 2h16c1.11 0 2-.89 2-2V8c0-1.11-.89-2-2-2z"/></svg>Промо</div>
-        <div class="nav-item" onclick="nav('wallet', this)"><svg viewBox="0 0 24 24"><path d="M21 18v1c0 1.1-.9 2-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14c1.1 0 2 .9 2 2v1h-9a3 3 0 0 0-3 3v8a3 3 0 0 0 3 3h9zm-9-2h10V8H12a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1zm4-3a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3z"/></svg>Кошелек</div>
-        <div class="nav-item" onclick="nav('profile', this)"><svg viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>Профиль</div>
+        <div class="nav-item active" onclick="navPage('home')"><svg viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>Игры</div>
+        <div class="nav-item" onclick="navPage('promo')"><svg viewBox="0 0 24 24"><path d="M20 6h-2.18c.11-.31.18-.65.18-1a2.99 2.99 0 0 0-5.5-1.65l-.5.67-.5-.68C10.96 2.12 10 1.5 9 1.5A2.99 2.99 0 0 0 6 4.5c0 .35.07.69.18 1H4c-1.11 0-1.99.89-1.99 2L2 19c0 1.11.89 2-2 2h16c1.11 0 2-.89 2-2V8c0-1.11-.89-2-2-2z"/></svg>Промо</div>
+        <div class="nav-item" onclick="navPage('wallet')"><svg viewBox="0 0 24 24"><path d="M21 18v1c0 1.1-.9 2-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14c1.1 0 2 .9 2 2v1h-9a3 3 0 0 0-3 3v8a3 3 0 0 0 3 3h9zm-9-2h10V8H12a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1zm4-3a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3z"/></svg>Кошелек</div>
+        <div class="nav-item" onclick="navPage('profile')"><svg viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>Профиль</div>
     </div>
 
     <script>
@@ -150,19 +213,39 @@
         tg.expand();
         tg.ready();
 
-        // Скрываем лоадер через 1.5 секунды принудительно, если скрипт не успел
+        // Навигация
+        function navPage(id) {
+            document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+            document.getElementById('page-' + id).classList.add('active');
+            
+            // Обновляем иконки в хотбаре
+            document.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
+            // (Тут можно добавить логику поиска нужной иконки по индексу)
+        }
+
+        function openAdmin() {
+            document.getElementById('admin-modal').style.display = 'flex';
+        }
+
+        function closeAdmin() {
+            document.getElementById('admin-modal').style.display = 'none';
+        }
+
+        // Принудительное скрытие лоадера
         window.onload = () => {
             setTimeout(() => {
-                const loader = document.getElementById('loader');
-                if(loader) loader.style.display = 'none';
-            }, 1500);
+                document.getElementById('loader').style.opacity = '0';
+                setTimeout(() => {
+                    document.getElementById('loader').style.display = 'none';
+                }, 500);
+            }, 1000);
         };
 
-        // Анти-сон для Render
+        // Пинг сервера для Render
         setInterval(() => {
-            fetch('/ping').catch(() => {});
-        }, 120000); 
+            fetch('/api/ping').catch(e => {});
+        }, 120000);
     </script>
     <script src="script.js"></script>
 </body>
-</html>
+    </html>
