@@ -19,6 +19,12 @@ app.use(express.static(path.join(__dirname, 'public')));
 process.on('uncaughtException', (err) => console.error('Критическая ошибка:', err));
 process.on('unhandledRejection', (reason, promise) => console.error('Необработанный промис:', reason));
 
+// АНТИ-СОН ДЛЯ RENDER (Будит сервер каждые 10 минут)
+setInterval(() => {
+    const url = process.env.WEB_APP_URL || "https://loonxgift.onrender.com";
+    fetch(url).then(() => console.log('🔄 Анти-сон: Сервер пинганул сам себя')).catch(() => {});
+}, 10 * 60 * 1000);
+
 // Подключение к БД
 mongoose.connect(process.env.MONGO_URI).then(() => console.log('✅ DB Connected')).catch(err => console.log('❌ DB Error:', err));
 
@@ -39,7 +45,7 @@ const UserSchema = new mongoose.Schema({
     id: String, 
     username: String, 
     photo: String, 
-    isBlocked: { type: Boolean, default: false }, // Для бана
+    isBlocked: { type: Boolean, default: false }, 
     balance: { type: Number, default: 0 }, 
     demo_balance: { type: Number, default: 5000 },
     stats: { 
@@ -49,13 +55,20 @@ const UserSchema = new mongoose.Schema({
         minus: {type:Number, default:0},
         promo: {type:Number, default:0}
     },
-    withdrawHistory: [{ // История выводов для профиля
-        withdrawId: String, // ДОБАВЛЕНО для надежной связи заявок
+    createdAt: { type: Date, default: Date.now },
+    withdrawHistory: [{ 
+        withdrawId: String, 
         amount: Number, 
         address: String, 
         status: String, 
         reason: String, 
         time: String 
+    }],
+    depositHistory: [{ // ИСТОРИЯ ДЕПОЗИТОВ ДОБАВЛЕНА
+        hash: String,
+        amount: Number,
+        status: String,
+        time: String
     }]
 });
 
@@ -67,8 +80,19 @@ const BetSchema = new mongoose.Schema({
 
 const PromoSchema = new mongoose.Schema({ code: String, amount: Number, limit: Number, usedBy: [String] });
 const WithdrawSchema = new mongoose.Schema({ userId: String, address: String, amount: Number, status: { type: String, default: 'pending' }, reason: String, time: String });
-const DepositSchema = new mongoose.Schema({ hash: { type: String, unique: true }, userId: String, amount: Number });
+const DepositSchema = new mongoose.Schema({ hash: { type: String, unique: true }, userId: String, amount: Number, time: String });
 const SettingsSchema = new mongoose.Schema({ key: String, value: mongoose.Schema.Types.Mixed });
+
+// BATTLE ROULETTE SCHEMA
+const BattleSchema = new mongoose.Schema({
+    creatorId: String,
+    players: Array, // [{id, username, avatar, bet, color}]
+    minBet: Number,
+    maxBet: Number,
+    status: { type: String, default: 'waiting' }, // waiting, spinning, finished
+    winnerId: String,
+    createdAt: { type: Date, default: Date.now }
+});
 
 const User = mongoose.model('User', UserSchema);
 const Bet = mongoose.model('Bet', BetSchema);
@@ -76,6 +100,7 @@ const Promo = mongoose.model('Promo', PromoSchema);
 const Withdraw = mongoose.model('Withdraw', WithdrawSchema);
 const Deposit = mongoose.model('Deposit', DepositSchema);
 const Settings = mongoose.model('Settings', SettingsSchema);
+const Battle = mongoose.model('Battle', BattleSchema);
 
 let globalBetHistory = [];
 
@@ -87,15 +112,17 @@ async function initSettings() {
         { key: 'rtp_coinflip', value: 90 }, 
         { key: 'maintenance_crash', value: false },
         { key: 'maintenance_mines', value: false },
-        { key: 'maintenance_coinflip', value: false }
+        { key: 'maintenance_coinflip', value: false },
+        { key: 'maintenance_battle', value: false } // ДОБАВЛЕНА БАТЛ РУЛЕТКА
     ];
     for (let setting of defaultSettings) {
         const exists = await Settings.findOne({ key: setting.key });
         if (!exists) await Settings.create(setting);
     }
     
+    // ФИКС ИСТОРИИ: Берем 10 последних, сортируем от новых к старым
     const lastBets = await Bet.find().sort({createdAt: -1}).limit(10);
-    globalBetHistory = lastBets.reverse().map(b => {
+    globalBetHistory = lastBets.map(b => {
         const obj = b.toObject();
         obj.timeMsk = new Date(b.createdAt).toLocaleTimeString("ru-RU", {timeZone: "Europe/Moscow"});
         return obj;
@@ -157,7 +184,6 @@ async function runCrash() {
     const limit = Math.pow(100 / (100 - (Math.random() * rtp)), 0.9).toFixed(2);
     
     const r = setInterval(async () => {
-        // Ускоряем краш (Пункт 8)
         crash.multiplier = (parseFloat(crash.multiplier) + 0.015).toFixed(2);
         io.emit('crashData', crash);
         
@@ -187,16 +213,98 @@ async function runCrash() {
 }
 startCrash();
 
+// ФИКС ИСТОРИИ СТАВОК (Всегда новые сверху)
 function pushToGlobalHistory(betObj) {
     const betWithTime = {
         ...(betObj.toObject ? betObj.toObject() : betObj),
-        timeMsk: getMskTime() // МСК время
+        timeMsk: getMskTime()
     };
     
-    globalBetHistory.push(betWithTime);
-    if(globalBetHistory.length > 10) globalBetHistory.shift();
+    globalBetHistory.unshift(betWithTime); // Добавляем в начало
+    if(globalBetHistory.length > 10) globalBetHistory.pop(); // Удаляем с конца
     io.emit('newHistoryEntry', betWithTime);
 }
+
+// --- BATTLE ROULETTE ENGINE ---
+const BATTLE_COLORS = ['#ffcc00', '#ff0055', '#007bff', '#ffffff']; // 🟡🔴🔵⚪
+setInterval(async () => {
+    // Чистка старых лобби (24 часа)
+    const expiredTime = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const expiredLobbies = await Battle.find({ status: 'waiting', createdAt: { $lt: expiredTime } });
+    
+    for (let lobby of expiredLobbies) {
+        for (let p of lobby.players) {
+            const u = await User.findOne({id: p.id});
+            if (u) { u.balance = Number((u.balance + p.bet).toFixed(2)); await u.save(); }
+        }
+        await Battle.findByIdAndDelete(lobby._id);
+    }
+
+    // Запуск игр по таймеру (2 минуты с создания)
+    const startTime = new Date(Date.now() - 2 * 60 * 1000);
+    const readyLobbies = await Battle.find({ status: 'waiting', createdAt: { $lt: startTime } });
+
+    for (let lobby of readyLobbies) {
+        if (lobby.players.length > 1) {
+            lobby.status = 'spinning';
+            await lobby.save();
+            io.emit('battleUpdate');
+            
+            // Логика рулетки (выбор победителя)
+            const totalPool = lobby.players.reduce((sum, p) => sum + p.bet, 0);
+            let rand = Math.random() * totalPool;
+            let currentWeight = 0;
+            let winner = lobby.players[0];
+
+            for (let p of lobby.players) {
+                currentWeight += p.bet;
+                if (rand <= currentWeight) { winner = p; break; }
+            }
+
+            lobby.status = 'finished';
+            lobby.winnerId = winner.id;
+            await lobby.save();
+
+            // Выплата 70% от чужих ставок
+            const othersPool = totalPool - winner.bet;
+            const winAmount = winner.bet + (othersPool * 0.70);
+
+            const wUser = await User.findOne({id: winner.id});
+            if (wUser) {
+                wUser.balance = Number((wUser.balance + winAmount).toFixed(2));
+                wUser.stats.wins++; wUser.stats.plus += (winAmount - winner.bet);
+                await wUser.save();
+            }
+
+            // Уведомляем клиентов о вращении (передаем победителя)
+            io.emit('battleSpin', { lobbyId: lobby._id, winnerId: winner.id });
+
+            // Запись в глобальную историю
+            const opponentStr = lobby.players.filter(p => p.id !== lobby.creatorId).map(p => p.username).join(', ');
+            const creator = lobby.players.find(p => p.id === lobby.creatorId);
+            
+            const betEntry = new Bet({
+                userId: winner.id, username: winner.username, avatar: winner.avatar,
+                game: 'Battle Roulette', amount: winner.bet, result: winAmount - winner.bet, mode: 'Real'
+            });
+            // Кастомное отображение имени для рулетки в истории
+            betEntry.username = `${creator.username} VS ${opponentStr} 🏆 Победитель: ${winner.username}`;
+            await betEntry.save();
+            pushToGlobalHistory(betEntry);
+
+            // Удаляем комнату через 2 минуты после конца
+            setTimeout(async () => { await Battle.findByIdAndDelete(lobby._id); io.emit('battleUpdate'); }, 120000);
+
+        } else {
+            // Если никто не зашел, возврат
+            const creator = lobby.players[0];
+            const u = await User.findOne({id: creator.id});
+            if(u) { u.balance = Number((u.balance + creator.bet).toFixed(2)); await u.save(); }
+            await Battle.findByIdAndDelete(lobby._id);
+            io.emit('battleUpdate');
+        }
+    }
+}, 5000);
 
 // --- СОКЕТЫ ---
 let online = 0;
@@ -215,7 +323,7 @@ app.post('/api/auth', async (req, res) => {
     if (!user) user = await User.create({ id, username: username || first_name, photo: photo_url });
     else { user.username = username || first_name; user.photo = photo_url; await user.save(); }
     
-    if(user.isBlocked) return res.status(403).json({ error: "BLOCKED" }); // Блок
+    if(user.isBlocked) return res.status(403).json({ error: "BLOCKED" });
 
     const allSettings = await Settings.find();
     const rtpData = {};
@@ -295,6 +403,78 @@ app.post('/api/bet', async (req, res) => {
     res.json(user);
 });
 
+// API BATTLE ROULETTE
+app.get('/api/battle/list', async (req, res) => {
+    const lobbies = await Battle.find({status: 'waiting'}).sort({createdAt: -1});
+    res.json(lobbies);
+});
+
+app.post('/api/battle/create', async (req, res) => {
+    const { id, bet, minBet, maxBet } = req.body;
+    const user = await User.findOne({id});
+    if(!user || user.isBlocked) return res.status(403).send();
+    if(bet < 1 || bet > 100) return res.status(400).json({error: 'Ставка от 1 до 100 TON'});
+    if(user.balance < bet) return res.status(400).json({error: 'Недостаточно средств'});
+    
+    user.balance = Number((user.balance - bet).toFixed(2));
+    user.stats.bets++; user.stats.minus += bet;
+    await user.save();
+
+    const avatar = user.photo || 'https://cdn-icons-png.flaticon.com/512/149/149071.png';
+    const newLobby = await Battle.create({
+        creatorId: user.id,
+        minBet: minBet, maxBet: maxBet,
+        players: [{ id: user.id, username: user.username, avatar, bet, color: BATTLE_COLORS[0] }]
+    });
+
+    io.emit('battleUpdate');
+    res.json(user);
+});
+
+app.post('/api/battle/join', async (req, res) => {
+    const { id, lobbyId, bet } = req.body;
+    const user = await User.findOne({id});
+    const lobby = await Battle.findById(lobbyId);
+
+    if(!user || !lobby || lobby.status !== 'waiting' || lobby.players.length >= 4) return res.status(400).json({error: 'Ошибка входа'});
+    if(lobby.players.find(p => p.id === id)) return res.status(400).json({error: 'Уже в лобби'});
+    if(bet < lobby.minBet || bet > lobby.maxBet || bet < 1 || bet > 150) return res.status(400).json({error: 'Лимиты ставки не соблюдены'});
+    if(user.balance < bet) return res.status(400).json({error: 'Недостаточно средств'});
+
+    user.balance = Number((user.balance - bet).toFixed(2));
+    user.stats.bets++; user.stats.minus += bet;
+    await user.save();
+
+    const avatar = user.photo || 'https://cdn-icons-png.flaticon.com/512/149/149071.png';
+    const pColor = BATTLE_COLORS[lobby.players.length];
+    lobby.players.push({ id: user.id, username: user.username, avatar, bet, color: pColor });
+    await lobby.save();
+
+    io.emit('battleUpdate');
+
+    // Уведомление создателю лобби
+    if(bot) {
+        bot.sendMessage(lobby.creatorId, `⚔️ Игрок **${user.username}** присоединился к вашей Battle Roulette! Ставка: ${bet} TON`, {parse_mode: 'Markdown'}).catch(()=>{});
+    }
+
+    res.json({user, lobby});
+});
+
+app.post('/api/battle/cancel', async (req, res) => {
+    const { id, lobbyId } = req.body;
+    const lobby = await Battle.findById(lobbyId);
+    if(!lobby || lobby.creatorId !== id || lobby.players.length > 1) return res.status(400).json({error: 'Нельзя отменить'});
+
+    const user = await User.findOne({id});
+    user.balance = Number((user.balance + lobby.players[0].bet).toFixed(2));
+    await user.save();
+    
+    await Battle.findByIdAndDelete(lobbyId);
+    io.emit('battleUpdate');
+    res.json(user);
+});
+
+
 app.post('/api/check_deposit', async (req, res) => {
     const { id } = req.body;
     const adminWallet = process.env.ADMIN_WALLET;
@@ -311,23 +491,26 @@ app.post('/api/check_deposit', async (req, res) => {
         let totalAdded = 0;
         
         for (let tx of data.result) {
-            // Проверяем, есть ли комментарий и совпадает ли он с ID юзера
             if (tx.in_msg && tx.in_msg.message && String(tx.in_msg.message).trim() === String(id).trim() && tx.in_msg.value > 0) {
                 const txHash = tx.transaction_id.hash;
                 const amountTON = tx.in_msg.value / 1e9; 
                 const exists = await Deposit.findOne({ hash: txHash });
                 if(!exists) {
-                    await Deposit.create({ hash: txHash, userId: id, amount: amountTON });
+                    await Deposit.create({ hash: txHash, userId: id, amount: amountTON, time: getMskTime() });
                     const user = await User.findOne({ id });
                     user.balance = Number((user.balance + amountTON).toFixed(2));
+                    // Добавляем в историю депозитов
+                    user.depositHistory.unshift({ hash: txHash, amount: amountTON, status: 'Успешно', time: getMskTime() });
                     await user.save();
                     foundNew = true;
                     totalAdded += amountTON;
                 }
             }
         }
-        if(foundNew) res.json({ success: true, added: totalAdded });
-        else res.status(400).json({ error: 'Новых оплат не найдено' });
+        if(foundNew) {
+            const updUser = await User.findOne({id});
+            res.json({ success: true, added: totalAdded, user: updUser });
+        } else res.status(400).json({ error: 'Новых оплат не найдено' });
     } catch (e) { 
         res.status(500).json({error: 'Network error'}); 
     }
@@ -353,10 +536,8 @@ app.post('/api/withdraw', async (req, res) => {
     if (user.balance < amount || amount < 5) return res.status(400).json({error: 'Min 5 TON'});
     user.balance = Number((user.balance - amount).toFixed(2)); 
     
-    // ИСПРАВЛЕНО: Теперь сохраняем withdrawId заявки для 100% точного мэтчинга при отклонении
     const newW = await Withdraw.create({ userId: id, address, amount, time: getMskTime() });
     
-    // Пишем в историю юзера
     user.withdrawHistory.unshift({ withdrawId: newW._id, amount, address, status: 'В обработке', reason: '', time: newW.time });
     await user.save();
 
@@ -372,9 +553,23 @@ const checkAdmin = (req, res, next) => {
 app.post('/api/admin/data', checkAdmin, async (req, res) => {
     const withdraws = await Withdraw.find({status: 'pending'});
     const promos = await Promo.find().sort({_id: -1}).limit(10);
-    // ФИКС БАЗЫ ДАННЫХ: Теперь сразу отправляем топ 100 юзеров, чтобы вкладка не багалась
     const users = await User.find().sort({balance: -1}).limit(100);
+    const totalUsers = await User.countDocuments();
     
+    // СЧЕТЧИКИ ВЫВОДОВ И ДЕПОЗИТОВ
+    const allDeps = await Deposit.aggregate([{$group: {_id: null, total: {$sum: "$amount"}}}]);
+    const allWiths = await Withdraw.aggregate([{$match: {status: 'approved'}}, {$group: {_id: null, total: {$sum: "$amount"}}}]);
+    const totalDeposited = allDeps[0] ? allDeps[0].total : 0;
+    const totalWithdrawn = allWiths[0] ? allWiths[0].total : 0;
+    
+    // ПОСЛЕДНИЕ ДЕПОЗИТЫ С ЮЗЕРАМИ
+    const latestDepositsRaw = await Deposit.find().sort({_id: -1}).limit(20);
+    const latestDeposits = [];
+    for(let d of latestDepositsRaw) {
+        const u = await User.findOne({id: d.userId});
+        latestDeposits.push({amount: d.amount, userId: d.userId, username: u ? u.username : 'Unknown', time: d.time});
+    }
+
     const allSettings = await Settings.find();
     const rtpData = {};
     const maintenanceData = {};
@@ -385,22 +580,28 @@ app.post('/api/admin/data', checkAdmin, async (req, res) => {
         }
     });
     
-    res.json({ withdraws, promos, users, rtp: rtpData, maintenance: maintenanceData });
+    res.json({ 
+        withdraws, promos, users, totalUsers, 
+        totalDeposited, totalWithdrawn, latestDeposits,
+        rtp: rtpData, maintenance: maintenanceData 
+    });
 });
 
-// Поиск пользователей
+// ПОИСК И ФИЛЬТРАЦИЯ ЮЗЕРОВ
 app.post('/api/admin/search_user', checkAdmin, async (req, res) => {
-    const { query } = req.body;
+    const { query, filterType } = req.body; // filterType: 'balance', 'new', 'banned'
     let filter = {};
+    
     if (query) {
-        filter = {
-            $or: [
-                { id: new RegExp(query, 'i') },
-                { username: new RegExp(query, 'i') }
-            ]
-        };
+        filter = { $or: [{ id: new RegExp(query, 'i') }, { username: new RegExp(query, 'i') }] };
     }
-    const users = await User.find(filter).sort({balance: -1}).limit(500);
+    
+    if (filterType === 'banned') filter.isBlocked = true;
+    
+    let sortConfig = { balance: -1 };
+    if (filterType === 'new') sortConfig = { createdAt: -1 };
+
+    const users = await User.find(filter).sort(sortConfig).limit(500);
     res.json({ users });
 });
 
@@ -426,7 +627,6 @@ app.post('/api/admin/broadcast', checkAdmin, (req, res) => {
     res.json({success: true});
 });
 
-// Рассылка в ТГ бота
 app.post('/api/admin/bot_broadcast', checkAdmin, async (req, res) => {
     const { text } = req.body;
     if(!text || !bot) return res.status(400).json({error: 'Текст пуст'});
@@ -435,7 +635,6 @@ app.post('/api/admin/bot_broadcast', checkAdmin, async (req, res) => {
     res.json({success: true});
 });
 
-// Сброс истории (баланс остается)
 app.post('/api/admin/reset_all_stats', checkAdmin, async (req, res) => {
     await User.updateMany({}, { $set: { betHistory: [], demo_balance: 5000, stats: { bets: 0, wins: 0, plus: 0, minus: 0, promo: 0 } } });
     await Bet.deleteMany({});
@@ -488,7 +687,6 @@ app.post('/api/admin/edit_balance', checkAdmin, async (req, res) => {
     res.json({success: true});
 });
 
-// Отклонение вывода с причиной
 app.post('/api/admin/withdraw_action', checkAdmin, async (req, res) => {
     const { wId, action, reason } = req.body;
     const w = await Withdraw.findById(wId);
@@ -496,11 +694,9 @@ app.post('/api/admin/withdraw_action', checkAdmin, async (req, res) => {
     
     const u = await User.findOne({id: w.userId});
     if(u) {
-        // ИСПРАВЛЕНО: надежный поиск по withdrawId (фоллбэк на старый метод если заявка была создана до обновления)
         let uHist = u.withdrawHistory.find(h => h.withdrawId ? h.withdrawId.toString() === w._id.toString() : (h.time === w.time && h.amount === w.amount));
         
         if(action === 'reject') {
-            // ИСПРАВЛЕНО: строгое ограничение до 2-х знаков, чтобы не было бага флоатов
             u.balance = Number((u.balance + w.amount).toFixed(2)); 
             if(uHist) { uHist.status = 'Отклонено'; uHist.reason = reason; }
         } else {
