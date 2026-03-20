@@ -2,191 +2,233 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Loonx Gift</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Loonx Gifts</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="/socket.io/socket.io.js"></script>
     <script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
+    <script>setTimeout(() => { const l = document.getElementById('loader'); if(l) l.style.display = 'none'; }, 5000);</script>
 </head>
 <body>
-    <div id="loader"><div class="spinner"></div><h2 style="color:var(--neon); letter-spacing: 3px;">LOONX</h2></div>
-    <div id="toast-container"></div>
+    <div id="loader"><div class="spinner"></div><h3 style="color:var(--neon); font-weight:800; letter-spacing:2px;">LOONX GIFTS</h3></div>
     <canvas id="stars-bg"></canvas>
+    <div id="toast-container"></div>
 
     <header>
         <div class="h-left">
-            <img src="" id="user-ava" class="avatar" onclick="checkAdmin()">
+            <img src="" id="user-ava" class="avatar" alt="ava">
             <div>
-                <div style="font-weight: 900; font-size: 15px; letter-spacing: 1px;">LOONX GIFT</div>
-                <div style="font-size: 11px; color: var(--neon);">● Онлайн: <span id="online-c">1</span></div>
+                <div class="bal-wrap"><span id="bal-val">0.00</span> <svg class="ton-icon" viewBox="0 0 24 24"><path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm4.8 7.3l-3.9 9.3c-.2.5-.9.5-1.1 0l-1.5-3.6-3.6-1.5c-.5-.2-.5-.9 0-1.1l9.3-3.9c.4-.2.9.2.8.8z"/></svg></div>
+                <div id="bal-mode" class="mode-btn" onclick="toggleMode()">REAL TON</div>
             </div>
         </div>
-        <div style="text-align: right;">
-            <div class="bal-wrap">
-                <span id="bal-val">0.00</span>
-                <svg class="ton-icon" viewBox="0 0 24 24"><path d="M12 2L2 22h20L12 2zm0 3.5l6.5 13h-13L12 5.5z"/></svg>
-            </div>
-            <div id="bal-mode" class="mode-btn" onclick="toggleMode()">REAL TON</div>
+        <div style="text-align:right;">
+            <div style="font-size:10px; color:var(--sub); font-weight:bold;">ОНЛАЙН: <span id="online-c" style="color:var(--neon)">0</span></div>
+            <div id="ton-connect-btn" style="transform: scale(0.8); transform-origin: right center; margin-top: 5px;"></div>
         </div>
     </header>
 
     <div class="content">
-        <div id="page-home" class="page active">
-            <div class="card" id="live-feed" style="font-size: 12px; max-height: 140px; overflow-y: auto;">
-                <div style="color:var(--sub); margin-bottom: 8px; font-weight: bold;">LIVE ЛЕНТА</div>
-                <div id="feed-list"></div>
-            </div>
+        <div id="page-games" class="page active">
+            <h2 style="margin-bottom:15px; font-weight:900; letter-spacing:1px; text-transform:uppercase;">Игры</h2>
             
-            <div class="card game-card" onclick="navGame('crash')">
+            <div class="game-card" onclick="navGame('crash')">
                 <div class="g-icon cr">🚀</div>
-                <div><b style="font-size: 16px;">CRASH</b><br><span style="color:var(--sub); font-size:12px">Множитель растет</span></div>
+                <div><h3 style="margin-bottom:5px;">Crash</h3><p style="color:var(--sub); font-size:12px; font-weight:600;">Успей забрать множитель</p></div>
             </div>
-            <div class="card game-card" onclick="navGame('mines')">
-                <div class="g-icon mi">💎</div>
-                <div><b style="font-size: 16px;">MINES</b><br><span style="color:var(--sub); font-size:12px">Найди кристаллы</span></div>
+
+            <div class="game-card" onclick="navGame('mines')">
+                <div class="g-icon mi">💣</div>
+                <div><h3 style="margin-bottom:5px;">Mines</h3><p style="color:var(--sub); font-size:12px; font-weight:600;">Ищи какашки</p></div>
             </div>
-            <div class="card game-card" onclick="navGame('coin')">
+
+            <div class="game-card" onclick="navGame('coinflip')">
                 <div class="g-icon co">🪙</div>
-                <div><b style="font-size: 16px;">COINFLIP</b><br><span style="color:var(--sub); font-size:12px">50/50: L или X</span></div>
+                <div><h3 style="margin-bottom:5px;">Coinflip</h3><p style="color:var(--sub); font-size:12px; font-weight:600;">Выбери свою сторону</p></div>
             </div>
-            <div class="card game-card" onclick="navGame('battle')">
-                <div class="g-icon" style="background:var(--neon); color:#000;">⚔️</div>
-                <div><b style="font-size: 16px;">BATTLE ROULETTE</b><br><span style="color:var(--sub); font-size:12px">Битва до 4 игроков</span></div>
+
+            <div class="game-card" onclick="navGame('battle')" style="border-color: #8a2be2;">
+                <div class="g-icon" style="background: linear-gradient(135deg, #8a2be2, #4b0082); box-shadow: 0 0 15px rgba(138,43,226,0.3);">⚔️</div>
+                <div><h3 style="margin-bottom:5px;">Battle Roulette</h3><p style="color:var(--sub); font-size:12px; font-weight:600;">Сразись за TON</p></div>
             </div>
+
+            <h3 style="margin:20px 0 10px 0; color:var(--sub); font-size:14px; text-transform:uppercase;">Лайв Ставки</h3>
+            <div class="live-bets-container" id="feed-list"></div>
         </div>
 
-        <div id="page-crash" class="page">
-            <div class="crash-screen">
-                <div class="cr-history" id="cr-history"></div>
-                <div id="cr-timer"></div>
-                <div id="cr-x">1.00x</div>
+        <div id="page-profile" class="page">
+            <div class="card" style="text-align:center; padding: 30px 15px;">
+                <img src="" id="profile-ava" style="width:80px; height:80px; border-radius:50%; border:3px solid var(--neon); margin-bottom:15px; object-fit:cover;" onclick="checkAdmin()">
+                <h2 id="profile-name" style="margin-bottom:5px;">-</h2>
+                <div style="color:var(--sub); font-size:12px; font-weight:bold; margin-bottom: 20px;">ID: <span id="profile-id"></span></div>
+                
+                <h4 style="text-align:left; color:var(--neon); margin-bottom:10px;">Статистика</h4>
+                <div class="profile-stats">
+                    <div class="prof-panel">Всего ставок<br><span id="p-bets">0</span></div>
+                    <div class="prof-panel">Побед<br><span id="p-wins" style="color:var(--neon-blue);">0</span></div>
+                    <div class="prof-panel">Выиграно<br><span id="p-plus">0.00</span></div>
+                    <div class="prof-panel">Проиграно<br><span id="p-minus" style="color:var(--neon-red);">0.00</span></div>
+                </div>
             </div>
-            <input type="number" id="cr-bet" class="input-box" placeholder="Ставка (TON)">
-            <div class="quick-bets">
-                <div class="qb-btn" onclick="setQuickBet('cr-bet', 1)">1</div>
-                <div class="qb-btn" onclick="setQuickBet('cr-bet', 5)">5</div>
-                <div class="qb-btn" onclick="setQuickBet('cr-bet', 10)">10</div>
-            </div>
-            <button id="cr-btn" class="btn" onclick="playCrash()">ПОСТАВИТЬ</button>
-            <div id="cr-live-bets" class="live-bets-container"></div>
-        </div>
 
-        <div id="page-mines" class="page">
-            <div class="mines-grid" id="mine-grid"></div>
-            <input type="number" id="mi-bet" class="input-box" placeholder="Ставка (TON)">
-            <button id="mi-btn" class="btn" onclick="playMines()">ИГРАТЬ (5 МИН)</button>
-        </div>
-
-        <div id="page-coin" class="page">
-            <div class="coin-container">
-                <div class="coin" id="coin-3d"><div class="c-face c-front">L</div><div class="c-face c-back">X</div></div>
-            </div>
-            <div class="coin-sides">
-                <div id="side-l" class="c-side active" onclick="setSide('L')">L</div>
-                <div id="side-x" class="c-side" onclick="setSide('X')">X</div>
-            </div>
-            <input type="number" id="co-bet" class="input-box" placeholder="Ставка (TON)">
-            <button id="co-btn" class="btn" onclick="playCoin()">КРУТИТЬ</button>
-        </div>
-
-        <div id="page-battle" class="page">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
-                <h2 style="color:var(--neon);">LOBBIES</h2>
-                <button class="btn" style="width:auto; margin-top:0; padding:8px 15px;" onclick="openBattleModal()">+ СОЗДАТЬ</button>
-            </div>
-            <div id="battle-lobbies" style="display:flex; flex-direction:column; gap:10px;"></div>
-        </div>
-
-        <div id="page-promo" class="page">
-            <div class="card">
-                <h3 style="text-align:center; color:var(--neon);">ПРОМОКОД</h3>
-                <input type="text" id="promo-code" class="input-box" placeholder="Введите код">
-                <button class="btn" onclick="activatePromo()">АКТИВИРОВАТЬ</button>
+            <div class="card info-section">
+                <h4 style="color:var(--neon); margin-bottom:10px; text-transform:uppercase;">Инфо</h4>
+                <a href="#" class="info-btn" onclick="tg.openTelegramLink('https://t.me/loonxnews')">📢 Официальный Канал</a>
+                <a href="#" class="info-btn" onclick="tg.openTelegramLink('https://t.me/loonxgift_support')">🎧 Служба Поддержки</a>
+                <a href="#" class="info-btn" onclick="tg.openTelegramLink('https://t.me/msgp2p')">🐞 Сообщить о баге</a>
             </div>
         </div>
 
         <div id="page-wallet" class="page">
             <div class="card">
-                <div class="wallet-tabs">
-                    <button class="w-tab active" onclick="switchDepTab('manual', this)">ПЕРЕВОД</button>
+                <div style="display:flex; gap:10px; margin-bottom:20px;">
+                    <button class="w-tab active" onclick="switchDepTab('manual', this)">РУЧНОЙ ДЕП.</button>
                     <button class="w-tab" onclick="switchDepTab('connect', this)">TON CONNECT</button>
                 </div>
+
                 <div id="dep-manual">
-                    <p style="font-size:11px; color:var(--sub);">Перевод на адрес (с Memo!):</p>
-                    <div id="dep-wallet" class="copy-box" onclick="copyText(this.innerText)">...</div>
-                    <div style="margin-top:10px;">Memo: <b id="dep-memo" class="copy-box" onclick="copyText(this.innerText)">...</b></div>
-                    <button class="btn" onclick="checkRealDeposit(this)">ПРОВЕРИТЬ ОПЛАТУ</button>
+                    <h3 style="margin-bottom:15px; color:var(--neon); text-align:center;">Пополнение</h3>
+                    <div style="background:#0a0a0a; padding:15px; border-radius:12px; border:1px solid #222; margin-bottom:15px; text-align:center;">
+                        <p style="color:var(--sub); font-size:12px; font-weight:bold; margin-bottom:5px;">АДРЕС ДЛЯ ПЕРЕВОДА:</p>
+                        <b id="dep-wallet" onclick="copyText(this.innerText)">Загрузка...</b>
+                        <p style="color:var(--sub); font-size:12px; font-weight:bold; margin:15px 0 5px 0;">ОБЯЗАТЕЛЬНЫЙ MEMO (COMMENT):</p>
+                        <b id="dep-memo" onclick="copyText(this.innerText)">-</b>
+                    </div>
+                    <p style="font-size:11px; color:var(--sub); text-align:center; margin-bottom:15px; font-weight:bold;">Нажмите на текст, чтобы скопировать. Переводите TON только в сети The Open Network.</p>
+                    <button class="btn" style="background:var(--neon-blue); box-shadow: 0 0 15px rgba(0,210,255,0.2);" onclick="checkRealDeposit(this)">ПРОВЕРИТЬ ОПЛАТУ</button>
                 </div>
+
                 <div id="dep-connect" style="display:none; text-align:center;">
-                    <div id="ton-connect-btn"></div>
-                    <input type="number" id="tc-amount" class="input-box" placeholder="Сумма TON">
-                    <button class="btn" onclick="payWithTonConnect()">ОПЛАТИТЬ</button>
+                    <h3 style="margin-bottom:15px; color:var(--neon);">Авто-Депозит</h3>
+                    <input type="number" id="tc-amount" class="input-box" placeholder="Сумма в TON (Мин 0.5)">
+                    <button class="btn btn-connect" onclick="payWithTonConnect()">ОПЛАТИТЬ ЧЕРЕЗ TON CONNECT</button>
                 </div>
             </div>
+
             <div class="card">
-                <h3>ВЫВОД</h3>
-                <input type="number" id="with-amount" class="input-box" placeholder="Сумма (мин 5)">
-                <input type="text" id="with-addr" class="input-box" placeholder="Адрес (UQ...)">
-                <button class="btn" onclick="withdraw()">ВЫВЕСТИ</button>
+                <h3 style="margin-bottom:15px; color:var(--neon-red); text-align:center;">Вывод средств</h3>
+                <input type="number" id="with-amount" class="input-box" placeholder="Сумма (Мин 5 TON)">
+                <input type="text" id="with-addr" class="input-box" placeholder="Ваш TON адрес (Начинается на UQ или EQ)">
+                <button class="btn btn-withdraw" onclick="withdraw()">СОЗДАТЬ ЗАЯВКУ</button>
             </div>
-            <div id="w-history-list"></div> </div>
 
-        <div id="page-profile" class="page">
-            <div class="card" style="display:flex; align-items:center; gap:15px;">
-                <img src="" id="profile-ava" style="width:60px; height:60px; border-radius:50%; border:2px solid var(--neon);">
-                <div><h2 id="profile-name">User</h2><span class="badge">Игрок</span></div>
-            </div>
-            <div class="card stats-grid">
-                <div><span>Игр</span><b id="p-bets">0</b></div>
-                <div><span>Побед</span><b id="p-wins">0</b></div>
-                <div style="color:var(--neon);"><span>+ TON</span><b id="p-plus">0</b></div>
-                <div style="color:var(--neon-red);"><span>- TON</span><b id="p-minus">0</b></div>
+            <div class="card" id="w-history-list"></div>
+        </div>
+
+        <div id="page-promo" class="page">
+            <div class="card" style="text-align:center; padding: 40px 20px;">
+                <h2 style="margin-bottom:10px; color:var(--neon);">Промокоды</h2>
+                <p style="color:var(--sub); font-size:13px; font-weight:bold; margin-bottom:20px;">Введи код из нашего канала, чтобы получить бонус!</p>
+                <input type="text" id="promo-code" class="input-box" placeholder="ВВЕДИТЕ КОД" style="text-transform:uppercase;">
+                <button class="btn" onclick="activatePromo()">АКТИВИРОВАТЬ</button>
             </div>
         </div>
-    </div>
 
-    <div id="battle-modal" class="modal-overlay" style="display:none;">
-        <div class="card modal-content">
-            <h3>НОВОЕ ЛОББИ</h3>
-            <input type="number" id="b-bet" class="input-box" placeholder="Твоя ставка (TON)">
-            <input type="number" id="b-min" class="input-box" placeholder="Мин. вход">
-            <input type="number" id="b-max" class="input-box" placeholder="Макс. вход">
-            <button class="btn" onclick="createBattleLobby()">СОЗДАТЬ</button>
-            <button class="btn" style="background:#444;" onclick="$('battle-modal').style.display='none'">ОТМЕНА</button>
-        </div>
-    </div>
-
-    <div id="battle-game-modal" class="modal-overlay" style="display:none; flex-direction:column; padding:20px;">
-        <div class="card" style="width:100%; text-align:center;">
-            <div id="battle-timer" style="font-weight:bold; margin-bottom:10px;">ОЖИДАНИЕ...</div>
-            <div style="position:relative; width:220px; height:220px; margin:0 auto;">
-                <canvas id="battle-wheel" width="220" height="220"></canvas>
-                <div style="position:absolute; top:-10px; left:50%; transform:translateX(-50%); color:white; font-size:24px;">▼</div>
+        <div id="page-crash" class="page">
+            <div class="cr-history" id="cr-history"></div>
+            <div class="crash-screen">
+                <div id="cr-x">1.00x</div>
+                <div id="cr-timer" style="color:var(--sub); font-size:12px; font-weight:bold; margin-top:10px;">ОЖИДАНИЕ...</div>
             </div>
-            <div id="battle-players" style="display:flex; flex-wrap:wrap; gap:10px; margin-top:20px; justify-content:center;"></div>
-            <button class="btn" style="margin-top:20px; background:var(--neon-red);" onclick="closeBattleGame()">ВЫЙТИ</button>
+            <div class="quick-bets" id="qb-crash"></div>
+            <input type="number" id="cr-bet" class="input-box" placeholder="Сумма ставки (TON)">
+            <button id="cr-btn" class="btn" onclick="playCrash()">ПОСТАВИТЬ</button>
+            <div class="live-bets-container" id="cr-live-bets"></div>
         </div>
-    </div>
 
-    <div id="admin-modal" class="modal-overlay" style="display:none;">
-        <div class="card modal-content" style="max-height:85vh; overflow-y:auto; width:95%;">
-            <div class="admin-tabs">
-                <button class="admin-tab active" onclick="switchAdminTab('withdraws')">Выводы</button>
-                <button class="admin-tab" onclick="switchAdminTab('promo')">Промо</button>
-                <button class="admin-tab" onclick="switchAdminTab('rtp')">RTP/Тех</button>
-                <button class="admin-tab" onclick="switchAdminTab('users')">Юзеры</button>
+        <div id="page-mines" class="page">
+            <div class="mines-grid" id="mine-grid"></div>
+            <div class="quick-bets" id="qb-mines"></div>
+            <input type="number" id="mi-bet" class="input-box" placeholder="Сумма ставки (TON)">
+            <button id="mi-btn" class="btn" onclick="playMines()">ИГРАТЬ</button>
+        </div>
+
+        <div id="page-coinflip" class="page">
+            <div class="coin-container">
+                <div class="coin" id="coin-3d">
+                    <div class="c-face c-front">L</div>
+                    <div class="c-face c-back">X</div>
+                </div>
             </div>
-            <div id="admin-content"></div>
-            <button class="btn" style="background:var(--neon-red);" onclick="$('admin-modal').style.display='none'">ЗАКРЫТЬ</button>
+            <div class="coin-sides">
+                <div class="c-side active" id="side-l" onclick="setSide('L')">LOONX (L)</div>
+                <div class="c-side" id="side-x" onclick="setSide('X')">CROSS (X)</div>
+            </div>
+            <div class="quick-bets" id="qb-coinflip"></div>
+            <input type="number" id="co-bet" class="input-box" placeholder="Сумма ставки (TON)">
+            <button id="co-btn" class="btn" onclick="playCoin()">КРУТИТЬ</button>
+        </div>
+
+        <div id="page-battle" class="page">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+                <h3 style="color:var(--text); font-weight:900;">BATTLE LOBBIES</h3>
+                <button class="btn" style="width:auto; padding:8px 15px; font-size:12px; background:var(--neon-blue);" onclick="openBattleModal()">СОЗДАТЬ</button>
+            </div>
+            <label style="color:var(--sub); font-size:12px; font-weight:bold; margin-bottom:10px; display:block;">
+                <input type="checkbox" id="my-lobbies-chk" onchange="renderBattleLobbies()"> Сначала мои лобби
+            </label>
+            <div id="battle-lobbies" style="display:flex; flex-direction:column; gap:10px;"></div>
         </div>
     </div>
 
     <div class="hotbar">
-        <div class="nav-item active" onclick="nav('home', this)"><svg viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg><span>Игры</span></div>
-        <div class="nav-item" onclick="nav('promo', this)"><svg viewBox="0 0 24 24"><path d="M20 6h-2.18c.11-.31-.18-.65.18-1a2.99 2.99 0 0 0-5.5-1.65l-.5.67-.5-.68C10.96 2.12 10 1.5 9 1.5A2.99 2.99 0 0 0 6 4.5c0 .35.07.69.18 1H4c-1.11 0-1.99.89-1.99 2L2 19c0 1.11.89 2-2 2h16c1.11 0 2-.89 2-2V8c0-1.11-.89-2-2-2z"/></svg><span>Промо</span></div>
-        <div class="nav-item" onclick="nav('wallet', this)"><svg viewBox="0 0 24 24"><path d="M21 18v1c0 1.1-.9 2-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14c1.1 0 2 .9 2 2v1h-9a3 3 0 0 0-3 3v8a3 3 0 0 0 3 3h9zm-9-2h10V8H12a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1zm4-3a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3z"/></svg><span>Кошелек</span></div>
-        <div class="nav-item" onclick="nav('profile', this)"><svg viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg><span>Профиль</span></div>
+        <div class="nav-item active" onclick="nav('games', this)">
+            <svg viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16zM12 22v-9M12 13 2.5 7.5M12 13l9.5-5.5"/></svg>
+            Игры
+        </div>
+        <div class="nav-item" onclick="nav('promo', this)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M15 5v2"/><path d="M15 11v2"/><path d="M15 17v2"/><path d="M5 5h14a2 2 0 0 1 2 2v3a2 2 0 0 0 0 4v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-3a2 2 0 0 0 0-4V7a2 2 0 0 1 2-2z"/>
+            </svg>
+            Промо
+        </div>
+        <div class="nav-item" onclick="nav('wallet', this)">
+            <svg viewBox="0 0 24 24"><path d="M20 7H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2zm-2 8a2 2 0 1 1 0-4 2 2 0 0 1 0 4z"/><path d="M4 5h14v2H4z"/></svg>
+            Кошелек
+        </div>
+        <div class="nav-item" onclick="nav('profile', this)">
+            <svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+            Профиль
+        </div>
+    </div>
+
+    <div id="battle-modal" style="position:fixed; inset:0; background:rgba(0,0,0,0.9); z-index:9000; display:none; flex-direction:column; justify-content:center; padding:20px; backdrop-filter:blur(5px);">
+        <div class="card" style="border-color:var(--neon-blue);">
+            <h3 style="color:var(--neon-blue); margin-bottom:15px; text-align:center;">Создать Лобби</h3>
+            <input type="number" id="b-bet" class="input-box" placeholder="Ваша ставка (TON)">
+            <div style="display:flex; gap:10px; margin-bottom:10px;">
+                <input type="number" id="b-min" class="input-box" placeholder="Мин. вход">
+                <input type="number" id="b-max" class="input-box" placeholder="Макс. вход">
+            </div>
+            <button class="btn" style="background:var(--neon-blue); box-shadow:0 0 15px rgba(0,210,255,0.3);" onclick="createBattleLobby()">СОЗДАТЬ</button>
+            <button class="btn" style="background:#333; margin-top:10px;" onclick="document.getElementById('battle-modal').style.display='none'">ОТМЕНА</button>
+        </div>
+    </div>
+
+    <div id="battle-game-modal">
+        <div style="flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; margin-bottom:20px; position:relative;">
+            <div style="position:absolute; top:-20px; left:50%; transform:translateX(-50%); width:0; height:0; border-left:15px solid transparent; border-right:15px solid transparent; border-top:25px solid #fff; z-index:10;"></div>
+            <canvas id="battle-wheel" width="280" height="280" style="border-radius:50%; box-shadow:0 0 30px rgba(0,0,0,0.8); border: 4px solid #222;"></canvas>
+            <div id="battle-timer" style="margin-top:25px; font-size:24px; font-weight:900; color:var(--neon); text-shadow: 0 0 15px rgba(0,255,136,0.5); text-align:center;">ОЖИДАНИЕ ИГРОКОВ...</div>
+            <div style="color:var(--sub); font-size:12px; margin-top:5px; font-weight:bold;">Таймер запустится, когда зайдет минимум 2 игрока</div>
+        </div>
+        <div id="battle-players" style="display:flex; flex-wrap:wrap; gap:10px; justify-content:center; margin-bottom:20px;"></div>
+        <button class="btn" style="background:#333;" onclick="closeBattleGame()">ЗАКРЫТЬ И СМОТРЕТЬ В ФОНЕ</button>
+    </div>
+
+    <div id="admin-modal">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+            <h2 style="color:var(--neon); text-shadow: 0 0 10px rgba(0,255,136,0.3);">Лоникс дай 30к</h2>
+            <button onclick="document.getElementById('admin-modal').style.display='none'" style="background:none; border:none; color:var(--neon-red); font-size:20px; font-weight:bold; cursor:pointer;">X</button>
+        </div>
+        <div class="admin-tabs">
+            <button class="admin-tab active" onclick="switchAdminTab('withdraws')">Выводы/Депы</button>
+            <button class="admin-tab" onclick="switchAdminTab('users')">Юзеры</button>
+            <button class="admin-tab" onclick="switchAdminTab('promo')">Промо</button>
+            <button class="admin-tab" onclick="switchAdminTab('rtp')">Настройки</button>
+        </div>
+        <div id="admin-content" style="flex: 1; overflow-y: auto;"></div>
     </div>
 
     <script src="script.js"></script>
