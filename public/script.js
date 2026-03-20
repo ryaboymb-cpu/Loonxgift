@@ -10,7 +10,7 @@ let mode = 'real';
 let adminPass = '';
 let globalRtp = 90;
 let rtpObj = { crash: 90, mines: 90, coinflip: 90 };
-let maintenance = { crash: false, mines: false, coinflip: false, battle: false };
+let maintenance = { crash: false, mines: false, coinflip: false };
 let adminWalletAddress = '';
 
 // TON CONNECT
@@ -24,7 +24,6 @@ const $ = id => document.getElementById(id);
 function showToast(msg, dur = 3000) {
     if(!msg) return;
     const container = $('toast-container');
-    if(!container) return;
     const t = document.createElement('div'); 
     t.className = 'toast'; 
     t.innerText = msg;
@@ -32,71 +31,58 @@ function showToast(msg, dur = 3000) {
     setTimeout(() => t.remove(), dur);
 }
 
-socket.on('global_alert', msg => { showToast(`УВЕДОМЛЕНИЕ: ${msg}`, 6000); });
+socket.on('global_alert', msg => { showToast(`📢 УВЕДОМЛЕНИЕ: ${msg}`, 6000); });
 function copyText(text) { if(!text) return; navigator.clipboard.writeText(text).then(() => showToast('Скопировано!')); }
 
-const canvasStars = $('stars-bg');
-let ctx, w, h, stars;
-if(canvasStars) {
-    ctx = canvasStars.getContext('2d');
-    w = canvasStars.width = window.innerWidth;
-    h = canvasStars.height = window.innerHeight;
-    stars = Array(120).fill().map(() => ({ x: Math.random()*w, y: Math.random()*h, s: Math.random()*2 + 0.5, speed: Math.random()*1 + 0.2 }));
-    function draw() {
-        ctx.clearRect(0,0,w,h); ctx.fillStyle = '#fff';
-        stars.forEach(s => {
-            ctx.fillRect(s.x, s.y, s.s, s.s);
-            s.y += s.speed;
-            if(s.y > h) { s.y = 0; s.x = Math.random()*w; }
-        });
-        requestAnimationFrame(draw);
-    } draw();
-}
+const ctx = $('stars-bg').getContext('2d');
+let w = $('stars-bg').width = window.innerWidth;
+let h = $('stars-bg').height = window.innerHeight;
+let stars = Array(120).fill().map(() => ({ x: Math.random()*w, y: Math.random()*h, s: Math.random()*2 + 0.5, speed: Math.random()*1 + 0.2 }));
+function draw() {
+    ctx.clearRect(0,0,w,h); ctx.fillStyle = '#fff';
+    stars.forEach(s => {
+        ctx.fillRect(s.x, s.y, s.s, s.s);
+        s.y += s.speed;
+        if(s.y > h) { s.y = 0; s.x = Math.random()*w; }
+    });
+    requestAnimationFrame(draw);
+} draw();
 
+// ВРЕМЯ МСК ДЛЯ КЛИЕНТА
 function getMskTime() {
     return new Date().toLocaleTimeString("ru-RU", {timeZone: "Europe/Moscow"});
 }
 
 window.onload = async () => {
-    try {
-        tg.expand();
-        const res = await fetch('/api/auth', {
-            method: 'POST', headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify(tg.initDataUnsafe.user || {id: "1", first_name: "Dev", username: "DevUser", photo_url: ""})
-        });
-        const data = await res.json();
-        
-        if(data.error === "BLOCKED") {
-            document.body.innerHTML = "<h1 style='color:red; text-align:center; margin-top:50px;'>ВЫ ЗАБЛОКИРОВАНЫ</h1>";
-            return;
-        }
-
-        user = data.user;
-        rtpObj = data.rtp || { crash: 90, mines: 90, coinflip: 90 };
-        maintenance = data.maintenance || { crash: false, mines: false, coinflip: false, battle: false };
-        adminWalletAddress = data.adminWallet || '';
-        
-        if($('dep-wallet')) $('dep-wallet').innerText = adminWalletAddress || 'Кошелек не настроен на сервере';
-        if($('dep-memo')) $('dep-memo').innerText = user.id;
-
-        const avaUrl = user.photo || 'https://cdn-icons-png.flaticon.com/512/149/149071.png';
-        if($('user-ava')) $('user-ava').src = avaUrl; 
-        if($('profile-ava')) $('profile-ava').src = avaUrl;
-        if($('profile-name')) $('profile-name').innerText = user.username || 'Игрок';
-        
-        updateUI();
-        renderWalletHistory();
-
-    } catch(err) {
-        console.error("Ошибка загрузки:", err);
-        showToast("Ошибка соединения с сервером");
-    } finally {
-        if($('loader')) { 
-            $('loader').style.opacity = '0'; 
-            setTimeout(() => $('loader').style.display = 'none', 500); 
-        }
+    tg.expand();
+    const res = await fetch('/api/auth', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(tg.initDataUnsafe.user || {id: "1", first_name: "Dev", username: "DevUser", photo_url: ""})
+    });
+    const data = await res.json();
+    if(data.error === "BLOCKED") {
+        document.body.innerHTML = "<h1 style='color:red; text-align:center; margin-top:50px;'>ВЫ ЗАБЛОКИРОВАНЫ</h1>";
+        return;
     }
 
+    user = data.user;
+    rtpObj = data.rtp || { crash: 90, mines: 90, coinflip: 90 };
+    maintenance = data.maintenance || { crash: false, mines: false, coinflip: false };
+    
+    adminWalletAddress = data.adminWallet || '';
+    if($('dep-wallet')) $('dep-wallet').innerText = adminWalletAddress || 'Кошелек не настроен на сервере';
+    if($('dep-memo')) $('dep-memo').innerText = user.id;
+
+    if($('loader')) { $('loader').style.opacity = '0'; setTimeout(() => $('loader').style.display = 'none', 500); }
+    
+    const avaUrl = user.photo || 'https://cdn-icons-png.flaticon.com/512/149/149071.png';
+    if($('user-ava')) $('user-ava').src = avaUrl; 
+    if($('profile-ava')) $('profile-ava').src = avaUrl;
+    if($('profile-name')) $('profile-name').innerText = user.username || 'Игрок';
+    updateUI();
+    renderWithdrawHistory();
+
+    // ФИКС ИКОНКИ ПРОМО (Делает её красивой и адекватной, чтобы не было битых картинок)
     setTimeout(() => {
         document.querySelectorAll('.nav-item').forEach(nav => {
             const attr = nav.getAttribute('onclick');
@@ -135,11 +121,9 @@ function nav(pageId, el) {
     if(el) { document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active')); el.classList.add('active'); }
 }
 
-function navGame(game) { 
-    if (maintenance[game.toLowerCase()]) return showToast('Временно тех. перерыв'); 
-    nav(game); 
-}
+function navGame(game) { if (maintenance[game]) return showToast('Временно тех. перерыв'); nav(game); }
 
+// БЫСТРЫЕ СТАВКИ
 function setQuickBet(inputId, amount) { if($(inputId)) $(inputId).value = amount; }
 
 function switchDepTab(type, el) {
@@ -149,6 +133,7 @@ function switchDepTab(type, el) {
     if($('dep-connect')) $('dep-connect').style.display = type === 'connect' ? 'block' : 'none';
 }
 
+// ИСПРАВЛЕННЫЙ TON CONNECT (С отправкой Memo/Комментария)
 async function payWithTonConnect() {
     if (!tonConnectUI.connected) return showToast('Сначала подключите кошелек!');
     const amount = parseFloat($('tc-amount').value);
@@ -157,9 +142,10 @@ async function payWithTonConnect() {
     let payloadBase64 = "";
     try {
         if (window.TonWeb) {
+            // Формируем payload для комментария (ID юзера)
             const tonweb = new TonWeb();
             const cell = new tonweb.boc.Cell();
-            cell.bits.writeUint(0, 32); 
+            cell.bits.writeUint(0, 32); // 32 бита нулей — стандарт TON для текста
             cell.bits.writeString(user.id);
             const bocBytes = await cell.toBoc();
             payloadBase64 = TonWeb.utils.bytesToBase64(bocBytes);
@@ -171,51 +157,38 @@ async function payWithTonConnect() {
         messages: [{
             address: adminWalletAddress,
             amount: (amount * 1000000000).toString(),
-            ...(payloadBase64 && { payload: payloadBase64 })
+            ...(payloadBase64 && { payload: payloadBase64 }) // Добавляем payload, если удалось сгенерировать
         }]
     };
 
     try {
         await tonConnectUI.sendTransaction(transaction);
-        showToast('Транзакция отправлена! Ожидайте зачисления и нажмите ПРОВЕРИТЬ ОПЛАТУ через 10 сек.');
+        showToast('Транзакция отправлена! Ожидайте зачисления и нажмите "ПРОВЕРИТЬ ОПЛАТУ" через 10 сек.');
     } catch (e) { showToast('Транзакция отменена'); }
 }
 
-function renderWalletHistory() {
-    const wList = $('w-history-list');
-    const dList = $('user-dep-history');
+// ИСТОРИЯ ВЫВОДОВ В КОШЕЛЬКЕ
+function renderWithdrawHistory() {
+    const list = $('w-history-list');
+    if(!list) return;
+    if(!user.withdrawHistory || user.withdrawHistory.length === 0) return list.innerHTML = '<div style="color:#555; text-align:center;">Нет выводов</div>';
     
-    if(wList) {
-        if(!user.withdrawHistory || user.withdrawHistory.length === 0) wList.innerHTML = '<div style="color:#555; text-align:center;">Нет выводов</div>';
-        else {
-            wList.innerHTML = user.withdrawHistory.map(w => {
-                let cls = w.status === 'Подтверждено' ? 'approved' : (w.status === 'Отклонено' ? 'rejected' : 'pending');
-                let rsn = w.reason ? `<br><span style="color:var(--neon-red); font-size:10px;">Причина: ${w.reason}</span>` : '';
-                return `
-                    <div class="w-history-item ${cls}">
-                        <div><img src="${user.photo || 'https://cdn-icons-png.flaticon.com/512/149/149071.png'}" style="width:20px; border-radius:50%; vertical-align:middle; margin-right:5px;"> <b>${w.amount} TON</b><br><span style="color:#888; font-size:10px;">${w.time || ''}</span></div>
-                        <div style="text-align:right;">${w.status} ${rsn}</div>
-                    </div>`;
-            }).join('');
-        }
-    }
-    
-    if(dList) {
-        if(!user.depositHistory || user.depositHistory.length === 0) dList.innerHTML = '<div style="color:#555; text-align:center;">Нет депозитов</div>';
-        else {
-            dList.innerHTML = user.depositHistory.map(d => `
-                <div class="w-history-item approved">
-                    <div><b>+ ${d.amount} TON</b><br><span style="color:#888; font-size:10px;">${d.time || ''}</span></div>
-                    <div style="text-align:right; color:var(--neon);">Успешно</div>
-                </div>`).join('');
-        }
-    }
+    list.innerHTML = user.withdrawHistory.map(w => {
+        let cls = w.status === 'Подтверждено' ? 'approved' : (w.status === 'Отклонено' ? 'rejected' : 'pending');
+        let rsn = w.reason ? `<br><span style="color:var(--neon-red); font-size:10px;">Причина: ${w.reason}</span>` : '';
+        return `
+            <div class="w-history-item ${cls}">
+                <div><img src="${user.photo || 'https://cdn-icons-png.flaticon.com/512/149/149071.png'}" style="width:20px; border-radius:50%; vertical-align:middle; margin-right:5px;"> <b>${w.amount} TON</b><br><span style="color:#888; font-size:10px;">${w.time || ''}</span></div>
+                <div style="text-align:right;">${w.status} ${rsn}</div>
+            </div>`;
+    }).join('');
 }
 
 if($('online-c')) socket.on('online', c => $('online-c').innerText = c);
 socket.on('rtpUpdate', r => rtpObj = r); 
 socket.on('maintenanceUpdate', m => maintenance = m); 
 
+// ИСТОРИЯ
 socket.on('init_history', bets => { 
     if($('feed-list')) { $('feed-list').innerHTML = ''; bets.reverse().forEach(b => addLiveBetToDOM(b)); }
 });
@@ -245,10 +218,10 @@ let curCrash = {}; let myCrashBets = []; let isCashingOut = false;
 
 function getCrashColor(x) {
     const val = parseFloat(x);
-    if(val < 1.3) return '#ff0055'; 
-    if(val < 1.6) return '#ffcc00'; 
-    if(val < 2.0) return '#aaff00'; 
-    return '#00ff88'; 
+    if(val < 1.3) return '#ff0055'; // Красный
+    if(val < 1.6) return '#ffcc00'; // Желтый
+    if(val < 2.0) return '#aaff00'; // Светло-зеленый
+    return '#00ff88'; // Ядовитый неон
 }
 
 socket.on('crashHistoryUpdate', hist => {
@@ -282,7 +255,7 @@ socket.on('crashData', d => {
     if(d.status === 'running') { 
         const col = getCrashColor(d.multiplier);
         if($('cr-x')) { $('cr-x').innerText = d.multiplier + 'x'; $('cr-x').style.color = col; $('cr-x').style.textShadow = `0 0 20px ${col}40`; }
-        if($('cr-timer')) $('cr-timer').innerText = 'В ПОЛЕТЕ'; 
+        if($('cr-timer')) $('cr-timer').innerText = '🚀 В ПОЛЕТЕ'; 
         if (myCrashBets.length > 0) { btn.innerText = `ЗАБРАТЬ ${(myCrashBets[0] * d.multiplier).toFixed(2)} TON`; btn.style.background = 'var(--neon-red)'; btn.disabled = false; } 
         else { btn.innerText = 'ОЖИДАНИЕ'; btn.style.background = '#555'; btn.disabled = true; }
     }
@@ -314,28 +287,14 @@ async function playCrash() {
 }
 
 // MINES
-let miActive = false; let bombs = []; let miBet = 0; let openedCells = 0; let currentMinesWin = 0; let isMinesCashingOut = false;
+let miActive = false; let bombs = []; let miBet = 0; let openedCells = 0; let currentMinesWin = 0; 
 
 function playMines() {
-    if(isMinesCashingOut) return;
     const curBal = mode === 'real' ? user.balance : user.demo_balance;
-    
-    if(miActive) { 
-        isMinesCashingOut = true;
-        reqBet('Mines', 0, currentMinesWin).then(ok => { 
-            isMinesCashingOut = false;
-            if(ok) { 
-                miActive = false; $('mi-btn').innerText='ИГРАТЬ'; showToast(`Забрал ${currentMinesWin.toFixed(2)} TON!`);
-                revealMines(true);
-            }
-        }); 
-        return; 
-    }
-    
+    if(miActive) { reqBet('Mines', 0, currentMinesWin).then(ok => { if(ok) { miActive = false; $('mi-btn').innerText='ИГРАТЬ'; showToast(`Забрал ${currentMinesWin.toFixed(2)} TON!`); }}); return; }
     miBet = parseFloat($('mi-bet').value); 
     if(isNaN(miBet) || miBet < 0.1 || miBet > 25) return showToast('Мин 0.1, Макс 25 TON');
     if(miBet > curBal) return showToast('Нет средств!');
-    
     reqBet('Mines', miBet, 0).then(success => {
         if(success) {
             bombs = []; while(bombs.length<5) { let r=Math.floor(Math.random()*25); if(!bombs.includes(r)) bombs.push(r); }
@@ -348,35 +307,26 @@ function renderMines() {
     if(!$('mine-grid')) return;
     $('mine-grid').innerHTML = '';
     for(let i=0; i<25; i++) {
-        let c = document.createElement('div'); c.className = 'm-cell'; c.dataset.idx = i;
+        let c = document.createElement('div'); c.className = 'm-cell';
         c.onclick = () => {
-            if(!miActive || c.classList.contains('open') || isMinesCashingOut) return;
+            if(!miActive || c.classList.contains('open')) return;
             let hitBomb = bombs.includes(i);
             if (!hitBomb) { if (Math.random() > ((rtpObj.mines||90) / 100)) { hitBomb = true; bombs[0] = i; } }
 
             if(hitBomb) { 
                 miActive=false; $('mi-btn').innerText='ИГРАТЬ'; showToast('БУМ!'); 
-                revealMines(false);
+                // Открываем все поле
+                const cells = document.querySelectorAll('.m-cell');
+                cells.forEach((cell, idx) => {
+                    cell.innerText = bombs.includes(idx) ? '💣' : '💎';
+                    if(bombs.includes(idx)) { cell.style.background = 'var(--neon-red)'; cell.style.borderColor = 'var(--neon-red)'; }
+                });
             } else { 
                 c.innerText='💎'; c.classList.add('open'); c.style.borderColor='var(--neon)'; openedCells++;
                 currentMinesWin = miBet * (1 + openedCells * 0.2); $('mi-btn').innerText = `ЗАБРАТЬ ${currentMinesWin.toFixed(2)} TON`; 
             }
         }; $('mine-grid').appendChild(c);
     }
-}
-
-function revealMines(isWin) {
-    const cells = document.querySelectorAll('.m-cell');
-    cells.forEach((cell, idx) => {
-        if (bombs.includes(idx)) {
-            cell.innerText = '💣'; cell.style.background = 'var(--neon-red)'; cell.style.borderColor = 'var(--neon-red)';
-        } else {
-            cell.innerText = '💎';
-            if (isWin && cell.classList.contains('open')) {
-                cell.style.background = 'rgba(0, 255, 136, 0.2)';
-            }
-        }
-    });
 }
 
 // COINFLIP
@@ -405,250 +355,20 @@ async function playCoin() {
         showToast(win > 0 ? `Победа! +${win.toFixed(2)}` : `Проигрыш: ${result}`); 
         await reqBet('Coinflip', bet, win);
         
+        // Reset rotation seamlessly
         setTimeout(() => {
             coin.style.transition = 'none'; 
             coin.style.transform = `rotateY(${result === 'L' ? 0 : 180}deg)`; 
-            isFlipping = false; $('co-btn').innerText = 'КРУТИТЬ МОНЕТУ';
+            isFlipping = false; $('co-btn').innerText = 'КРУТИТЬ';
         }, 500);
     }, 2000);
-}
-
-// BATTLE ROULETTE 
-let activeLobbies = [];
-let currentLobbyId = null;
-let brTimerInterval = null;
-const BR_COLORS = ['#FFD700', '#FFFFFF', '#FF0000', '#00FF00']; // Желтый, Белый, Красный, Зеленый
-
-socket.on('init_battles', lobbies => { activeLobbies = lobbies; renderBattleLobbies(); });
-socket.on('battleUpdate', lobbies => { 
-    activeLobbies = lobbies; 
-    renderBattleLobbies(); 
-    if(currentLobbyId) {
-        const updatedLobby = activeLobbies.find(l => l._id === currentLobbyId);
-        if(updatedLobby) {
-            drawBattleWheel(updatedLobby.players);
-            if(updatedLobby.startTime && updatedLobby.players.length >= 2) {
-                startBattleTimer(updatedLobby.startTime);
-            }
-        }
-    }
-});
-
-socket.on('battleSpinStart', lobby => {
-    if(currentLobbyId !== lobby._id) return;
-    clearInterval(brTimerInterval);
-    if($('br-timer-display')) $('br-timer-display').innerText = 'КРУТИМ!';
-    
-    const canvas = $('br-canvas');
-    if(canvas) {
-        canvas.style.transition = 'transform 5s cubic-bezier(0.1, 0.7, 0.1, 1)';
-        canvas.style.transform = `rotate(${360 * 5 + Math.random() * 360}deg)`;
-    }
-});
-
-socket.on('battleFinished', data => {
-    if(currentLobbyId !== data.lobbyId) return;
-    const finalWin = data.winPool * 0.7; // Минус 30% комиссия
-    if($('br-timer-display')) $('br-timer-display').innerText = `ПОБЕДИЛ: ${data.winner.username}`;
-    
-    if (data.winner.userId === user.id) { 
-        showToast(`ТЫ ВЫИГРАЛ ${finalWin.toFixed(2)} TON!`); 
-        updateUI(); 
-    }
-    
-    setTimeout(() => {
-        $('br-game-view').style.display = 'none';
-        $('br-lobby-list').style.display = 'block';
-        currentLobbyId = null;
-        if($('br-canvas')) {
-            $('br-canvas').style.transition = 'none';
-            $('br-canvas').style.transform = 'rotate(0deg)';
-        }
-    }, 5000);
-});
-
-function renderBattleLobbies() {
-    const cont = $('br-active-rooms');
-    if (!cont) return;
-
-    if (activeLobbies.length === 0) {
-        cont.innerHTML = '<div style="text-align:center; color:#555;">Нет открытых комнат. Создай свою!</div>';
-        return;
-    }
-
-    cont.innerHTML = activeLobbies.map(l => {
-        const isMine = l.creatorId === user.id;
-        const totalPool = l.players.reduce((sum, p) => sum + p.bet, 0);
-
-        return `
-        <div class="card" style="margin-bottom:10px; border:1px solid ${isMine ? 'var(--neon)' : '#333'};">
-            <div style="display:flex; justify-content:space-between; align-items:center;">
-                <div style="display:flex; align-items:center; gap:10px;">
-                    <img src="${l.creatorAvatar}" style="width:30px; border-radius:50%;">
-                    <div><b>${l.creatorName}</b></div>
-                </div>
-                <div style="text-align:right;">
-                    <b style="color:var(--neon);">${totalPool} TON</b>
-                    <div style="font-size:10px; color:#888;">Игроков: ${l.players.length}/4</div>
-                </div>
-            </div>
-            <div style="margin-top:10px; display:flex; gap:5px;">
-                ${isMine && l.players.length === 1 ? `<button class="btn" style="background:var(--neon-red); padding:5px; font-size:12px;" onclick="deleteLobby('${l._id}')">Удалить</button>` : ''}
-                <button class="btn" style="background:#222; padding:5px; font-size:12px;" onclick="viewLobby('${l._id}')">Войти в комнату</button>
-            </div>
-        </div>`;
-    }).join('');
-}
-
-async function createBattleLobby() {
-    if (mode === 'demo') return showToast('Доступно только на REAL TON!');
-    const amount = parseFloat(prompt('Сумма ставки (TON):'));
-    if (!amount || amount < 0.1) return showToast('Неверная сумма');
-    
-    const r = await fetch('/api/battle/create', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id:user.id, amount, minBet: amount, maxLimit: amount*2}) });
-    if(r.ok) { 
-        user = await r.json(); 
-        updateUI(); 
-        showToast('Комната создана!'); 
-    } else { 
-        const err = await r.json(); 
-        showToast(err.error); 
-    }
-}
-
-async function joinBattleLobby() {
-    if(!currentLobbyId) return;
-    if (mode === 'demo') return showToast('Доступно только на REAL TON!');
-    
-    const amount = parseFloat($('br-bet-amount').value);
-    if (!amount || amount <= 0) return showToast('Введите сумму ставки');
-    
-    const r = await fetch('/api/battle/join', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id:user.id, lobbyId: currentLobbyId, amount}) });
-    if(r.ok) { 
-        user = await r.json(); 
-        updateUI(); 
-        showToast('Вы в игре!'); 
-        $('br-bet-amount').value = '';
-    } else { 
-        const err = await r.json(); 
-        showToast(err.error); 
-    }
-}
-
-async function deleteLobby(lobbyId) {
-    const r = await fetch('/api/battle/delete', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id:user.id, lobbyId}) });
-    if(r.ok) { user = await r.json(); updateUI(); showToast('Удалено, баланс возвращен'); }
-}
-
-function viewLobby(lobbyId) {
-    const lobby = activeLobbies.find(l => l._id === lobbyId);
-    if (!lobby) return;
-    currentLobbyId = lobbyId;
-    $('br-lobby-list').style.display = 'none';
-    $('br-game-view').style.display = 'block';
-    
-    if(lobby.startTime && lobby.players.length >= 2) {
-        startBattleTimer(lobby.startTime);
-    } else {
-        $('br-timer-display').innerText = '02:00';
-        clearInterval(brTimerInterval);
-    }
-    drawBattleWheel(lobby.players);
-}
-
-function startBattleTimer(startTimeStr) {
-    clearInterval(brTimerInterval);
-    const display = $('br-timer-display');
-    if(!display) return;
-
-    brTimerInterval = setInterval(() => {
-        const now = new Date().getTime();
-        const start = new Date(startTimeStr).getTime();
-        const target = start + (120 * 1000); 
-        const diff = target - now;
-
-        if (diff <= 0) {
-            display.innerText = "00:00";
-            clearInterval(brTimerInterval);
-            return;
-        }
-
-        const m = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-        const s = Math.floor((diff % (1000 * 60)) / 1000);
-        display.innerText = `0${m}:${s < 10 ? '0'+s : s}`;
-    }, 1000);
-}
-
-function drawBattleWheel(players) {
-    const canvas = $('br-canvas');
-    if (!canvas) return;
-    const ctxW = canvas.getContext('2d');
-    const total = players.reduce((sum, p) => sum + p.bet, 0);
-    
-    if($('br-total-bank')) $('br-total-bank').innerText = total.toFixed(2) + ' T';
-
-    ctxW.clearRect(0, 0, canvas.width, canvas.height);
-    const cx = canvas.width / 2;
-    const cy = canvas.height / 2;
-    const radius = 110;
-
-    let startAngle = 0;
-    const list = $('br-players-list');
-    if(list) list.innerHTML = '';
-
-    players.forEach((p, index) => {
-        const pColor = BR_COLORS[index % 4]; // Назначаем строго 4 цвета
-        const sliceAngle = (p.bet / total) * 2 * Math.PI;
-        
-        ctxW.beginPath();
-        ctxW.moveTo(cx, cy);
-        ctxW.arc(cx, cy, radius, startAngle, startAngle + sliceAngle);
-        ctxW.fillStyle = pColor;
-        ctxW.fill();
-        ctxW.lineWidth = 2;
-        ctxW.strokeStyle = '#111';
-        ctxW.stroke();
-
-        const chance = ((p.bet / total) * 100).toFixed(1);
-
-        if (p.bet > 0) {
-            const textAngle = startAngle + sliceAngle / 2;
-            const tx = cx + Math.cos(textAngle) * (radius * 0.65);
-            const ty = cy + Math.sin(textAngle) * (radius * 0.65);
-            
-            ctxW.fillStyle = pColor === '#FFFFFF' ? '#000' : '#fff';
-            ctxW.font = "bold 14px sans-serif";
-            ctxW.textAlign = "center";
-            ctxW.textBaseline = "middle";
-            ctxW.fillText(chance + '%', tx, ty);
-        }
-
-        startAngle += sliceAngle;
-
-        if(list) {
-            list.innerHTML += `
-                <div class="br-player-card" style="border-left:4px solid ${pColor};">
-                    <div style="display:flex; align-items:center; gap:8px;">
-                        <img src="${p.avatar || 'https://cdn-icons-png.flaticon.com/512/149/149071.png'}" style="width:28px; height:28px; border-radius:50%;">
-                        <div>
-                            <b style="color:#fff;">${p.username}</b>
-                            <div style="font-size:11px; color:var(--neon);">${p.bet} TON</div>
-                        </div>
-                    </div>
-                    <div style="text-align:right;">
-                        <b style="color:${pColor}; font-size:16px;">${chance}%</b>
-                    </div>
-                </div>
-            `;
-        }
-    });
 }
 
 // ФИНАНСЫ И ПРОМО
 async function checkRealDeposit(btn) {
     btn.innerText = "ПРОВЕРЯЕМ...";
     const r = await fetch('/api/check_deposit', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id:user.id}) });
-    if(r.ok) { const d = await r.json(); user = d.user; updateUI(); renderWalletHistory(); showToast(`+${d.added} TON`); } 
+    if(r.ok) { const d = await r.json(); user = d.user; updateUI(); showToast(`+${d.added} TON`); } 
     else { const e = await r.json(); showToast(e.error || 'Не найдено'); } btn.innerText = "ПРОВЕРИТЬ ОПЛАТУ";
 }
 
@@ -656,22 +376,20 @@ async function withdraw() {
     const a = parseFloat($('with-amount').value); 
     const ad = $('with-addr').value;
     
+    // ДОБАВЛЕНО: Проверка на пустой адрес кошелька
     if(!ad || !ad.trim()) return showToast('Введите адрес кошелька!');
     if(a > user.balance || a < 5) return showToast('Ошибка (Мин 5 TON)');
     
     const r = await fetch('/api/withdraw', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id:user.id, address:ad, amount:a}) });
-    if(r.ok) { user = await r.json(); updateUI(); renderWalletHistory(); showToast('Заявка создана!'); $('with-amount').value=''; $('with-addr').value=''; } 
+    if(r.ok) { user = await r.json(); updateUI(); renderWithdrawHistory(); showToast('Заявка создана!'); $('with-amount').value=''; $('with-addr').value=''; } 
     else showToast('Ошибка вывода');
 }
 
 async function activatePromo() {
     const code = $('promo-code').value;
     const r = await fetch('/api/promo', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id:user.id, code}) });
-    if(r.ok) { 
-        user = await r.json(); updateUI(); showToast('Успешно активирован!'); $('promo-code').value=''; 
-    } else { 
-        const e = await r.json(); showToast(e.error || 'Ошибка промокода'); 
-    }
+    if(r.ok) { user = await r.json(); updateUI(); showToast('Активирован!'); $('promo-code').value=''; } 
+    else showToast('Ошибка промо');
 }
 
 async function reqBet(game, bet, win) {
@@ -680,45 +398,29 @@ async function reqBet(game, bet, win) {
 }
 
 // АДМИН ПАНЕЛЬ
-let aTaps = 0; let adminSearchQuery = ''; let currentFilter = 'all';
+let aTaps = 0; let adminSearchQuery = '';
 async function checkAdmin() { aTaps++; if(aTaps >= 5) { aTaps = 0; let p = prompt('Пароль:'); if(p) { adminPass = p; loadAdminData(); } } }
 function switchAdminTab(tab) { document.querySelectorAll('.admin-tab').forEach(t => t.classList.remove('active')); event.target.classList.add('active'); renderAdminContent(tab); }
 
 let adData = {};
 async function loadAdminData() {
     const r = await fetch('/api/admin/data', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({pass: adminPass}) });
-    if(r.ok) { 
-        adData = await r.json(); 
-        $('admin-modal').style.display = 'flex'; 
-        if($('adm-total-dep')) $('adm-total-dep').innerText = adData.totalDeps.toFixed(2) + ' TON';
-        if($('adm-total-with')) $('adm-total-with').innerText = adData.totalWiths.toFixed(2) + ' TON';
-        if($('adm-u-count')) $('adm-u-count').innerText = adData.usersCount;
-        renderAdminContent('withdraws'); 
-    } else showToast('Неверный пароль');
+    if(r.ok) { adData = await r.json(); $('admin-modal').style.display = 'block'; renderAdminContent('withdraws'); } else showToast('Неверный пароль');
 }
 
+// ФИКС И ПОИСК БАЗЫ ДАННЫХ
 async function searchAdminUsers(query) {
     adminSearchQuery = query;
-    const r = await fetch('/api/admin/search_user', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({pass: adminPass, query, filterType: currentFilter}) });
+    const r = await fetch('/api/admin/search_user', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({pass: adminPass, query}) });
     if(r.ok) { const d = await r.json(); adData.users = d.users; renderAdminContent('users'); }
-}
-
-function setAdminFilter(type) {
-    currentFilter = type;
-    document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
-    if(event && event.target) event.target.classList.add('active');
-    searchAdminUsers(adminSearchQuery);
 }
 
 function renderAdminContent(tab) {
     const c = $('admin-content');
-    if(!c) return;
-
     if(tab === 'withdraws') {
         c.innerHTML = adData.withdraws.map(w => `
             <div style="background:#1a1a1a; padding:10px; border-radius:8px; margin-bottom:10px;">
-                <b>Игрок:</b> <a href="tg://user?id=${w.userId}" style="color:var(--neon);">${w.username}</a> <br>
-                <b>Сумма:</b> ${w.amount} TON <br> <code>${w.address}</code><br>
+                <b>ID:</b> ${w.userId} <br> <b>Сумма:</b> ${w.amount} TON <br> <code>${w.address}</code><br>
                 <button class="btn" style="padding:8px; margin-top:5px;" onclick="adminW('${w._id}', 'approve')">ОДОБРИТЬ</button>
                 <button class="btn" style="padding:8px; margin-top:5px; background:var(--neon-red);" onclick="adminW('${w._id}', 'reject')">ОТКЛОНИТЬ (ВЕРНУТЬ)</button>
             </div>
@@ -732,8 +434,8 @@ function renderAdminContent(tab) {
             <button class="btn" style="padding:10px;" onclick="adminPromo()">СОЗДАТЬ ПРОМО</button><hr>
             ${adData.promos.map(p => `
                 <div style="padding:8px; border-bottom:1px solid #222;">
-                    <div><b>${p.code}</b> - ${p.amount} TON | Осталось: <span style="color:var(--neon)">${p.limit - p.usedBy.length}</span> из ${p.limit}</div>
-                    <button style="background:#333; color:#fff; border:none; padding:4px 8px; border-radius:4px; margin-top:5px;" onclick="alert('Активации (ID):\\n' + ${JSON.stringify(p.usedBy).replace(/"/g, '')})">Кто юзал?</button>
+                    <div><b>${p.code}</b> - ${p.amount} TON | Осталось: <span style="color:var(--neon)">${p.limit - p.activations}</span> из ${p.limit}</div>
+                    <button style="background:#333; color:#fff; border:none; padding:4px 8px; border-radius:4px; margin-top:5px;" onclick="alert('Активации:\\n' + ${JSON.stringify(p.usedBy).replace(/"/g, '&quot;')})">Кто юзал?</button>
                     <button style="background:var(--neon-red); color:#fff; border:none; padding:4px 8px; border-radius:4px; margin-top:5px;" onclick="adminDelPromo('${p._id}')">Удалить</button>
                 </div>
             `).join('')}
@@ -741,23 +443,20 @@ function renderAdminContent(tab) {
     }
     if(tab === 'rtp') {
         c.innerHTML = `
-            <h4 style="color:var(--neon);">РАССЫЛКА В БОТА</h4>
+            <h4 style="color:var(--neon);">РАССЫЛКА В БОТА (Loonx Gifts)</h4>
             <textarea id="ad-bot-msg" class="input-box" style="height:60px; font-size:12px;" placeholder="Сообщение ВСЕМ в бота..."></textarea>
             <button class="btn" style="padding:8px; margin-top:0; margin-bottom:20px; background:var(--neon-blue); color:#000;" onclick="adminBotBroadcast()">ОТПРАВИТЬ ВСЕМ</button>
+            <hr>
+            <h4 style="color:var(--neon);">ОБНУЛЕНИЕ</h4>
+            <button class="btn" style="padding:8px; background:red; margin-bottom:20px;" onclick="adminReset()">ОБНУЛИТЬ ИСТОРИЮ (Баланс останется)</button>
             <hr>
             <h4 style="color:var(--neon); margin-bottom:10px;">RTP</h4>
             <div><b>Crash RTP (%):</b> <input type="number" id="rtp-crash" value="${adData.rtp.crash||90}" class="input-box" style="padding:5px; width:70px; display:inline-block;"> <button class="btn" style="padding:5px; width:auto; display:inline-block;" onclick="adminRTP('crash')">OK</button></div>
             <div><b>Mines RTP (%):</b> <input type="number" id="rtp-mines" value="${adData.rtp.mines||90}" class="input-box" style="padding:5px; width:70px; display:inline-block;"> <button class="btn" style="padding:5px; width:auto; display:inline-block;" onclick="adminRTP('mines')">OK</button></div>
             <div><b>Coinflip RTP (%):</b> <input type="number" id="rtp-coinflip" value="${adData.rtp.coinflip||90}" class="input-box" style="padding:5px; width:70px; display:inline-block;"> <button class="btn" style="padding:5px; width:auto; display:inline-block;" onclick="adminRTP('coinflip')">OK</button></div>
-            <hr>
-            <h4 style="color:var(--neon); margin-bottom:10px;">ОТКЛЮЧЕНИЕ ИГР</h4>
-            <div><b>Crash:</b> <button onclick="adminMaint('crash', ${!maintenance.crash})">${maintenance.crash ? 'ВКЛЮЧИТЬ' : 'ОТКЛЮЧИТЬ'}</button></div>
-            <div><b>Mines:</b> <button onclick="adminMaint('mines', ${!maintenance.mines})">${maintenance.mines ? 'ВКЛЮЧИТЬ' : 'ОТКЛЮЧИТЬ'}</button></div>
-            <div><b>Coinflip:</b> <button onclick="adminMaint('coinflip', ${!maintenance.coinflip})">${maintenance.coinflip ? 'ВКЛЮЧИТЬ' : 'ОТКЛЮЧИТЬ'}</button></div>
-            <div><b>Battle:</b> <button onclick="adminMaint('battle', ${!maintenance.battle})">${maintenance.battle ? 'ВКЛЮЧИТЬ' : 'ОТКЛЮЧИТЬ'}</button></div>
         `;
     }
-    if(tab === 'users') { 
+    if(tab === 'users') { // ФИКС: Теперь юзеры прогружаются сразу
         let usersHtml = (adData.users || []).map(u => `
             <div style="padding:10px; border-bottom:1px solid #222; position:relative;">
                 <img src="${u.photo || 'https://cdn-icons-png.flaticon.com/512/149/149071.png'}" style="width:25px; border-radius:50%; vertical-align:middle;"> 
@@ -797,6 +496,11 @@ async function adminBotBroadcast() {
     $('ad-bot-msg').value = ''; showToast('Разослано всем!');
 }
 
+async function adminReset() {
+    if(!confirm('ТОЧНО ОБНУЛИТЬ ИСТОРИЮ?')) return;
+    await fetch('/api/admin/reset_all_stats', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({pass: adminPass}) }); showToast('История стерта');
+}
+
 async function adminPromo() {
     const code = $('ad-pr-code').value; const amount = $('ad-pr-sum').value; const limit = $('ad-pr-lim').value;
     await fetch('/api/admin/promo_create', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({pass: adminPass, code, amount, limit}) }); loadAdminData();
@@ -808,7 +512,4 @@ async function adminDelPromo(pId) {
 async function adminRTP(game) {
     const value = $(`rtp-${game}`).value;
     await fetch('/api/admin/set_rtp', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({pass: adminPass, game, value}) }); showToast('RTP сохранен!');
-}
-async function adminMaint(game, state) {
-    await fetch('/api/admin/maintenance', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({pass: adminPass, game, state}) }); loadAdminData();
-}
+                                                                                                                                                                                                                               }
