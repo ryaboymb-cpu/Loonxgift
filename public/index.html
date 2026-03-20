@@ -10,419 +10,400 @@
     <script src="https://unpkg.com/tonweb@0.0.60/dist/tonweb.js"></script>
     
     <style>
-        :root {
-            --neon-green: #00ff88;
-            --neon-red: #ff0055;
-            --neon-blue: #00ccff;
-            --neon-gold: #ffcc00;
-            --bg-dark: #050505;
-            --card-bg: linear-gradient(145deg, #1a1a1a, #0d0d0d);
-            --shadow-green: 0 0 15px rgba(0, 255, 136, 0.4);
-        }
-
         body {
             margin: 0;
             padding: 0;
-            background-color: var(--bg-dark);
+            background-color: #050505;
             color: #ffffff;
-            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             overflow-x: hidden;
             padding-bottom: 90px;
         }
 
-        /* Анимированный фон: Падающие звезды */
-        .stars-container {
+        /* Твой оригинальный фон с падающими звездами */
+        .stars {
             position: fixed;
             top: 0; left: 0; width: 100%; height: 100%;
             z-index: -1;
-            background: black url('https://cdn.pixabay.com/photo/2016/01/27/15/25/space-1164402_960_720.jpg') repeat;
-            animation: starFall 120s linear infinite;
-            opacity: 0.4;
+            background: black url('https://cdn.pixabay.com/photo/2016/01/27/15/25/space-1164402_960_720.jpg') repeat top center;
+            animation: fall 20s linear infinite;
+            opacity: 0.3;
         }
 
-        @keyframes starFall {
+        @keyframes fall {
             from { background-position: 0 0; }
             to { background-position: -10000px 5000px; }
         }
 
-        /* UI Элементы */
-        .neon-box {
-            border: 1px solid var(--neon-green);
-            box-shadow: var(--shadow-green);
-            border-radius: 15px;
-            padding: 15px;
-            background: rgba(10, 10, 10, 0.85);
-            backdrop-filter: blur(5px);
+        /* Твой оригинальный Неон */
+        .neon-text {
+            color: #00ff00;
+            text-shadow: 0 0 10px #00ff00, 0 0 20px #00ff00;
         }
 
-        .btn-main {
-            background: var(--neon-green);
+        .neon-box {
+            border: 1px solid #00ff00;
+            box-shadow: 0 0 15px rgba(0, 255, 0, 0.4);
+            border-radius: 15px;
+            padding: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(10px);
+        }
+
+        /* Кнопки с твоим градиентом и тенями */
+        .btn-green {
+            background: #00ff00;
             color: #000;
             border: none;
-            padding: 14px;
-            border-radius: 12px;
-            font-weight: 800;
+            padding: 14px 20px;
+            border-radius: 10px;
+            font-weight: bold;
             cursor: pointer;
             width: 100%;
             text-transform: uppercase;
-            box-shadow: 0 0 10px var(--neon-green);
+            box-shadow: 0 0 15px #00ff00;
             transition: 0.2s;
         }
 
-        .btn-main:active { transform: scale(0.96); }
-
-        /* Игровые карточки */
-        .game-grid { padding: 10px; }
-        .game-card {
-            display: flex;
-            align-items: center;
-            padding: 22px;
-            margin-bottom: 12px;
-            border-radius: 18px;
-            background: var(--card-bg);
-            border: 1px solid #222;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
-            transition: 0.3s;
-        }
-        .game-card:active { border-color: var(--neon-green); box-shadow: var(--shadow-green); }
-
-        .game-icon {
-            width: 55px; height: 55px;
-            border-radius: 12px;
-            margin-right: 18px;
-            display: flex;
-            align-items: center; justify-content: center;
-            font-size: 28px;
-            box-shadow: 0 0 10px rgba(255,255,255,0.1);
+        .btn-red {
+            background: #ff004c;
+            color: #fff;
+            border: none;
+            padding: 14px 20px;
+            border-radius: 10px;
+            font-weight: bold;
+            cursor: pointer;
+            box-shadow: 0 0 15px #ff004c;
         }
 
-        /* Градиенты иконок */
-        .bg-crash { background: linear-gradient(45deg, #ff0055, #8800ff); }
-        .bg-mines { background: linear-gradient(45deg, #00ccff, #00ff88); }
-        .bg-coin { background: linear-gradient(45deg, #ffcc00, #ff6600); }
-        .bg-battle { background: linear-gradient(45deg, #333, #000); border: 1px solid var(--neon-green); }
-
-        /* Быстрые ставки */
-        .quick-bet-bar {
+        /* Быстрые ставки (0.5, 1, 5, 10, 25) */
+        .quick-bets {
             display: flex;
-            gap: 8px;
-            margin: 10px 0;
-            overflow-x: auto;
-            padding-bottom: 5px;
+            justify-content: space-between;
+            margin: 15px 0;
+            gap: 5px;
         }
-        .q-btn {
+        
+        .quick-bets button {
+            flex: 1;
             background: #1a1a1a;
             color: #fff;
             border: 1px solid #333;
             border-radius: 8px;
-            padding: 8px 14px;
-            font-size: 13px;
-            white-space: nowrap;
+            padding: 10px 5px;
+            font-size: 12px;
+            cursor: pointer;
         }
 
-        /* Coinflip Selection */
-        .side-select { display: flex; gap: 10px; margin-bottom: 15px; }
-        .side-btn {
-            flex: 1;
-            padding: 15px;
-            background: #111;
+        /* Твой UI Меню игр */
+        .game-card {
+            display: flex;
+            align-items: center;
+            padding: 25px;
+            margin: 15px;
+            border-radius: 20px;
+            background: linear-gradient(145deg, #1a1a1a, #0d0d0d);
+            border: 1px solid #222;
+            cursor: pointer;
+            transition: 0.3s;
+        }
+
+        .game-card:active { border-color: #00ff00; box-shadow: 0 0 20px rgba(0, 255, 0, 0.3); }
+
+        .game-icon {
+            width: 65px; height: 65px;
+            border-radius: 15px;
+            margin-right: 20px;
+            display: flex;
+            align-items: center; justify-content: center;
+            font-size: 32px;
+        }
+
+        .bg-crash { background: linear-gradient(45deg, #ff004c, #ff00a0); }
+        .bg-mines { background: linear-gradient(45deg, #00ffcc, #0088ff); }
+        .bg-coinflip { background: linear-gradient(45deg, #ffcc00, #ff8800); }
+        .bg-battle { background: linear-gradient(45deg, #444, #111); border: 1px solid #00ff00; }
+
+        /* Coinflip Выбор - исправил подсветку */
+        .coin-btn {
+            background: #1a1a1a;
+            color: #fff;
             border: 2px solid #333;
-            border-radius: 12px;
-            font-size: 20px;
+            padding: 20px;
+            width: 48%;
+            border-radius: 15px;
+            font-size: 22px;
             font-weight: bold;
-            color: #555;
         }
-        .side-btn.selected-L { border-color: var(--neon-blue); color: var(--neon-blue); box-shadow: 0 0 15px rgba(0, 204, 255, 0.4); }
-        .side-btn.selected-X { border-color: var(--neon-red); color: var(--neon-red); box-shadow: 0 0 15px rgba(255, 0, 85, 0.4); }
+        .coin-btn.selected {
+            border-color: #ff004c;
+            color: #ff004c;
+            box-shadow: 0 0 20px rgba(255, 0, 76, 0.6);
+        }
 
-        /* Battle Wheel */
-        .battle-container { text-align: center; }
-        .wheel-box {
+        /* Battle Wheel с исправленной стрелкой */
+        .wheel-container {
             position: relative;
-            width: 260px; height: 260px;
-            margin: 20px auto;
+            width: 280px; height: 280px;
+            margin: 30px auto;
         }
-        .wheel-pointer {
+        
+        .wheel-arrow {
             position: absolute;
-            top: -10px; left: 50%;
+            top: -20px; left: 50%;
             transform: translateX(-50%);
-            z-index: 10;
-            width: 0; height: 0;
-            border-left: 15px solid transparent;
-            border-right: 15px solid transparent;
-            border-top: 25px solid var(--neon-green);
-            filter: drop-shadow(0 0 5px var(--neon-green));
+            width: 0; height: 0; 
+            border-left: 20px solid transparent;
+            border-right: 20px solid transparent;
+            border-top: 30px solid #00ff00;
+            z-index: 100;
+            filter: drop-shadow(0 0 8px #00ff00);
         }
-        .wheel-canvas {
+
+        .wheel {
             width: 100%; height: 100%;
             border-radius: 50%;
-            border: 5px solid #222;
+            border: 6px solid #00ff00;
+            box-shadow: 0 0 30px rgba(0, 255, 0, 0.5);
+            background: conic-gradient(#ff004c 0% 50%, #0088ff 50% 100%);
             transition: transform 5s cubic-bezier(0.15, 0, 0.15, 1);
-            background: conic-gradient(var(--neon-blue) 0% 50%, var(--neon-red) 50% 100%);
         }
 
-        /* Нижняя навигация */
-        .nav-bar {
+        /* Нижний хот бар (SVG + подсветка) */
+        .bottom-nav {
             position: fixed;
             bottom: 0; width: 100%;
-            background: rgba(10, 10, 10, 0.95);
+            background: rgba(13, 13, 13, 0.95);
+            border-top: 1px solid #222;
             display: flex;
             justify-content: space-around;
             padding: 12px 0;
-            border-top: 1px solid #222;
             z-index: 1000;
         }
-        .nav-link { text-align: center; color: #555; text-decoration: none; }
-        .nav-link.active { color: var(--neon-green); }
-        .nav-link svg { width: 26px; height: 26px; fill: currentColor; }
-        .nav-link.active svg { filter: drop-shadow(0 0 8px var(--neon-green)); }
 
-        /* Админка */
-        .admin-menu { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 15px; }
-        .admin-btn { background: #1a1a1a; border: 1px solid #333; color: #fff; padding: 12px; border-radius: 10px; font-size: 12px; }
-        
-        /* Секции */
-        .page { display: none; padding: 15px; animation: fadeIn 0.3s ease; }
-        .page.active { display: block; }
-        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        .nav-item { text-align: center; color: #666; cursor: pointer; }
+        .nav-item svg { width: 28px; height: 28px; fill: #666; }
+        .nav-item.active { color: #00ff00; }
+        .nav-item.active svg { fill: #00ff00; filter: drop-shadow(0 0 10px #00ff00); }
 
-        .copy-val { color: var(--neon-green); font-family: monospace; cursor: pointer; background: #111; padding: 4px 8px; border-radius: 4px; }
+        /* Админка - исправлена верстка кнопок */
+        .admin-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-top: 20px;
+        }
+        .admin-grid button {
+            padding: 15px;
+            background: #1a1a1a;
+            border: 1px solid #333;
+            color: white;
+            border-radius: 12px;
+            font-size: 13px;
+        }
+
+        .profile-list { list-style: none; padding: 0; margin: 20px 0; }
+        .profile-list li {
+            padding: 18px;
+            border-bottom: 1px solid #222;
+            display: flex;
+            justify-content: space-between;
+            background: rgba(20,20,20,0.5);
+        }
+
+        .copy-text { color: #00ff00; cursor: pointer; text-decoration: underline; font-family: monospace; }
+        .section { display: none; padding: 15px; }
+        .section.active { display: block; }
     </style>
 </head>
 <body>
-    <div class="stars-container"></div>
+    <div class="stars"></div>
 
-    <header style="display: flex; justify-content: space-between; align-items: center; padding: 15px;">
-        <div style="display: flex; align-items: center; gap: 10px;">
-            <img id="user-avatar" src="" style="width: 40px; height: 40px; border-radius: 50%; border: 2px solid var(--neon-green);">
+    <div style="display:flex; justify-content:space-between; align-items:center; padding:20px;">
+        <div style="display:flex; align-items:center; gap:12px;">
+            <img id="u-avatar" src="" style="width:45px; height:45px; border-radius:50%; border:2px solid #00ff00;">
             <div>
-                <div style="font-size: 10px; color: #888;">БАЛАНС</div>
-                <div style="font-size: 18px; font-weight: 800;"><span id="balance-display">0.00</span> <span style="color: var(--neon-green);">TON</span></div>
+                <div style="font-size:10px; color:#888;">ВАШ БАЛАНС</div>
+                <div style="font-size:20px; font-weight:900;"><span id="u-bal">0.00</span> <span style="color:#00ff00;">TON</span></div>
             </div>
         </div>
-        <div id="ton-connect-mount"></div>
-    </header>
+        <div id="ton-connect-root"></div>
+    </div>
 
-    <section id="page-home" class="page active">
-        <div class="game-grid">
-            <div class="game-card" onclick="showPage('game-crash')">
-                <div class="game-icon bg-crash">🚀</div>
-                <div><h3 style="margin:0;">CRASH</h3><small style="color:#777;">Множитель до x1000</small></div>
-            </div>
-            <div class="game-card" onclick="showPage('game-mines')">
-                <div class="game-icon bg-mines">💎</div>
-                <div><h3 style="margin:0;">MINES</h3><small style="color:#777;">Найди алмазы</small></div>
-            </div>
-            <div class="game-card" onclick="showPage('game-coinflip')">
-                <div class="game-icon bg-coin">🪙</div>
-                <div><h3 style="margin:0;">COINFLIP</h3><small style="color:#777;">L или X — удвой ставку</small></div>
-            </div>
-            <div class="game-card" onclick="showPage('game-battle')">
-                <div class="game-icon bg-battle">⚔️</div>
-                <div><h3 style="margin:0; color: var(--neon-green);">BATTLE ARENA</h3><small style="color:#777;">PvP с Дуровым за TON</small></div>
-            </div>
+    <section id="menu-section" class="section active">
+        <div class="game-card" onclick="openSection('crash-section')">
+            <div class="game-icon bg-crash">🚀</div>
+            <div><h3>CRASH</h3><span style="color:#aaa; font-size:12px;">Успей забрать X</span></div>
+        </div>
+        <div class="game-card" onclick="openSection('mines-section')">
+            <div class="game-icon bg-mines">💎</div>
+            <div><h3>MINES</h3><span style="color:#aaa; font-size:12px;">Обойди ловушки</span></div>
+        </div>
+        <div class="game-card" onclick="openSection('coinflip-section')">
+            <div class="game-icon bg-coinflip">🪙</div>
+            <div><h3>COINFLIP</h3><span style="color:#aaa; font-size:12px;">Удвой на L или X</span></div>
+        </div>
+        <div class="game-card" onclick="openSection('battle-section')">
+            <div class="game-icon bg-battle">⚔️</div>
+            <div><h3 style="color:#00ff00;">BATTLE ARENA</h3><span style="color:#aaa; font-size:12px;">PvP Сражения</span></div>
         </div>
     </section>
 
-    <section id="game-coinflip" class="page">
+    <section id="coinflip-section" class="section">
         <h2 class="neon-text">COINFLIP</h2>
-        <div class="side-select">
-            <button class="side-btn" id="coin-L" onclick="pickSide('L')">L</button>
-            <button class="side-btn" id="coin-X" onclick="pickSide('X')">X</button>
+        <div style="display: flex; justify-content: space-between; margin-bottom: 20px;">
+            <button class="coin-btn" id="btn-L" onclick="selectSide('L')">L</button>
+            <button class="coin-btn" id="btn-X" onclick="selectSide('X')">X</button>
         </div>
-        <div class="quick-bet-bar">
-            <button class="q-btn" onclick="setBet(0.5)">0.5</button>
-            <button class="q-btn" onclick="setBet(1)">1</button>
-            <button class="q-btn" onclick="setBet(5)">5</button>
-            <button class="q-btn" onclick="setBet(10)">10</button>
-            <button class="q-btn" onclick="setBet(25)">25</button>
+        <div class="quick-bets">
+            <button onclick="setQuickBet(0.5)">0.5</button>
+            <button onclick="setQuickBet(1)">1</button>
+            <button onclick="setQuickBet(5)">5</button>
+            <button onclick="setQuickBet(10)">10</button>
+            <button onclick="setQuickBet(25)">25</button>
         </div>
-        <input type="number" id="coin-bet-input" class="btn-main" style="background:#000; color:#fff; border:1px solid #333; margin-bottom:10px;" placeholder="Сумма TON">
-        <button class="btn-main">ИГРАТЬ</button>
+        <input type="number" id="coin-bet" placeholder="Ставка TON" style="width:100%; padding:15px; margin-bottom:20px; background:#111; border:1px solid #333; color:white; border-radius:10px;">
+        <button class="btn-green">ИГРАТЬ</button>
     </section>
 
-    <section id="game-battle" class="page">
-        <div class="battle-container">
-            <h2 style="color: var(--neon-green); margin-bottom: 5px;">BATTLE ARENA</h2>
-            <div id="battle-timer" style="font-weight: bold; color: var(--neon-red);">ОЖИДАНИЕ ИГРОКОВ...</div>
-            
-            <div class="wheel-box">
-                <div class="wheel-pointer"></div>
-                <div id="battle-wheel" class="wheel-canvas"></div>
-            </div>
-
-            <div class="quick-bet-bar" style="justify-content: center;">
-                <button class="q-btn" onclick="setBet(1, 'battle')">1</button>
-                <button class="q-btn" onclick="setBet(5, 'battle')">5</button>
-                <button class="q-btn" onclick="setBet(10, 'battle')">10</button>
-            </div>
-            <button class="btn-main" id="battle-action-btn" onclick="joinBattle()">СОЗДАТЬ БИТВУ / ВОЙТИ</button>
-            
-            <div id="battle-history" style="margin-top: 20px; text-align: left; font-size: 13px;">
-                </div>
+    <section id="battle-section" class="section">
+        <h2 class="neon-text" style="text-align:center;">BATTLE ARENA</h2>
+        <div class="wheel-container">
+            <div class="wheel-arrow"></div>
+            <div class="wheel" id="main-wheel"></div>
         </div>
+        <div class="quick-bets">
+            <button onclick="setQuickBet(1, 'battle')">1</button>
+            <button onclick="setQuickBet(5, 'battle')">5</button>
+            <button onclick="setQuickBet(10, 'battle')">10</button>
+        </div>
+        <button class="btn-green" onclick="startBattle()">СОЗДАТЬ БИТВУ / СТАВКА</button>
+        <div id="battle-log" style="margin-top:25px;">
+            </div>
     </section>
 
-    <section id="page-wallet" class="page">
+    <section id="wallet-section" class="section">
         <div class="neon-box">
-            <h3>ПОПОЛНЕНИЕ</h3>
-            <div style="display: flex; gap: 10px; margin-bottom: 20px;">
-                <button class="btn-main" onclick="initTonConnect()">TON CONNECT</button>
-                <button class="btn-main" style="background: #222; color: #fff;" onclick="showManualDeposit()">ВРУЧНУЮ</button>
+            <h3>КОШЕЛЕК</h3>
+            <button class="btn-green" style="margin-bottom:20px;" onclick="connectWallet()">ПОДКЛЮЧИТЬ TON CONNECT</button>
+            <div style="background:rgba(255,255,255,0.05); padding:15px; border-radius:10px;">
+                <p style="font-size:12px; color:#888;">АДРЕС ДЛЯ ПОПОЛНЕНИЯ:</p>
+                <span class="copy-text" onclick="copy('UQC...zadF')">UQC...zadF</span>
+                <p style="font-size:12px; color:#888; margin-top:15px;">MEMO (ОБЯЗАТЕЛЬНО):</p>
+                <span class="copy-text" onclick="copy('8423153067')">8423153067</span>
             </div>
-
-            <div id="manual-dep-info" style="display: none;">
-                <p>Адрес: <span class="copy-val" onclick="copy('UQC...zadF')">UQC...zadF</span></p>
-                <p>Memo: <span class="copy-val" onclick="copy('8423153067')">8423153067</span></p>
-                <small style="color: #888;">*Нажмите на текст для копирования</small>
+            <div style="display:flex; gap:10px; margin-top:20px;">
+                <button class="btn-green">ДЕПОЗИТ</button>
+                <button class="btn-red" style="width:100%;">ВЫВОД</button>
             </div>
-            
-            <hr style="border: 0; border-top: 1px solid #333; margin: 20px 0;">
-            <button class="btn-main" style="background: var(--neon-red); box-shadow: 0 0 10px var(--neon-red);">ВЫВЕСТИ TON</button>
         </div>
     </section>
 
-    <section id="page-profile" class="page">
-        <div class="neon-box" style="padding: 0;">
-            <div style="padding: 20px; border-bottom: 1px solid #222; display: flex; align-items: center; gap: 15px;">
-                <img id="prof-avatar" src="" style="width: 60px; height: 60px; border-radius: 50%; border: 2px solid var(--neon-green);">
-                <div>
-                    <h2 id="prof-name" style="margin: 0;">User</h2>
-                    <small id="prof-id" style="color: #666;">ID: 000000</small>
-                </div>
-            </div>
-            <div style="padding: 10px;">
-                <div style="display: flex; justify-content: space-between; padding: 12px; border-bottom: 1px solid #111;">
-                    <span>Статус</span><span style="color: var(--neon-green);">Игрок</span>
-                </div>
-                <div style="display: flex; justify-content: space-between; padding: 12px; border-bottom: 1px solid #111;">
-                    <span>Выиграно</span><span id="prof-win">0.00 TON</span>
-                </div>
-                <div style="display: flex; justify-content: space-between; padding: 12px; border-bottom: 1px solid #111;">
-                    <span>Потрачено</span><span id="prof-spent" style="color: var(--neon-red);">0.00 TON</span>
-                </div>
-                <div style="display: flex; justify-content: space-between; padding: 12px;">
-                    <span>Чистая прибыль</span><span id="prof-profit" style="color: var(--neon-blue);">0.00 TON</span>
-                </div>
-            </div>
+    <section id="profile-section" class="section">
+        <div class="neon-box" style="padding:0; overflow:hidden;">
+            <ul class="profile-list">
+                <li><span>ID:</span> <span class="neon-text" id="p-id">000000</span></li>
+                <li><span>БАЛАНС:</span> <span id="p-bal">0.00 TON</span></li>
+                <li><span>ИГР СЫГРАНО:</span> <span>397</span></li>
+                <li><span>ПОБЕД:</span> <span style="color:#00ff00;">130</span></li>
+                <li><span>ВЫИГРАНО:</span> <span style="color:#00ff00;">2375.91 TON</span></li>
+                <li><span>ПРОИГРАНО:</span> <span style="color:#ff004c;">2283.10 TON</span></li>
+            </ul>
         </div>
-        <button class="btn-main" style="margin-top: 20px; background: #222; color: #fff;" onclick="showPage('page-admin')">АДМИН ПАНЕЛЬ</button>
+        <button class="btn-red" style="width:100%; margin-top:20px;" onclick="openSection('admin-section')">АДМИН ПАНЕЛЬ</button>
     </section>
 
-    <section id="page-admin" class="page">
-        <h2 style="color: var(--neon-red);">Лоникс дай 30к</h2>
-        <div class="neon-box" style="margin-bottom: 15px;">
-            <input type="text" id="user-search" placeholder="Поиск по ID или Нику" class="btn-main" style="background:#000; color:#fff; border:1px solid #333; text-align:left;">
-            <div id="search-result" style="margin-top: 10px; font-size: 13px;">
-                </div>
+    <section id="admin-section" class="section">
+        <h2 style="color:#ff004c;">АДМИН ПАНЕЛЬ</h2>
+        <input type="text" placeholder="Поиск (ID / Юзер)" style="width:100%; padding:15px; background:#111; border:1px solid #333; color:white; border-radius:10px; margin-bottom:15px;">
+        
+        <div class="admin-grid">
+            <button>РАССЫЛКА</button>
+            <button>RTP %</button>
+            <button>ВЫКЛ ИГРЫ</button>
+            <button onclick="window.open('https://t.me/loonx')">КАНАЛ</button>
+            <button>САППОРТ</button>
+            <button>БАГИ</button>
         </div>
 
-        <div class="admin-menu">
-            <button class="admin-btn">РАССЫЛКА</button>
-            <button class="admin-btn">RTP НАСТРОЙКИ</button>
-            <button class="admin-btn">ВЫКЛ ИГРЫ</button>
-            <button class="admin-btn" onclick="window.open('https://t.me/your_channel')">НАШ КАНАЛ</button>
-            <button class="admin-btn">САППОРТ</button>
-            <button class="admin-btn">БАГИ</button>
+        <div id="admin-user-info" style="margin-top:25px;" class="neon-box">
+            <h4>MsgP2P (ID: 123)</h4>
+            <p>Баланс: 236.32 TON</p>
+            <div style="display:flex; gap:10px;">
+                <button class="btn-green" style="font-size:12px;">+ НАЧИСЛИТЬ</button>
+                <button class="btn-red" style="font-size:12px; width:100%;"> - СПИСАТЬ</button>
+            </div>
         </div>
     </section>
 
-    <nav class="nav-bar">
-        <a href="#" class="nav-link active" onclick="showPage('page-home', this)">
+    <nav class="bottom-nav">
+        <div class="nav-item active" onclick="switchTab('menu-section', this)">
             <svg viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
-            <div style="font-size: 10px;">Игры</div>
-        </a>
-        <a href="#" class="nav-link" onclick="showPage('page-promo', this)">
+            <div style="font-size:12px;">Игры</div>
+        </div>
+        <div class="nav-item" onclick="switchTab('promo-section', this)">
             <svg viewBox="0 0 24 24"><path d="M21.41 11.58l-9-9C12.05 2.22 11.55 2 11 2H4c-1.1 0-2 .9-2 2v7c0 .55.22 1.05.59 1.41l9 9c.36.36.86.58 1.41.58.55 0 1.05-.22 1.41-.59l7-7c.37-.36.59-.86.59-1.41 0-.55-.23-1.06-.59-1.41z"/></svg>
-            <div style="font-size: 10px;">Промо</div>
-        </a>
-        <a href="#" class="nav-link" onclick="showPage('page-wallet', this)">
-            <svg viewBox="0 0 24 24"><path d="M21 18v1c0 1.1-.9 2-2 2H5c-1.11 0-2-.9-2-2V5c0-1.1.89-2 2-2h14c1.1 0 2 .9 2 2v1h-9c-1.11 0-2 .9-2 2v8c0 1.1.89 2 2 2h9zm-9-2h10V8H12v8zm4-2.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/></svg>
-            <div style="font-size: 10px;">Кошелек</div>
-        </a>
-        <a href="#" class="nav-link" onclick="showPage('page-profile', this)">
+            <div style="font-size:12px;">Промо</div>
+        </div>
+        <div class="nav-item" onclick="switchTab('wallet-section', this)">
+            <svg viewBox="0 0 24 24"><path d="M21 18v1c0 1.1-.9 2-2 2H5c-1.11 0-2-.9-2-2V5c0-1.1.89-2 2-2h14c1.1 0 2 .9 2 2v1h-9c-1.11 0-2-.9-2 2v8c0 1.1.89 2 2 2h9zm-9-2h10V8H12v8zm4-2.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/></svg>
+            <div style="font-size:12px;">Кошелек</div>
+        </div>
+        <div class="nav-item" onclick="switchTab('profile-section', this)">
             <svg viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
-            <div style="font-size: 10px;">Профиль</div>
-        </a>
+            <div style="font-size:12px;">Профиль</div>
+        </div>
     </nav>
 
     <script>
         const tg = window.Telegram.WebApp;
         tg.expand();
 
-        let selectedSide = null;
-        let currentBet = 0;
-
-        // Переключение вкладок
-        function showPage(id, el) {
-            document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+        function switchTab(id, el) {
+            document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
             document.getElementById(id).classList.add('active');
-            if(el) {
-                document.querySelectorAll('.nav-link').forEach(n => n.classList.remove('active'));
-                el.classList.add('active');
-            }
+            document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+            if(el) el.classList.add('active');
         }
 
-        // Выбор стороны в Coinflip
-        function pickSide(side) {
-            selectedSide = side;
-            document.getElementById('coin-L').className = 'side-btn' + (side === 'L' ? ' selected-L' : '');
-            document.getElementById('coin-X').className = 'side-btn' + (side === 'X' ? ' selected-X' : '');
+        function openSection(id) {
+            document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+            document.getElementById(id).classList.add('active');
         }
 
-        // Быстрая ставка
-        function setBet(val, game) {
-            const input = document.getElementById(game === 'battle' ? 'battle-bet' : 'coin-bet-input');
-            if(input) input.value = val;
+        function selectSide(side) {
+            document.getElementById('btn-L').classList.remove('selected');
+            document.getElementById('btn-X').classList.remove('selected');
+            document.getElementById('btn-' + side).classList.add('selected');
         }
 
-        // Копирование
+        function setQuickBet(val, game) {
+            const input = document.getElementById(game === 'battle' ? 'coin-bet' : 'coin-bet');
+            input.value = val;
+        }
+
         function copy(text) {
             navigator.clipboard.writeText(text);
-            tg.showAlert('Скопировано: ' + text);
+            tg.showAlert("Скопировано: " + text);
         }
 
-        function showManualDeposit() {
-            const el = document.getElementById('manual-dep-info');
-            el.style.display = el.style.display === 'none' ? 'block' : 'none';
-        }
-
-        // Battle Arena Logic
-        function joinBattle() {
-            const wheel = document.getElementById('battle-wheel');
-            const btn = document.getElementById('battle-action-btn');
+        function startBattle() {
+            const wheel = document.getElementById('main-wheel');
+            const randomDeg = Math.floor(Math.random() * 2000) + 1080;
+            wheel.style.transform = `rotate(${randomDeg}deg)`;
             
-            // Симуляция вращения (в реальности через Socket.io)
-            const deg = Math.floor(Math.random() * 2000) + 1500;
-            wheel.style.transform = `rotate(${deg}deg)`;
-            btn.disabled = true;
-            btn.innerText = "ИДЕТ БИТВА...";
-
             setTimeout(() => {
-                // Логика: 70% победителю
-                const totalPool = 10; // Пример
-                const winAmount = totalPool * 0.7;
                 tg.showPopup({
-                    title: 'Битва завершена!',
-                    message: `Победитель забрал ${winAmount.toFixed(2)} TON. Комната доступна для просмотра 5 минут.`,
+                    title: 'Результат',
+                    message: 'Победитель забрал 70% банка! Комната открыта еще 5 минут.',
                     buttons: [{type: 'ok'}]
                 });
-                btn.innerText = "ИГРА ЗАКРЫТА (5М)";
-                // Через 5 минут вернуть кнопку в Create
-            }, 5000);
+            }, 5200);
         }
 
-        // TON Connect Init
-        const tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
-            manifestUrl: 'https://loonx-gifts.render.com/tonconnect-manifest.json',
-            buttonRootId: 'ton-connect-mount'
-        });
-
-        // Инициализация данных юзера
-        document.getElementById('user-avatar').src = tg.initDataUnsafe.user?.photo_url || '';
-        document.getElementById('prof-avatar').src = tg.initDataUnsafe.user?.photo_url || '';
-        document.getElementById('prof-name').innerText = tg.initDataUnsafe.user?.first_name || 'User';
-        document.getElementById('prof-id').innerText = 'ID: ' + (tg.initDataUnsafe.user?.id || '000000');
+        // Данные юзера
+        document.getElementById('u-avatar').src = tg.initDataUnsafe.user?.photo_url || '';
+        document.getElementById('p-id').innerText = tg.initDataUnsafe.user?.id || '000000';
     </script>
 </body>
 </html>
