@@ -845,49 +845,4 @@ function navGame(game) {
 // BATTLE ROULETTE IMPROVED
 function openBattleGame(lobbyId) {
     let lobby = typeof lobbyId === 'string' ? battleLobbies.find(l => l._id === lobbyId) : lobbyId;
-    if(!lobby) return;
-    currentBattle = lobby;
-    
-    // Данные юзера в рулетке
-    $('br-user-ava').src = user.photo || 'https://cdn-icons-png.flaticon.com/512/149/149071.png';
-    $('br-user-name').innerText = user.username;
-    $('br-user-bal').innerText = user.balance.toFixed(2) + ' TON';
-
-    $('battle-game-modal').style.display = 'flex';
-    $('battle-wheel').style.transition = 'none';
-    $('battle-wheel').style.transform = 'rotate(0deg)';
-    
-    drawBattleWheel(lobby);
-    renderBattlePlayers(lobby);
-    
-    // Таймер только если игроков больше 1
-    const updateTimer = () => {
-        if(!currentBattle || currentBattle.status !== 'waiting') return;
-        if(currentBattle.players.length < 2) {
-            $('battle-timer').innerText = 'ОЖИДАНИЕ ИГРОКОВ...';
-            return;
-        }
-        const endTime = new Date(currentBattle.createdAt).getTime() + 120000;
-        const left = Math.floor((endTime - Date.now()) / 1000);
-        if(left > 0) {
-            let m = Math.floor(left / 60); let s = left % 60;
-            $('battle-timer').innerText = `СТАРТ ЧЕРЕЗ: ${m}:${s<10?'0'+s:s}`;
-            setTimeout(updateTimer, 1000);
-        } else $('battle-timer').innerText = 'ЗАПУСК...';
-    };
-    updateTimer();
-}
-
-// ADMIN PANEL - EDIT BALANCE
-async function adminEditBalance(userId) {
-    let act = confirm('ОК - Пополнить, Отмена - Снять') ? 'add' : 'sub';
-    let amt = prompt('Сумма TON:');
-    if(!amt) return;
-    await fetch('/api/admin/edit_balance', { 
-        method:'POST', 
-        headers:{'Content-Type':'application/json'}, 
-        body:JSON.stringify({pass: adminPass, userId, action: act, amount: amt}) 
-    });
-    showToast('Баланс обновлен');
-    searchAdminUsers(adminSearchQuery);
 }
