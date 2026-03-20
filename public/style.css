@@ -1,4 +1,4 @@
- :root { --bg: #050505; --card: #121212; --neon: #00ff88; --neon-blue: #00d2ff; --neon-red: #ff0055; --text: #fff; --sub: #888; }
+:root { --bg: #050505; --card: #121212; --neon: #00ff88; --neon-blue: #00d2ff; --neon-red: #ff0055; --text: #fff; --sub: #888; }
 * { margin: 0; padding: 0; box-sizing: border-box; font-family: -apple-system, sans-serif; -webkit-tap-highlight-color: transparent; }
 body { background: var(--bg); color: var(--text); height: 100vh; overflow: hidden; display: flex; flex-direction: column; }
 
@@ -24,32 +24,47 @@ header { padding: 15px; display: flex; justify-content: space-between; align-ite
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 
 .card { background: var(--card); border: 1px solid #222; border-radius: 18px; padding: 18px; margin-bottom: 15px; }
-.game-card { display: flex; align-items: center; gap: 15px; cursor: pointer; transition: 0.2s; background: linear-gradient(180deg, #151515, #0d0d0d); border: 1px solid #2a2a2a; }
-.game-card.disabled { opacity: 0.6; cursor: not-allowed; }
-.g-icon { width: 55px; height: 55px; border-radius: 14px; display: flex; align-items: center; justify-content: center; font-size: 26px; }
+.game-card { display: flex; align-items: center; gap: 15px; cursor: pointer; transition: 0.2s; background: linear-gradient(180deg, #151515, #0d0d0d); border: 1px solid #2a2a2a; border-radius: 16px; padding: 15px; margin-bottom: 12px; }
+.game-card:active { transform: scale(0.98); }
+.g-icon { width: 55px; height: 55px; border-radius: 14px; display: flex; align-items: center; justify-content: center; font-size: 26px; flex-shrink: 0; }
 .cr { background: linear-gradient(135deg, #ff0055, #ff007f); box-shadow: 0 0 15px rgba(255,0,85,0.3); }
 .mi { background: linear-gradient(135deg, #00ff88, #00ccff); box-shadow: 0 0 15px rgba(0,255,136,0.3); }
 .co { background: linear-gradient(135deg, #ffcc00, #ff9900); box-shadow: 0 0 15px rgba(255,204,0,0.3); }
 
+/* --- ОБНОВЛЕННЫЕ КНОПКИ --- */
 .btn { width: 100%; padding: 16px; border-radius: 14px; border: none; background: var(--neon); color: #000; font-weight: 800; font-size: 16px; cursor: pointer; transition: 0.2s; margin-top: 10px; box-shadow: 0 0 15px rgba(0,255,136,0.2); }
 .btn:active { transform: scale(0.95); }
 .btn:disabled { background: #555 !important; box-shadow: none !important; color: #888 !important; cursor: not-allowed; }
-.input-box { width: 100%; padding: 16px; background: #080808; border: 1px solid #333; border-radius: 14px; color: #fff; text-align: center; font-size: 18px; font-weight: 700; margin-bottom: 10px; outline: none; }
+.btn-withdraw { background: linear-gradient(90deg, #ff0055, #ff007f); box-shadow: 0 0 15px rgba(255,0,85,0.3); color: #fff; }
+.btn-connect { background: linear-gradient(90deg, #0098EA, #00d2ff); box-shadow: 0 0 15px rgba(0,210,255,0.3); color: #fff; }
 
-.crash-screen { text-align: center; padding: 20px 0 40px 0; background: #0a0a0a; border-radius: 18px; margin-bottom: 15px; border: 1px solid #222; box-shadow: inset 0 0 30px rgba(0,0,0,0.8); position: relative; }
+.input-box { width: 100%; padding: 16px; background: #080808; border: 1px solid #333; border-radius: 14px; color: #fff; text-align: center; font-size: 18px; font-weight: 700; margin-bottom: 10px; outline: none; }
+.input-box:focus { border-color: var(--neon); box-shadow: 0 0 10px rgba(0,255,136,0.1); }
+
+/* --- ПРОФИЛЬ (НОВОЕ) --- */
+.profile-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.prof-panel { background: #1a1a1a; border: 1px solid #333; border-radius: 14px; padding: 15px 10px; font-size: 12px; color: var(--sub); font-weight: bold; }
+.prof-panel span { font-size: 18px; color: #fff; display: block; margin-top: 5px; }
+.info-section .info-btn { display: flex; align-items: center; justify-content: center; gap: 10px; background: #1a1a1a; padding: 14px; border-radius: 14px; border: 1px solid #333; margin-bottom: 10px; color: #fff; text-decoration: none; font-weight: bold; font-size: 14px; transition: 0.2s; }
+.info-section .info-btn:active { border-color: var(--neon); background: rgba(0,255,136,0.05); transform: scale(0.98); }
+
+/* --- КОШЕЛЕК ФИКС --- */
+.w-tab { flex: 1; padding: 12px; background: #222; color: #fff; border: none; border-radius: 12px; font-weight: bold; transition: 0.2s; }
+.w-tab.active { background: var(--neon); color: #000; box-shadow: 0 0 15px rgba(0,255,136,0.2); }
+#dep-wallet { color: var(--neon-blue); font-size: 13px; word-wrap: break-word; word-break: break-all; display: block; padding: 10px; background: #111; border-radius: 8px; border: 1px solid #333; }
+#dep-memo { color: var(--neon); font-size: 16px; display: block; padding: 10px; background: #111; border-radius: 8px; border: 1px solid #333; letter-spacing: 1px; }
+
+/* --- ИГРЫ --- */
+.crash-screen { text-align: center; padding: 60px 0 80px 0; background: #0a0a0a; border-radius: 18px; margin-bottom: 15px; border: 1px solid #222; box-shadow: inset 0 0 40px rgba(0,0,0,0.8); position: relative; }
+#cr-x { font-size: 56px; font-weight: 900; transition: color 0.3s ease, text-shadow 0.3s ease; letter-spacing: 2px; }
 .cr-history { display: flex; gap: 5px; padding: 0 15px 15px 15px; overflow-x: auto; white-space: nowrap; margin-bottom: 10px; border-bottom: 1px solid #222; }
 .cr-history::-webkit-scrollbar { display: none; }
 .cr-badge { padding: 4px 8px; border-radius: 6px; font-size: 11px; font-weight: bold; background: #1a1a1a; }
-.cr-badge.good { color: var(--neon); border: 1px solid var(--neon); }
-.cr-badge.bad { color: var(--neon-red); border: 1px solid var(--neon-red); }
 
-#cr-x { transition: color 0.3s ease, text-shadow 0.3s ease; } /* Плавная смена цвета для краша */
-
-/* Меню быстрых ставок */
-.quick-bets { display: flex; gap: 5px; margin-bottom: 10px; overflow-x: auto; padding-bottom: 5px; }
+.quick-bets { display: flex; gap: 6px; margin-bottom: 15px; overflow-x: auto; padding-bottom: 5px; justify-content: space-between; }
 .quick-bets::-webkit-scrollbar { display: none; }
-.qb-btn { flex: 0 0 auto; padding: 10px 15px; background: #1a1a1a; border: 1px solid #333; border-radius: 10px; font-size: 14px; font-weight: bold; color: #fff; cursor: pointer; transition: 0.2s; }
-.qb-btn:active { background: var(--neon); color: #000; border-color: var(--neon); }
+.qb-btn { flex: 1; min-width: 45px; padding: 12px 0; background: #1a1a1a; border: 1px solid #333; border-radius: 10px; font-size: 14px; font-weight: 900; color: #fff; text-align: center; transition: 0.2s; }
+.qb-btn:active { background: var(--neon); color: #000; border-color: var(--neon); transform: scale(0.95); }
 
 .live-bets-container { margin-top: 15px; background: #0a0a0a; border-radius: 14px; border: 1px solid #222; padding: 10px; max-height: 150px; overflow-y: auto; }
 .live-bet-item { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #1a1a1a; font-size: 13px; }
@@ -61,15 +76,16 @@ header { padding: 15px; display: flex; justify-content: space-between; align-ite
 .m-cell { aspect-ratio: 1; background: #1a1a1a; border-radius: 10px; display: flex; justify-content: center; align-items: center; font-size: 24px; transition: 0.2s; border: 1px solid #333; cursor: pointer; box-shadow: inset 0 0 10px rgba(0,0,0,0.5); }
 .m-cell.open { background: #0a0a0a; border-color: var(--neon); transform: scale(0.95); }
 
-.coin-container { perspective: 1000px; margin: 30px auto; width: 120px; height: 120px; }
+.coin-container { perspective: 1000px; margin: 30px auto; width: 140px; height: 140px; }
 .coin { width: 100%; height: 100%; position: relative; transform-style: preserve-3d; transition: transform 2s cubic-bezier(0.2, 0.8, 0.2, 1); }
-.c-face { position: absolute; width: 100%; height: 100%; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 50px; font-weight: 900; backface-visibility: hidden; background: #111; }
+.c-face { position: absolute; width: 100%; height: 100%; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 60px; font-weight: 900; backface-visibility: hidden; background: #111; }
 .c-front { border: 5px solid var(--neon); color: var(--neon); box-shadow: 0 0 30px rgba(0,255,136,0.4); }
-.c-back { transform: rotateY(180deg); border: 5px solid var(--neon-red); color: var(--neon-red); box-shadow: 0 0 30px rgba(255,0,85,0.4); }
+.c-back { transform: rotateY(180deg); border: 5px solid #ffcc00; color: #ffcc00; box-shadow: 0 0 30px rgba(255,204,0,0.4); }
 .coin-sides { display: flex; gap: 10px; margin-bottom: 15px; }
-.c-side { flex: 1; text-align: center; padding: 15px; background: #1a1a1a; border-radius: 14px; border: 2px solid #333; cursor: pointer; font-weight: 800; font-size: 18px; transition: 0.2s; }
-.c-side.active[data-side="L"] { border-color: var(--neon); background: rgba(0,255,136,0.1); color: var(--neon); }
-.c-side.active[data-side="X"] { border-color: var(--neon-red); background: rgba(255,0,85,0.1); color: var(--neon-red); }
+.c-side { flex: 1; text-align: center; padding: 18px; background: #1a1a1a; border-radius: 14px; border: 2px solid #333; font-weight: 900; font-size: 16px; transition: 0.2s; }
+/* ФИКС ЦВЕТОВ COINFLIP */
+.c-side.active[data-side="L"] { border-color: var(--neon-red); background: rgba(255,0,85,0.1); color: var(--neon-red); box-shadow: 0 0 15px rgba(255,0,85,0.2); }
+.c-side.active[data-side="X"] { border-color: var(--neon-red); background: rgba(255,0,85,0.1); color: var(--neon-red); box-shadow: 0 0 15px rgba(255,0,85,0.2); }
 
 .hotbar { position: fixed; bottom: 0; left: 0; width: 100%; height: 75px; background: rgba(5,5,5,0.95); border-top: 1px solid #222; display: flex; justify-content: space-around; align-items: center; z-index: 100; padding-bottom: env(safe-area-inset-bottom); backdrop-filter: blur(10px); }
 .nav-item { display: flex; flex-direction: column; align-items: center; gap: 5px; color: var(--sub); font-size: 11px; font-weight: 700; width: 25%; cursor: pointer; transition: 0.2s; }
@@ -77,7 +93,17 @@ header { padding: 15px; display: flex; justify-content: space-between; align-ite
 .nav-item.active { color: var(--neon); }
 .nav-item.active svg { filter: drop-shadow(0 0 8px rgba(0,255,136,0.6)); transform: translateY(-3px); }
 
-#admin-modal { position: fixed; inset: 0; background: var(--bg); z-index: 2000; padding: 20px; overflow-y: auto; display: none; }
-.admin-tabs { display: flex; gap: 5px; margin-bottom: 15px; overflow-x: auto; padding-bottom: 5px; }
-.admin-tab { background: #222; border: none; color: #fff; padding: 8px 15px; border-radius: 8px; font-weight: bold; wite-space: nowrap; }
-.admin-tab.active { background: var(--neon); color: #000; }
+/* --- АДМИН ПАНЕЛЬ ФУЛЛСКРИН --- */
+#admin-modal, #battle-game-modal { position: fixed; inset: 0; width: 100vw; height: 100vh; background: var(--bg); z-index: 20000; padding: 20px; overflow-y: auto; display: none; flex-direction: column; }
+.admin-tabs { display: flex; gap: 5px; margin-bottom: 20px; overflow-x: auto; padding-bottom: 5px; }
+.admin-tabs::-webkit-scrollbar { display: none; }
+.admin-tab { background: #222; border: 1px solid #333; color: #fff; padding: 10px 15px; border-radius: 10px; font-weight: bold; white-space: nowrap; transition: 0.2s; flex: 1; text-align: center; }
+.admin-tab.active { background: var(--neon); color: #000; border-color: var(--neon); box-shadow: 0 0 15px rgba(0,255,136,0.2); }
+
+/* АНИМАЦИЯ ОТЛЕТАЮЩЕГО БАЛАНСА */
+@keyframes floatUp {
+    0% { transform: translate(-50%, -50%) scale(0.5); opacity: 0; }
+    20% { transform: translate(-50%, -50%) scale(1.2); opacity: 1; }
+    100% { transform: translate(-50%, -300%) scale(0.8); opacity: 0; }
+}
+.floating-win { position: fixed; left: 50%; top: 50%; color: var(--neon); font-size: 32px; font-weight: 900; text-shadow: 0 0 20px rgba(0,255,136,0.8); pointer-events: none; z-index: 99999; animation: floatUp 1.2s ease-out forwards; }
