@@ -776,9 +776,6 @@ async function adminMaint(game, state) {
     await fetch('/api/admin/maintenance', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({pass: adminPass, game, state}) }); 
     adData.maintenance[game] = state; showToast(`Статус ${game} обновлен!`);
 }
-// ... (начало такое же как в оригинале) ...
-
-// ГЛОБАЛЬНАЯ ЗАЩИТА ОТ СПАМА (Баг забрать 2-3 раза)
 let isRequesting = false;
 
 async function reqBet(game, bet, win) {
@@ -894,7 +891,4 @@ async function adminEditBalance(userId) {
     showToast('Баланс обновлен');
     searchAdminUsers(adminSearchQuery);
 }
-
-// Обновленный рендер юзеров в админке
-// В функцию renderAdminContent(tab) в секцию 'users' добавь кнопку баланса:
-// <button style="background:orange; color:#000; padding:5px; border-radius:4px;" onclick="adminEditBalance('${u.id}')">💰 БАЛАНС</button>
+) :
