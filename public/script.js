@@ -1,4 +1,4 @@
-// ФИКС ДЛЯ TON CONNECT (Подгружаем библиотеку TonWeb для отправки комментария)
+// ФИКС ДЛЯ TON CONNECT
 const tonwebScript = document.createElement('script');
 tonwebScript.src = 'https://unpkg.com/tonweb@0.0.60/dist/tonweb.js';
 document.head.appendChild(tonwebScript);
@@ -10,7 +10,7 @@ let mode = 'real';
 let adminPass = '';
 let globalRtp = 90;
 let rtpObj = { crash: 90, mines: 90, coinflip: 90 };
-let maintenance = { crash: false, mines: false, coinflip: false };
+let maintenance = { crash: false, mines: false, coinflip: false, battle: false };
 let adminWalletAddress = '';
 
 // TON CONNECT
@@ -48,7 +48,6 @@ function draw() {
     requestAnimationFrame(draw);
 } draw();
 
-// ВРЕМЯ МСК ДЛЯ КЛИЕНТА
 function getMskTime() {
     return new Date().toLocaleTimeString("ru-RU", {timeZone: "Europe/Moscow"});
 }
@@ -67,7 +66,7 @@ window.onload = async () => {
 
     user = data.user;
     rtpObj = data.rtp || { crash: 90, mines: 90, coinflip: 90 };
-    maintenance = data.maintenance || { crash: false, mines: false, coinflip: false };
+    maintenance = data.maintenance || { crash: false, mines: false, coinflip: false, battle: false };
     
     adminWalletAddress = data.adminWallet || '';
     if($('dep-wallet')) $('dep-wallet').innerText = adminWalletAddress || 'Кошелек не настроен на сервере';
@@ -81,8 +80,9 @@ window.onload = async () => {
     if($('profile-name')) $('profile-name').innerText = user.username || 'Игрок';
     updateUI();
     renderWithdrawHistory();
+    renderBattleLobbies();
 
-    // ФИКС ИКОНКИ ПРОМО (Делает её красивой и адекватной, чтобы не было битых картинок)
+    // ФИКС ИКОНКИ ПРОМО
     setTimeout(() => {
         document.querySelectorAll('.nav-item').forEach(nav => {
             const attr = nav.getAttribute('onclick');
@@ -121,9 +121,15 @@ function nav(pageId, el) {
     if(el) { document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active')); el.classList.add('active'); }
 }
 
-function navGame(game) { if (maintenance[game]) return showToast('Временно тех. перерыв'); nav(game); }
+function navGame(game) { 
+    // ФИКС ОТКЛЮЧЕНИЯ ИГР
+    let mKey = game;
+    if(game === 'coin') mKey = 'coinflip'; // Алиас если ID страницы 'coin'
+    if (maintenance[mKey]) return showToast('Временно тех. перерыв'); 
+    nav(game); 
+    if(game === 'battle') renderBattleLobbies();
+}
 
-// БЫСТРЫЕ СТАВКИ
 function setQuickBet(inputId, amount) { if($(inputId)) $(inputId).value = amount; }
 
 function switchDepTab(type, el) {
@@ -133,7 +139,6 @@ function switchDepTab(type, el) {
     if($('dep-connect')) $('dep-connect').style.display = type === 'connect' ? 'block' : 'none';
 }
 
-// ИСПРАВЛЕННЫЙ TON CONNECT (С отправкой Memo/Комментария)
 async function payWithTonConnect() {
     if (!tonConnectUI.connected) return showToast('Сначала подключите кошелек!');
     const amount = parseFloat($('tc-amount').value);
@@ -142,10 +147,9 @@ async function payWithTonConnect() {
     let payloadBase64 = "";
     try {
         if (window.TonWeb) {
-            // Формируем payload для комментария (ID юзера)
             const tonweb = new TonWeb();
             const cell = new tonweb.boc.Cell();
-            cell.bits.writeUint(0, 32); // 32 бита нулей — стандарт TON для текста
+            cell.bits.writeUint(0, 32); 
             cell.bits.writeString(user.id);
             const bocBytes = await cell.toBoc();
             payloadBase64 = TonWeb.utils.bytesToBase64(bocBytes);
@@ -157,7 +161,7 @@ async function payWithTonConnect() {
         messages: [{
             address: adminWalletAddress,
             amount: (amount * 1000000000).toString(),
-            ...(payloadBase64 && { payload: payloadBase64 }) // Добавляем payload, если удалось сгенерировать
+            ...(payloadBase64 && { payload: payloadBase64 }) 
         }]
     };
 
@@ -167,34 +171,53 @@ async function payWithTonConnect() {
     } catch (e) { showToast('Транзакция отменена'); }
 }
 
-// ИСТОРИЯ ВЫВОДОВ В КОШЕЛЬКЕ
+// ИСТОРИЯ ВЫВОДОВ И ДЕПОЗИТОВ В КОШЕЛЬКЕ
 function renderWithdrawHistory() {
     const list = $('w-history-list');
     if(!list) return;
-    if(!user.withdrawHistory || user.withdrawHistory.length === 0) return list.innerHTML = '<div style="color:#555; text-align:center;">Нет выводов</div>';
     
-    list.innerHTML = user.withdrawHistory.map(w => {
-        let cls = w.status === 'Подтверждено' ? 'approved' : (w.status === 'Отклонено' ? 'rejected' : 'pending');
-        let rsn = w.reason ? `<br><span style="color:var(--neon-red); font-size:10px;">Причина: ${w.reason}</span>` : '';
-        return `
-            <div class="w-history-item ${cls}">
-                <div><img src="${user.photo || 'https://cdn-icons-png.flaticon.com/512/149/149071.png'}" style="width:20px; border-radius:50%; vertical-align:middle; margin-right:5px;"> <b>${w.amount} TON</b><br><span style="color:#888; font-size:10px;">${w.time || ''}</span></div>
-                <div style="text-align:right;">${w.status} ${rsn}</div>
-            </div>`;
-    }).join('');
+    let wHtml = '';
+    if(!user.withdrawHistory || user.withdrawHistory.length === 0) wHtml = '<div style="color:#555; text-align:center;">Нет выводов</div>';
+    else {
+        wHtml = user.withdrawHistory.map(w => {
+            let cls = w.status === 'Подтверждено' ? 'approved' : (w.status === 'Отклонено' ? 'rejected' : 'pending');
+            let rsn = w.reason ? `<br><span style="color:var(--neon-red); font-size:10px;">Причина: ${w.reason}</span>` : '';
+            return `
+                <div class="w-history-item ${cls}">
+                    <div><b>ВЫВОД:</b> ${w.amount} TON<br><span style="color:#888; font-size:10px;">${w.time || ''}</span></div>
+                    <div style="text-align:right;">${w.status} ${rsn}</div>
+                </div>`;
+        }).join('');
+    }
+
+    let dHtml = '<h4 style="color:var(--neon); margin-top:20px; text-align:center;">ИСТОРИЯ ДЕПОЗИТОВ</h4>';
+    if(!user.depositHistory || user.depositHistory.length === 0) dHtml += '<div style="color:#555; text-align:center;">Нет депозитов</div>';
+    else {
+        dHtml += user.depositHistory.map(d => `
+            <div class="w-history-item approved" style="border-left: 3px solid var(--neon);">
+                <div><b>ДЕПОЗИТ:</b> ${d.amount} TON<br><span style="color:#888; font-size:10px;">${d.time || ''}</span></div>
+                <div style="text-align:right; color:var(--neon);">Успешно</div>
+            </div>`).join('');
+    }
+
+    list.innerHTML = wHtml + dHtml;
 }
 
 if($('online-c')) socket.on('online', c => $('online-c').innerText = c);
 socket.on('rtpUpdate', r => rtpObj = r); 
 socket.on('maintenanceUpdate', m => maintenance = m); 
 
-// ИСТОРИЯ
+// ФИКС ИСТОРИИ СТАВОК (СТРОГО НОВЫЕ СВЕРХУ)
 socket.on('init_history', bets => { 
-    if($('feed-list')) { $('feed-list').innerHTML = ''; bets.reverse().forEach(b => addLiveBetToDOM(b)); }
+    if($('feed-list')) { 
+        $('feed-list').innerHTML = ''; 
+        // bets с сервера уже отсортирован новые->старые
+        bets.forEach(b => addLiveBetToDOM(b, true)); 
+    }
 });
-socket.on('newHistoryEntry', b => addLiveBetToDOM(b));
+socket.on('newHistoryEntry', b => addLiveBetToDOM(b, false));
 
-function addLiveBetToDOM(b) {
+function addLiveBetToDOM(b, isInit) {
     const list = $('feed-list');
     if(!list) return;
     const d = document.createElement('div'); d.className = 'live-bet-item';
@@ -202,15 +225,23 @@ function addLiveBetToDOM(b) {
     const modeTag = b.mode === 'Demo' ? '<span style="color:var(--neon-blue); font-size:9px;">[DEMO]</span>' : '<span style="color:var(--neon); font-size:9px;">[REAL]</span>';
     const timeHtml = b.timeMsk ? `<span style="font-size:9px; color:#555; margin-left:5px;">${b.timeMsk}</span>` : '';
     
+    // Поддержка длинных ников для Battle Roulette
+    const nameStr = b.username.includes('VS') ? `<span style="font-size:9px;">${b.username}</span>` : b.username;
+
     d.innerHTML = `
         <div class="live-user">
             <img src="${b.avatar || 'https://cdn-icons-png.flaticon.com/512/149/149071.png'}" class="live-ava">
-            <span>${b.username} ${timeHtml}<br><b style="color:var(--sub); font-size:10px;">(${b.game})</b> ${modeTag}</span>
+            <span>${nameStr} ${timeHtml}<br><b style="color:var(--sub); font-size:10px;">(${b.game})</b> ${modeTag}</span>
         </div>
         <span style="font-weight:bold; color:${isWin?'var(--neon)':'var(--neon-red)'}">${isWin ? '+'+b.result : b.result}</span>
     `;
-    list.prepend(d); 
-    if(list.children.length > 10) list.lastChild.remove();
+    
+    if (isInit) {
+        list.appendChild(d); // При ините просто добавляем по порядку (они уже новые сверху)
+    } else {
+        list.prepend(d); // Новая ставка падает строго вверх
+        if(list.children.length > 10) list.lastChild.remove();
+    }
 }
 
 // CRASH
@@ -218,10 +249,10 @@ let curCrash = {}; let myCrashBets = []; let isCashingOut = false;
 
 function getCrashColor(x) {
     const val = parseFloat(x);
-    if(val < 1.3) return '#ff0055'; // Красный
-    if(val < 1.6) return '#ffcc00'; // Желтый
-    if(val < 2.0) return '#aaff00'; // Светло-зеленый
-    return '#00ff88'; // Ядовитый неон
+    if(val < 1.3) return '#ff0055'; 
+    if(val < 1.6) return '#ffcc00'; 
+    if(val < 2.0) return '#aaff00'; 
+    return '#00ff88'; 
 }
 
 socket.on('crashHistoryUpdate', hist => {
@@ -315,7 +346,6 @@ function renderMines() {
 
             if(hitBomb) { 
                 miActive=false; $('mi-btn').innerText='ИГРАТЬ'; showToast('БУМ!'); 
-                // Открываем все поле
                 const cells = document.querySelectorAll('.m-cell');
                 cells.forEach((cell, idx) => {
                     cell.innerText = bombs.includes(idx) ? '💣' : '💎';
@@ -355,7 +385,6 @@ async function playCoin() {
         showToast(win > 0 ? `Победа! +${win.toFixed(2)}` : `Проигрыш: ${result}`); 
         await reqBet('Coinflip', bet, win);
         
-        // Reset rotation seamlessly
         setTimeout(() => {
             coin.style.transition = 'none'; 
             coin.style.transform = `rotateY(${result === 'L' ? 0 : 180}deg)`; 
@@ -364,11 +393,209 @@ async function playCoin() {
     }, 2000);
 }
 
+
+// --- BATTLE ROULETTE КЛИЕНТ ---
+let battleLobbies = [];
+let currentBattle = null;
+
+socket.on('battleUpdate', () => { renderBattleLobbies(); });
+
+socket.on('battleSpin', ({lobbyId, winnerId}) => {
+    if(currentBattle && currentBattle._id === lobbyId) {
+        currentBattle.status = 'spinning';
+        const wheel = $('battle-wheel');
+        wheel.style.transition = 'transform 5s cubic-bezier(0.2, 0.8, 0.2, 1)';
+        
+        // Считаем угол для победителя (чтобы стрелка указала на него)
+        let totalPool = currentBattle.players.reduce((s, p) => s + p.bet, 0);
+        let startAngle = 0;
+        let winAngle = 0;
+        
+        for(let p of currentBattle.players) {
+            let slice = (p.bet / totalPool) * 360;
+            if(p.id === winnerId) { winAngle = startAngle + (slice / 2); break; }
+            startAngle += slice;
+        }
+        
+        // Полные обороты + выравнивание стрелки (которая вверху, т.е. 270 градусов)
+        const rotations = 3600; 
+        const finalTransform = rotations + (270 - winAngle);
+        wheel.style.transform = `rotate(${finalTransform}deg)`;
+        
+        $('battle-timer').innerText = 'РУЛЕТКА КРУТИТСЯ!';
+        
+        setTimeout(() => {
+            const winner = currentBattle.players.find(p => p.id === winnerId);
+            $('battle-timer').innerText = `ПОБЕДИЛ: ${winner.username}!`;
+            $('battle-timer').style.color = winner.color;
+            showToast(`${winner.username} забирает куш!`);
+        }, 5000);
+    }
+});
+
+function openBattleModal() {
+    if(mode === 'demo') return showToast('Battle Roulette доступна только на REAL TON!');
+    $('battle-modal').style.display = 'flex';
+}
+
+async function createBattleLobby() {
+    const bet = parseFloat($('b-bet').value);
+    const min = parseFloat($('b-min').value);
+    const max = parseFloat($('b-max').value);
+    
+    if(isNaN(bet) || bet < 1 || bet > 100) return showToast('Ваша ставка от 1 до 100 TON');
+    if(isNaN(min) || min < 1) return showToast('Мин. ставка от 1 TON');
+    if(isNaN(max) || max > 150) return showToast('Макс. ставка до 150 TON');
+    if(min >= max) return showToast('Мин. ставка должна быть меньше Макс.');
+    
+    const r = await fetch('/api/battle/create', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id:user.id, bet, minBet:min, maxBet:max}) });
+    if(r.ok) { user = await r.json(); updateUI(); $('battle-modal').style.display='none'; showToast('Лобби создано!'); }
+    else { const e = await r.json(); showToast(e.error || 'Ошибка'); }
+}
+
+async function joinBattle(lobbyId) {
+    if(mode === 'demo') return showToast('Только REAL TON!');
+    const lobby = battleLobbies.find(l => l._id === lobbyId);
+    let betStr = prompt(`Введите ставку (От ${lobby.minBet} до ${lobby.maxBet} TON):`);
+    if(!betStr) return;
+    const bet = parseFloat(betStr);
+    
+    const r = await fetch('/api/battle/join', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id:user.id, lobbyId, bet}) });
+    if(r.ok) { 
+        const d = await r.json(); user = d.user; updateUI(); showToast('Вы вошли в лобби!'); 
+        openBattleGame(d.lobby);
+    } else { const e = await r.json(); showToast(e.error || 'Ошибка'); }
+}
+
+async function cancelBattle(lobbyId) {
+    if(!confirm('Отменить лобби и вернуть TON?')) return;
+    const r = await fetch('/api/battle/cancel', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id:user.id, lobbyId}) });
+    if(r.ok) { user = await r.json(); updateUI(); showToast('Лобби отменено!'); }
+    else showToast('Ошибка отмены');
+}
+
+async function renderBattleLobbies() {
+    const r = await fetch('/api/battle/list');
+    if(!r.ok) return;
+    battleLobbies = await r.json();
+    
+    const list = $('battle-lobbies');
+    if(!list) return;
+
+    if($('my-lobbies-chk') && $('my-lobbies-chk').checked) {
+        battleLobbies.sort((a,b) => {
+            let aMine = a.players.some(p => p.id === user.id) ? -1 : 1;
+            let bMine = b.players.some(p => p.id === user.id) ? -1 : 1;
+            return aMine - bMine;
+        });
+    }
+
+    list.innerHTML = battleLobbies.map(l => {
+        const creator = l.players[0];
+        const isMine = l.creatorId === user.id;
+        const imIn = l.players.some(p => p.id === user.id);
+        
+        let actionBtn = '';
+        if(isMine && l.players.length === 1) actionBtn = `<button class="btn" style="background:var(--neon-red); padding:5px; font-size:12px;" onclick="cancelBattle('${l._id}')">ОТМЕНА</button>`;
+        else if(imIn || isMine) actionBtn = `<button class="btn" style="background:#555; padding:5px; font-size:12px;" onclick="openBattleGame('${l._id}')">СМОТРЕТЬ</button>`;
+        else actionBtn = `<button class="btn" style="background:var(--neon); color:#000; padding:5px; font-size:12px;" onclick="joinBattle('${l._id}')">ВОЙТИ</button>`;
+
+        const timeStr = new Date(l.createdAt).toLocaleTimeString("ru-RU", {timeZone:"Europe/Moscow", hour:"2-digit", minute:"2-digit"});
+        
+        return `
+        <div style="background:#1a1a1a; border:1px solid ${isMine?'var(--neon)':'#333'}; padding:10px; border-radius:8px; display:flex; justify-content:space-between; align-items:center;">
+            <div style="display:flex; align-items:center; gap:10px;">
+                <img src="${creator.avatar}" style="width:30px; border-radius:50%;">
+                <div>
+                    <b style="color:var(--text);">${creator.username}</b> <span style="font-size:10px; color:#555;">[${timeStr}]</span><br>
+                    <span style="font-size:12px; color:var(--neon);">${creator.bet} TON</span> 
+                    <span style="font-size:10px; color:#888;">(Вход: ${l.minBet}-${l.maxBet})</span><br>
+                    <span style="font-size:10px; color:var(--neon-blue);">Игроков: ${l.players.length}/4</span>
+                </div>
+            </div>
+            <div>${actionBtn}</div>
+        </div>`;
+    }).join('') || '<div style="text-align:center; color:#555;">Нет открытых лобби</div>';
+}
+
+function openBattleGame(lobbyId) {
+    let lobby = typeof lobbyId === 'string' ? battleLobbies.find(l => l._id === lobbyId) : lobbyId;
+    if(!lobby) return;
+    currentBattle = lobby;
+    
+    $('battle-game-modal').style.display = 'flex';
+    $('battle-wheel').style.transition = 'none';
+    $('battle-wheel').style.transform = 'rotate(0deg)';
+    
+    drawBattleWheel(lobby);
+    renderBattlePlayers(lobby);
+    
+    // Подсчет времени (2 минуты с создания)
+    const updateTimer = () => {
+        if(!currentBattle || currentBattle.status !== 'waiting') return;
+        const endTime = new Date(currentBattle.createdAt).getTime() + 120000;
+        const left = Math.floor((endTime - Date.now()) / 1000);
+        if(left > 0) {
+            let m = Math.floor(left / 60); let s = left % 60;
+            $('battle-timer').innerText = `СТАРТ ЧЕРЕЗ: 0${m}:${s<10?'0'+s:s}`;
+            $('battle-timer').style.color = 'var(--neon)';
+            setTimeout(updateTimer, 1000);
+        } else $('battle-timer').innerText = 'ЗАПУСК...';
+    };
+    updateTimer();
+}
+
+function closeBattleGame() {
+    $('battle-game-modal').style.display = 'none';
+    currentBattle = null;
+}
+
+function drawBattleWheel(lobby) {
+    const canvas = $('battle-wheel');
+    const ctx = canvas.getContext('2d');
+    const cw = canvas.width / 2;
+    const ch = canvas.height / 2;
+    
+    ctx.clearRect(0,0, canvas.width, canvas.height);
+    
+    const totalPool = lobby.players.reduce((sum, p) => sum + p.bet, 0);
+    let startAngle = 0;
+    
+    for (let p of lobby.players) {
+        let sliceAngle = (p.bet / totalPool) * 2 * Math.PI;
+        ctx.beginPath();
+        ctx.moveTo(cw, ch);
+        ctx.arc(cw, ch, cw - 5, startAngle, startAngle + sliceAngle);
+        ctx.closePath();
+        ctx.fillStyle = p.color;
+        ctx.fill();
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = '#111';
+        ctx.stroke();
+        
+        startAngle += sliceAngle;
+    }
+}
+
+function renderBattlePlayers(lobby) {
+    const totalPool = lobby.players.reduce((sum, p) => sum + p.bet, 0);
+    $('battle-players').innerHTML = lobby.players.map(p => {
+        const perc = ((p.bet / totalPool) * 100).toFixed(1);
+        return `
+        <div style="background:#111; border-left:4px solid ${p.color}; padding:8px; border-radius:6px; flex: 1 1 45%; max-width:48%; text-align:left;">
+            <img src="${p.avatar}" style="width:20px; border-radius:50%; vertical-align:middle;"> 
+            <span style="font-size:12px; font-weight:bold;">${p.username}</span><br>
+            <span style="font-size:12px; color:var(--neon);">${p.bet} TON</span> <span style="font-size:10px; color:#888;">(${perc}%)</span>
+        </div>`;
+    }).join('');
+}
+
+
 // ФИНАНСЫ И ПРОМО
 async function checkRealDeposit(btn) {
     btn.innerText = "ПРОВЕРЯЕМ...";
     const r = await fetch('/api/check_deposit', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id:user.id}) });
-    if(r.ok) { const d = await r.json(); user = d.user; updateUI(); showToast(`+${d.added} TON`); } 
+    if(r.ok) { const d = await r.json(); user = d.user; updateUI(); renderWithdrawHistory(); showToast(`+${d.added} TON`); } 
     else { const e = await r.json(); showToast(e.error || 'Не найдено'); } btn.innerText = "ПРОВЕРИТЬ ОПЛАТУ";
 }
 
@@ -376,7 +603,6 @@ async function withdraw() {
     const a = parseFloat($('with-amount').value); 
     const ad = $('with-addr').value;
     
-    // ДОБАВЛЕНО: Проверка на пустой адрес кошелька
     if(!ad || !ad.trim()) return showToast('Введите адрес кошелька!');
     if(a > user.balance || a < 5) return showToast('Ошибка (Мин 5 TON)');
     
@@ -398,7 +624,7 @@ async function reqBet(game, bet, win) {
 }
 
 // АДМИН ПАНЕЛЬ
-let aTaps = 0; let adminSearchQuery = '';
+let aTaps = 0; let adminSearchQuery = ''; let currentAdminFilter = 'balance';
 async function checkAdmin() { aTaps++; if(aTaps >= 5) { aTaps = 0; let p = prompt('Пароль:'); if(p) { adminPass = p; loadAdminData(); } } }
 function switchAdminTab(tab) { document.querySelectorAll('.admin-tab').forEach(t => t.classList.remove('active')); event.target.classList.add('active'); renderAdminContent(tab); }
 
@@ -408,23 +634,40 @@ async function loadAdminData() {
     if(r.ok) { adData = await r.json(); $('admin-modal').style.display = 'block'; renderAdminContent('withdraws'); } else showToast('Неверный пароль');
 }
 
-// ФИКС И ПОИСК БАЗЫ ДАННЫХ
-async function searchAdminUsers(query) {
+async function searchAdminUsers(query, filterType = currentAdminFilter) {
     adminSearchQuery = query;
-    const r = await fetch('/api/admin/search_user', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({pass: adminPass, query}) });
+    currentAdminFilter = filterType;
+    const r = await fetch('/api/admin/search_user', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({pass: adminPass, query, filterType}) });
     if(r.ok) { const d = await r.json(); adData.users = d.users; renderAdminContent('users'); }
 }
 
 function renderAdminContent(tab) {
     const c = $('admin-content');
     if(tab === 'withdraws') {
-        c.innerHTML = adData.withdraws.map(w => `
-            <div style="background:#1a1a1a; padding:10px; border-radius:8px; margin-bottom:10px;">
-                <b>ID:</b> ${w.userId} <br> <b>Сумма:</b> ${w.amount} TON <br> <code>${w.address}</code><br>
-                <button class="btn" style="padding:8px; margin-top:5px;" onclick="adminW('${w._id}', 'approve')">ОДОБРИТЬ</button>
-                <button class="btn" style="padding:8px; margin-top:5px; background:var(--neon-red);" onclick="adminW('${w._id}', 'reject')">ОТКЛОНИТЬ (ВЕРНУТЬ)</button>
+        c.innerHTML = `
+            <div style="background:#222; padding:10px; border-radius:8px; margin-bottom:15px; text-align:center;">
+                <div style="color:var(--neon); font-size:18px;"><b>ВСЕГО ДЕПОВ:</b> ${adData.totalDeposited.toFixed(2)} TON</div>
+                <div style="color:var(--neon-red); font-size:18px;"><b>ВСЕГО ВЫВОДОВ:</b> ${adData.totalWithdrawn.toFixed(2)} TON</div>
             </div>
-        `).join('') || 'Нет заявок';
+            <h4 style="color:var(--neon);">ОЖИДАЮТ ВЫПЛАТЫ</h4>
+            ${adData.withdraws.map(w => `
+                <div style="background:#1a1a1a; padding:10px; border-radius:8px; margin-bottom:10px;">
+                    <b>ID:</b> ${w.userId} <br> <b>Сумма:</b> ${w.amount} TON <br> <code>${w.address}</code><br>
+                    <button class="btn" style="padding:8px; margin-top:5px;" onclick="adminW('${w._id}', 'approve')">ОДОБРИТЬ</button>
+                    <button class="btn" style="padding:8px; margin-top:5px; background:var(--neon-red);" onclick="adminW('${w._id}', 'reject')">ОТКЛОНИТЬ (ВЕРНУТЬ)</button>
+                </div>
+            `).join('') || '<div style="color:#555;">Нет заявок</div>'}
+            
+            <hr>
+            <h4 style="color:var(--neon);">ПОСЛЕДНИЕ ДЕПОЗИТЫ</h4>
+            ${adData.latestDeposits.map(d => `
+                <div style="padding:8px; border-bottom:1px solid #333;">
+                    <a href="tg://user?id=${d.userId}" style="color:var(--neon); text-decoration:none;"><b>@${d.username}</b></a>
+                    (ID: ${d.userId}) <br>
+                    Пополнил: <b style="color:#fff;">${d.amount} TON</b> <span style="font-size:10px; color:#888;">[${d.time}]</span>
+                </div>
+            `).join('') || '<div style="color:#555;">Нет депозитов</div>'}
+        `;
     }
     if(tab === 'promo') { 
         c.innerHTML = `
@@ -432,13 +675,15 @@ function renderAdminContent(tab) {
             <input type="number" id="ad-pr-sum" class="input-box" style="padding:10px; font-size:14px;" placeholder="Сумма TON">
             <input type="number" id="ad-pr-lim" class="input-box" style="padding:10px; font-size:14px;" placeholder="Лимит активаций">
             <button class="btn" style="padding:10px;" onclick="adminPromo()">СОЗДАТЬ ПРОМО</button><hr>
-            ${adData.promos.map(p => `
+            ${adData.promos.map(p => {
+                const usedListHtml = p.usedBy.map(uid => `<a href="tg://user?id=${uid}" style="color:var(--neon);">ID: ${uid}</a>`).join(', ');
+                return `
                 <div style="padding:8px; border-bottom:1px solid #222;">
-                    <div><b>${p.code}</b> - ${p.amount} TON | Осталось: <span style="color:var(--neon)">${p.limit - p.activations}</span> из ${p.limit}</div>
-                    <button style="background:#333; color:#fff; border:none; padding:4px 8px; border-radius:4px; margin-top:5px;" onclick="alert('Активации:\\n' + ${JSON.stringify(p.usedBy).replace(/"/g, '&quot;')})">Кто юзал?</button>
+                    <div><b>${p.code}</b> - ${p.amount} TON | Осталось: <span style="color:var(--neon)">${p.limit - p.usedBy.length}</span> из ${p.limit}</div>
+                    <div style="font-size:10px; margin-top:5px; max-height:40px; overflow-y:auto; background:#111; padding:5px;">Использовали: ${usedListHtml || 'Никто'}</div>
                     <button style="background:var(--neon-red); color:#fff; border:none; padding:4px 8px; border-radius:4px; margin-top:5px;" onclick="adminDelPromo('${p._id}')">Удалить</button>
                 </div>
-            `).join('')}
+            `}).join('')}
         `;
     }
     if(tab === 'rtp') {
@@ -454,9 +699,15 @@ function renderAdminContent(tab) {
             <div><b>Crash RTP (%):</b> <input type="number" id="rtp-crash" value="${adData.rtp.crash||90}" class="input-box" style="padding:5px; width:70px; display:inline-block;"> <button class="btn" style="padding:5px; width:auto; display:inline-block;" onclick="adminRTP('crash')">OK</button></div>
             <div><b>Mines RTP (%):</b> <input type="number" id="rtp-mines" value="${adData.rtp.mines||90}" class="input-box" style="padding:5px; width:70px; display:inline-block;"> <button class="btn" style="padding:5px; width:auto; display:inline-block;" onclick="adminRTP('mines')">OK</button></div>
             <div><b>Coinflip RTP (%):</b> <input type="number" id="rtp-coinflip" value="${adData.rtp.coinflip||90}" class="input-box" style="padding:5px; width:70px; display:inline-block;"> <button class="btn" style="padding:5px; width:auto; display:inline-block;" onclick="adminRTP('coinflip')">OK</button></div>
+            <hr>
+            <h4 style="color:var(--neon); margin-bottom:10px;">ОТКЛЮЧЕНИЕ ИГР (ТЕХ. РАБОТЫ)</h4>
+            <label><input type="checkbox" ${adData.maintenance.crash ? 'checked' : ''} onchange="adminMaint('crash', this.checked)"> Crash</label><br>
+            <label><input type="checkbox" ${adData.maintenance.mines ? 'checked' : ''} onchange="adminMaint('mines', this.checked)"> Mines</label><br>
+            <label><input type="checkbox" ${adData.maintenance.coinflip ? 'checked' : ''} onchange="adminMaint('coinflip', this.checked)"> Coinflip</label><br>
+            <label><input type="checkbox" ${adData.maintenance.battle ? 'checked' : ''} onchange="adminMaint('battle', this.checked)"> Battle Roulette</label><br>
         `;
     }
-    if(tab === 'users') { // ФИКС: Теперь юзеры прогружаются сразу
+    if(tab === 'users') { 
         let usersHtml = (adData.users || []).map(u => `
             <div style="padding:10px; border-bottom:1px solid #222; position:relative;">
                 <img src="${u.photo || 'https://cdn-icons-png.flaticon.com/512/149/149071.png'}" style="width:25px; border-radius:50%; vertical-align:middle;"> 
@@ -471,6 +722,14 @@ function renderAdminContent(tab) {
             `).join('');
 
         c.innerHTML = `
+            <div style="text-align:center; color:var(--neon-blue); font-weight:bold; margin-bottom:10px;">Всего юзеров: ${adData.totalUsers}</div>
+            
+            <div style="display:flex; justify-content:space-around; background:#111; padding:10px; border-radius:8px; margin-bottom:10px; font-size:12px;">
+                <label><input type="radio" name="u_filt" ${currentAdminFilter==='balance'?'checked':''} onchange="searchAdminUsers(adminSearchQuery, 'balance')"> Топ Баланс</label>
+                <label><input type="radio" name="u_filt" ${currentAdminFilter==='new'?'checked':''} onchange="searchAdminUsers(adminSearchQuery, 'new')"> Новые</label>
+                <label><input type="radio" name="u_filt" ${currentAdminFilter==='banned'?'checked':''} onchange="searchAdminUsers(adminSearchQuery, 'banned')"> Забаненые</label>
+            </div>
+            
             <input type="text" class="input-box" placeholder="Поиск (ID / Юзер)" value="${adminSearchQuery}" oninput="searchAdminUsers(this.value)">
             <div style="margin-top:10px;">${usersHtml}</div>
         `;
@@ -512,4 +771,8 @@ async function adminDelPromo(pId) {
 async function adminRTP(game) {
     const value = $(`rtp-${game}`).value;
     await fetch('/api/admin/set_rtp', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({pass: adminPass, game, value}) }); showToast('RTP сохранен!');
-                                                                                                                                                                                                                               }
+}
+async function adminMaint(game, state) {
+    await fetch('/api/admin/maintenance', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({pass: adminPass, game, state}) }); 
+    adData.maintenance[game] = state; showToast(`Статус ${game} обновлен!`);
+}
