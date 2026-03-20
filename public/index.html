@@ -2,14 +2,10 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Loonx Gifts</title>
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    <script src="/socket.io/socket.io.js"></script>
-    <script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
-    <script src="https://unpkg.com/tonweb@0.0.60/dist/tonweb.js"></script>
-    
     <style>
+        /* Базовые стили и фон с падающими звездами */
         body {
             margin: 0;
             padding: 0;
@@ -17,10 +13,9 @@
             color: #ffffff;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             overflow-x: hidden;
-            padding-bottom: 90px;
+            padding-bottom: 80px;
         }
 
-        /* Твой оригинальный фон с падающими звездами */
         .stars {
             position: fixed;
             top: 0; left: 0; width: 100%; height: 100%;
@@ -35,7 +30,7 @@
             to { background-position: -10000px 5000px; }
         }
 
-        /* Твой оригинальный Неон */
+        /* Неоновые эффекты и общие классы */
         .neon-text {
             color: #00ff00;
             text-shadow: 0 0 10px #00ff00, 0 0 20px #00ff00;
@@ -43,44 +38,44 @@
 
         .neon-box {
             border: 1px solid #00ff00;
-            box-shadow: 0 0 15px rgba(0, 255, 0, 0.4);
-            border-radius: 15px;
-            padding: 20px;
-            background: rgba(0, 0, 0, 0.8);
-            backdrop-filter: blur(10px);
+            box-shadow: 0 0 10px rgba(0, 255, 0, 0.5);
+            border-radius: 12px;
+            padding: 15px;
+            background: rgba(0, 0, 0, 0.7);
         }
 
-        /* Кнопки с твоим градиентом и тенями */
         .btn-green {
             background: #00ff00;
             color: #000;
             border: none;
-            padding: 14px 20px;
-            border-radius: 10px;
+            padding: 12px 20px;
+            border-radius: 8px;
             font-weight: bold;
             cursor: pointer;
             width: 100%;
             text-transform: uppercase;
-            box-shadow: 0 0 15px #00ff00;
+            box-shadow: 0 0 10px #00ff00;
             transition: 0.2s;
         }
+
+        .btn-green:active { transform: scale(0.95); }
 
         .btn-red {
             background: #ff004c;
             color: #fff;
             border: none;
-            padding: 14px 20px;
-            border-radius: 10px;
+            padding: 12px 20px;
+            border-radius: 8px;
             font-weight: bold;
             cursor: pointer;
-            box-shadow: 0 0 15px #ff004c;
+            box-shadow: 0 0 10px #ff004c;
         }
 
-        /* Быстрые ставки (0.5, 1, 5, 10, 25) */
+        /* Быстрые ставки */
         .quick-bets {
             display: flex;
             justify-content: space-between;
-            margin: 15px 0;
+            margin: 10px 0;
             gap: 5px;
         }
         
@@ -89,34 +84,45 @@
             background: #1a1a1a;
             color: #fff;
             border: 1px solid #333;
-            border-radius: 8px;
-            padding: 10px 5px;
-            font-size: 12px;
+            border-radius: 5px;
+            padding: 8px 5px;
             cursor: pointer;
+            transition: 0.2s;
+            font-size: 12px;
+        }
+        
+        .quick-bets button:hover {
+            border-color: #00ff00;
+            color: #00ff00;
         }
 
-        /* Твой UI Меню игр */
+        /* Главное меню игр (Градиенты и размеры) */
         .game-card {
             display: flex;
             align-items: center;
-            padding: 25px;
+            padding: 20px;
             margin: 15px;
-            border-radius: 20px;
+            border-radius: 15px;
             background: linear-gradient(145deg, #1a1a1a, #0d0d0d);
             border: 1px solid #222;
             cursor: pointer;
             transition: 0.3s;
         }
 
-        .game-card:active { border-color: #00ff00; box-shadow: 0 0 20px rgba(0, 255, 0, 0.3); }
+        .game-card:hover {
+            box-shadow: 0 0 15px rgba(0, 255, 0, 0.3);
+            border-color: #00ff00;
+        }
 
         .game-icon {
-            width: 65px; height: 65px;
-            border-radius: 15px;
-            margin-right: 20px;
+            width: 60px;
+            height: 60px;
+            border-radius: 12px;
+            margin-right: 15px;
             display: flex;
-            align-items: center; justify-content: center;
-            font-size: 32px;
+            align-items: center;
+            justify-content: center;
+            font-size: 30px;
         }
 
         .bg-crash { background: linear-gradient(45deg, #ff004c, #ff00a0); }
@@ -124,214 +130,293 @@
         .bg-coinflip { background: linear-gradient(45deg, #ffcc00, #ff8800); }
         .bg-battle { background: linear-gradient(45deg, #444, #111); border: 1px solid #00ff00; }
 
-        /* Coinflip Выбор - исправил подсветку */
+        /* Coinflip Selection */
         .coin-btn {
             background: #1a1a1a;
             color: #fff;
             border: 2px solid #333;
-            padding: 20px;
+            padding: 15px;
             width: 48%;
-            border-radius: 15px;
-            font-size: 22px;
+            border-radius: 10px;
+            font-size: 18px;
             font-weight: bold;
+            transition: 0.3s;
         }
+        /* Исправленная подсветка выбора стороны */
         .coin-btn.selected {
-            border-color: #ff004c;
-            color: #ff004c;
-            box-shadow: 0 0 20px rgba(255, 0, 76, 0.6);
+            border-color: #ff004c !important;
+            color: #ff004c !important;
+            box-shadow: 0 0 15px rgba(255, 0, 76, 0.6);
         }
 
-        /* Battle Wheel с исправленной стрелкой */
+        /* Battle Rullet Wheel */
         .wheel-container {
             position: relative;
-            width: 280px; height: 280px;
+            width: 250px;
+            height: 250px;
             margin: 30px auto;
         }
         
         .wheel-arrow {
             position: absolute;
-            top: -20px; left: 50%;
+            top: -15px;
+            left: 50%;
             transform: translateX(-50%);
-            width: 0; height: 0; 
-            border-left: 20px solid transparent;
-            border-right: 20px solid transparent;
-            border-top: 30px solid #00ff00;
-            z-index: 100;
-            filter: drop-shadow(0 0 8px #00ff00);
+            width: 0; 
+            height: 0; 
+            border-left: 15px solid transparent;
+            border-right: 15px solid transparent;
+            border-top: 25px solid #00ff00;
+            z-index: 10;
+            filter: drop-shadow(0 0 5px #00ff00);
         }
 
         .wheel {
-            width: 100%; height: 100%;
+            width: 100%;
+            height: 100%;
             border-radius: 50%;
-            border: 6px solid #00ff00;
-            box-shadow: 0 0 30px rgba(0, 255, 0, 0.5);
+            border: 4px solid #00ff00;
+            box-shadow: 0 0 20px rgba(0, 255, 0, 0.4);
             background: conic-gradient(#ff004c 0% 50%, #0088ff 50% 100%);
-            transition: transform 5s cubic-bezier(0.15, 0, 0.15, 1);
+            transition: transform 4s cubic-bezier(0.17, 0.67, 0.12, 0.99);
         }
 
-        /* Нижний хот бар (SVG + подсветка) */
+        /* Навигация (Нижний хот бар с SVG) */
         .bottom-nav {
             position: fixed;
-            bottom: 0; width: 100%;
-            background: rgba(13, 13, 13, 0.95);
+            bottom: 0;
+            width: 100%;
+            background: #0d0d0d;
             border-top: 1px solid #222;
             display: flex;
             justify-content: space-around;
-            padding: 12px 0;
-            z-index: 1000;
+            padding: 10px 0;
+            z-index: 100;
         }
 
-        .nav-item { text-align: center; color: #666; cursor: pointer; }
-        .nav-item svg { width: 28px; height: 28px; fill: #666; }
-        .nav-item.active { color: #00ff00; }
-        .nav-item.active svg { fill: #00ff00; filter: drop-shadow(0 0 10px #00ff00); }
+        .nav-item {
+            text-align: center;
+            color: #666;
+            cursor: pointer;
+            transition: 0.3s;
+        }
 
-        /* Админка - исправлена верстка кнопок */
+        .nav-item svg {
+            width: 24px;
+            height: 24px;
+            fill: #666;
+            transition: 0.3s;
+        }
+
+        .nav-item.active { color: #00ff00; }
+        .nav-item.active svg {
+            fill: #00ff00;
+            filter: drop-shadow(0 0 8px #00ff00);
+        }
+
+        /* Админка */
         .admin-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 12px;
+            gap: 10px;
             margin-top: 20px;
         }
         .admin-grid button {
-            padding: 15px;
-            background: #1a1a1a;
-            border: 1px solid #333;
+            padding: 12px;
+            background: #222;
+            border: 1px solid #444;
             color: white;
-            border-radius: 12px;
+            border-radius: 8px;
             font-size: 13px;
         }
-
-        .profile-list { list-style: none; padding: 0; margin: 20px 0; }
+        
+        /* Профиль Лист */
+        .profile-list {
+            list-style: none;
+            padding: 0;
+            margin: 20px;
+        }
         .profile-list li {
-            padding: 18px;
-            border-bottom: 1px solid #222;
+            padding: 15px 0;
+            border-bottom: 1px solid #333;
             display: flex;
             justify-content: space-between;
-            background: rgba(20,20,20,0.5);
         }
 
-        .copy-text { color: #00ff00; cursor: pointer; text-decoration: underline; font-family: monospace; }
-        .section { display: none; padding: 15px; }
+        .copy-text {
+            color: #00ff00;
+            cursor: pointer;
+            text-decoration: underline;
+        }
+
+        .section { display: none; }
         .section.active { display: block; }
+
     </style>
 </head>
 <body>
     <div class="stars"></div>
 
-    <div style="display:flex; justify-content:space-between; align-items:center; padding:20px;">
-        <div style="display:flex; align-items:center; gap:12px;">
-            <img id="u-avatar" src="" style="width:45px; height:45px; border-radius:50%; border:2px solid #00ff00;">
+    <section id="menu-section" class="section active">
+        <div class="game-card" onclick="openGame('crash')">
+            <div class="game-icon bg-crash">🚀</div>
             <div>
-                <div style="font-size:10px; color:#888;">ВАШ БАЛАНС</div>
-                <div style="font-size:20px; font-weight:900;"><span id="u-bal">0.00</span> <span style="color:#00ff00;">TON</span></div>
+                <h3 style="margin:0;">CRASH</h3>
+                <span style="color:#aaa; font-size:12px;">Успей до взрыва</span>
             </div>
         </div>
-        <div id="ton-connect-root"></div>
-    </div>
-
-    <section id="menu-section" class="section active">
-        <div class="game-card" onclick="openSection('crash-section')">
-            <div class="game-icon bg-crash">🚀</div>
-            <div><h3>CRASH</h3><span style="color:#aaa; font-size:12px;">Успей забрать X</span></div>
-        </div>
-        <div class="game-card" onclick="openSection('mines-section')">
+        <div class="game-card" onclick="openGame('mines')">
             <div class="game-icon bg-mines">💎</div>
-            <div><h3>MINES</h3><span style="color:#aaa; font-size:12px;">Обойди ловушки</span></div>
+            <div>
+                <h3 style="margin:0;">MINES</h3>
+                <span style="color:#aaa; font-size:12px;">Обойди бомбы</span>
+            </div>
         </div>
-        <div class="game-card" onclick="openSection('coinflip-section')">
+        <div class="game-card" onclick="openGame('coinflip')">
             <div class="game-icon bg-coinflip">🪙</div>
-            <div><h3>COINFLIP</h3><span style="color:#aaa; font-size:12px;">Удвой на L или X</span></div>
+            <div>
+                <h3 style="margin:0;">COINFLIP</h3>
+                <span style="color:#aaa; font-size:12px;">Крути монету (L или X)</span>
+            </div>
         </div>
-        <div class="game-card" onclick="openSection('battle-section')">
+        <div class="game-card" onclick="openGame('battle')">
             <div class="game-icon bg-battle">⚔️</div>
-            <div><h3 style="color:#00ff00;">BATTLE ARENA</h3><span style="color:#aaa; font-size:12px;">PvP Сражения</span></div>
+            <div>
+                <h3 style="margin:0; color: #00ff00;">BATTLE ARENA</h3>
+                <span style="color:#aaa; font-size:12px;">Сражайся с игроками</span>
+            </div>
         </div>
     </section>
 
-    <section id="coinflip-section" class="section">
-        <h2 class="neon-text">COINFLIP</h2>
-        <div style="display: flex; justify-content: space-between; margin-bottom: 20px;">
-            <button class="coin-btn" id="btn-L" onclick="selectSide('L')">L</button>
-            <button class="coin-btn" id="btn-X" onclick="selectSide('X')">X</button>
+    <section id="crash-section" class="section" style="padding: 20px;">
+        <h2>CRASH</h2>
+        <div class="neon-box" style="text-align: center; margin-bottom: 20px;">
+            <h1 id="crash-multiplier" style="font-size: 48px;">1.00x</h1>
         </div>
         <div class="quick-bets">
-            <button onclick="setQuickBet(0.5)">0.5</button>
-            <button onclick="setQuickBet(1)">1</button>
-            <button onclick="setQuickBet(5)">5</button>
-            <button onclick="setQuickBet(10)">10</button>
-            <button onclick="setQuickBet(25)">25</button>
+            <button onclick="setBet(0.5)">0.5</button>
+            <button onclick="setBet(1)">1</button>
+            <button onclick="setBet(5)">5</button>
+            <button onclick="setBet(10)">10</button>
+            <button onclick="setBet(25)">25</button>
         </div>
-        <input type="number" id="coin-bet" placeholder="Ставка TON" style="width:100%; padding:15px; margin-bottom:20px; background:#111; border:1px solid #333; color:white; border-radius:10px;">
+        <input type="number" id="bet-amount-crash" placeholder="Ставка TON" style="width: 100%; padding: 10px; margin-bottom: 20px; background: #111; border: 1px solid #333; color: white; box-sizing: border-box;">
+        <button class="btn-green">СТАВКА</button>
+    </section>
+
+    <section id="mines-section" class="section" style="padding: 20px;">
+        <h2>MINES</h2>
+        <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 5px; margin-bottom: 20px;">
+            <script>
+                for(let i=0; i<25; i++) document.write('<div style="aspect-ratio: 1; background: #222; border-radius: 5px; border: 1px solid #333;"></div>');
+            </script>
+        </div>
+        <div class="quick-bets">
+            <button onclick="setBet(0.5)">0.5</button>
+            <button onclick="setBet(1)">1</button>
+            <button onclick="setBet(5)">5</button>
+            <button onclick="setBet(10)">10</button>
+            <button onclick="setBet(25)">25</button>
+        </div>
+        <input type="number" id="bet-amount-mines" placeholder="Ставка TON" style="width: 100%; padding: 10px; margin-bottom: 20px; background: #111; border: 1px solid #333; color: white; box-sizing: border-box;">
         <button class="btn-green">ИГРАТЬ</button>
     </section>
 
-    <section id="battle-section" class="section">
-        <h2 class="neon-text" style="text-align:center;">BATTLE ARENA</h2>
+    <section id="coinflip-section" class="section" style="padding: 20px;">
+        <h2>COINFLIP</h2>
+        <div style="display: flex; justify-content: space-between; margin-bottom: 20px;">
+            <button class="coin-btn" id="btn-side-L" onclick="selectCoinSide('L')">L</button>
+            <button class="coin-btn" id="btn-side-X" onclick="selectCoinSide('X')">X</button>
+        </div>
+        
+        <div class="quick-bets">
+            <button onclick="setBet(0.5)">0.5</button>
+            <button onclick="setBet(1)">1</button>
+            <button onclick="setBet(5)">5</button>
+            <button onclick="setBet(10)">10</button>
+            <button onclick="setBet(25)">25</button>
+        </div>
+        <input type="number" id="bet-amount" placeholder="Ставка TON" style="width: 100%; padding: 10px; margin-bottom: 20px; background: #111; border: 1px solid #333; color: white; box-sizing: border-box;">
+        <button class="btn-green">ПОСТАВИТЬ</button>
+    </section>
+
+    <section id="battle-section" class="section" style="padding: 20px;">
+        <h2 class="neon-text">BATTLE ARENA</h2>
+        
         <div class="wheel-container">
             <div class="wheel-arrow"></div>
-            <div class="wheel" id="main-wheel"></div>
+            <div class="wheel" id="battle-wheel"></div>
         </div>
+        
         <div class="quick-bets">
-            <button onclick="setQuickBet(1, 'battle')">1</button>
-            <button onclick="setQuickBet(5, 'battle')">5</button>
-            <button onclick="setQuickBet(10, 'battle')">10</button>
+            <button onclick="setBet(0.5)">0.5</button>
+            <button onclick="setBet(1)">1</button>
+            <button onclick="setBet(5)">5</button>
+            <button onclick="setBet(10)">10</button>
+            <button onclick="setBet(25)">25</button>
         </div>
-        <button class="btn-green" onclick="startBattle()">СОЗДАТЬ БИТВУ / СТАВКА</button>
-        <div id="battle-log" style="margin-top:25px;">
+        
+        <button class="btn-green" style="margin-bottom: 10px;" onclick="spinWheel()">СОЗДАТЬ БИТВУ / СТАВКА</button>
+        
+        <div id="battle-history" style="margin-top: 20px; font-size: 14px; background: rgba(0,0,0,0.5); border-radius: 10px; padding: 10px;">
+            <p style="color: #888;">История ставок:</p>
             </div>
     </section>
 
-    <section id="wallet-section" class="section">
+    <section id="wallet-section" class="section" style="padding: 20px;">
         <div class="neon-box">
-            <h3>КОШЕЛЕК</h3>
-            <button class="btn-green" style="margin-bottom:20px;" onclick="connectWallet()">ПОДКЛЮЧИТЬ TON CONNECT</button>
-            <div style="background:rgba(255,255,255,0.05); padding:15px; border-radius:10px;">
-                <p style="font-size:12px; color:#888;">АДРЕС ДЛЯ ПОПОЛНЕНИЯ:</p>
-                <span class="copy-text" onclick="copy('UQC...zadF')">UQC...zadF</span>
-                <p style="font-size:12px; color:#888; margin-top:15px;">MEMO (ОБЯЗАТЕЛЬНО):</p>
-                <span class="copy-text" onclick="copy('8423153067')">8423153067</span>
-            </div>
-            <div style="display:flex; gap:10px; margin-top:20px;">
-                <button class="btn-green">ДЕПОЗИТ</button>
-                <button class="btn-red" style="width:100%;">ВЫВОД</button>
+            <h3>TonConnect</h3>
+            <button class="btn-green" style="margin-bottom: 15px;">ПОДКЛЮЧИТЬ КОШЕЛЕК</button>
+            
+            <p>Ваш адрес: <br>
+            <span class="copy-text" onclick="copyText('UQC...zadF')">UQC...zadF (Нажми для копирования)</span></p>
+            
+            <p>Memo: <br>
+            <span class="copy-text" onclick="copyText('8423153067')">8423153067 (Нажми для копирования)</span></p>
+            
+            <div style="display: flex; gap: 10px; margin-top: 20px;">
+                <button class="btn-green">ПОПОЛНИТЬ</button>
+                <button class="btn-red" style="flex: 1;">ВЫВЕСТИ</button>
             </div>
         </div>
     </section>
 
     <section id="profile-section" class="section">
-        <div class="neon-box" style="padding:0; overflow:hidden;">
-            <ul class="profile-list">
-                <li><span>ID:</span> <span class="neon-text" id="p-id">000000</span></li>
-                <li><span>БАЛАНС:</span> <span id="p-bal">0.00 TON</span></li>
-                <li><span>ИГР СЫГРАНО:</span> <span>397</span></li>
-                <li><span>ПОБЕД:</span> <span style="color:#00ff00;">130</span></li>
-                <li><span>ВЫИГРАНО:</span> <span style="color:#00ff00;">2375.91 TON</span></li>
-                <li><span>ПРОИГРАНО:</span> <span style="color:#ff004c;">2283.10 TON</span></li>
-            </ul>
-        </div>
-        <button class="btn-red" style="width:100%; margin-top:20px;" onclick="openSection('admin-section')">АДМИН ПАНЕЛЬ</button>
+        <ul class="profile-list">
+            <li><span>ID:</span> <span class="neon-text">123456789</span></li>
+            <li><span>Баланс:</span> <span class="neon-text">238.32 TON</span></li>
+            <li><span>Сыграно игр:</span> <span>397</span></li>
+            <li><span>Побед:</span> <span style="color: #00ff00;">130</span></li>
+            <li><span>Профит:</span> <span style="color: #00ff00;">2375.91 TON</span></li>
+            <li><span>Минус:</span> <span style="color: #ff004c;">2283.10 TON</span></li>
+        </ul>
+        
+        <button class="btn-red" style="width: 90%; margin: 0 5%;" onclick="openAdmin()">АДМИН ПАНЕЛЬ</button>
     </section>
 
-    <section id="admin-section" class="section">
-        <h2 style="color:#ff004c;">АДМИН ПАНЕЛЬ</h2>
-        <input type="text" placeholder="Поиск (ID / Юзер)" style="width:100%; padding:15px; background:#111; border:1px solid #333; color:white; border-radius:10px; margin-bottom:15px;">
+    <section id="admin-section" class="section" style="padding: 20px;">
+        <h2 style="color: #ff004c;">АДМИН ПАНЕЛЬ</h2>
+        <input type="text" id="admin-user-search" placeholder="Поиск (ID / Юзер)" style="width: 100%; padding: 10px; background: #111; border: 1px solid #333; color: white; border-radius: 8px; margin-bottom: 15px;">
         
         <div class="admin-grid">
-            <button>РАССЫЛКА</button>
-            <button>RTP %</button>
-            <button>ВЫКЛ ИГРЫ</button>
-            <button onclick="window.open('https://t.me/loonx')">КАНАЛ</button>
-            <button>САППОРТ</button>
-            <button>БАГИ</button>
+            <button onclick="alert('Рассылка запущена')">Рассылка</button>
+            <button onclick="alert('Настройки RTP сохранены')">Настройки RTP</button>
+            <button onclick="alert('Игры отключены')">Отключение игр</button>
+            <button onclick="window.open('https://t.me/')">Наш Канал</button>
+            <button onclick="alert('Чат с саппортом')">Саппорт</button>
+            <button onclick="alert('Отчет отправлен')">Баги</button>
         </div>
 
-        <div id="admin-user-info" style="margin-top:25px;" class="neon-box">
-            <h4>MsgP2P (ID: 123)</h4>
-            <p>Баланс: 236.32 TON</p>
-            <div style="display:flex; gap:10px;">
-                <button class="btn-green" style="font-size:12px;">+ НАЧИСЛИТЬ</button>
-                <button class="btn-red" style="font-size:12px; width:100%;"> - СПИСАТЬ</button>
+        <div id="user-stats-admin" style="margin-top: 20px;">
+            <h4>Найденный пользователь: MsgP2P</h4>
+            <div class="neon-box" style="border-color: #ff004c;">
+                <p>Баланс: 236.32 TON</p>
+                <p>Всего выиграно: <span style="color: #00ff00;">500 TON</span></p>
+                <p>Всего потрачено: <span style="color: #ff004c;">400 TON</span></p>
+                <div style="display: flex; gap: 10px; margin-top: 10px;">
+                    <button class="btn-green" style="font-size: 11px;" onclick="alert('TON начислен')">+ Начислить TON</button>
+                    <button class="btn-red" style="font-size: 11px; flex: 1;" onclick="alert('TON списан')">- Снять TON</button>
+                </div>
             </div>
         </div>
     </section>
@@ -339,71 +424,98 @@
     <nav class="bottom-nav">
         <div class="nav-item active" onclick="switchTab('menu-section', this)">
             <svg viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
-            <div style="font-size:12px;">Игры</div>
+            <div style="font-size: 12px; margin-top: 5px;">Игры</div>
         </div>
         <div class="nav-item" onclick="switchTab('promo-section', this)">
-            <svg viewBox="0 0 24 24"><path d="M21.41 11.58l-9-9C12.05 2.22 11.55 2 11 2H4c-1.1 0-2 .9-2 2v7c0 .55.22 1.05.59 1.41l9 9c.36.36.86.58 1.41.58.55 0 1.05-.22 1.41-.59l7-7c.37-.36.59-.86.59-1.41 0-.55-.23-1.06-.59-1.41z"/></svg>
-            <div style="font-size:12px;">Промо</div>
+            <svg viewBox="0 0 24 24"><path d="M21.41 11.58l-9-9C12.05 2.22 11.55 2 11 2H4c-1.1 0-2 .9-2 2v7c0 .55.22 1.05.59 1.41l9 9c.36.36.86.58 1.41.58.55 0 1.05-.22 1.41-.59l7-7c.37-.36.59-.86.59-1.41 0-.55-.23-1.06-.59-1.41zM5.5 7C4.67 7 4 6.33 4 5.5S4.67 4 5.5 4 7 4.67 7 5.5 6.33 7 5.5 7z"/></svg>
+            <div style="font-size: 12px; margin-top: 5px;">Промо</div>
         </div>
         <div class="nav-item" onclick="switchTab('wallet-section', this)">
-            <svg viewBox="0 0 24 24"><path d="M21 18v1c0 1.1-.9 2-2 2H5c-1.11 0-2-.9-2-2V5c0-1.1.89-2 2-2h14c1.1 0 2 .9 2 2v1h-9c-1.11 0-2-.9-2 2v8c0 1.1.89 2 2 2h9zm-9-2h10V8H12v8zm4-2.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/></svg>
-            <div style="font-size:12px;">Кошелек</div>
+            <svg viewBox="0 0 24 24"><path d="M21 18v1c0 1.1-.9 2-2 2H5c-1.11 0-2-.9-2-2V5c0-1.1.89-2 2-2h14c1.1 0 2 .9 2 2v1h-9c-1.11 0-2 .9-2 2v8c0 1.1.89 2 2 2h9zm-9-2h10V8H12v8zm4-2.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/></svg>
+            <div style="font-size: 12px; margin-top: 5px;">Кошелек</div>
         </div>
         <div class="nav-item" onclick="switchTab('profile-section', this)">
             <svg viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
-            <div style="font-size:12px;">Профиль</div>
+            <div style="font-size: 12px; margin-top: 5px;">Профиль</div>
         </div>
     </nav>
 
     <script>
-        const tg = window.Telegram.WebApp;
-        tg.expand();
-
-        function switchTab(id, el) {
+        // Переключение вкладок
+        function switchTab(sectionId, element) {
             document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
-            document.getElementById(id).classList.add('active');
-            document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-            if(el) el.classList.add('active');
-        }
-
-        function openSection(id) {
-            document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
-            document.getElementById(id).classList.add('active');
-        }
-
-        function selectSide(side) {
-            document.getElementById('btn-L').classList.remove('selected');
-            document.getElementById('btn-X').classList.remove('selected');
-            document.getElementById('btn-' + side).classList.add('selected');
-        }
-
-        function setQuickBet(val, game) {
-            const input = document.getElementById(game === 'battle' ? 'coin-bet' : 'coin-bet');
-            input.value = val;
-        }
-
-        function copy(text) {
-            navigator.clipboard.writeText(text);
-            tg.showAlert("Скопировано: " + text);
-        }
-
-        function startBattle() {
-            const wheel = document.getElementById('main-wheel');
-            const randomDeg = Math.floor(Math.random() * 2000) + 1080;
-            wheel.style.transform = `rotate(${randomDeg}deg)`;
+            document.getElementById(sectionId).classList.add('active');
             
-            setTimeout(() => {
-                tg.showPopup({
-                    title: 'Результат',
-                    message: 'Победитель забрал 70% банка! Комната открыта еще 5 минут.',
-                    buttons: [{type: 'ok'}]
-                });
-            }, 5200);
+            document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+            if(element) element.classList.add('active');
         }
 
-        // Данные юзера
-        document.getElementById('u-avatar').src = tg.initDataUnsafe.user?.photo_url || '';
-        document.getElementById('p-id').innerText = tg.initDataUnsafe.user?.id || '000000';
+        function openGame(game) {
+            document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+            const target = document.getElementById(game + '-section');
+            if(target) target.classList.add('active');
+        }
+
+        function openAdmin() {
+            switchTab('admin-section', null);
+        }
+
+        // Логика Coinflip L/X - Фикс подсветки
+        function selectCoinSide(side) {
+            document.getElementById('btn-side-L').classList.remove('selected');
+            document.getElementById('btn-side-X').classList.remove('selected');
+            document.getElementById('btn-side-' + side).classList.add('selected');
+        }
+
+        // Быстрые ставки - Добавил поддержку всех инпутов
+        function setBet(amount) {
+            const activeSection = document.querySelector('.section.active');
+            const input = activeSection.querySelector('input[type="number"]');
+            if(input) input.value = amount;
+        }
+
+        // Копирование в один клик
+        function copyText(text) {
+            navigator.clipboard.writeText(text).then(() => {
+                alert('Скопировано: ' + text);
+            });
+        }
+
+        // Анимация колеса батл рулетки + логика истории
+        function spinWheel() {
+            const wheel = document.getElementById('battle-wheel');
+            const btn = document.querySelector('#battle-section .btn-green');
+            
+            // Генерируем случайный градус
+            const randomDegree = Math.floor(Math.random() * 2000) + 1080; 
+            wheel.style.transform = `rotate(${randomDegree}deg)`;
+            
+            // Блокируем кнопку на время вращения
+            btn.disabled = true;
+            btn.innerText = "ИДЕТ БИТВА...";
+
+            setTimeout(() => {
+                const winAmount = (document.getElementById('bet-amount').value || 1) * 1.7; // 70% профит
+                const history = document.getElementById('battle-history');
+                
+                // Добавляем в историю
+                const entry = document.createElement('div');
+                entry.style.padding = "5px 0";
+                entry.style.borderBottom = "1px solid #222";
+                entry.innerHTML = `⚔️ <b>Вы</b> vs <b>Игрок1</b> | Победа: <span style="color:#00ff00">+${winAmount.toFixed(2)} TON</span>`;
+                history.prepend(entry);
+
+                alert("Победитель определен! Вы выиграли " + winAmount.toFixed(2) + " TON. Комната будет открыта еще 5 минут.");
+                
+                btn.innerText = "ОЖИДАНИЕ (5 мин)";
+                // Через 5 минут можно снова играть (симуляция)
+                setTimeout(() => {
+                    btn.disabled = false;
+                    btn.innerText = "СОЗДАТЬ БИТВУ / СТАВКА";
+                }, 300000); 
+
+            }, 4000);
+        }
     </script>
 </body>
 </html>
