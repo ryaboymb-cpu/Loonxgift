@@ -891,4 +891,3 @@ async function adminEditBalance(userId) {
     showToast('Баланс обновлен');
     searchAdminUsers(adminSearchQuery);
 }
-) :
