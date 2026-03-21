@@ -127,7 +127,7 @@ function updateUI() {
     if($('p-minus')) $('p-minus').innerText = user.stats.minus.toFixed(2) + ' TON';
 
     // Обновление рефералки
-    if($('ref-link')) $('ref-link').innerText = `https://t.me/LoonxGiftBot?start=${user.id}`;
+    if($('ref-link')) $('ref-link').innerText = `https://t.me/LoonxGift_Bot?start=${user.id}`;
     if($('ref-count')) $('ref-count').innerText = user.referrals ? user.referrals.length : 0;
     if($('ref-earned')) $('ref-earned').innerText = (user.refEarned || 0).toFixed(2) + ' TON';
     
