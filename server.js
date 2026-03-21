@@ -19,6 +19,9 @@ app.use(express.static(path.join(__dirname, 'public')));
 process.on('uncaughtException', (err) => console.error('Критическая ошибка:', err));
 process.on('unhandledRejection', (reason, promise) => console.error('Необработанный промис:', reason));
 
+// ДОБАВЛЕНО: Защита от мультикликов (глобальная блокировка активных запросов юзера)
+const actionLocks = new Set();
+
 // АНТИ-СОН ДЛЯ RENDER (Будит сервер каждые 10 минут)
 setInterval(() => {
     const url = process.env.WEB_APP_URL || "https://loonxgift.onrender.com";
@@ -32,7 +35,7 @@ mongoose.connect(process.env.MONGO_URI).then(() => console.log('✅ DB Connected
 app.get('/tonconnect-manifest.json', (req, res) => {
     res.json({
         url: process.env.WEB_APP_URL || "https://loonxgift.onrender.com",
-        name: "Loonx Gifts",
+        name: "LoonxGift", // ИСПРАВЛЕНО: Убрана s
         iconUrl: "https://cdn-icons-png.flaticon.com/512/149/149071.png"
     });
 });
@@ -64,7 +67,7 @@ const UserSchema = new mongoose.Schema({
         reason: String, 
         time: String 
     }],
-    depositHistory: [{ // ИСТОРИЯ ДЕПОЗИТОВ ДОБАВЛЕНА
+    depositHistory: [{
         hash: String,
         amount: Number,
         status: String,
@@ -91,6 +94,7 @@ const BattleSchema = new mongoose.Schema({
     maxBet: Number,
     status: { type: String, default: 'waiting' }, // waiting, spinning, finished
     winnerId: String,
+    timerStartedAt: Date, // ДОБАВЛЕНО: Время, когда зашел 2-й игрок
     createdAt: { type: Date, default: Date.now }
 });
 
@@ -113,7 +117,7 @@ async function initSettings() {
         { key: 'maintenance_crash', value: false },
         { key: 'maintenance_mines', value: false },
         { key: 'maintenance_coinflip', value: false },
-        { key: 'maintenance_battle', value: false } // ДОБАВЛЕНА БАТЛ РУЛЕТКА
+        { key: 'maintenance_battle', value: false }
     ];
     for (let setting of defaultSettings) {
         const exists = await Settings.findOne({ key: setting.key });
@@ -145,7 +149,8 @@ if (process.env.BOT_TOKEN) {
     });
 
     bot.onText(/\/(start|help)/, (msg) => {
-        const text = `🚀 Привет, ${msg.from.first_name}!\nДобро пожаловать в Loonx Gifts.\n\nТут ты можешь играть и выигрывать TON! Твой баланс и все игры находятся внутри Mini App.\n\nВыбирай действие в меню ниже:`;
+        // ИСПРАВЛЕНО: Убрана s в тексте бота
+        const text = `🚀 Привет, ${msg.from.first_name}!\nДобро пожаловать в LoonxGift.\n\nТут ты можешь играть и выигрывать TON! Твой баланс и все игры находятся внутри Mini App.\n\nВыбирай действие в меню ниже:`;
         const appUrl = process.env.WEB_APP_URL || "https://loonxgift.onrender.com/";
 
         bot.sendMessage(msg.chat.id, text, {
@@ -220,15 +225,14 @@ function pushToGlobalHistory(betObj) {
         timeMsk: getMskTime()
     };
     
-    globalBetHistory.unshift(betWithTime); // Добавляем в начало
-    if(globalBetHistory.length > 10) globalBetHistory.pop(); // Удаляем с конца
+    globalBetHistory.unshift(betWithTime);
+    if(globalBetHistory.length > 10) globalBetHistory.pop();
     io.emit('newHistoryEntry', betWithTime);
 }
 
 // --- BATTLE ROULETTE ENGINE ---
-const BATTLE_COLORS = ['#ffcc00', '#ff0055', '#007bff', '#ffffff']; // 🟡🔴🔵⚪
+const BATTLE_COLORS = ['#ffcc00', '#ff0055', '#007bff', '#ffffff'];
 setInterval(async () => {
-    // Чистка старых лобби (24 часа)
     const expiredTime = new Date(Date.now() - 24 * 60 * 60 * 1000);
     const expiredLobbies = await Battle.find({ status: 'waiting', createdAt: { $lt: expiredTime } });
     
@@ -240,17 +244,24 @@ setInterval(async () => {
         await Battle.findByIdAndDelete(lobby._id);
     }
 
-    // Запуск игр по таймеру (2 минуты с создания)
-    const startTime = new Date(Date.now() - 2 * 60 * 1000);
-    const readyLobbies = await Battle.find({ status: 'waiting', createdAt: { $lt: startTime } });
+    // ИСПРАВЛЕНО: Запуск игр по таймеру (2 минуты с присоединения 2-го игрока или если 4 человека)
+    const waitingLobbies = await Battle.find({ status: 'waiting' });
 
-    for (let lobby of readyLobbies) {
-        if (lobby.players.length > 1) {
+    for (let lobby of waitingLobbies) {
+        let shouldStart = false;
+        
+        if (lobby.players.length >= 4) {
+            shouldStart = true;
+        } else if (lobby.players.length > 1 && lobby.timerStartedAt) {
+            const twoMinsAgo = new Date(Date.now() - 2 * 60 * 1000);
+            if (lobby.timerStartedAt < twoMinsAgo) shouldStart = true;
+        }
+
+        if (shouldStart) {
             lobby.status = 'spinning';
             await lobby.save();
             io.emit('battleUpdate');
             
-            // Логика рулетки (выбор победителя)
             const totalPool = lobby.players.reduce((sum, p) => sum + p.bet, 0);
             let rand = Math.random() * totalPool;
             let currentWeight = 0;
@@ -265,7 +276,6 @@ setInterval(async () => {
             lobby.winnerId = winner.id;
             await lobby.save();
 
-            // Выплата 70% от чужих ставок
             const othersPool = totalPool - winner.bet;
             const winAmount = winner.bet + (othersPool * 0.70);
 
@@ -276,10 +286,8 @@ setInterval(async () => {
                 await wUser.save();
             }
 
-            // Уведомляем клиентов о вращении (передаем победителя)
             io.emit('battleSpin', { lobbyId: lobby._id, winnerId: winner.id });
 
-            // Запись в глобальную историю
             const opponentStr = lobby.players.filter(p => p.id !== lobby.creatorId).map(p => p.username).join(', ');
             const creator = lobby.players.find(p => p.id === lobby.creatorId);
             
@@ -287,21 +295,11 @@ setInterval(async () => {
                 userId: winner.id, username: winner.username, avatar: winner.avatar,
                 game: 'Battle Roulette', amount: winner.bet, result: winAmount - winner.bet, mode: 'Real'
             });
-            // Кастомное отображение имени для рулетки в истории
             betEntry.username = `${creator.username} VS ${opponentStr} 🏆 Победитель: ${winner.username}`;
             await betEntry.save();
             pushToGlobalHistory(betEntry);
 
-            // Удаляем комнату через 2 минуты после конца
             setTimeout(async () => { await Battle.findByIdAndDelete(lobby._id); io.emit('battleUpdate'); }, 120000);
-
-        } else {
-            // Если никто не зашел, возврат
-            const creator = lobby.players[0];
-            const u = await User.findOne({id: creator.id});
-            if(u) { u.balance = Number((u.balance + creator.bet).toFixed(2)); await u.save(); }
-            await Battle.findByIdAndDelete(lobby._id);
-            io.emit('battleUpdate');
         }
     }
 }, 5000);
@@ -340,67 +338,76 @@ app.post('/api/auth', async (req, res) => {
 
 app.post('/api/bet', async (req, res) => {
     const { id, game, bet, win, multiplier, mode } = req.body;
-    const user = await User.findOne({ id });
-    if(!user || user.isBlocked) return res.status(403).send();
     
-    const actualMode = mode === 'demo' ? 'demo' : 'real';
-    const field = actualMode === 'demo' ? 'demo_balance' : 'balance';
-    
-    if (bet < 0 || win < 0 || user[field] < bet) return res.status(400).json({error: 'No money'});
-    const avatar = user.photo || 'https://cdn-icons-png.flaticon.com/512/149/149071.png';
+    // ДОБАВЛЕНО: Мультиклик фикс
+    if (actionLocks.has(id)) return res.status(429).json({error: 'Слишком частые клики'});
+    actionLocks.add(id);
 
-    if (game === 'Crash') {
-        if (win === 0 && bet > 0) {
-            const activeUserBets = crashLiveBets.filter(b => b.id === user.id && !b.cashedOut);
-            if (activeUserBets.length >= 2) return res.status(400).json({error: 'Max 2 bets'});
-            crashLiveBets.push({ id: user.id, username: user.username, avatar, bet, cashedOut: false, win: 0, mode: actualMode });
-            io.emit('crashBetsUpdate', crashLiveBets);
-            
-            user[field] = Number((user[field] - bet).toFixed(2));
-            if (actualMode === 'real') { user.stats.bets++; user.stats.minus += bet; }
-            await user.save();
-            return res.json(user);
-            
-        } else if (win > 0) {
-            const activeBet = crashLiveBets.find(b => b.id === user.id && !b.cashedOut);
-            if (!activeBet) return res.status(400).json({error: 'Already cashed out or not found'});
-            
-            activeBet.cashedOut = true;
-            activeBet.win = win;
-            io.emit('crashBetsUpdate', crashLiveBets);
-            
-            user[field] = Number((user[field] + win).toFixed(2));
-            if (actualMode === 'real') { user.stats.wins++; user.stats.plus += win; }
-            await user.save();
-            
-            const profit = win - activeBet.bet;
-            const newBetEntry = new Bet({ userId: user.id, username: user.username, avatar, game: 'Crash', amount: activeBet.bet, result: profit, mode: actualMode === 'demo' ? 'Demo' : 'Real' });
-            await newBetEntry.save();
-            pushToGlobalHistory(newBetEntry);
-            
-            return res.json(user);
+    try {
+        const user = await User.findOne({ id });
+        if(!user || user.isBlocked) return res.status(403).send();
+        
+        const actualMode = mode === 'demo' ? 'demo' : 'real';
+        const field = actualMode === 'demo' ? 'demo_balance' : 'balance';
+        
+        if (bet < 0 || win < 0 || user[field] < bet) return res.status(400).json({error: 'No money'});
+        const avatar = user.photo || 'https://cdn-icons-png.flaticon.com/512/149/149071.png';
+
+        if (game === 'Crash') {
+            if (win === 0 && bet > 0) {
+                const activeUserBets = crashLiveBets.filter(b => b.id === user.id && !b.cashedOut);
+                if (activeUserBets.length >= 2) return res.status(400).json({error: 'Max 2 bets'});
+                crashLiveBets.push({ id: user.id, username: user.username, avatar, bet, cashedOut: false, win: 0, mode: actualMode });
+                io.emit('crashBetsUpdate', crashLiveBets);
+                
+                user[field] = Number((user[field] - bet).toFixed(2));
+                if (actualMode === 'real') { user.stats.bets++; user.stats.minus += bet; }
+                await user.save();
+                return res.json(user);
+                
+            } else if (win > 0) {
+                const activeBet = crashLiveBets.find(b => b.id === user.id && !b.cashedOut);
+                if (!activeBet) return res.status(400).json({error: 'Already cashed out or not found'});
+                
+                activeBet.cashedOut = true;
+                activeBet.win = win;
+                io.emit('crashBetsUpdate', crashLiveBets);
+                
+                user[field] = Number((user[field] + win).toFixed(2));
+                if (actualMode === 'real') { user.stats.wins++; user.stats.plus += win; }
+                await user.save();
+                
+                const profit = win - activeBet.bet;
+                const newBetEntry = new Bet({ userId: user.id, username: user.username, avatar, game: 'Crash', amount: activeBet.bet, result: profit, mode: actualMode === 'demo' ? 'Demo' : 'Real' });
+                await newBetEntry.save();
+                pushToGlobalHistory(newBetEntry);
+                
+                return res.json(user);
+            }
         }
-    }
 
-    const profit = win > 0 ? (win - bet) : -bet;
-    const newBetEntry = new Bet({
-        userId: user.id, username: user.username, avatar, game: game,
-        amount: bet, multiplier: multiplier || (bet > 0 ? (win / bet).toFixed(2) : 0),
-        result: Number(profit.toFixed(2)), mode: actualMode === 'demo' ? 'Demo' : 'Real'
-    });
-    await newBetEntry.save();
-    pushToGlobalHistory(newBetEntry);
+        const profit = win > 0 ? (win - bet) : -bet;
+        const newBetEntry = new Bet({
+            userId: user.id, username: user.username, avatar, game: game,
+            amount: bet, multiplier: multiplier || (bet > 0 ? (win / bet).toFixed(2) : 0),
+            result: Number(profit.toFixed(2)), mode: actualMode === 'demo' ? 'Demo' : 'Real'
+        });
+        await newBetEntry.save();
+        pushToGlobalHistory(newBetEntry);
 
-    user[field] = Number((user[field] - bet + win).toFixed(2));
-    
-    if (actualMode === 'real') {
-        if (bet > 0) user.stats.bets++; 
-        if (win > 0) { user.stats.wins++; user.stats.plus += win; } 
-        else if (bet > 0) { user.stats.minus += bet; }
+        user[field] = Number((user[field] - bet + win).toFixed(2));
+        
+        if (actualMode === 'real') {
+            if (bet > 0) user.stats.bets++; 
+            if (win > 0) { user.stats.wins++; user.stats.plus += win; } 
+            else if (bet > 0) { user.stats.minus += bet; }
+        }
+        await user.save();
+        
+        res.json(user);
+    } finally {
+        actionLocks.delete(id);
     }
-    await user.save();
-    
-    res.json(user);
 });
 
 // API BATTLE ROULETTE
@@ -411,53 +418,76 @@ app.get('/api/battle/list', async (req, res) => {
 
 app.post('/api/battle/create', async (req, res) => {
     const { id, bet, minBet, maxBet } = req.body;
-    const user = await User.findOne({id});
-    if(!user || user.isBlocked) return res.status(403).send();
-    if(bet < 1 || bet > 100) return res.status(400).json({error: 'Ставка от 1 до 100 TON'});
-    if(user.balance < bet) return res.status(400).json({error: 'Недостаточно средств'});
     
-    user.balance = Number((user.balance - bet).toFixed(2));
-    user.stats.bets++; user.stats.minus += bet;
-    await user.save();
+    // ДОБАВЛЕНО: Мультиклик фикс
+    if (actionLocks.has(id)) return res.status(429).json({error: 'Подождите...'});
+    actionLocks.add(id);
 
-    const avatar = user.photo || 'https://cdn-icons-png.flaticon.com/512/149/149071.png';
-    const newLobby = await Battle.create({
-        creatorId: user.id,
-        minBet: minBet, maxBet: maxBet,
-        players: [{ id: user.id, username: user.username, avatar, bet, color: BATTLE_COLORS[0] }]
-    });
+    try {
+        const user = await User.findOne({id});
+        if(!user || user.isBlocked) return res.status(403).send();
+        if(bet < 1 || bet > 100) return res.status(400).json({error: 'Ставка от 1 до 100 TON'});
+        if(user.balance < bet) return res.status(400).json({error: 'Недостаточно средств'});
+        
+        user.balance = Number((user.balance - bet).toFixed(2));
+        user.stats.bets++; user.stats.minus += bet;
+        await user.save();
 
-    io.emit('battleUpdate');
-    res.json(user);
+        const avatar = user.photo || 'https://cdn-icons-png.flaticon.com/512/149/149071.png';
+        const newLobby = await Battle.create({
+            creatorId: user.id,
+            minBet: minBet, maxBet: maxBet,
+            players: [{ id: user.id, username: user.username, avatar, bet, color: BATTLE_COLORS[0] }]
+        });
+
+        io.emit('battleUpdate');
+        res.json(user);
+    } finally {
+        actionLocks.delete(id);
+    }
 });
 
 app.post('/api/battle/join', async (req, res) => {
     const { id, lobbyId, bet } = req.body;
-    const user = await User.findOne({id});
-    const lobby = await Battle.findById(lobbyId);
+    
+    // ДОБАВЛЕНО: Мультиклик фикс
+    if (actionLocks.has(id)) return res.status(429).json({error: 'Подождите...'});
+    actionLocks.add(id);
 
-    if(!user || !lobby || lobby.status !== 'waiting' || lobby.players.length >= 4) return res.status(400).json({error: 'Ошибка входа'});
-    if(lobby.players.find(p => p.id === id)) return res.status(400).json({error: 'Уже в лобби'});
-    if(bet < lobby.minBet || bet > lobby.maxBet || bet < 1 || bet > 150) return res.status(400).json({error: 'Лимиты ставки не соблюдены'});
-    if(user.balance < bet) return res.status(400).json({error: 'Недостаточно средств'});
+    try {
+        const user = await User.findOne({id});
+        const lobby = await Battle.findById(lobbyId);
 
-    user.balance = Number((user.balance - bet).toFixed(2));
-    user.stats.bets++; user.stats.minus += bet;
-    await user.save();
+        if(!user || !lobby || lobby.status !== 'waiting' || lobby.players.length >= 4) return res.status(400).json({error: 'Ошибка входа'});
+        if(lobby.players.find(p => p.id === id)) return res.status(400).json({error: 'Уже в лобби'});
+        if(bet < lobby.minBet || bet > lobby.maxBet || bet < 1 || bet > 150) return res.status(400).json({error: 'Лимиты ставки не соблюдены'});
+        if(user.balance < bet) return res.status(400).json({error: 'Недостаточно средств'});
 
-    const avatar = user.photo || 'https://cdn-icons-png.flaticon.com/512/149/149071.png';
-    const pColor = BATTLE_COLORS[lobby.players.length];
-    lobby.players.push({ id: user.id, username: user.username, avatar, bet, color: pColor });
-    await lobby.save();
+        user.balance = Number((user.balance - bet).toFixed(2));
+        user.stats.bets++; user.stats.minus += bet;
+        await user.save();
 
-    io.emit('battleUpdate');
+        const avatar = user.photo || 'https://cdn-icons-png.flaticon.com/512/149/149071.png';
+        const pColor = BATTLE_COLORS[lobby.players.length];
+        lobby.players.push({ id: user.id, username: user.username, avatar, bet, color: pColor });
+        
+        // ИСПРАВЛЕНО: Запускаем таймер только когда присоединился 2-й игрок
+        if (lobby.players.length === 2) {
+            lobby.timerStartedAt = new Date();
+        }
+        
+        await lobby.save();
 
-    // Уведомление создателю лобби
-    if(bot) {
-        bot.sendMessage(lobby.creatorId, `⚔️ Игрок **${user.username}** присоединился к вашей Battle Roulette! Ставка: ${bet} TON`, {parse_mode: 'Markdown'}).catch(()=>{});
+        io.emit('battleUpdate');
+
+        if(bot) {
+            bot.sendMessage(lobby.creatorId, `⚔️ Игрок **${user.username}** присоединился к вашей Battle Roulette! Ставка: ${bet} TON`, {parse_mode: 'Markdown'}).catch(()=>{});
+        }
+
+        res.json({user, lobby});
+    } finally {
+        actionLocks.delete(id);
     }
-
-    res.json({user, lobby});
 });
 
 app.post('/api/battle/cancel', async (req, res) => {
@@ -473,7 +503,6 @@ app.post('/api/battle/cancel', async (req, res) => {
     io.emit('battleUpdate');
     res.json(user);
 });
-
 
 app.post('/api/check_deposit', async (req, res) => {
     const { id } = req.body;
@@ -499,7 +528,6 @@ app.post('/api/check_deposit', async (req, res) => {
                     await Deposit.create({ hash: txHash, userId: id, amount: amountTON, time: getMskTime() });
                     const user = await User.findOne({ id });
                     user.balance = Number((user.balance + amountTON).toFixed(2));
-                    // Добавляем в историю депозитов
                     user.depositHistory.unshift({ hash: txHash, amount: amountTON, status: 'Успешно', time: getMskTime() });
                     await user.save();
                     foundNew = true;
@@ -532,16 +560,25 @@ app.post('/api/promo', async (req, res) => {
 
 app.post('/api/withdraw', async (req, res) => {
     const { id, address, amount } = req.body;
-    const user = await User.findOne({ id });
-    if (user.balance < amount || amount < 5) return res.status(400).json({error: 'Min 5 TON'});
-    user.balance = Number((user.balance - amount).toFixed(2)); 
     
-    const newW = await Withdraw.create({ userId: id, address, amount, time: getMskTime() });
-    
-    user.withdrawHistory.unshift({ withdrawId: newW._id, amount, address, status: 'В обработке', reason: '', time: newW.time });
-    await user.save();
+    // ДОБАВЛЕНО: Мультиклик фикс
+    if (actionLocks.has(id)) return res.status(429).json({error: 'Подождите...'});
+    actionLocks.add(id);
 
-    res.json(user);
+    try {
+        const user = await User.findOne({ id });
+        if (user.balance < amount || amount < 5) return res.status(400).json({error: 'Min 5 TON'});
+        user.balance = Number((user.balance - amount).toFixed(2)); 
+        
+        const newW = await Withdraw.create({ userId: id, address, amount, time: getMskTime() });
+        
+        user.withdrawHistory.unshift({ withdrawId: newW._id, amount, address, status: 'В обработке', reason: '', time: newW.time });
+        await user.save();
+
+        res.json(user);
+    } finally {
+        actionLocks.delete(id);
+    }
 });
 
 // --- АДМИН ПАНЕЛЬ ---
@@ -556,13 +593,11 @@ app.post('/api/admin/data', checkAdmin, async (req, res) => {
     const users = await User.find().sort({balance: -1}).limit(100);
     const totalUsers = await User.countDocuments();
     
-    // СЧЕТЧИКИ ВЫВОДОВ И ДЕПОЗИТОВ
     const allDeps = await Deposit.aggregate([{$group: {_id: null, total: {$sum: "$amount"}}}]);
     const allWiths = await Withdraw.aggregate([{$match: {status: 'approved'}}, {$group: {_id: null, total: {$sum: "$amount"}}}]);
     const totalDeposited = allDeps[0] ? allDeps[0].total : 0;
     const totalWithdrawn = allWiths[0] ? allWiths[0].total : 0;
     
-    // ПОСЛЕДНИЕ ДЕПОЗИТЫ С ЮЗЕРАМИ
     const latestDepositsRaw = await Deposit.find().sort({_id: -1}).limit(20);
     const latestDeposits = [];
     for(let d of latestDepositsRaw) {
@@ -587,9 +622,8 @@ app.post('/api/admin/data', checkAdmin, async (req, res) => {
     });
 });
 
-// ПОИСК И ФИЛЬТРАЦИЯ ЮЗЕРОВ
 app.post('/api/admin/search_user', checkAdmin, async (req, res) => {
-    const { query, filterType } = req.body; // filterType: 'balance', 'new', 'banned'
+    const { query, filterType } = req.body;
     let filter = {};
     
     if (query) {
@@ -605,7 +639,6 @@ app.post('/api/admin/search_user', checkAdmin, async (req, res) => {
     res.json({ users });
 });
 
-// Бан / Сообщения
 app.post('/api/admin/user_action', checkAdmin, async (req, res) => {
     const { userId, action, msg } = req.body;
     const user = await User.findOne({ id: String(userId) });
@@ -701,6 +734,10 @@ app.post('/api/admin/withdraw_action', checkAdmin, async (req, res) => {
             if(uHist) { uHist.status = 'Отклонено'; uHist.reason = reason; }
         } else {
             if(uHist) { uHist.status = 'Подтверждено'; }
+            // ДОБАВЛЕНО: Уведомление об успешном выводе
+            if(bot) {
+                bot.sendMessage(w.userId, `✅ Ваш вывод на сумму **${w.amount} TON** успешно обработан и отправлен на ваш кошелек!`, {parse_mode: 'Markdown'}).catch(()=>{});
+            }
         }
         await u.save();
     }
