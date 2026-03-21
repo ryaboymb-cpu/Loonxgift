@@ -1,858 +1,838 @@
-// ФИКС ДЛЯ TON CONNECT
-const tonwebScript = document.createElement('script');
-tonwebScript.src = 'https://unpkg.com/tonweb@0.0.60/dist/tonweb.js';
-document.head.appendChild(tonwebScript);
+let tg = window.Telegram.WebApp;
+tg.expand();
+tg.ready();
 
-const tg = window.Telegram.WebApp;
-const socket = io();
-let user = null; 
-let mode = 'real';
-let adminPass = '';
-let globalRtp = 90;
-let rtpObj = { crash: 90, mines: 90, coinflip: 90 };
-let maintenance = { crash: false, mines: false, coinflip: false, battle: false };
-let adminWalletAddress = '';
-
-// TON CONNECT
-const tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
-    manifestUrl: 'https://loonxgift.onrender.com/tonconnect-manifest.json', 
-    buttonRootId: 'ton-connect-btn'
-});
-
-const $ = id => document.getElementById(id);
-
-function showToast(msg, dur = 3000) {
-    if(!msg) return;
-    const container = $('toast-container');
-    const t = document.createElement('div'); 
-    t.className = 'toast'; 
-    t.innerText = msg;
-    container.appendChild(t); 
-    setTimeout(() => t.remove(), dur);
-}
-
-socket.on('global_alert', msg => { showToast(`📢 УВЕДОМЛЕНИЕ: ${msg}`, 6000); });
-function copyText(text) { if(!text) return; navigator.clipboard.writeText(text).then(() => showToast('Скопировано!')); }
-
-const ctx = $('stars-bg').getContext('2d');
-let w = $('stars-bg').width = window.innerWidth;
-let h = $('stars-bg').height = window.innerHeight;
-let stars = Array(120).fill().map(() => ({ x: Math.random()*w, y: Math.random()*h, s: Math.random()*2 + 0.5, speed: Math.random()*1 + 0.2 }));
-function draw() {
-    ctx.clearRect(0,0,w,h); ctx.fillStyle = '#fff';
-    stars.forEach(s => {
-        ctx.fillRect(s.x, s.y, s.s, s.s);
-        s.y += s.speed;
-        if(s.y > h) { s.y = 0; s.x = Math.random()*w; }
-    });
-    requestAnimationFrame(draw);
-} draw();
-
-function getMskTime() {
-    return new Date().toLocaleTimeString("ru-RU", {timeZone: "Europe/Moscow"});
-}
-
-function renderQuickBets() {
-    const vals = [0.1, 0.5, 1, 5, 10, 25];
-    ['cr', 'mi', 'co'].forEach(prefix => {
-        const el = $(`qb-${prefix === 'cr' ? 'crash' : prefix === 'mi' ? 'mines' : 'coinflip'}`);
-        if(el) {
-            el.innerHTML = vals.map(v => `<button type="button" onclick="setQuickBet('${prefix}-bet', ${v})" style="padding: 6px 12px; background: #222; border: 1px solid var(--neon); color: var(--neon); border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 11px;">${v}</button>`).join('');
-        }
-    });
-}
-
-window.onload = async () => {
-    tg.expand();
-    renderQuickBets(); // Быстрые ставки
-    
-    const res = await fetch('/api/auth', {
-        method: 'POST', headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify(tg.initDataUnsafe.user || {id: "1", first_name: "Dev", username: "DevUser", photo_url: ""})
-    });
-    const data = await res.json();
-    if(data.error === "BLOCKED") {
-        document.body.innerHTML = "<h1 style='color:red; text-align:center; margin-top:50px;'>ВЫ ЗАБЛОКИРОВАНЫ</h1>";
-        return;
-    }
-
-    user = data.user;
-    rtpObj = data.rtp || { crash: 90, mines: 90, coinflip: 90 };
-    maintenance = data.maintenance || { crash: false, mines: false, coinflip: false, battle: false };
-    
-    adminWalletAddress = data.adminWallet || '';
-    if($('dep-wallet')) $('dep-wallet').innerText = adminWalletAddress || 'Кошелек не настроен на сервере';
-    if($('dep-memo')) $('dep-memo').innerText = user.id;
-
-    if($('loader')) { $('loader').style.opacity = '0'; setTimeout(() => $('loader').style.display = 'none', 500); }
-    
-    const avaUrl = user.photo || 'https://cdn-icons-png.flaticon.com/512/149/149071.png';
-    if($('user-ava')) $('user-ava').src = avaUrl; 
-    if($('profile-ava')) $('profile-ava').src = avaUrl;
-    if($('profile-name')) $('profile-name').innerText = user.username || 'Игрок';
-    if($('profile-id')) $('profile-id').innerText = user.id; // Добавлено отображение ID
-    
-    updateUI();
-    renderWithdrawHistory();
-    renderBattleLobbies();
-
-    // ФИКС ИКОНКИ ПРОМО
-    setTimeout(() => {
-        document.querySelectorAll('.nav-item').forEach(nav => {
-            const attr = nav.getAttribute('onclick');
-            if (attr && (attr.includes("'promo'") || attr.includes('"promo"'))) {
-                nav.innerHTML = `
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:24px;height:24px;margin-bottom:3px;opacity:0.8;display:block;margin:0 auto;">
-                    <path d="M15 5v2"/><path d="M15 11v2"/><path d="M15 17v2"/><path d="M5 5h14a2 2 0 0 1 2 2v3a2 2 0 0 0 0 4v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-3a2 2 0 0 0 0-4V7a2 2 0 0 1 2-2z"/>
-                </svg>
-                <span style="font-size:10px;">Промо</span>`;
-            }
+// Инициализация Canvas "Падающие Звезды"
+const canvas = document.getElementById('stars-bg');
+const ctx = canvas.getContext('2d');
+let stars = [];
+function initStars() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    stars = [];
+    for (let i = 0; i < 100; i++) {
+        stars.push({
+            x: Math.random() * canvas.width,
+            y: Math.random() * canvas.height,
+            size: Math.random() * 2,
+            speedY: Math.random() * 0.5 + 0.1,
+            alpha: Math.random()
         });
-    }, 500);
-};
-
-function updateUI() {
-    if(!user) return;
-    const bal = mode === 'real' ? user.balance : user.demo_balance;
-    if($('bal-val')) $('bal-val').innerText = bal.toFixed(2);
-    if($('bal-mode')) {
-        $('bal-mode').innerText = mode === 'real' ? 'REAL TON' : 'DEMO TON';
-        $('bal-mode').style.color = mode === 'demo' ? 'var(--neon-blue)' : 'var(--neon)';
-        $('bal-mode').style.borderColor = mode === 'demo' ? 'var(--neon-blue)' : 'var(--neon)';
-    }
-    
-    if($('p-bets')) $('p-bets').innerText = user.stats.bets; 
-    if($('p-wins')) $('p-wins').innerText = user.stats.wins;
-    if($('p-plus')) $('p-plus').innerText = user.stats.plus.toFixed(2) + ' TON'; 
-    if($('p-minus')) $('p-minus').innerText = user.stats.minus.toFixed(2) + ' TON';
-
-    // Обновление рефералки
-    if($('ref-link')) $('ref-link').innerText = `https://t.me/LoonxGift_Bot?start=${user.id}`;
-    if($('ref-count')) $('ref-count').innerText = user.referrals ? user.referrals.length : 0;
-    if($('ref-earned')) $('ref-earned').innerText = (user.refEarned || 0).toFixed(2) + ' TON';
-    
-    if($('ref-list')) {
-        if(!user.referrals || user.referrals.length === 0) {
-            $('ref-list').innerHTML = '<div style="color:#555; text-align:center;">У вас пока нет рефералов</div>';
-        } else {
-            $('ref-list').innerHTML = user.referrals.map(r => `
-                <div style="display:flex; justify-content:space-between; border-bottom:1px solid #222; padding:5px 0;">
-                    <span><span style="color:var(--neon);">ID:</span> ${r.id}</span>
-                    <span style="color:var(--neon-blue);">+${(r.earnedForMe || 0).toFixed(2)} TON</span>
-                </div>
-            `).join('');
-        }
     }
 }
+function drawStars() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = '#fff';
+    for (let s of stars) {
+        ctx.globalAlpha = s.alpha;
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, s.size, 0, Math.PI * 2);
+        ctx.fill();
+        s.y += s.speedY;
+        if (s.y > canvas.height) { s.y = 0; s.x = Math.random() * canvas.width; }
+    }
+    requestAnimationFrame(drawStars);
+}
+initStars();
+drawStars();
+window.addEventListener('resize', initStars);
 
-function toggleMode() { mode = mode === 'real' ? 'demo' : 'real'; updateUI(); showToast(`Включен ${mode} режим`); }
 
-function nav(pageId, el) {
-    document.querySelectorAll('.page').forEach(p => p.classList.remove('active')); 
-    if($('page-'+pageId)) $('page-'+pageId).classList.add('active');
-    if(el) { document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active')); el.classList.add('active'); }
+const tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
+    manifestUrl: 'https://loonxgift.onrender.com/tonconnect-manifest.json',
+    buttonRootId: 'ton-connect-button'
+});
+
+const API_URL = ''; 
+const socket = io();
+
+let USER_ID = tg.initDataUnsafe?.user?.id || Math.floor(Math.random() * 100000);
+let USER_NAME = tg.initDataUnsafe?.user?.first_name || 'TestUser';
+let USER_PHOTO = tg.initDataUnsafe?.user?.photo_url || 'https://cdn-icons-png.flaticon.com/512/149/149071.png';
+let REF_ID = tg.initDataUnsafe?.start_param || null;
+
+let IS_DEMO = false;
+let BALANCE_REAL = 0;
+let BALANCE_DEMO = 5000;
+let ADMIN_WALLET = '';
+
+function showToast(msg) {
+    const c = document.getElementById('toast-container');
+    const t = document.createElement('div');
+    t.className = 'toast'; t.innerText = msg;
+    c.appendChild(t);
+    tg.HapticFeedback.notificationOccurred('warning');
+    setTimeout(() => { t.style.animation = 'slideDown 0.3s reverse forwards'; setTimeout(() => t.remove(), 300); }, 3000);
 }
 
-function navGame(game) { 
-    let mKey = game;
-    if(game === 'coin') mKey = 'coinflip'; 
-    if (maintenance[mKey]) return showToast('Временно тех. перерыв'); 
-    nav(game); 
-    if(game === 'battle') renderBattleLobbies();
+function updateBalanceUI() {
+    const bal = IS_DEMO ? BALANCE_DEMO : BALANCE_REAL;
+    document.getElementById('user-balance').innerText = bal.toFixed(2);
+    document.getElementById('mode-badge').innerText = IS_DEMO ? 'DEMO' : 'REAL';
+    document.getElementById('mode-badge').style.borderColor = IS_DEMO ? 'var(--neon)' : 'var(--neon-red)';
+    document.getElementById('mode-badge').style.color = IS_DEMO ? 'var(--neon)' : 'var(--neon-red)';
 }
 
-function setQuickBet(inputId, amount) { if($(inputId)) $(inputId).value = amount; }
-
-function switchDepTab(type, el) {
-    document.querySelectorAll('.w-tab').forEach(b => { b.classList.remove('active'); b.style.background='#222'; b.style.color='#fff'; });
-    el.classList.add('active'); el.style.background='var(--neon)'; el.style.color='#000';
-    if($('dep-manual')) $('dep-manual').style.display = type === 'manual' ? 'block' : 'none';
-    if($('dep-connect')) $('dep-connect').style.display = type === 'connect' ? 'block' : 'none';
+function toggleMode(e) {
+    e.stopPropagation();
+    IS_DEMO = !IS_DEMO;
+    updateBalanceUI();
+    showToast(`Включен ${IS_DEMO ? 'DEMO' : 'REAL'} счет`);
 }
 
-async function payWithTonConnect() {
-    if (!tonConnectUI.connected) return showToast('Сначала подключите кошелек!');
-    const amount = parseFloat($('tc-amount').value);
-    if(isNaN(amount) || amount <= 0) return showToast('Введите сумму');
-    
-    let payloadBase64 = "";
+async function auth() {
     try {
-        if (window.TonWeb) {
-            const tonweb = new TonWeb();
-            const cell = new tonweb.boc.Cell();
-            cell.bits.writeUint(0, 32); 
-            cell.bits.writeString(user.id);
-            const bocBytes = await cell.toBoc();
-            payloadBase64 = TonWeb.utils.bytesToBase64(bocBytes);
+        const res = await fetch(`${API_URL}/api/auth`, {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ id: USER_ID, username: USER_NAME, photo_url: USER_PHOTO, refId: REF_ID })
+        });
+        const data = await res.json();
+        if (data.error === "BLOCKED") return document.body.innerHTML = "<h1 style='color:red;text-align:center;margin-top:50px;'>АККАУНТ ЗАБЛОКИРОВАН</h1>";
+        
+        BALANCE_REAL = data.user.balance;
+        BALANCE_DEMO = data.user.demo_balance;
+        ADMIN_WALLET = data.adminWallet;
+
+        document.getElementById('user-name').innerText = data.user.username;
+        document.getElementById('user-avatar').src = data.user.photo || USER_PHOTO;
+        document.getElementById('prof-name').innerText = data.user.username;
+        document.getElementById('prof-avatar').src = data.user.photo || USER_PHOTO;
+        document.getElementById('prof-id').innerText = data.user.id;
+        document.getElementById('ref-link').innerText = `t.me/LoonxGift_bot?start=${data.user.id}`;
+        
+        document.getElementById('st-bets').innerText = data.user.stats.bets;
+        document.getElementById('st-wins').innerText = data.user.stats.wins;
+        document.getElementById('st-plus').innerText = data.user.stats.plus.toFixed(2);
+        document.getElementById('st-minus').innerText = data.user.stats.minus.toFixed(2);
+        document.getElementById('st-ref-earn').innerText = data.user.referralEarnings ? data.user.referralEarnings.toFixed(2) : "0.00";
+
+        document.getElementById('dep-wallet').innerText = ADMIN_WALLET;
+        document.getElementById('dep-memo').innerText = String(data.user.id);
+
+        if (['881223945', '7729215091'].includes(String(USER_ID))) {
+            document.getElementById('admin-btn').style.display = 'flex';
         }
-    } catch(e) { console.error('Ошибка создания комментария:', e); }
 
-    const transaction = {
-        validUntil: Math.floor(Date.now() / 1000) + 600,
-        messages: [{
-            address: adminWalletAddress,
-            amount: (amount * 1000000000).toString(),
-            ...(payloadBase64 && { payload: payloadBase64 }) 
-        }]
-    };
-
-    try {
-        await tonConnectUI.sendTransaction(transaction);
-        showToast('Транзакция отправлена! Ожидайте зачисления и нажмите "ПРОВЕРИТЬ ОПЛАТУ" через 10 сек.');
-    } catch (e) { showToast('Транзакция отменена'); }
+        updateBalanceUI();
+        document.getElementById('loader').style.opacity = '0';
+        setTimeout(() => document.getElementById('loader').style.display = 'none', 500);
+    } catch (e) { showToast("Ошибка авторизации"); }
 }
 
-function renderWithdrawHistory() {
-    const list = $('w-history-list');
-    if(!list) return;
+auth();
+
+function switchPage(pageId) {
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+    document.getElementById(`page-${pageId}`).classList.add('active');
     
-    let wHtml = '';
-    if(!user.withdrawHistory || user.withdrawHistory.length === 0) wHtml = '<div style="color:#555; text-align:center;">Нет выводов</div>';
-    else {
-        wHtml = user.withdrawHistory.map(w => {
-            let cls = w.status === 'Подтверждено' ? 'approved' : (w.status === 'Отклонено' ? 'rejected' : 'pending');
-            let rsn = w.reason ? `<br><span style="color:var(--neon-red); font-size:10px;">Причина: ${w.reason}</span>` : '';
-            return `
-                <div class="w-history-item ${cls}">
-                    <div><b>ВЫВОД:</b> ${w.amount} TON<br><span style="color:#888; font-size:10px;">${w.time || ''}</span></div>
-                    <div style="text-align:right;">${w.status} ${rsn}</div>
-                </div>`;
-        }).join('');
+    if (pageId === 'games' || pageId === 'wallet' || pageId === 'profile') {
+        document.getElementById(`nav-${pageId}`).classList.add('active');
     }
-
-    let dHtml = '<h4 style="color:var(--neon); margin-top:20px; text-align:center;">ИСТОРИЯ ДЕПОЗИТОВ</h4>';
-    if(!user.depositHistory || user.depositHistory.length === 0) dHtml += '<div style="color:#555; text-align:center;">Нет депозитов</div>';
-    else {
-        dHtml += user.depositHistory.map(d => `
-            <div class="w-history-item approved" style="border-left: 3px solid var(--neon);">
-                <div><b>ДЕПОЗИТ:</b> ${d.amount} TON<br><span style="color:#888; font-size:10px;">${d.time || ''}</span></div>
-                <div style="text-align:right; color:var(--neon);">Успешно</div>
-            </div>`).join('');
-    }
-
-    list.innerHTML = wHtml + dHtml;
+    window.scrollTo(0,0);
 }
 
-if($('online-c')) socket.on('online', c => $('online-c').innerText = c);
-socket.on('rtpUpdate', r => rtpObj = r); 
-socket.on('maintenanceUpdate', m => maintenance = m); 
+function switchWalletTab(tabId) {
+    document.querySelectorAll('.w-tab').forEach(t => t.classList.remove('active'));
+    event.target.classList.add('active');
+    document.getElementById('tab-deposit').style.display = tabId === 'deposit' ? 'block' : 'none';
+    document.getElementById('tab-withdraw').style.display = tabId === 'withdraw' ? 'block' : 'none';
+}
 
-socket.on('init_history', bets => { 
-    if($('feed-list')) { 
-        $('feed-list').innerHTML = ''; 
-        bets.forEach(b => addLiveBetToDOM(b, true)); 
+function copyText(id) {
+    const text = document.getElementById(id).innerText;
+    navigator.clipboard.writeText(text);
+    showToast("Скопировано!");
+}
+
+function setBet(inputId, amount) { document.getElementById(inputId).value = amount; }
+function multiplyBet(inputId, mult) {
+    const val = parseFloat(document.getElementById(inputId).value) || 0;
+    document.getElementById(inputId).value = (val * mult).toFixed(2);
+}
+
+function checkBalance(bet) {
+    const bal = IS_DEMO ? BALANCE_DEMO : BALANCE_REAL;
+    if (isNaN(bet) || bet <= 0) { showToast("Неверная сумма"); return false; }
+    if (bet > bal) { showToast("Недостаточно средств"); return false; }
+    return true;
+}
+
+function showFloatingWin(amount) {
+    const el = document.createElement('div');
+    el.className = 'floating-win';
+    el.innerHTML = `+${amount.toFixed(2)} <i class="ton-icon"></i>`;
+    document.body.appendChild(el);
+    setTimeout(() => el.remove(), 1200);
+}
+
+// --- ИГРА: CRASH ---
+let crashActive = false;
+let myCrashBet = 0;
+
+function openCrash() { switchPage('crash'); }
+
+socket.on('crashData', (data) => {
+    const el = document.getElementById('cr-x');
+    const st = document.getElementById('cr-status');
+    const btn = document.getElementById('btn-cr-action');
+
+    if (data.status === 'waiting') {
+        st.innerText = `СЛЕДУЮЩИЙ РАУНД ЧЕРЕЗ ${data.timer}С`;
+        st.style.color = 'var(--sub)';
+        el.innerText = '1.00x'; el.style.color = '#fff'; el.style.textShadow = 'none';
+        if(!crashActive) { btn.innerText = 'ПОСТАВИТЬ'; btn.className = 'btn'; }
+    } else if (data.status === 'running') {
+        st.innerText = 'В ПОЛЕТЕ'; st.style.color = 'var(--neon)';
+        el.innerText = `${data.multiplier}x`; el.style.color = '#fff';
+        if(crashActive) { btn.innerText = `ЗАБРАТЬ ${(myCrashBet * parseFloat(data.multiplier)).toFixed(2)}`; btn.className = 'btn btn-connect'; }
+    } else if (data.status === 'crashed') {
+        st.innerText = 'КРАШ!'; st.style.color = 'var(--neon-red)';
+        el.innerText = `${data.multiplier}x`; el.style.color = 'var(--neon-red)';
+        el.style.textShadow = '0 0 20px rgba(255,0,85,0.8)';
+        crashActive = false; btn.innerText = 'ПОСТАВИТЬ'; btn.className = 'btn';
     }
 });
-socket.on('newHistoryEntry', b => addLiveBetToDOM(b, false));
 
-function addLiveBetToDOM(b, isInit) {
-    const list = $('feed-list');
-    if(!list) return;
-    const d = document.createElement('div'); d.className = 'live-bet-item';
-    const isWin = b.result > 0;
-    const modeTag = b.mode === 'Demo' ? '<span style="color:var(--neon-blue); font-size:9px;">[DEMO]</span>' : '<span style="color:var(--neon); font-size:9px;">[REAL]</span>';
-    const timeHtml = b.timeMsk ? `<span style="font-size:9px; color:#555; margin-left:5px;">${b.timeMsk}</span>` : '';
-    const nameStr = b.username.includes('VS') ? `<span style="font-size:9px;">${b.username}</span>` : b.username;
+socket.on('crashHistoryUpdate', (hist) => {
+    const c = document.getElementById('cr-history');
+    c.innerHTML = '';
+    hist.forEach(m => {
+        const val = parseFloat(m);
+        const col = val < 1.5 ? 'var(--neon-red)' : (val < 3 ? 'var(--neon-blue)' : 'var(--neon)');
+        c.innerHTML += `<div class="cr-badge" style="color:${col}; border: 1px solid ${col};">${val}x</div>`;
+    });
+});
 
-    d.innerHTML = `
-        <div class="live-user">
-            <img src="${b.avatar || 'https://cdn-icons-png.flaticon.com/512/149/149071.png'}" class="live-ava">
-            <span>${nameStr} ${timeHtml}<br><b style="color:var(--sub); font-size:10px;">(${b.game})</b> ${modeTag}</span>
+socket.on('crashBetsUpdate', (bets) => {
+    const c = document.getElementById('cr-live-bets');
+    c.innerHTML = bets.map(b => `
+        <div class="live-bet-item">
+            <div class="live-user"><img src="${b.avatar}" class="live-ava"> ${b.username} ${b.mode==='demo'?'<span style="font-size:8px;color:#888;">(DEMO)</span>':''}</div>
+            <div style="font-weight:bold;">
+                ${b.cashedOut ? `<span style="color:var(--neon);">+${b.win.toFixed(2)} <i class="ton-icon"></i></span>` : `<span>${b.bet} <i class="ton-icon"></i></span>`}
+            </div>
         </div>
-        <span style="font-weight:bold; color:${isWin?'var(--neon)':'var(--neon-red)'}">${isWin ? '+'+b.result : b.result}</span>
-    `;
-    
-    if (isInit) {
-        list.appendChild(d);
+    `).join('');
+});
+
+async function actionCrash() {
+    const btn = document.getElementById('btn-cr-action');
+    if (!crashActive && btn.innerText === 'ПОСТАВИТЬ') {
+        const bet = parseFloat(document.getElementById('cr-bet').value);
+        if(!checkBalance(bet)) return;
+        
+        tg.HapticFeedback.impactOccurred('medium');
+        const res = await fetch(`${API_URL}/api/bet`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({id: USER_ID, game: 'Crash', bet, win: 0, mode: IS_DEMO ? 'demo' : 'real'}) });
+        if(res.ok) {
+            const data = await res.json();
+            if(IS_DEMO) BALANCE_DEMO = data.demo_balance; else BALANCE_REAL = data.balance;
+            updateBalanceUI();
+            myCrashBet = bet; crashActive = true;
+            btn.innerText = 'В ИГРЕ...'; btn.className = 'btn';
+        } else { showToast("Ошибка ставки (Ожидайте или Макс 2 ставки)"); }
+
+    } else if (crashActive && btn.innerText.includes('ЗАБРАТЬ')) {
+        const currentX = parseFloat(document.getElementById('cr-x').innerText);
+        const win = Number((myCrashBet * currentX).toFixed(2));
+        tg.HapticFeedback.notificationOccurred('success');
+        
+        const res = await fetch(`${API_URL}/api/bet`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({id: USER_ID, game: 'Crash', bet: myCrashBet, win, mode: IS_DEMO ? 'demo' : 'real'}) });
+        if(res.ok) {
+            const data = await res.json();
+            if(IS_DEMO) BALANCE_DEMO = data.demo_balance; else BALANCE_REAL = data.balance;
+            updateBalanceUI();
+            crashActive = false; btn.innerText = 'ПОСТАВИТЬ'; btn.className = 'btn';
+            showFloatingWin(win);
+        }
+    }
+}
+
+// --- ИГРА: MINES ---
+let miActive = false;
+let miGrid = [];
+let miBet = 0;
+let miCount = 3;
+let miClicks = 0;
+
+function openMines() { switchPage('mines'); renderMinesGrid(); }
+
+function getMinesMultiplier(mines, clicks) {
+    const kx = {
+        3: [1.1, 1.25, 1.45, 1.7, 2.0, 2.4, 2.9, 3.5, 4.3, 5.3, 6.7, 8.6, 11.5, 15.8, 22.9],
+        5: [1.2, 1.5, 1.9, 2.4, 3.2, 4.3, 5.9, 8.4, 12.3, 18.9, 30.8, 54.0, 102.5, 222.1, 592.4],
+        10: [1.6, 2.8, 5.4, 11.2, 25.1, 62.9, 179.6, 598.8, 2395.0, 11976.0, 83835.0, 922187.0],
+        24: [24.0]
+    };
+    return kx[mines][clicks - 1] || 1.0;
+}
+
+function renderMinesGrid() {
+    const g = document.getElementById('mi-grid');
+    g.innerHTML = '';
+    for(let i=0; i<25; i++) {
+        const c = document.createElement('div');
+        c.className = 'm-cell'; c.dataset.id = i;
+        c.onclick = () => clickMine(i, c);
+        g.appendChild(c);
+    }
+}
+
+async function actionMines() {
+    const btn = document.getElementById('btn-mi-action');
+    if (!miActive) {
+        const bet = parseFloat(document.getElementById('mi-bet').value);
+        if(!checkBalance(bet)) return;
+        
+        miBet = bet; miCount = parseInt(document.getElementById('mi-count').value); miClicks = 0;
+        
+        const res = await fetch(`${API_URL}/api/bet`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({id: USER_ID, game: 'Mines', bet, win: 0, mode: IS_DEMO ? 'demo' : 'real'}) });
+        if(!res.ok) return showToast("Ошибка");
+        const data = await res.json();
+        if(IS_DEMO) BALANCE_DEMO = data.demo_balance; else BALANCE_REAL = data.balance;
+        updateBalanceUI();
+
+        miGrid = Array(25).fill('safe');
+        let m = 0;
+        while(m < miCount) { const r = Math.floor(Math.random()*25); if(miGrid[r]!=='mine') { miGrid[r]='mine'; m++; } }
+        
+        miActive = true; renderMinesGrid();
+        document.getElementById('mi-kx').innerText = '1.00x';
+        document.getElementById('mi-count').disabled = true;
+        btn.innerText = 'ЗАБРАТЬ'; btn.className = 'btn btn-connect';
+        tg.HapticFeedback.impactOccurred('medium');
     } else {
-        list.prepend(d);
-        if(list.children.length > 10) list.lastChild.remove();
+        const win = miClicks > 0 ? Number((miBet * getMinesMultiplier(miCount, miClicks)).toFixed(2)) : 0;
+        const res = await fetch(`${API_URL}/api/bet`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({id: USER_ID, game: 'Mines', bet: 0, win, mode: IS_DEMO ? 'demo' : 'real'}) });
+        if(res.ok) {
+            const data = await res.json();
+            if(IS_DEMO) BALANCE_DEMO = data.demo_balance; else BALANCE_REAL = data.balance;
+            updateBalanceUI();
+            if(win>0) showFloatingWin(win);
+        }
+        endMines();
     }
 }
 
-// CRASH
-let curCrash = {}; let myCrashBets = []; let isCashingOut = false; let isCrashBetting = false;
+function clickMine(id, el) {
+    if(!miActive || el.classList.contains('open')) return;
+    el.classList.add('open');
+    tg.HapticFeedback.impactOccurred('light');
 
-function getCrashColor(x) {
-    const val = parseFloat(x);
-    if(val < 1.3) return '#ff0055'; 
-    if(val < 1.6) return '#ffcc00'; 
-    if(val < 2.0) return '#aaff00'; 
-    return '#00ff88'; 
-}
-
-socket.on('crashHistoryUpdate', hist => {
-    if($('cr-history')) $('cr-history').innerHTML = hist.map(x => `<div class="cr-badge" style="color:${getCrashColor(x)}; border-color:${getCrashColor(x)};">${x}x</div>`).join('');
-});
-
-socket.on('crashBetsUpdate', bets => {
-    if(!$('cr-live-bets')) return;
-    if(bets.length === 0) $('cr-live-bets').innerHTML = '<div style="text-align:center; color:#555; padding:10px;">Ставок пока нет</div>';
-    else {
-        $('cr-live-bets').innerHTML = bets.map(b => {
-            const modeTag = b.mode === 'demo' ? '<span style="color:var(--neon-blue); font-size:9px;">[D]</span>' : '<span style="color:var(--neon); font-size:9px;">[R]</span>';
-            let statusHtml = `<span style="color:var(--text);">${b.bet} TON</span>`;
-            if (b.cashedOut) statusHtml = `<span style="color:var(--neon); font-weight:bold;">Вывел ${b.win.toFixed(2)}</span>`;
-            else if (curCrash.status === 'crashed') statusHtml = `<span style="color:var(--neon-red);">Проиграл</span>`;
-            return `<div class="live-bet-item"><div class="live-user"><img src="${b.avatar}" class="live-ava"> <span>${b.username} ${modeTag}</span></div>${statusHtml}</div>`
-        }).join('');
-    }
-});
-
-socket.on('crashData', d => {
-    curCrash = d; const btn = $('cr-btn');
-    if(!btn) return;
-    if(d.status === 'waiting') { 
-        if($('cr-x')) { $('cr-x').innerText = 'ЖДЕМ'; $('cr-x').style.color = '#fff'; $('cr-x').style.textShadow = 'none'; }
-        if($('cr-timer')) $('cr-timer').innerText = `СТАРТ: ${d.timer}с`; 
-        if(myCrashBets.length === 0) { btn.innerText = 'ПОСТАВИТЬ'; btn.style.background = 'var(--neon)'; btn.disabled = false; } 
-        else if (myCrashBets.length === 1) { btn.innerText = 'ПОСТАВИТЬ 2-Ю СТАВКУ'; btn.style.background = 'var(--neon)'; btn.disabled = false; } 
-        else { btn.innerText = 'МАКС. СТАВОК (2)'; btn.style.background = '#555'; btn.disabled = true; }
-    }
-    if(d.status === 'running') { 
-        const col = getCrashColor(d.multiplier);
-        if($('cr-x')) { $('cr-x').innerText = d.multiplier + 'x'; $('cr-x').style.color = col; $('cr-x').style.textShadow = `0 0 20px ${col}40`; }
-        if($('cr-timer')) $('cr-timer').innerText = '🚀 В ПОЛЕТЕ'; 
-        if (myCrashBets.length > 0) { btn.innerText = `ЗАБРАТЬ ${(myCrashBets[0] * d.multiplier).toFixed(2)} TON`; btn.style.background = 'var(--neon-red)'; btn.disabled = false; } 
-        else { btn.innerText = 'ОЖИДАНИЕ'; btn.style.background = '#555'; btn.disabled = true; }
-    }
-    if(d.status === 'crashed') { 
-        if($('cr-x')) { $('cr-x').innerText = 'BOOM!'; $('cr-x').style.color = 'var(--neon-red)'; $('cr-x').style.textShadow = `0 0 20px rgba(255,0,85,0.4)`; }
-        if(myCrashBets.length > 0) myCrashBets = []; 
-        btn.innerText = 'ПОСТАВИТЬ'; btn.style.background = 'var(--neon)'; btn.disabled = false; isCashingOut = false;
-    }
-});
-
-async function playCrash() {
-    if(isCashingOut || isCrashBetting) return; 
-    const btn = $('cr-btn'); const curBal = mode === 'real' ? user.balance : user.demo_balance;
-    if(curCrash.status === 'waiting') {
-        if (myCrashBets.length >= 2) return showToast('Максимум 2 ставки!');
-        let crBet = parseFloat($('cr-bet').value); 
-        if(isNaN(crBet) || crBet < 0.1 || crBet > 25) return showToast('Мин 0.1, Макс 25 TON');
-        if(crBet > curBal) return showToast('Недостаточно средств!');
-        
-        isCrashBetting = true; btn.disabled = true;
-        const r = await fetch('/api/bet', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id:user.id, game:'Crash', bet:crBet, win:0, mode}) });
-        isCrashBetting = false; btn.disabled = false;
-        
-        if(r.ok) { user = await r.json(); updateUI(); myCrashBets.push(crBet); btn.innerText = myCrashBets.length === 1 ? 'ПОСТАВИТЬ 2-Ю СТАВКУ' : 'МАКС. СТАВОК (2)'; if(myCrashBets.length===2) btn.disabled=true; showToast('Принято!'); } 
-        else { showToast('Ошибка ставки!'); }
-    } else if(curCrash.status === 'running' && myCrashBets.length > 0) {
-        isCashingOut = true; const win = myCrashBets[0] * curCrash.multiplier; 
-        const r = await fetch('/api/bet', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id:user.id, game:'Crash', bet:0, win:win, mode}) });
-        if(r.ok) { user = await r.json(); updateUI(); myCrashBets.shift(); showToast(`+ ${win.toFixed(2)} TON!`); if (myCrashBets.length > 0) btn.innerText = `ЗАБРАТЬ ${(myCrashBets[0] * curCrash.multiplier).toFixed(2)} TON`; else { btn.innerText = 'ОЖИДАНИЕ'; btn.style.background = '#555'; btn.disabled = true; } } 
-        else { showToast('Не успел!'); } isCashingOut = false;
+    if(miGrid[id] === 'mine') {
+        el.innerHTML = '💣'; el.style.background = 'rgba(255,0,85,0.2)'; el.style.borderColor = 'var(--neon-red)';
+        tg.HapticFeedback.notificationOccurred('error');
+        endMines(false);
+    } else {
+        el.innerHTML = '💎'; miClicks++;
+        document.getElementById('mi-kx').innerText = `${getMinesMultiplier(miCount, miClicks).toFixed(2)}x`;
+        if (miClicks === (25 - miCount)) {
+            actionMines(); // Автовывод если все открыто
+        }
     }
 }
 
-// MINES
-let miActive = false; let bombs = []; let miBet = 0; let openedCells = 0; let currentMinesWin = 0; 
-let isMinesProcessing = false; // Защита от мультиклика
-
-function playMines() {
-    if(isMinesProcessing) return;
-    const curBal = mode === 'real' ? user.balance : user.demo_balance;
-    if(miActive) { 
-        isMinesProcessing = true;
-        $('mi-btn').disabled = true;
-        reqBet('Mines', 0, currentMinesWin).then(ok => { 
-            isMinesProcessing = false;
-            $('mi-btn').disabled = false;
-            if(ok) { miActive = false; $('mi-btn').innerText='ИГРАТЬ'; showToast(`Забрал ${currentMinesWin.toFixed(2)} TON!`); renderMines(true); }
-        }); 
-        return; 
-    }
-    miBet = parseFloat($('mi-bet').value); 
-    if(isNaN(miBet) || miBet < 0.1 || miBet > 25) return showToast('Мин 0.1, Макс 25 TON');
-    if(miBet > curBal) return showToast('Нет средств!');
+function endMines(won = true) {
+    miActive = false;
+    document.getElementById('btn-mi-action').innerText = 'ИГРАТЬ';
+    document.getElementById('btn-mi-action').className = 'btn';
+    document.getElementById('mi-count').disabled = false;
     
-    isMinesProcessing = true; $('mi-btn').disabled = true;
-    reqBet('Mines', miBet, 0).then(success => {
-        isMinesProcessing = false; $('mi-btn').disabled = false;
-        if(success) {
-            bombs = []; while(bombs.length<5) { let r=Math.floor(Math.random()*25); if(!bombs.includes(r)) bombs.push(r); }
-            miActive = true; openedCells = 0; currentMinesWin = miBet; $('mi-btn').innerText = `ЗАБРАТЬ ${currentMinesWin.toFixed(2)} TON`; renderMines(); showToast('Ищи кристаллы!');
+    document.querySelectorAll('.m-cell').forEach((c, i) => {
+        if (!c.classList.contains('open')) {
+            c.innerHTML = miGrid[i] === 'mine' ? '<span style="opacity:0.3">💣</span>' : '<span style="opacity:0.3">💎</span>';
         }
     });
 }
 
-function renderMines(isEnd = false) {
-    if(!$('mine-grid')) return;
-    $('mine-grid').innerHTML = '';
-    for(let i=0; i<25; i++) {
-        let c = document.createElement('div'); c.className = 'm-cell';
-        if(isEnd && miActive===false) {
-             c.innerText = bombs.includes(i) ? '💣' : '💎';
-             c.style.opacity = '0.5';
-             $('mine-grid').appendChild(c);
-             continue;
-        }
-        c.onclick = () => {
-            if(!miActive || c.classList.contains('open') || isMinesProcessing) return;
-            let hitBomb = bombs.includes(i);
-            if (!hitBomb) { if (Math.random() > ((rtpObj.mines||90) / 100)) { hitBomb = true; bombs[0] = i; } }
-
-            if(hitBomb) { 
-                miActive=false; $('mi-btn').innerText='ИГРАТЬ'; showToast('БУМ!'); 
-                const cells = document.querySelectorAll('.m-cell');
-                cells.forEach((cell, idx) => {
-                    cell.innerText = bombs.includes(idx) ? '💣' : '💎';
-                    if(bombs.includes(idx)) { cell.style.background = 'var(--neon-red)'; cell.style.borderColor = 'var(--neon-red)'; }
-                });
-            } else { 
-                c.innerText='💎'; c.classList.add('open'); c.style.borderColor='var(--neon)'; openedCells++;
-                currentMinesWin = miBet * (1 + openedCells * 0.2); $('mi-btn').innerText = `ЗАБРАТЬ ${currentMinesWin.toFixed(2)} TON`; 
-            }
-        }; $('mine-grid').appendChild(c);
-    }
+// --- ИГРА: COINFLIP ---
+let cfSide = 'O';
+function openCoinflip() { switchPage('coinflip'); }
+function selectCoinSide(side) {
+    cfSide = side;
+    document.getElementById('c-side-o').className = side === 'O' ? 'c-side active' : 'c-side inactive';
+    document.getElementById('c-side-r').className = side === 'R' ? 'c-side active' : 'c-side inactive';
+    tg.HapticFeedback.selectionChanged();
 }
 
-// COINFLIP
-let cSide = 'L'; let isFlipping = false;
-function setSide(s) { 
-    if(isFlipping) return; 
-    cSide = s; 
-    $('side-l').classList.toggle('active', s==='L'); 
-    $('side-x').classList.toggle('active', s==='X'); 
-    
-    // Подсветка (Зеленый / Красный для наглядности)
-    $('side-l').style.boxShadow = s === 'L' ? '0 0 15px var(--neon)' : 'none';
-    $('side-l').style.borderColor = s === 'L' ? 'var(--neon)' : '#333';
-    
-    $('side-x').style.boxShadow = s === 'X' ? '0 0 15px var(--neon-red)' : 'none';
-    $('side-x').style.borderColor = s === 'X' ? 'var(--neon-red)' : '#333';
-}
+async function playCoinflip() {
+    const bet = parseFloat(document.getElementById('cf-bet').value);
+    if(!checkBalance(bet)) return;
 
-// Инициализация цветов при загрузке
-setTimeout(() => setSide('L'), 500);
+    const btn = document.getElementById('btn-cf-action');
+    btn.disabled = true; btn.innerText = 'БРОСОК...';
+    tg.HapticFeedback.impactOccurred('medium');
 
-async function playCoin() {
-    if(isFlipping) return;
-    const curBal = mode === 'real' ? user.balance : user.demo_balance;
-    const bet = parseFloat($('co-bet').value); 
-    if(isNaN(bet) || bet < 0.1 || bet > 25) return showToast('Мин 0.1, Макс 25 TON');
-    if(bet > curBal) return showToast('Недостаточно средств!');
-
-    isFlipping = true; $('co-btn').innerText = 'КРУТИМ...'; $('co-btn').disabled = true;
-    
-    const winChance = ((rtpObj.coinflip || 90) / 100) * 0.5; 
-    const isWin = Math.random() < winChance;
-    const result = isWin ? cSide : (cSide === 'L' ? 'X' : 'L');
-    
-    const coin = $('coin-3d');
-    const rotation = result === 'L' ? 1800 : 1980;
-    coin.style.transition = 'transform 2s cubic-bezier(0.2, 0.8, 0.2, 1)';
-    coin.style.transform = `rotateY(${rotation}deg)`;
+    const coin = document.getElementById('cf-coin');
+    coin.style.transition = 'none'; coin.style.transform = 'rotateY(0deg)';
     
     setTimeout(async () => {
-        const win = result === cSide ? bet*2 : 0;
-        showToast(win > 0 ? `Победа! +${win.toFixed(2)}` : `Проигрыш: ${result}`); 
-        await reqBet('Coinflip', bet, win);
+        const isWin = Math.random() < 0.48; // ~96% RTP
+        const resultSide = isWin ? cfSide : (cfSide === 'O' ? 'R' : 'O');
+        const win = isWin ? Number((bet * 1.95).toFixed(2)) : 0;
+
+        const res = await fetch(`${API_URL}/api/bet`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({id: USER_ID, game: 'Coinflip', bet, win, mode: IS_DEMO ? 'demo' : 'real'}) });
         
-        setTimeout(() => {
-            coin.style.transition = 'none'; 
-            coin.style.transform = `rotateY(${result === 'L' ? 0 : 180}deg)`; 
-            isFlipping = false; $('co-btn').innerText = 'КРУТИТЬ'; $('co-btn').disabled = false;
-        }, 500);
-    }, 2000);
+        if (res.ok) {
+            const data = await res.json();
+            if(IS_DEMO) BALANCE_DEMO = data.demo_balance; else BALANCE_REAL = data.balance;
+            updateBalanceUI();
+
+            coin.style.transition = 'transform 2s cubic-bezier(0.2, 0.8, 0.2, 1)';
+            const spins = 5 * 360;
+            const extra = resultSide === 'R' ? 180 : 0;
+            coin.style.transform = `rotateY(${spins + extra}deg)`;
+
+            setTimeout(() => {
+                btn.disabled = false; btn.innerText = 'БРОСИТЬ МОНЕТУ';
+                if(isWin) { tg.HapticFeedback.notificationOccurred('success'); showFloatingWin(win); } 
+                else { tg.HapticFeedback.notificationOccurred('error'); }
+            }, 2100);
+        } else {
+            btn.disabled = false; btn.innerText = 'БРОСИТЬ МОНЕТУ'; showToast('Ошибка');
+        }
+    }, 50);
 }
 
+// --- БАТЛ РУЛЕТКА ---
+function openBattleLobby() { switchPage('battle'); loadBattleLobbies(); }
 
-// --- BATTLE ROULETTE КЛИЕНТ ---
-let battleLobbies = [];
-let currentBattle = null;
+async function loadBattleLobbies() {
+    const res = await fetch(`${API_URL}/api/battle/list`);
+    const data = await res.json();
+    const c = document.getElementById('battle-lobbies-container');
+    c.innerHTML = data.length === 0 ? '<div style="text-align:center; color:var(--sub); padding: 20px;">Нет активных лобби</div>' : '';
+    
+    data.forEach(l => {
+        const isMy = l.creatorId === String(USER_ID);
+        const inLobby = l.players.some(p => p.id === String(USER_ID));
+        const total = l.players.reduce((s,p)=>s+p.bet, 0);
+        
+        c.innerHTML += `
+            <div class="card" style="margin-bottom: 10px; border-color: var(--neon-blue); padding: 12px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                    <div><span style="font-weight: 900; font-size: 16px;">Создатель:</span> ${l.players[0].username}</div>
+                    <div style="font-weight: 900; color: var(--neon);">${total} <i class="ton-icon"></i></div>
+                </div>
+                <div style="display: flex; gap: 5px; margin-bottom: 10px;">
+                    ${l.players.map(p => `<img src="${p.avatar}" style="width:30px; height:30px; border-radius:50%; border:2px solid ${p.color};">`).join('')}
+                    ${Array(4 - l.players.length).fill('<div style="width:30px; height:30px; border-radius:50%; border:2px dashed #444;"></div>').join('')}
+                </div>
+                ${inLobby ? 
+                    `<button class="btn" style="padding: 10px; background: #333; color: #fff;" onclick="openBattleGame('${l._id}')">ОТКРЫТЬ ЛОББИ</button>` :
+                    `<div style="display:flex; gap:5px;">
+                        <input type="number" id="btl-join-${l._id}" class="input-box" style="margin:0; padding:10px;" placeholder="Ставка">
+                        <button class="btn btn-connect" style="margin:0; padding:10px;" onclick="joinBattleLobby('${l._id}')">ВОЙТИ</button>
+                    </div>`
+                }
+            </div>
+        `;
+    });
+}
 
-socket.on('battleUpdate', () => { renderBattleLobbies(); });
+async function createBattleLobby() {
+    if(IS_DEMO) return showToast("Только на REAL счете");
+    const bet = parseFloat(document.getElementById('btl-create-bet').value);
+    
+    const res = await fetch(`${API_URL}/api/battle/create`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({id: USER_ID, bet}) });
+    const data = await res.json();
+    if(data.error) return showToast(data.error);
+    
+    BALANCE_REAL = data.balance; updateBalanceUI(); loadBattleLobbies();
+    showToast("Лобби создано!");
+}
+
+async function joinBattleLobby(lobbyId) {
+    if(IS_DEMO) return showToast("Только на REAL счете");
+    const bet = parseFloat(document.getElementById(`btl-join-${lobbyId}`).value);
+    
+    const res = await fetch(`${API_URL}/api/battle/join`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({id: USER_ID, lobbyId, bet}) });
+    const data = await res.json();
+    if(data.error) return showToast(data.error);
+    
+    BALANCE_REAL = data.user.balance; updateBalanceUI(); 
+    openBattleGame(lobbyId);
+}
+
+let activeBattleLobbyId = null;
+
+function openBattleGame(lobbyId) {
+    activeBattleLobbyId = lobbyId;
+    document.getElementById('battle-game-modal').style.display = 'flex';
+    updateBattleModalData();
+}
+
+function closeBattleModal() {
+    document.getElementById('battle-game-modal').style.display = 'none';
+    activeBattleLobbyId = null;
+    loadBattleLobbies();
+}
+
+async function updateBattleModalData() {
+    if(!activeBattleLobbyId) return;
+    const res = await fetch(`${API_URL}/api/battle/list`);
+    const lobbies = await res.json();
+    const lobby = lobbies.find(l => l._id === activeBattleLobbyId);
+    
+    if(!lobby) return closeBattleModal(); // Лобби завершилось или отменено
+
+    const total = lobby.players.reduce((s,p)=>s+p.bet, 0);
+    document.getElementById('btl-bank').innerText = total;
+    
+    const c = document.getElementById('btl-players-list');
+    c.innerHTML = lobby.players.map(p => `
+        <div style="display:flex; justify-content:space-between; background:#111; padding:10px; border-radius:10px; border-left:4px solid ${p.color};">
+            <div style="display:flex; align-items:center; gap:10px;">
+                <img src="${p.avatar}" style="width:24px; height:24px; border-radius:50%;">
+                <span style="font-weight:bold;">${p.username}</span>
+            </div>
+            <div style="font-weight:900;">${p.bet} <i class="ton-icon"></i> <span style="font-size:10px; color:var(--sub);">(${Math.round(p.bet/total*100)}%)</span></div>
+        </div>
+    `).join('');
+
+    // Отрисовка колеса (conic-gradient)
+    const wheel = document.getElementById('btl-wheel');
+    let gradientParts = [];
+    let currentDeg = 0;
+    lobby.players.forEach(p => {
+        const percentage = (p.bet / total) * 100;
+        gradientParts.push(`${p.color} ${currentDeg}% ${currentDeg + percentage}%`);
+        currentDeg += percentage;
+    });
+    wheel.style.background = `conic-gradient(${gradientParts.join(', ')})`;
+
+    const st = document.getElementById('btl-status-text');
+    if (lobby.players.length === 1) {
+        st.innerText = "ОЖИДАНИЕ ИГРОКОВ...";
+        document.getElementById('btl-cancel-btn').style.display = (lobby.creatorId === String(USER_ID)) ? 'block' : 'none';
+    } else {
+        document.getElementById('btl-cancel-btn').style.display = 'none';
+        if(lobby.timerStartedAt) {
+            const passed = Math.floor((new Date() - new Date(lobby.timerStartedAt)) / 1000);
+            const left = 120 - passed;
+            if(left > 0) st.innerText = `СТАРТ ЧЕРЕЗ ${left} СЕК (Или при 4 игроках)`;
+            else st.innerText = "ЗАПУСК...";
+        }
+    }
+}
+
+async function cancelBattle() {
+    if(!activeBattleLobbyId) return;
+    const res = await fetch(`${API_URL}/api/battle/cancel`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({id: USER_ID, lobbyId: activeBattleLobbyId}) });
+    const data = await res.json();
+    if(data.error) return showToast(data.error);
+    BALANCE_REAL = data.balance; updateBalanceUI();
+    closeBattleModal(); showToast("Лобби отменено");
+}
+
+socket.on('battleUpdate', () => {
+    if(document.getElementById('page-battle').classList.contains('active')) loadBattleLobbies();
+    if(activeBattleLobbyId) updateBattleModalData();
+});
 
 socket.on('battleSpin', ({lobbyId, winnerId}) => {
-    if(currentBattle && currentBattle._id === lobbyId) {
-        currentBattle.status = 'spinning';
-        $('battle-join-area').style.display = 'none'; // Скрываем инпут ставки
-        const wheel = $('battle-wheel');
-        wheel.style.transition = 'transform 5s cubic-bezier(0.2, 0.8, 0.2, 1)';
+    if(activeBattleLobbyId === lobbyId) {
+        document.getElementById('btl-status-text').innerText = "ВРАЩЕНИЕ...";
+        const wheel = document.getElementById('btl-wheel');
+        // Случайное вращение от 5 до 10 полных оборотов + рандомный угол
+        const spins = (Math.floor(Math.random() * 5) + 5) * 360;
+        const extra = Math.floor(Math.random() * 360);
+        wheel.style.transform = `rotate(${spins + extra}deg)`;
         
-        let totalPool = currentBattle.players.reduce((s, p) => s + p.bet, 0);
-        let startAngle = 0;
-        let winAngle = 0;
-        
-        for(let p of currentBattle.players) {
-            let slice = (p.bet / totalPool) * 360;
-            if(p.id === winnerId) { winAngle = startAngle + (slice / 2); break; }
-            startAngle += slice;
-        }
-        
-        const rotations = 3600; 
-        const finalTransform = rotations + (270 - winAngle);
-        wheel.style.transform = `rotate(${finalTransform}deg)`;
-        
-        $('battle-timer').innerText = 'РУЛЕТКА КРУТИТСЯ!';
-        
-        setTimeout(() => {
-            const winner = currentBattle.players.find(p => p.id === winnerId);
-            $('battle-timer').innerText = `ПОБЕДИЛ: ${winner.username}!`;
-            $('battle-timer').style.color = winner.color;
-            showToast(`${winner.username} забирает куш!`);
+        setTimeout(async () => {
+            document.getElementById('btl-status-text').innerText = "ПОБЕДИТЕЛЬ ОПРЕДЕЛЕН!";
+            tg.HapticFeedback.notificationOccurred('success');
+            // Обновляем баланс после игры
+            await auth(); 
+            setTimeout(() => closeBattleModal(), 3000);
         }, 5000);
     }
 });
 
-function openBattleModal() {
-    if(mode === 'demo') return showToast('Battle Roulette доступна только на REAL TON!');
-    $('battle-modal').style.display = 'flex';
+
+// --- КОШЕЛЕК И ФИНАНСЫ ---
+async function depositViaTonConnect() {
+    const amount = parseFloat(document.getElementById('tc-amount').value);
+    if(isNaN(amount) || amount < 0.1) return showToast("Мин 0.1 TON");
+    
+    if (!tonConnectUI.connected) return showToast("Сначала подключи кошелек TON Connect выше!");
+
+    try {
+        const tx = {
+            validUntil: Math.floor(Date.now() / 1000) + 360,
+            messages: [{
+                address: ADMIN_WALLET,
+                amount: (amount * 1e9).toString(),
+                payload: btoa(String(USER_ID)) // Base64 от ID юзера как MEMO
+            }]
+        };
+        await tonConnectUI.sendTransaction(tx);
+        showToast("Транзакция отправлена! Ожидайте зачисления.");
+        setTimeout(checkDeposit, 15000); // Авто-проверка через 15 сек
+    } catch (e) { showToast("Ошибка оплаты или отмена"); }
 }
 
-async function createBattleLobby() {
-    const bet = parseFloat($('b-bet').value);
-    const min = parseFloat($('b-min').value);
-    const max = parseFloat($('b-max').value);
+async function checkDeposit() {
+    const btn = document.getElementById('btn-check-dep');
+    btn.disabled = true; btn.innerText = 'ПРОВЕРКА...';
     
-    if(isNaN(bet) || bet < 1 || bet > 100) return showToast('Ваша ставка от 1 до 100 TON');
-    if(isNaN(min) || min < 1) return showToast('Мин. ставка от 1 TON');
-    if(isNaN(max) || max > 150) return showToast('Макс. ставка до 150 TON');
-    if(min >= max) return showToast('Мин. ставка должна быть меньше Макс.');
+    const res = await fetch(`${API_URL}/api/check_deposit`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({id: USER_ID}) });
+    const data = await res.json();
     
-    const r = await fetch('/api/battle/create', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id:user.id, bet, minBet:min, maxBet:max}) });
-    if(r.ok) { user = await r.json(); updateUI(); $('battle-modal').style.display='none'; showToast('Лобби создано!'); }
-    else { const e = await r.json(); showToast(e.error || 'Ошибка'); }
-}
-
-async function submitBattleJoin() {
-    if(!currentBattle) return;
-    const betStr = $('battle-join-bet').value;
-    const bet = parseFloat(betStr);
-    
-    if(isNaN(bet) || bet < currentBattle.minBet || bet > currentBattle.maxBet) {
-        return showToast(`Сумма от ${currentBattle.minBet} до ${currentBattle.maxBet}`);
-    }
-    
-    const r = await fetch('/api/battle/join', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id:user.id, lobbyId: currentBattle._id, bet}) });
-    if(r.ok) { 
-        const d = await r.json(); user = d.user; updateUI(); showToast('Вы вошли в лобби!'); 
-        $('battle-join-area').style.display = 'none'; // Убираем инпут
-        openBattleGame(d.lobby); // Обновляем игру
-    } else { const e = await r.json(); showToast(e.error || 'Ошибка'); }
-}
-
-
-async function cancelBattle(lobbyId) {
-    if(!confirm('Отменить лобби и вернуть TON?')) return;
-    const r = await fetch('/api/battle/cancel', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id:user.id, lobbyId}) });
-    if(r.ok) { user = await r.json(); updateUI(); showToast('Лобби отменено!'); }
-    else showToast('Ошибка отмены');
-}
-
-async function renderBattleLobbies() {
-    const r = await fetch('/api/battle/list');
-    if(!r.ok) return;
-    battleLobbies = await r.json();
-    
-    const list = $('battle-lobbies');
-    if(!list) return;
-
-    if($('my-lobbies-chk') && $('my-lobbies-chk').checked) {
-        battleLobbies.sort((a,b) => {
-            let aMine = a.players.some(p => p.id === user.id) ? -1 : 1;
-            let bMine = b.players.some(p => p.id === user.id) ? -1 : 1;
-            return aMine - bMine;
-        });
-    }
-
-    list.innerHTML = battleLobbies.map(l => {
-        const creator = l.players[0];
-        const isMine = l.creatorId === user.id;
-        const imIn = l.players.some(p => p.id === user.id);
-        
-        let actionBtn = '';
-        if(isMine && l.players.length === 1) actionBtn = `<button class="btn" style="background:var(--neon-red); padding:5px; font-size:12px;" onclick="cancelBattle('${l._id}')">ОТМЕНА</button>`;
-        else actionBtn = `<button class="btn" style="background:var(--neon); color:#000; padding:5px 10px; font-size:12px; font-weight:bold;" onclick="openBattleGame('${l._id}')">${imIn ? 'СМОТРЕТЬ' : 'ВОЙТИ / СМОТРЕТЬ'}</button>`;
-
-        const timeStr = new Date(l.createdAt).toLocaleTimeString("ru-RU", {timeZone:"Europe/Moscow", hour:"2-digit", minute:"2-digit"});
-        
-        return `
-        <div style="background:#1a1a1a; border:1px solid ${isMine?'var(--neon)':'#333'}; padding:10px; border-radius:8px; display:flex; justify-content:space-between; align-items:center;">
-            <div style="display:flex; align-items:center; gap:10px;">
-                <img src="${creator.avatar}" style="width:30px; border-radius:50%;">
-                <div>
-                    <b style="color:var(--text);">${creator.username}</b> <span style="font-size:10px; color:#555;">[${timeStr}]</span><br>
-                    <span style="font-size:12px; color:var(--neon);">${creator.bet} TON</span> 
-                    <span style="font-size:10px; color:#888;">(Вход: ${l.minBet}-${l.maxBet})</span><br>
-                    <span style="font-size:10px; color:var(--neon-blue);">Игроков: ${l.players.length}/4</span>
-                </div>
-            </div>
-            <div>${actionBtn}</div>
-        </div>`;
-    }).join('') || '<div style="text-align:center; color:#555;">Нет открытых лобби</div>';
-}
-
-function openBattleGame(lobbyId) {
-    if(mode === 'demo') { showToast('Только REAL TON!'); return; }
-    let lobby = typeof lobbyId === 'string' ? battleLobbies.find(l => l._id === lobbyId) : lobbyId;
-    if(!lobby) return;
-    currentBattle = lobby;
-    
-    $('battle-game-modal').style.display = 'flex';
-    $('battle-wheel').style.transition = 'none';
-    $('battle-wheel').style.transform = 'rotate(0deg)';
-    
-    drawBattleWheel(lobby);
-    renderBattlePlayers(lobby);
-    
-    // Проверка, участвует ли юзер. Если нет — показываем инпут ставки внутри лобби
-    const imIn = lobby.players.some(p => p.id === user.id);
-    if (!imIn && lobby.status === 'waiting' && lobby.players.length < 4) {
-        $('battle-join-area').style.display = 'block';
-        $('battle-join-bet').placeholder = `Сумма (${lobby.minBet} - ${lobby.maxBet} TON)`;
+    btn.disabled = false; btn.innerText = 'Проверить оплату';
+    if(data.success) {
+        BALANCE_REAL = data.user.balance; updateBalanceUI();
+        showToast(`Пополнено на ${data.added} TON!`);
+        tg.HapticFeedback.notificationOccurred('success');
     } else {
-        $('battle-join-area').style.display = 'none';
-    }
-
-    const updateTimer = () => {
-        if(!currentBattle || currentBattle.status !== 'waiting') return;
-        const endTime = new Date(currentBattle.createdAt).getTime() + 120000;
-        const left = Math.floor((endTime - Date.now()) / 1000);
-        if(left > 0) {
-            let m = Math.floor(left / 60); let s = left % 60;
-            $('battle-timer').innerText = `СТАРТ ЧЕРЕЗ: 0${m}:${s<10?'0'+s:s}`;
-            $('battle-timer').style.color = 'var(--neon)';
-            setTimeout(updateTimer, 1000);
-        } else $('battle-timer').innerText = 'ЗАПУСК...';
-    };
-    updateTimer();
-}
-
-function closeBattleGame() {
-    $('battle-game-modal').style.display = 'none';
-    currentBattle = null;
-}
-
-function drawBattleWheel(lobby) {
-    const canvas = $('battle-wheel');
-    const ctx = canvas.getContext('2d');
-    const cw = canvas.width / 2;
-    const ch = canvas.height / 2;
-    
-    ctx.clearRect(0,0, canvas.width, canvas.height);
-    
-    const totalPool = lobby.players.reduce((sum, p) => sum + p.bet, 0);
-    let startAngle = 0;
-    
-    for (let p of lobby.players) {
-        let sliceAngle = (p.bet / totalPool) * 2 * Math.PI;
-        ctx.beginPath();
-        ctx.moveTo(cw, ch);
-        ctx.arc(cw, ch, cw - 5, startAngle, startAngle + sliceAngle);
-        ctx.closePath();
-        ctx.fillStyle = p.color;
-        ctx.fill();
-        ctx.lineWidth = 2;
-        ctx.strokeStyle = '#111';
-        ctx.stroke();
-        
-        startAngle += sliceAngle;
+        showToast(data.error);
     }
 }
 
-function renderBattlePlayers(lobby) {
-    const totalPool = lobby.players.reduce((sum, p) => sum + p.bet, 0);
-    $('battle-players').innerHTML = lobby.players.map(p => {
-        const perc = ((p.bet / totalPool) * 100).toFixed(1);
-        return `
-        <div style="background:#111; border-left:4px solid ${p.color}; padding:8px; border-radius:6px; flex: 1 1 45%; max-width:48%; text-align:left;">
-            <img src="${p.avatar}" style="width:20px; border-radius:50%; vertical-align:middle;"> 
-            <span style="font-size:12px; font-weight:bold;">${p.username}</span><br>
-            <span style="font-size:12px; color:var(--neon);">${p.bet} TON</span> <span style="font-size:10px; color:#888;">(${perc}%)</span>
-        </div>`;
-    }).join('');
-}
-
-
-// ФИНАНСЫ И ПРОМО
-async function checkRealDeposit(btn) {
-    btn.innerText = "ПРОВЕРЯЕМ..."; btn.disabled = true;
-    const r = await fetch('/api/check_deposit', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id:user.id}) });
-    if(r.ok) { const d = await r.json(); user = d.user; updateUI(); renderWithdrawHistory(); showToast(`+${d.added} TON`); } 
-    else { const e = await r.json(); showToast(e.error || 'Не найдено'); } 
-    btn.innerText = "ПРОВЕРИТЬ ОПЛАТУ"; btn.disabled = false;
-}
-
-async function withdraw() {
-    const a = parseFloat($('with-amount').value); 
-    const ad = $('with-addr').value;
+async function requestWithdraw() {
+    const address = document.getElementById('w-address').value;
+    const amount = parseFloat(document.getElementById('w-amount').value);
     
-    if(!ad || !ad.trim()) return showToast('Введите адрес кошелька!');
-    if(a > user.balance || a < 5) return showToast('Ошибка (Мин 5 TON)');
+    if(!address || isNaN(amount) || amount < 5) return showToast("Мин 5 TON и укажите адрес");
+    if(amount > BALANCE_REAL) return showToast("Недостаточно средств");
+
+    const res = await fetch(`${API_URL}/api/withdraw`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({id: USER_ID, address, amount}) });
+    const data = await res.json();
+    if(data.error) return showToast(data.error);
     
-    const btn = document.querySelector('.btn-withdraw'); btn.disabled = true; btn.innerText = "СОЗДАНИЕ...";
-    const r = await fetch('/api/withdraw', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id:user.id, address:ad, amount:a}) });
-    btn.disabled = false; btn.innerText = "СОЗДАТЬ ЗАЯВКУ";
-    
-    if(r.ok) { user = await r.json(); updateUI(); renderWithdrawHistory(); showToast('Заявка создана!'); $('with-amount').value=''; $('with-addr').value=''; } 
-    else showToast('Ошибка вывода');
+    BALANCE_REAL = data.balance; updateBalanceUI();
+    showToast("Заявка создана!");
+    document.getElementById('w-address').value = '';
+    document.getElementById('w-amount').value = '';
 }
 
 async function activatePromo() {
-    const code = $('promo-code').value;
-    const r = await fetch('/api/promo', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id:user.id, code}) });
-    if(r.ok) { user = await r.json(); updateUI(); showToast('Активирован!'); $('promo-code').value=''; } 
-    else showToast('Ошибка промо');
+    const code = document.getElementById('promo-input').value;
+    if(!code) return showToast("Введи код");
+    const res = await fetch(`${API_URL}/api/promo`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({id: USER_ID, code}) });
+    const data = await res.json();
+    if(data.error) return showToast(data.error); // Точная ошибка с бэка
+    
+    BALANCE_REAL = data.balance; updateBalanceUI();
+    showToast("Активировано!"); tg.HapticFeedback.notificationOccurred('success');
+    document.getElementById('promo-input').value = '';
 }
 
-async function reqBet(game, bet, win) {
-    const r = await fetch('/api/bet', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id:user.id, game, bet, win, mode}) });
-    if(r.ok) { user = await r.json(); updateUI(); return true; } else { showToast('Нет средств!'); return false; }
+
+// --- АДМИН ПАНЕЛЬ ---
+function openAdmin() { document.getElementById('admin-modal').style.display = 'flex'; loadAdminData(); }
+function closeAdmin() { document.getElementById('admin-modal').style.display = 'none'; }
+function switchAdminTab(t) {
+    document.querySelectorAll('.admin-tab').forEach(el => el.classList.remove('active'));
+    event.target.classList.add('active');
+    ['stats', 'users', 'withdraws', 'promo', 'settings'].forEach(id => document.getElementById(`adm-tab-${id}`).style.display = 'none');
+    document.getElementById(`adm-tab-${t}`).style.display = 'block';
 }
 
-// АДМИН ПАНЕЛЬ
-let aTaps = 0; let adminSearchQuery = ''; let currentAdminFilter = 'balance';
-async function checkAdmin() { aTaps++; if(aTaps >= 5) { aTaps = 0; let p = prompt('Пароль:'); if(p) { adminPass = p; loadAdminData(); } } }
-function switchAdminTab(tab) { document.querySelectorAll('.admin-tab').forEach(t => t.classList.remove('active')); event.target.classList.add('active'); renderAdminContent(tab); }
+async function adminReq(endpoint, body = {}) {
+    body.pass = document.getElementById('admin-pass').value;
+    const res = await fetch(`${API_URL}/api/admin/${endpoint}`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body) });
+    return await res.json();
+}
 
-let adData = {};
 async function loadAdminData() {
-    const r = await fetch('/api/admin/data', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({pass: adminPass}) });
-    if(r.ok) { adData = await r.json(); $('admin-modal').style.display = 'block'; renderAdminContent('withdraws'); } else showToast('Неверный пароль');
-}
+    const d = await adminReq('data');
+    if(d.error) return showToast(d.error);
 
-async function searchAdminUsers(query, filterType = currentAdminFilter) {
-    adminSearchQuery = query;
-    currentAdminFilter = filterType;
-    const r = await fetch('/api/admin/search_user', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({pass: adminPass, query, filterType}) });
-    if(r.ok) { const d = await r.json(); adData.users = d.users; renderAdminContent('users'); }
-}
+    document.getElementById('adm-tot-users').innerText = d.totalUsers;
+    document.getElementById('adm-tot-reqs').innerText = d.withdraws.length;
+    document.getElementById('adm-deps').innerText = d.totalDeposited.toFixed(2);
+    document.getElementById('adm-withs').innerText = d.totalWithdrawn.toFixed(2);
 
-function renderAdminContent(tab) {
-    const c = $('admin-content');
-    if(tab === 'withdraws') {
-        c.innerHTML = `
-            <div style="background:#222; padding:10px; border-radius:8px; margin-bottom:15px; text-align:center;">
-                <div style="color:var(--neon); font-size:18px;"><b>ВСЕГО ДЕПОВ:</b> ${adData.totalDeposited.toFixed(2)} TON</div>
-                <div style="color:var(--neon-red); font-size:18px;"><b>ВСЕГО ВЫВОДОВ:</b> ${adData.totalWithdrawn.toFixed(2)} TON</div>
+    document.getElementById('adm-deps-list').innerHTML = d.latestDeposits.map(x => `<div><b>${x.amount} TON</b> от ${x.username} (${x.time})</div>`).join('');
+
+    const wc = document.getElementById('adm-withdraws-list');
+    wc.innerHTML = d.withdraws.map(w => `
+        <div class="card" style="padding:10px;">
+            <b>ID:</b> ${w.userId} <br>
+            <b>Сумма:</b> ${w.amount} TON <br>
+            <b>Адрес:</b> <span style="font-size:10px;word-break:break-all;">${w.address}</span><br>
+            <div style="display:flex;gap:5px;margin-top:5px;">
+                <button class="btn" style="padding:5px;background:var(--neon);" onclick="adminWithdrawAction('${w._id}','approve')">Одобрить</button>
+                <button class="btn" style="padding:5px;background:var(--neon-red);" onclick="adminWithdrawAction('${w._id}','reject')">Отклонить</button>
             </div>
-            <h4 style="color:var(--neon);">ОЖИДАЮТ ВЫПЛАТЫ</h4>
-            ${adData.withdraws.map(w => `
-                <div style="background:#1a1a1a; padding:10px; border-radius:8px; margin-bottom:10px;">
-                    <b>ID:</b> ${w.userId} <br> <b>Сумма:</b> ${w.amount} TON <br> <code>${w.address}</code><br>
-                    <button class="btn" style="padding:8px; margin-top:5px;" onclick="adminW('${w._id}', 'approve')">ОДОБРИТЬ</button>
-                    <button class="btn" style="padding:8px; margin-top:5px; background:var(--neon-red);" onclick="adminW('${w._id}', 'reject')">ОТКЛОНИТЬ (ВЕРНУТЬ)</button>
-                </div>
-            `).join('') || '<div style="color:#555;">Нет заявок</div>'}
-            
-            <hr>
-            <h4 style="color:var(--neon);">ПОСЛЕДНИЕ ДЕПОЗИТЫ</h4>
-            ${adData.latestDeposits.map(d => `
-                <div style="padding:8px; border-bottom:1px solid #333;">
-                    <a href="tg://user?id=${d.userId}" style="color:var(--neon); text-decoration:none;"><b>@${d.username}</b></a>
-                    (ID: ${d.userId}) <br>
-                    Пополнил: <b style="color:#fff;">${d.amount} TON</b> <span style="font-size:10px; color:#888;">[${d.time}]</span>
-                </div>
-            `).join('') || '<div style="color:#555;">Нет депозитов</div>'}
-        `;
-    }
-    if(tab === 'promo') { 
-        c.innerHTML = `
-            <input type="text" id="ad-pr-code" class="input-box" style="padding:10px; font-size:14px;" placeholder="Код">
-            <input type="number" id="ad-pr-sum" class="input-box" style="padding:10px; font-size:14px;" placeholder="Сумма TON">
-            <input type="number" id="ad-pr-lim" class="input-box" style="padding:10px; font-size:14px;" placeholder="Лимит активаций">
-            <button class="btn" style="padding:10px;" onclick="adminPromo()">СОЗДАТЬ ПРОМО</button><hr>
-            ${adData.promos.map(p => {
-                const usedListHtml = p.usedBy.map(uid => `<a href="tg://user?id=${uid}" style="color:var(--neon);">ID: ${uid}</a>`).join(', ');
-                return `
-                <div style="padding:8px; border-bottom:1px solid #222;">
-                    <div><b>${p.code}</b> - ${p.amount} TON | Осталось: <span style="color:var(--neon)">${p.limit - p.usedBy.length}</span> из ${p.limit}</div>
-                    <div style="font-size:10px; margin-top:5px; max-height:40px; overflow-y:auto; background:#111; padding:5px;">Использовали: ${usedListHtml || 'Никто'}</div>
-                    <button style="background:var(--neon-red); color:#fff; border:none; padding:4px 8px; border-radius:4px; margin-top:5px;" onclick="adminDelPromo('${p._id}')">Удалить</button>
-                </div>
-            `}).join('')}
-        `;
-    }
-    if(tab === 'rtp') {
-        c.innerHTML = `
-            <h4 style="color:var(--neon);">РАССЫЛКА В БОТА (LoonxGift)</h4>
-            <textarea id="ad-bot-msg" class="input-box" style="height:60px; font-size:12px;" placeholder="Сообщение ВСЕМ в бота..."></textarea>
-            <button class="btn" style="padding:8px; margin-top:0; margin-bottom:20px; background:var(--neon-blue); color:#000;" onclick="adminBotBroadcast()">ОТПРАВИТЬ ВСЕМ</button>
-            <hr>
-            <h4 style="color:var(--neon);">ОБНУЛЕНИЕ</h4>
-            <button class="btn" style="padding:8px; background:red; margin-bottom:20px;" onclick="adminReset()">ОБНУЛИТЬ ИСТОРИЮ (Баланс останется)</button>
-            <hr>
-            <h4 style="color:var(--neon); margin-bottom:10px;">RTP</h4>
-            <div><b>Crash RTP (%):</b> <input type="number" id="rtp-crash" value="${adData.rtp.crash||90}" class="input-box" style="padding:5px; width:70px; display:inline-block;"> <button class="btn" style="padding:5px; width:auto; display:inline-block;" onclick="adminRTP('crash')">OK</button></div>
-            <div><b>Mines RTP (%):</b> <input type="number" id="rtp-mines" value="${adData.rtp.mines||90}" class="input-box" style="padding:5px; width:70px; display:inline-block;"> <button class="btn" style="padding:5px; width:auto; display:inline-block;" onclick="adminRTP('mines')">OK</button></div>
-            <div><b>Coinflip RTP (%):</b> <input type="number" id="rtp-coinflip" value="${adData.rtp.coinflip||90}" class="input-box" style="padding:5px; width:70px; display:inline-block;"> <button class="btn" style="padding:5px; width:auto; display:inline-block;" onclick="adminRTP('coinflip')">OK</button></div>
-            <hr>
-            <h4 style="color:var(--neon); margin-bottom:10px;">ОТКЛЮЧЕНИЕ ИГР (ТЕХ. РАБОТЫ)</h4>
-            <label><input type="checkbox" ${adData.maintenance.crash ? 'checked' : ''} onchange="adminMaint('crash', this.checked)"> Crash</label><br>
-            <label><input type="checkbox" ${adData.maintenance.mines ? 'checked' : ''} onchange="adminMaint('mines', this.checked)"> Mines</label><br>
-            <label><input type="checkbox" ${adData.maintenance.coinflip ? 'checked' : ''} onchange="adminMaint('coinflip', this.checked)"> Coinflip</label><br>
-            <label><input type="checkbox" ${adData.maintenance.battle ? 'checked' : ''} onchange="adminMaint('battle', this.checked)"> Battle Roulette</label><br>
-        `;
-    }
-    if(tab === 'users') { 
-        let usersHtml = (adData.users || []).map(u => `
-            <div style="padding:10px; border-bottom:1px solid #222; position:relative;">
-                <img src="${u.photo || 'https://cdn-icons-png.flaticon.com/512/149/149071.png'}" style="width:25px; border-radius:50%; vertical-align:middle;"> 
-                <a href="tg://user?id=${u.id}" style="color:var(--text); text-decoration:none;"><b>${u.username}</b></a> 
-                (${u.balance.toFixed(2)} TON)
-                ${u.isBlocked ? '<span style="background:red; padding:2px 5px; border-radius:4px; font-size:10px;">ЗАБАНЕН</span>' : ''}
-                <div style="margin-top:5px; display:flex; gap:5px;">
-                    <button style="background:var(--neon-blue); color:#000; border:none; padding:5px; border-radius:4px;" onclick="adminMsgUser('${u.id}')">В ЛС БОТА</button>
-                    <button style="background:${u.isBlocked?'#555':'red'}; color:#fff; border:none; padding:5px; border-radius:4px;" onclick="adminBan('${u.id}', ${!u.isBlocked})">${u.isBlocked?'РАЗБАНИТЬ':'БАН'}</button>
-                </div>
-            </div>
-            `).join('');
+        </div>
+    `).join('');
 
-        c.innerHTML = `
-            <div style="text-align:center; color:var(--neon-blue); font-weight:bold; margin-bottom:10px;">Всего юзеров: ${adData.totalUsers}</div>
-            
-            <div style="display:flex; justify-content:space-around; background:#111; padding:10px; border-radius:8px; margin-bottom:10px; font-size:12px;">
-                <label><input type="radio" name="u_filt" ${currentAdminFilter==='balance'?'checked':''} onchange="searchAdminUsers(adminSearchQuery, 'balance')"> Топ Баланс</label>
-                <label><input type="radio" name="u_filt" ${currentAdminFilter==='new'?'checked':''} onchange="searchAdminUsers(adminSearchQuery, 'new')"> Новые</label>
-                <label><input type="radio" name="u_filt" ${currentAdminFilter==='banned'?'checked':''} onchange="searchAdminUsers(adminSearchQuery, 'banned')"> Забаненые</label>
-            </div>
-            
-            <input type="text" class="input-box" placeholder="Поиск (ID / Юзер)" value="${adminSearchQuery}" oninput="searchAdminUsers(this.value)">
-            <div style="margin-top:10px;">${usersHtml}</div>
+    document.getElementById('adm-promo-list').innerHTML = d.promos.map(p => `
+        <div style="display:flex;justify-content:space-between;background:#111;padding:10px;border-radius:10px;">
+            <div><b>${p.code}</b> (${p.amount} TON) [${p.usedBy.length}/${p.limit}]</div>
+            <button style="background:var(--neon-red);color:#fff;border:none;padding:5px 10px;border-radius:5px;" onclick="adminDelPromo('${p._id}')">X</button>
+        </div>
+    `).join('');
+
+    // Rtp & Maint
+    if(d.rtp) {
+        if(d.rtp.crash) document.getElementById('rtp-cr').value = d.rtp.crash;
+        if(d.rtp.mines) document.getElementById('rtp-mi').value = d.rtp.mines;
+        if(d.rtp.coinflip) document.getElementById('rtp-co').value = d.rtp.coinflip;
+    }
+    if(d.maintenance) {
+        ['crash','mines','coinflip','battle'].forEach(g => {
+            const el = document.getElementById(`maint-${g=== 'coinflip' ? 'co' : (g==='battle'?'btl':g.substring(0,2))}`);
+            if(el) { el.style.color = d.maintenance[g] ? 'var(--neon-red)' : 'var(--neon)'; el.innerText = d.maintenance[g] ? 'OFF (Ремонт)' : 'ON'; }
+        });
+    }
+}
+
+// Поиск юзеров
+async function adminSearchUsers() {
+    const query = document.getElementById('adm-search-q').value;
+    const filterType = document.getElementById('adm-search-f').value;
+    const d = await adminReq('search_user', {query, filterType});
+    if(d.error) return;
+    
+    document.getElementById('adm-users-list').innerHTML = d.users.map(u => `
+        <div style="display:flex;justify-content:space-between;align-items:center;background:#1a1a1a;padding:8px;border-radius:8px;margin-bottom:5px;cursor:pointer;border:1px solid #333;" onclick="openAdminUserDetails('${u.id}', 1)">
+            <div style="font-size:12px;"><b>${u.username}</b><br><span style="color:var(--sub)">ID: ${u.id}</span></div>
+            <div style="font-weight:bold; color:var(--neon);">${u.balance.toFixed(2)} <i class="ton-icon"></i></div>
+        </div>
+    `).join('');
+}
+
+// Детали юзера
+let currentAdminUserId = null;
+let currentAdminUserPage = 1;
+
+async function openAdminUserDetails(userId, page = 1) {
+    currentAdminUserId = userId;
+    currentAdminUserPage = page;
+    const d = await adminReq('user_details', { userId, page, limit: 10 });
+    if(d.error) return showToast("Ошибка загрузки юзера");
+
+    const u = d.user;
+    document.getElementById('adm-user-details-card').style.display = 'block';
+    
+    // Инфо
+    document.getElementById('adm-ud-info').innerHTML = `
+        <b>Имя:</b> ${u.username} ${u.isBlocked ? '<span style="color:red;">[BANNED]</span>' : ''}<br>
+        <b>ID:</b> ${u.id}<br>
+        <b>Баланс:</b> ${u.balance.toFixed(2)} TON | <b>DEMO:</b> ${u.demo_balance.toFixed(2)}<br>
+        <b>Стата (REAL):</b> Ставок: ${u.stats.bets} | Вин: ${u.stats.wins} | Профит: ${u.stats.plus.toFixed(2)} | Убыток: ${u.stats.minus.toFixed(2)}<br>
+        <b style="color:var(--neon-blue);">Заработано с промо:</b> ${u.stats.promo ? u.stats.promo.toFixed(2) : 0} TON<br>
+        <b style="color:var(--neon-blue);">С рефералов:</b> ${u.referralEarnings ? u.referralEarnings.toFixed(2) : 0} TON<br>
+        <div style="margin-top:10px; display:flex; gap:5px;">
+            <button class="btn" style="padding:5px; margin:0;" onclick="adminUserAction('${u.id}', 'ban')">Бан</button>
+            <button class="btn" style="padding:5px; margin:0; background:#333; color:#fff;" onclick="adminUserAction('${u.id}', 'unban')">Разбан</button>
+        </div>
+    `;
+
+    // Таблица ставок
+    document.getElementById('adm-ud-page').innerText = `Стр ${d.pagination.currentPage} / ${d.pagination.totalPages || 1}`;
+    
+    if(d.bets.length === 0) {
+        document.getElementById('adm-ud-bets').innerHTML = '<div style="text-align:center; color:gray; padding:10px;">Нет ставок</div>';
+    } else {
+        document.getElementById('adm-ud-bets').innerHTML = `
+            <table style="width:100%; text-align:left; border-collapse: collapse;">
+                <tr style="border-bottom:1px solid #333; color:var(--sub);">
+                    <th>Время</th><th>Игра</th><th>Ставка</th><th>Рез</th><th>TON</th>
+                </tr>
+                ${d.bets.map(b => `
+                    <tr style="border-bottom:1px solid #222;">
+                        <td>${b.timeMsk.split(' ')[1]}</td>
+                        <td>${b.game}</td>
+                        <td>${b.amount}</td>
+                        <td style="color:${b.result > 0 ? 'var(--neon)' : 'var(--neon-red)'}">${b.result > 0 ? '+'+b.result : b.result}</td>
+                        <td>${b.balanceAfter ? b.balanceAfter.toFixed(1) : '-'}</td>
+                    </tr>
+                `).join('')}
+            </table>
         `;
     }
 }
 
-async function adminW(wId, action) {
-    let reason = ''; if(action === 'reject') reason = prompt('Причина отклонения (увидит юзер):') || 'Нарушение правил';
-    await fetch('/api/admin/withdraw_action', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({pass: adminPass, wId, action, reason}) }); loadAdminData();
+function closeAdminUserDetails() {
+    document.getElementById('adm-user-details-card').style.display = 'none';
+    currentAdminUserId = null;
 }
 
-async function adminBan(userId, doBan) {
-    await fetch('/api/admin/user_action', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({pass: adminPass, userId, action: doBan?'ban':'unban'}) }); searchAdminUsers(adminSearchQuery);
+function adminChangeUserPage(dir) {
+    if(!currentAdminUserId) return;
+    let newPage = currentAdminUserPage + dir;
+    if(newPage < 1) newPage = 1;
+    openAdminUserDetails(currentAdminUserId, newPage);
 }
-async function adminMsgUser(userId) {
-    let msg = prompt('Сообщение в ЛС от бота:'); if(!msg)return;
-    await fetch('/api/admin/user_action', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({pass: adminPass, userId, action: 'message', msg}) }); showToast('Отправлено');
+
+async function adminEditBalance(action) {
+    if(!currentAdminUserId) return;
+    const amount = parseFloat(document.getElementById('adm-ud-edit-sum').value);
+    if(isNaN(amount) || amount <= 0) return showToast("Укажи сумму");
+    
+    const d = await adminReq('edit_balance', { userId: currentAdminUserId, action, amount });
+    if(d.success) {
+        showToast("Баланс обновлен");
+        document.getElementById('adm-ud-edit-sum').value = '';
+        openAdminUserDetails(currentAdminUserId, currentAdminUserPage); // релоад
+    }
+}
+
+async function adminUserAction(uid, action) {
+    await adminReq('user_action', {userId: uid, action});
+    showToast("Выполнено");
+    openAdminUserDetails(uid, currentAdminUserPage);
+}
+
+async function adminWithdrawAction(wId, action) {
+    let reason = '';
+    if(action === 'reject') reason = prompt("Причина отказа:");
+    const d = await adminReq('withdraw_action', {wId, action, reason});
+    if(d.success) { showToast("Обработано"); loadAdminData(); }
+}
+
+async function adminCreatePromo() {
+    const code = document.getElementById('adm-pr-code').value;
+    const amount = document.getElementById('adm-pr-amount').value;
+    const limit = document.getElementById('adm-pr-limit').value;
+    const d = await adminReq('promo_create', {code, amount, limit});
+    if(d.success) { showToast("Создано"); loadAdminData(); }
+}
+
+async function adminDelPromo(pId) {
+    await adminReq('promo_delete', {pId}); loadAdminData();
+}
+
+async function adminSetRtp(game, inputId) {
+    const value = document.getElementById(inputId).value;
+    const d = await adminReq('set_rtp', {game, value});
+    if(d.success) showToast("RTP изменен");
+}
+
+async function adminToggleMaintenance(game) {
+    const el = document.getElementById(`maint-${game=== 'coinflip' ? 'co' : (game==='battle'?'btl':game.substring(0,2))}`);
+    const state = !el.innerText.includes('OFF');
+    const d = await adminReq('maintenance', {game, state});
+    if(d.success) loadAdminData();
+}
+
+async function adminResetStats() {
+    const d = await adminReq('reset_all_stats');
+    if(d.success) showToast("Сброшено");
+}
+
+async function adminBroadcast() {
+    const text = document.getElementById('adm-bc-text').value;
+    const d = await adminReq('broadcast', {text});
+    if(d.success) { showToast("Отправлено"); document.getElementById('adm-bc-text').value=''; }
 }
 
 async function adminBotBroadcast() {
-    const text = $('ad-bot-msg').value; if(!text) return;
-    await fetch('/api/admin/bot_broadcast', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({pass: adminPass, text}) });
-    $('ad-bot-msg').value = ''; showToast('Разослано всем!');
+    const text = document.getElementById('adm-bot-text').value;
+    const d = await adminReq('bot_broadcast', {text});
+    if(d.success) { showToast("Рассылка начата"); document.getElementById('adm-bot-text').value=''; }
 }
 
-async function adminReset() {
-    if(!confirm('ТОЧНО ОБНУЛИТЬ ИСТОРИЮ?')) return;
-    await fetch('/api/admin/reset_all_stats', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({pass: adminPass}) }); showToast('История стерта');
-}
+socket.on('global_alert', (text) => {
+    alert("📢 Сообщение от Администрации:\n\n" + text);
+});
 
-async function adminPromo() {
-    const code = $('ad-pr-code').value; const amount = $('ad-pr-sum').value; const limit = $('ad-pr-lim').value;
-    await fetch('/api/admin/promo_create', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({pass: adminPass, code, amount, limit}) }); loadAdminData();
-}
-async function adminDelPromo(pId) {
-    if(!confirm('Удалить этот промокод?')) return;
-    await fetch('/api/admin/promo_delete', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({pass: adminPass, pId}) }); loadAdminData();
-}
-async function adminRTP(game) {
-    const value = $(`rtp-${game}`).value;
-    await fetch('/api/admin/set_rtp', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({pass: adminPass, game, value}) }); showToast('RTP сохранен!');
-}
-async function adminMaint(game, state) {
-    await fetch('/api/admin/maintenance', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({pass: adminPass, game, state}) }); 
-    adData.maintenance[game] = state; showToast(`Статус ${game} обновлен!`);
-}
+// Слушатель тех. работ для закрытия игр
+socket.on('maintenanceUpdate', (data) => {
+    // В реальном времени может выкидывать из игры, если админ включил
+    // Для простоты, здесь просто алерт, если юзер в игре
+});
