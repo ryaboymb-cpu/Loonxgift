@@ -21,11 +21,6 @@ process.on('unhandledRejection', (reason, promise) => console.error('Необр�
 
 // Защита от мультикликов (глобальная блокировка активных запросов юзера)
 const actionLocks = new Set();
-// Автоматическая очистка блокировки на случай ошибки
-const lockWithTimeout = (id) => {
-    actionLocks.add(id);
-    setTimeout(() => actionLocks.delete(id), 10000); 
-};
 
 // АНТИ-СОН ДЛЯ RENDER (Будит сервер каждые 10 минут)
 setInterval(() => {
@@ -56,9 +51,9 @@ const UserSchema = new mongoose.Schema({
     isBlocked: { type: Boolean, default: false }, 
     balance: { type: Number, default: 0 }, 
     demo_balance: { type: Number, default: 5000 },
-    referredBy: { type: String, default: null }, 
-    referrals: [{ type: String }],               
-    referralEarnings: { type: Number, default: 0 }, 
+    referredBy: { type: String, default: null }, // ДОБАВЛЕНО: Кто пригласил
+    referrals: [{ type: String }],               // ДОБАВЛЕНО: Список рефералов
+    referralEarnings: { type: Number, default: 0 }, // ДОБАВЛЕНО: Заработок с рефералов
     stats: { 
         bets: {type:Number, default:0}, 
         wins: {type:Number, default:0}, 
@@ -86,7 +81,7 @@ const UserSchema = new mongoose.Schema({
 const BetSchema = new mongoose.Schema({
     userId: String, username: String, avatar: String, game: String, amount: Number,
     multiplier: Number, result: Number, mode: String,
-    balanceAfter: Number, 
+    balanceAfter: Number, // ДОБАВЛЕНО: Баланс после ставки (для истории в админке)
     createdAt: { type: Date, default: Date.now }
 });
 
@@ -95,10 +90,12 @@ const WithdrawSchema = new mongoose.Schema({ userId: String, address: String, am
 const DepositSchema = new mongoose.Schema({ hash: { type: String, unique: true }, userId: String, amount: Number, time: String });
 const SettingsSchema = new mongoose.Schema({ key: String, value: mongoose.Schema.Types.Mixed });
 
-// BATTLE ROULETTE SCHEMA (Обновлено)
+// BATTLE ROULETTE SCHEMA
 const BattleSchema = new mongoose.Schema({
     creatorId: String,
     players: Array, // [{id, username, avatar, bet, color}]
+    minBet: Number,
+    maxBet: Number,
     status: { type: String, default: 'waiting' }, // waiting, spinning, finished
     winnerId: String,
     timerStartedAt: Date, 
@@ -155,10 +152,12 @@ if (process.env.BOT_TOKEN) {
         }
     });
 
+    // Обработка /start с учетом реферальной ссылки (например, /start ref_123456)
     bot.onText(/\/(start|help)(?: (.+))?/, (msg, match) => {
         const refParam = match[2] || '';
         const text = `🚀 Привет, ${msg.from.first_name}!\nДобро пожаловать в LoonxGift.\n\nТут ты можешь играть и выигрывать TON! Твой баланс и все игры находятся внутри Mini App.\n\nВыбирай действие в меню ниже:`;
         
+        // Передаем реф-код в start_param для Web App
         const appUrl = process.env.WEB_APP_URL 
             ? `${process.env.WEB_APP_URL}?start_param=${refParam}` 
             : `https://loonxgift.onrender.com/?start_param=${refParam}`;
@@ -219,7 +218,7 @@ async function runCrash() {
                         const newBet = new Bet({ 
                             userId: u.id, username: u.username, avatar: b.avatar, 
                             game: 'Crash', amount: b.bet, result: -b.bet, mode: actualMode,
-                            balanceAfter: u[balField] 
+                            balanceAfter: u[balField] // ДОБАВЛЕНО: Фиксируем баланс
                         });
                         await newBet.save();
                         pushToGlobalHistory(newBet);
@@ -253,7 +252,8 @@ setInterval(async () => {
     
     for (let lobby of expiredLobbies) {
         for (let p of lobby.players) {
-            await User.updateOne({ id: p.id }, { $inc: { balance: p.bet } });
+            const u = await User.findOne({id: p.id});
+            if (u) { u.balance = Number((u.balance + p.bet).toFixed(2)); await u.save(); }
         }
         await Battle.findByIdAndDelete(lobby._id);
     }
@@ -307,12 +307,13 @@ setInterval(async () => {
             const betEntry = new Bet({
                 userId: winner.id, username: winner.username, avatar: winner.avatar,
                 game: 'Battle Roulette', amount: winner.bet, result: winAmount - winner.bet, mode: 'Real',
-                balanceAfter: wUser ? wUser.balance : 0 
+                balanceAfter: wUser ? wUser.balance : 0 // ДОБАВЛЕНО
             });
             betEntry.username = `${creator.username} VS ${opponentStr} 🏆 Победитель: ${winner.username}`;
             await betEntry.save();
             pushToGlobalHistory(betEntry);
 
+            // ДОБАВЛЕНО: Уведомления от бота о победе/поражении
             if (bot) {
                 for (let p of lobby.players) {
                     if (p.id === winner.id) {
@@ -340,16 +341,17 @@ io.on('connection', async (socket) => {
 
 // --- API ЭНДПОИНТЫ ---
 app.post('/api/auth', async (req, res) => {
+    // ДОБАВЛЕНО: Принимаем refId
     const { id, username, first_name, photo_url, refId } = req.body;
     let user = await User.findOne({ id });
     
     if (!user) { 
         user = await User.create({ id, username: username || first_name, photo: photo_url }); 
         
-        // Надежная логика привязки реферала
+        // ДОБАВЛЕНО: Логика привязки реферала
         if (refId && refId !== String(id)) {
             const referrer = await User.findOne({ id: String(refId) });
-            if (referrer && !referrer.referrals.includes(String(id))) {
+            if (referrer) {
                 user.referredBy = String(refId);
                 referrer.referrals.push(String(id));
                 await referrer.save();
@@ -358,7 +360,7 @@ app.post('/api/auth', async (req, res) => {
         }
     } else { 
         user.username = username || first_name; 
-        if (photo_url) user.photo = photo_url; 
+        user.photo = photo_url; 
         await user.save(); 
     }
     
@@ -381,7 +383,7 @@ app.post('/api/bet', async (req, res) => {
     const { id, game, bet, win, multiplier, mode } = req.body;
     
     if (actionLocks.has(id)) return res.status(429).json({error: 'Слишком частые клики'});
-    lockWithTimeout(id);
+    actionLocks.add(id);
 
     try {
         const user = await User.findOne({ id });
@@ -421,7 +423,7 @@ app.post('/api/bet', async (req, res) => {
                 const newBetEntry = new Bet({ 
                     userId: user.id, username: user.username, avatar, game: 'Crash', 
                     amount: activeBet.bet, result: profit, mode: actualMode === 'demo' ? 'Demo' : 'Real',
-                    balanceAfter: user[field] 
+                    balanceAfter: user[field] // ДОБАВЛЕНО
                 });
                 await newBetEntry.save();
                 pushToGlobalHistory(newBetEntry);
@@ -437,7 +439,7 @@ app.post('/api/bet', async (req, res) => {
             userId: user.id, username: user.username, avatar, game: game,
             amount: bet, multiplier: multiplier || (bet > 0 ? (win / bet).toFixed(2) : 0),
             result: Number(profit.toFixed(2)), mode: actualMode === 'demo' ? 'Demo' : 'Real',
-            balanceAfter: user[field] 
+            balanceAfter: user[field] // ДОБАВЛЕНО
         });
         await newBetEntry.save();
         pushToGlobalHistory(newBetEntry);
@@ -462,15 +464,15 @@ app.get('/api/battle/list', async (req, res) => {
 });
 
 app.post('/api/battle/create', async (req, res) => {
-    const { id, bet } = req.body;
+    const { id, bet, minBet, maxBet } = req.body;
     
     if (actionLocks.has(id)) return res.status(429).json({error: 'Подождите...'});
-    lockWithTimeout(id);
+    actionLocks.add(id);
 
     try {
         const user = await User.findOne({id});
         if(!user || user.isBlocked) return res.status(403).send();
-        if(bet < 0.5 || bet > 150) return res.status(400).json({error: 'Ставка от 0.5 до 150 TON'});
+        if(bet < 1 || bet > 100) return res.status(400).json({error: 'Ставка от 1 до 100 TON'});
         if(user.balance < bet) return res.status(400).json({error: 'Недостаточно средств'});
         
         user.balance = Number((user.balance - bet).toFixed(2));
@@ -480,6 +482,7 @@ app.post('/api/battle/create', async (req, res) => {
         const avatar = user.photo || 'https://cdn-icons-png.flaticon.com/512/149/149071.png';
         const newLobby = await Battle.create({
             creatorId: user.id,
+            minBet: minBet, maxBet: maxBet,
             players: [{ id: user.id, username: user.username, avatar, bet, color: BATTLE_COLORS[0] }]
         });
 
@@ -494,7 +497,7 @@ app.post('/api/battle/join', async (req, res) => {
     const { id, lobbyId, bet } = req.body;
     
     if (actionLocks.has(id)) return res.status(429).json({error: 'Подождите...'});
-    lockWithTimeout(id);
+    actionLocks.add(id);
 
     try {
         const user = await User.findOne({id});
@@ -502,7 +505,7 @@ app.post('/api/battle/join', async (req, res) => {
 
         if(!user || !lobby || lobby.status !== 'waiting' || lobby.players.length >= 4) return res.status(400).json({error: 'Ошибка входа'});
         if(lobby.players.find(p => p.id === id)) return res.status(400).json({error: 'Уже в лобби'});
-        if(bet < 0.5 || bet > 150) return res.status(400).json({error: 'Ставка от 0.5 до 150 TON'});
+        if(bet < lobby.minBet || bet > lobby.maxBet || bet < 1 || bet > 150) return res.status(400).json({error: 'Лимиты ставки не соблюдены'});
         if(user.balance < bet) return res.status(400).json({error: 'Недостаточно средств'});
 
         user.balance = Number((user.balance - bet).toFixed(2));
@@ -513,8 +516,7 @@ app.post('/api/battle/join', async (req, res) => {
         const pColor = BATTLE_COLORS[lobby.players.length];
         lobby.players.push({ id: user.id, username: user.username, avatar, bet, color: pColor });
         
-        // Таймер начинается заново при каждом входе, если игроков больше 1
-        if (lobby.players.length >= 2) {
+        if (lobby.players.length === 2) {
             lobby.timerStartedAt = new Date();
         }
         
@@ -575,11 +577,12 @@ app.post('/api/check_deposit', async (req, res) => {
                     foundNew = true;
                     totalAdded += amountTON;
 
+                    // ДОБАВЛЕНО: Уведомление о депе
                     if(bot) {
                         bot.sendMessage(id, `📥 ✅ Ваш баланс успешно пополнен на **${amountTON} TON**!`, {parse_mode: 'Markdown'}).catch(()=>{});
                     }
 
-                    // 10% Рефоводу без снятия у депающего
+                    // ДОБАВЛЕНО: Начисление 10% рефоводу
                     if (user.referredBy) {
                         const referrer = await User.findOne({ id: user.referredBy });
                         if (referrer) {
@@ -609,7 +612,7 @@ app.post('/api/promo', async (req, res) => {
     const { id, code } = req.body;
     const promo = await Promo.findOne({ code });
     
-    // Точные ошибки для промокодов
+    // ДОБАВЛЕНО: Раздельные ошибки для промокодов
     if(!promo) return res.status(400).json({error: 'Промокод не найден'});
     if(promo.usedBy.length >= promo.limit || promo.usedBy.includes(id)) return res.status(400).json({error: 'Промокод уже активирован'});
     
@@ -620,6 +623,7 @@ app.post('/api/promo', async (req, res) => {
     
     await user.save(); await promo.save();
 
+    // ДОБАВЛЕНО: Уведомление об успешной активации
     if(bot) {
         bot.sendMessage(id, `🎁 Вы успешно активировали промокод и получили **${promo.amount} TON** на баланс!`, {parse_mode: 'Markdown'}).catch(()=>{});
     }
@@ -631,7 +635,7 @@ app.post('/api/withdraw', async (req, res) => {
     const { id, address, amount } = req.body;
     
     if (actionLocks.has(id)) return res.status(429).json({error: 'Подождите...'});
-    lockWithTimeout(id);
+    actionLocks.add(id);
 
     try {
         const user = await User.findOne({ id });
@@ -707,7 +711,7 @@ app.post('/api/admin/search_user', checkAdmin, async (req, res) => {
     res.json({ users });
 });
 
-// Детальная информация по конкретному юзеру для админки
+// ДОБАВЛЕНО: Детальная информация по конкретному юзеру для админки (с пагинацией)
 app.post('/api/admin/user_details', checkAdmin, async (req, res) => {
     const { userId, page = 1, limit = 10 } = req.body;
     const user = await User.findOne({ id: String(userId) });
@@ -720,6 +724,7 @@ app.post('/api/admin/user_details', checkAdmin, async (req, res) => {
         .skip((page - 1) * limit)
         .limit(limit);
 
+    // Форматируем время для отдачи на клиент
     const formattedBets = bets.map(b => ({
         ...b.toObject(),
         timeMsk: new Date(b.createdAt).toLocaleString("ru-RU", { timeZone: "Europe/Moscow" })
