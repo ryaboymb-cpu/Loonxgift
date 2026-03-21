@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Loonx Gifts</title>
+    <title>LoonxGift</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="/socket.io/socket.io.js"></script>
@@ -11,7 +11,7 @@
     <script>setTimeout(() => { const l = document.getElementById('loader'); if(l) l.style.display = 'none'; }, 5000);</script>
 </head>
 <body>
-    <div id="loader"><div class="spinner"></div><h3 style="color:var(--neon); font-weight:800; letter-spacing:2px;">LOONX GIFTS</h3></div>
+    <div id="loader"><div class="spinner"></div><h3 style="color:var(--neon); font-weight:800; letter-spacing:2px;">LOONXGIFT</h3></div>
     <canvas id="stars-bg"></canvas>
     <div id="toast-container"></div>
 
@@ -19,7 +19,7 @@
         <div class="h-left">
             <img src="" id="user-ava" class="avatar" alt="ava">
             <div>
-                <div class="bal-wrap"><span id="bal-val">0.00</span> <svg class="ton-icon" viewBox="0 0 24 24"><path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm4.8 7.3l-3.9 9.3c-.2.5-.9.5-1.1 0l-1.5-3.6-3.6-1.5c-.5-.2-.5-.9 0-1.1l9.3-3.9c.4-.2.9.2.8.8z"/></svg></div>
+                <div class="bal-wrap"><span id="bal-val">0.00</span> <svg class="ton-icon" viewBox="0 0 24 24" style="width:16px;height:16px;fill:currentColor;"><path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm4.8 7.3l-3.9 9.3c-.2.5-.9.5-1.1 0l-1.5-3.6-3.6-1.5c-.5-.2-.5-.9 0-1.1l9.3-3.9c.4-.2.9.2.8.8z"/></svg></div>
                 <div id="bal-mode" class="mode-btn" onclick="toggleMode()">REAL TON</div>
             </div>
         </div>
@@ -61,7 +61,10 @@
             <div class="card" style="text-align:center; padding: 30px 15px;">
                 <img src="" id="profile-ava" style="width:80px; height:80px; border-radius:50%; border:3px solid var(--neon); margin-bottom:15px; object-fit:cover;" onclick="checkAdmin()">
                 <h2 id="profile-name" style="margin-bottom:5px;">-</h2>
-                <div style="color:var(--sub); font-size:12px; font-weight:bold; margin-bottom: 20px;">ID: <span id="profile-id"></span></div>
+                <div style="color:var(--sub); font-size:12px; font-weight:bold; margin-bottom: 20px; display:flex; align-items:center; justify-content:center; gap:5px;">
+                    ID: <span id="profile-id"></span>
+                    <svg viewBox="0 0 24 24" style="width:14px; height:14px; fill:var(--neon);"><path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm4.8 7.3l-3.9 9.3c-.2.5-.9.5-1.1 0l-1.5-3.6-3.6-1.5c-.5-.2-.5-.9 0-1.1l9.3-3.9c.4-.2.9.2.8.8z"/></svg>
+                </div>
                 
                 <h4 style="text-align:left; color:var(--neon); margin-bottom:10px;">Статистика</h4>
                 <div class="profile-stats">
@@ -109,7 +112,7 @@
             <div class="card">
                 <h3 style="margin-bottom:15px; color:var(--neon-red); text-align:center;">Вывод средств</h3>
                 <input type="number" id="with-amount" class="input-box" placeholder="Сумма (Мин 5 TON)">
-                <input type="text" id="with-addr" class="input-box" placeholder="Ваш TON адрес (Начинается на UQ или EQ)">
+                <input type="text" id="with-addr" class="input-box" placeholder="Ваш TON адрес">
                 <button class="btn btn-withdraw" onclick="withdraw()">СОЗДАТЬ ЗАЯВКУ</button>
             </div>
 
@@ -117,11 +120,25 @@
         </div>
 
         <div id="page-promo" class="page">
-            <div class="card" style="text-align:center; padding: 40px 20px;">
+            <div class="card" style="text-align:center; padding: 30px 20px;">
                 <h2 style="margin-bottom:10px; color:var(--neon);">Промокоды</h2>
-                <p style="color:var(--sub); font-size:13px; font-weight:bold; margin-bottom:20px;">Введи код из нашего канала, чтобы получить бонус!</p>
+                <p style="color:var(--sub); font-size:13px; font-weight:bold; margin-bottom:20px;">Введи промокод и получи бонус</p>
                 <input type="text" id="promo-code" class="input-box" placeholder="ВВЕДИТЕ КОД" style="text-transform:uppercase;">
                 <button class="btn" onclick="activatePromo()">АКТИВИРОВАТЬ</button>
+            </div>
+
+            <div class="card" style="margin-top:20px; text-align:center;">
+                <h3 style="color:var(--neon-blue); margin-bottom:10px;">Реферальная система</h3>
+                <p style="color:var(--sub); font-size:12px; margin-bottom:15px;">Приглашай друзей и получай <b>10%</b> от каждого их депозита сразу на баланс!</p>
+                <div style="background:#0a0a0a; padding:10px; border-radius:8px; border:1px solid #222; margin-bottom:15px; word-break: break-all;">
+                    <b id="ref-link" onclick="copyText(this.innerText)">Загрузка...</b>
+                </div>
+                <div style="display:flex; justify-content:space-around; margin-bottom:15px;">
+                    <div class="prof-panel" style="width:45%;">Приглашено<br><span id="ref-count" style="color:var(--neon);">0</span></div>
+                    <div class="prof-panel" style="width:45%;">Заработано<br><span id="ref-earned" style="color:var(--neon-blue);">0.00 TON</span></div>
+                </div>
+                <h4 style="color:var(--neon); margin-bottom:10px; font-size:14px; text-align:left;">Мои рефералы</h4>
+                <div id="ref-list" style="text-align:left; max-height:150px; overflow-y:auto; font-size:12px; border:1px solid #222; padding:10px; border-radius:8px; background:#111;"></div>
             </div>
         </div>
 
@@ -131,7 +148,7 @@
                 <div id="cr-x">1.00x</div>
                 <div id="cr-timer" style="color:var(--sub); font-size:12px; font-weight:bold; margin-top:10px;">ОЖИДАНИЕ...</div>
             </div>
-            <div class="quick-bets" id="qb-crash"></div>
+            <div class="quick-bets" id="qb-crash" style="display:flex; justify-content:center; gap:5px; flex-wrap:wrap; margin-bottom:10px;"></div>
             <input type="number" id="cr-bet" class="input-box" placeholder="Сумма ставки (TON)">
             <button id="cr-btn" class="btn" onclick="playCrash()">ПОСТАВИТЬ</button>
             <div class="live-bets-container" id="cr-live-bets"></div>
@@ -139,7 +156,7 @@
 
         <div id="page-mines" class="page">
             <div class="mines-grid" id="mine-grid"></div>
-            <div class="quick-bets" id="qb-mines"></div>
+            <div class="quick-bets" id="qb-mines" style="display:flex; justify-content:center; gap:5px; flex-wrap:wrap; margin-bottom:10px;"></div>
             <input type="number" id="mi-bet" class="input-box" placeholder="Сумма ставки (TON)">
             <button id="mi-btn" class="btn" onclick="playMines()">ИГРАТЬ</button>
         </div>
@@ -152,10 +169,10 @@
                 </div>
             </div>
             <div class="coin-sides">
-                <div class="c-side active" id="side-l" onclick="setSide('L')">LOONX (L)</div>
-                <div class="c-side" id="side-x" onclick="setSide('X')">CROSS (X)</div>
+                <div class="c-side active" id="side-l" onclick="setSide('L')">L</div>
+                <div class="c-side" id="side-x" onclick="setSide('X')">X</div>
             </div>
-            <div class="quick-bets" id="qb-coinflip"></div>
+            <div class="quick-bets" id="qb-coinflip" style="display:flex; justify-content:center; gap:5px; flex-wrap:wrap; margin-bottom:10px;"></div>
             <input type="number" id="co-bet" class="input-box" placeholder="Сумма ставки (TON)">
             <button id="co-btn" class="btn" onclick="playCoin()">КРУТИТЬ</button>
         </div>
@@ -206,15 +223,22 @@
         </div>
     </div>
 
-    <div id="battle-game-modal">
-        <div style="flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; margin-bottom:20px; position:relative;">
+    <div id="battle-game-modal" style="position:fixed; inset:0; background:rgba(0,0,0,0.95); z-index:9001; display:none; flex-direction:column; padding:20px; overflow-y:auto; backdrop-filter:blur(10px);">
+        <div style="flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; margin-bottom:20px; position:relative; margin-top:30px;">
             <div style="position:absolute; top:-20px; left:50%; transform:translateX(-50%); width:0; height:0; border-left:15px solid transparent; border-right:15px solid transparent; border-top:25px solid #fff; z-index:10;"></div>
             <canvas id="battle-wheel" width="280" height="280" style="border-radius:50%; box-shadow:0 0 30px rgba(0,0,0,0.8); border: 4px solid #222;"></canvas>
             <div id="battle-timer" style="margin-top:25px; font-size:24px; font-weight:900; color:var(--neon); text-shadow: 0 0 15px rgba(0,255,136,0.5); text-align:center;">ОЖИДАНИЕ ИГРОКОВ...</div>
-            <div style="color:var(--sub); font-size:12px; margin-top:5px; font-weight:bold;">Таймер запустится, когда зайдет минимум 2 игрока</div>
+            <div style="color:var(--sub); font-size:12px; margin-top:5px; font-weight:bold; text-align:center;">Таймер запустится, когда зайдет минимум 2 игрока</div>
         </div>
+        
+        <div id="battle-join-area" style="display:none; text-align:center; margin-bottom:15px; background:#1a1a1a; padding:15px; border-radius:12px; border:1px solid var(--neon);">
+            <h4 style="color:#fff; margin-bottom:10px;">Присоединиться к битве</h4>
+            <input type="number" id="battle-join-bet" class="input-box" placeholder="Сумма ставки">
+            <button class="btn" style="background:var(--neon); color:#000;" onclick="submitBattleJoin()">ВНЕСТИ СТАВКУ</button>
+        </div>
+
         <div id="battle-players" style="display:flex; flex-wrap:wrap; gap:10px; justify-content:center; margin-bottom:20px;"></div>
-        <button class="btn" style="background:#333;" onclick="closeBattleGame()">ЗАКРЫТЬ И СМОТРЕТЬ В ФОНЕ</button>
+        <button class="btn" style="background:#333; margin-bottom: 30px;" onclick="closeBattleGame()">ЗАКРЫТЬ И СМОТРЕТЬ В ФОНЕ</button>
     </div>
 
     <div id="admin-modal">
