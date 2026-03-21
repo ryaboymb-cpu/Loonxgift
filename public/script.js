@@ -52,8 +52,20 @@ function getMskTime() {
     return new Date().toLocaleTimeString("ru-RU", {timeZone: "Europe/Moscow"});
 }
 
+function renderQuickBets() {
+    const vals = [0.1, 0.5, 1, 5, 10, 25];
+    ['cr', 'mi', 'co'].forEach(prefix => {
+        const el = $(`qb-${prefix === 'cr' ? 'crash' : prefix === 'mi' ? 'mines' : 'coinflip'}`);
+        if(el) {
+            el.innerHTML = vals.map(v => `<button type="button" onclick="setQuickBet('${prefix}-bet', ${v})" style="padding: 6px 12px; background: #222; border: 1px solid var(--neon); color: var(--neon); border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 11px;">${v}</button>`).join('');
+        }
+    });
+}
+
 window.onload = async () => {
     tg.expand();
+    renderQuickBets(); // Быстрые ставки
+    
     const res = await fetch('/api/auth', {
         method: 'POST', headers: {'Content-Type': 'application/json'},
         body: JSON.stringify(tg.initDataUnsafe.user || {id: "1", first_name: "Dev", username: "DevUser", photo_url: ""})
@@ -78,6 +90,8 @@ window.onload = async () => {
     if($('user-ava')) $('user-ava').src = avaUrl; 
     if($('profile-ava')) $('profile-ava').src = avaUrl;
     if($('profile-name')) $('profile-name').innerText = user.username || 'Игрок';
+    if($('profile-id')) $('profile-id').innerText = user.id; // Добавлено отображение ID
+    
     updateUI();
     renderWithdrawHistory();
     renderBattleLobbies();
@@ -111,6 +125,24 @@ function updateUI() {
     if($('p-wins')) $('p-wins').innerText = user.stats.wins;
     if($('p-plus')) $('p-plus').innerText = user.stats.plus.toFixed(2) + ' TON'; 
     if($('p-minus')) $('p-minus').innerText = user.stats.minus.toFixed(2) + ' TON';
+
+    // Обновление рефералки
+    if($('ref-link')) $('ref-link').innerText = `https://t.me/LoonxGiftBot?start=${user.id}`;
+    if($('ref-count')) $('ref-count').innerText = user.referrals ? user.referrals.length : 0;
+    if($('ref-earned')) $('ref-earned').innerText = (user.refEarned || 0).toFixed(2) + ' TON';
+    
+    if($('ref-list')) {
+        if(!user.referrals || user.referrals.length === 0) {
+            $('ref-list').innerHTML = '<div style="color:#555; text-align:center;">У вас пока нет рефералов</div>';
+        } else {
+            $('ref-list').innerHTML = user.referrals.map(r => `
+                <div style="display:flex; justify-content:space-between; border-bottom:1px solid #222; padding:5px 0;">
+                    <span><span style="color:var(--neon);">ID:</span> ${r.id}</span>
+                    <span style="color:var(--neon-blue);">+${(r.earnedForMe || 0).toFixed(2)} TON</span>
+                </div>
+            `).join('');
+        }
+    }
 }
 
 function toggleMode() { mode = mode === 'real' ? 'demo' : 'real'; updateUI(); showToast(`Включен ${mode} режим`); }
@@ -122,9 +154,8 @@ function nav(pageId, el) {
 }
 
 function navGame(game) { 
-    // ФИКС ОТКЛЮЧЕНИЯ ИГР
     let mKey = game;
-    if(game === 'coin') mKey = 'coinflip'; // Алиас если ID страницы 'coin'
+    if(game === 'coin') mKey = 'coinflip'; 
     if (maintenance[mKey]) return showToast('Временно тех. перерыв'); 
     nav(game); 
     if(game === 'battle') renderBattleLobbies();
@@ -171,7 +202,6 @@ async function payWithTonConnect() {
     } catch (e) { showToast('Транзакция отменена'); }
 }
 
-// ИСТОРИЯ ВЫВОДОВ И ДЕПОЗИТОВ В КОШЕЛЬКЕ
 function renderWithdrawHistory() {
     const list = $('w-history-list');
     if(!list) return;
@@ -207,11 +237,9 @@ if($('online-c')) socket.on('online', c => $('online-c').innerText = c);
 socket.on('rtpUpdate', r => rtpObj = r); 
 socket.on('maintenanceUpdate', m => maintenance = m); 
 
-// ФИКС ИСТОРИИ СТАВОК (СТРОГО НОВЫЕ СВЕРХУ)
 socket.on('init_history', bets => { 
     if($('feed-list')) { 
         $('feed-list').innerHTML = ''; 
-        // bets с сервера уже отсортирован новые->старые
         bets.forEach(b => addLiveBetToDOM(b, true)); 
     }
 });
@@ -224,8 +252,6 @@ function addLiveBetToDOM(b, isInit) {
     const isWin = b.result > 0;
     const modeTag = b.mode === 'Demo' ? '<span style="color:var(--neon-blue); font-size:9px;">[DEMO]</span>' : '<span style="color:var(--neon); font-size:9px;">[REAL]</span>';
     const timeHtml = b.timeMsk ? `<span style="font-size:9px; color:#555; margin-left:5px;">${b.timeMsk}</span>` : '';
-    
-    // Поддержка длинных ников для Battle Roulette
     const nameStr = b.username.includes('VS') ? `<span style="font-size:9px;">${b.username}</span>` : b.username;
 
     d.innerHTML = `
@@ -237,15 +263,15 @@ function addLiveBetToDOM(b, isInit) {
     `;
     
     if (isInit) {
-        list.appendChild(d); // При ините просто добавляем по порядку (они уже новые сверху)
+        list.appendChild(d);
     } else {
-        list.prepend(d); // Новая ставка падает строго вверх
+        list.prepend(d);
         if(list.children.length > 10) list.lastChild.remove();
     }
 }
 
 // CRASH
-let curCrash = {}; let myCrashBets = []; let isCashingOut = false;
+let curCrash = {}; let myCrashBets = []; let isCashingOut = false; let isCrashBetting = false;
 
 function getCrashColor(x) {
     const val = parseFloat(x);
@@ -298,15 +324,18 @@ socket.on('crashData', d => {
 });
 
 async function playCrash() {
-    if(isCashingOut) return; const btn = $('cr-btn'); const curBal = mode === 'real' ? user.balance : user.demo_balance;
+    if(isCashingOut || isCrashBetting) return; 
+    const btn = $('cr-btn'); const curBal = mode === 'real' ? user.balance : user.demo_balance;
     if(curCrash.status === 'waiting') {
         if (myCrashBets.length >= 2) return showToast('Максимум 2 ставки!');
         let crBet = parseFloat($('cr-bet').value); 
         if(isNaN(crBet) || crBet < 0.1 || crBet > 25) return showToast('Мин 0.1, Макс 25 TON');
         if(crBet > curBal) return showToast('Недостаточно средств!');
-        isCashingOut = true;
+        
+        isCrashBetting = true; btn.disabled = true;
         const r = await fetch('/api/bet', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id:user.id, game:'Crash', bet:crBet, win:0, mode}) });
-        isCashingOut = false;
+        isCrashBetting = false; btn.disabled = false;
+        
         if(r.ok) { user = await r.json(); updateUI(); myCrashBets.push(crBet); btn.innerText = myCrashBets.length === 1 ? 'ПОСТАВИТЬ 2-Ю СТАВКУ' : 'МАКС. СТАВОК (2)'; if(myCrashBets.length===2) btn.disabled=true; showToast('Принято!'); } 
         else { showToast('Ошибка ставки!'); }
     } else if(curCrash.status === 'running' && myCrashBets.length > 0) {
@@ -319,14 +348,28 @@ async function playCrash() {
 
 // MINES
 let miActive = false; let bombs = []; let miBet = 0; let openedCells = 0; let currentMinesWin = 0; 
+let isMinesProcessing = false; // Защита от мультиклика
 
 function playMines() {
+    if(isMinesProcessing) return;
     const curBal = mode === 'real' ? user.balance : user.demo_balance;
-    if(miActive) { reqBet('Mines', 0, currentMinesWin).then(ok => { if(ok) { miActive = false; $('mi-btn').innerText='ИГРАТЬ'; showToast(`Забрал ${currentMinesWin.toFixed(2)} TON!`); }}); return; }
+    if(miActive) { 
+        isMinesProcessing = true;
+        $('mi-btn').disabled = true;
+        reqBet('Mines', 0, currentMinesWin).then(ok => { 
+            isMinesProcessing = false;
+            $('mi-btn').disabled = false;
+            if(ok) { miActive = false; $('mi-btn').innerText='ИГРАТЬ'; showToast(`Забрал ${currentMinesWin.toFixed(2)} TON!`); renderMines(true); }
+        }); 
+        return; 
+    }
     miBet = parseFloat($('mi-bet').value); 
     if(isNaN(miBet) || miBet < 0.1 || miBet > 25) return showToast('Мин 0.1, Макс 25 TON');
     if(miBet > curBal) return showToast('Нет средств!');
+    
+    isMinesProcessing = true; $('mi-btn').disabled = true;
     reqBet('Mines', miBet, 0).then(success => {
+        isMinesProcessing = false; $('mi-btn').disabled = false;
         if(success) {
             bombs = []; while(bombs.length<5) { let r=Math.floor(Math.random()*25); if(!bombs.includes(r)) bombs.push(r); }
             miActive = true; openedCells = 0; currentMinesWin = miBet; $('mi-btn').innerText = `ЗАБРАТЬ ${currentMinesWin.toFixed(2)} TON`; renderMines(); showToast('Ищи кристаллы!');
@@ -334,13 +377,19 @@ function playMines() {
     });
 }
 
-function renderMines() {
+function renderMines(isEnd = false) {
     if(!$('mine-grid')) return;
     $('mine-grid').innerHTML = '';
     for(let i=0; i<25; i++) {
         let c = document.createElement('div'); c.className = 'm-cell';
+        if(isEnd && miActive===false) {
+             c.innerText = bombs.includes(i) ? '💣' : '💎';
+             c.style.opacity = '0.5';
+             $('mine-grid').appendChild(c);
+             continue;
+        }
         c.onclick = () => {
-            if(!miActive || c.classList.contains('open')) return;
+            if(!miActive || c.classList.contains('open') || isMinesProcessing) return;
             let hitBomb = bombs.includes(i);
             if (!hitBomb) { if (Math.random() > ((rtpObj.mines||90) / 100)) { hitBomb = true; bombs[0] = i; } }
 
@@ -361,7 +410,23 @@ function renderMines() {
 
 // COINFLIP
 let cSide = 'L'; let isFlipping = false;
-function setSide(s) { if(isFlipping) return; cSide = s; $('side-l').classList.toggle('active', s==='L'); $('side-x').classList.toggle('active', s==='X'); }
+function setSide(s) { 
+    if(isFlipping) return; 
+    cSide = s; 
+    $('side-l').classList.toggle('active', s==='L'); 
+    $('side-x').classList.toggle('active', s==='X'); 
+    
+    // Подсветка (Зеленый / Красный для наглядности)
+    $('side-l').style.boxShadow = s === 'L' ? '0 0 15px var(--neon)' : 'none';
+    $('side-l').style.borderColor = s === 'L' ? 'var(--neon)' : '#333';
+    
+    $('side-x').style.boxShadow = s === 'X' ? '0 0 15px var(--neon-red)' : 'none';
+    $('side-x').style.borderColor = s === 'X' ? 'var(--neon-red)' : '#333';
+}
+
+// Инициализация цветов при загрузке
+setTimeout(() => setSide('L'), 500);
+
 async function playCoin() {
     if(isFlipping) return;
     const curBal = mode === 'real' ? user.balance : user.demo_balance;
@@ -369,7 +434,7 @@ async function playCoin() {
     if(isNaN(bet) || bet < 0.1 || bet > 25) return showToast('Мин 0.1, Макс 25 TON');
     if(bet > curBal) return showToast('Недостаточно средств!');
 
-    isFlipping = true; $('co-btn').innerText = 'КРУТИМ...';
+    isFlipping = true; $('co-btn').innerText = 'КРУТИМ...'; $('co-btn').disabled = true;
     
     const winChance = ((rtpObj.coinflip || 90) / 100) * 0.5; 
     const isWin = Math.random() < winChance;
@@ -388,7 +453,7 @@ async function playCoin() {
         setTimeout(() => {
             coin.style.transition = 'none'; 
             coin.style.transform = `rotateY(${result === 'L' ? 0 : 180}deg)`; 
-            isFlipping = false; $('co-btn').innerText = 'КРУТИТЬ';
+            isFlipping = false; $('co-btn').innerText = 'КРУТИТЬ'; $('co-btn').disabled = false;
         }, 500);
     }, 2000);
 }
@@ -403,10 +468,10 @@ socket.on('battleUpdate', () => { renderBattleLobbies(); });
 socket.on('battleSpin', ({lobbyId, winnerId}) => {
     if(currentBattle && currentBattle._id === lobbyId) {
         currentBattle.status = 'spinning';
+        $('battle-join-area').style.display = 'none'; // Скрываем инпут ставки
         const wheel = $('battle-wheel');
         wheel.style.transition = 'transform 5s cubic-bezier(0.2, 0.8, 0.2, 1)';
         
-        // Считаем угол для победителя (чтобы стрелка указала на него)
         let totalPool = currentBattle.players.reduce((s, p) => s + p.bet, 0);
         let startAngle = 0;
         let winAngle = 0;
@@ -417,7 +482,6 @@ socket.on('battleSpin', ({lobbyId, winnerId}) => {
             startAngle += slice;
         }
         
-        // Полные обороты + выравнивание стрелки (которая вверху, т.е. 270 градусов)
         const rotations = 3600; 
         const finalTransform = rotations + (270 - winAngle);
         wheel.style.transform = `rotate(${finalTransform}deg)`;
@@ -453,19 +517,23 @@ async function createBattleLobby() {
     else { const e = await r.json(); showToast(e.error || 'Ошибка'); }
 }
 
-async function joinBattle(lobbyId) {
-    if(mode === 'demo') return showToast('Только REAL TON!');
-    const lobby = battleLobbies.find(l => l._id === lobbyId);
-    let betStr = prompt(`Введите ставку (От ${lobby.minBet} до ${lobby.maxBet} TON):`);
-    if(!betStr) return;
+async function submitBattleJoin() {
+    if(!currentBattle) return;
+    const betStr = $('battle-join-bet').value;
     const bet = parseFloat(betStr);
     
-    const r = await fetch('/api/battle/join', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id:user.id, lobbyId, bet}) });
+    if(isNaN(bet) || bet < currentBattle.minBet || bet > currentBattle.maxBet) {
+        return showToast(`Сумма от ${currentBattle.minBet} до ${currentBattle.maxBet}`);
+    }
+    
+    const r = await fetch('/api/battle/join', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id:user.id, lobbyId: currentBattle._id, bet}) });
     if(r.ok) { 
         const d = await r.json(); user = d.user; updateUI(); showToast('Вы вошли в лобби!'); 
-        openBattleGame(d.lobby);
+        $('battle-join-area').style.display = 'none'; // Убираем инпут
+        openBattleGame(d.lobby); // Обновляем игру
     } else { const e = await r.json(); showToast(e.error || 'Ошибка'); }
 }
+
 
 async function cancelBattle(lobbyId) {
     if(!confirm('Отменить лобби и вернуть TON?')) return;
@@ -497,8 +565,7 @@ async function renderBattleLobbies() {
         
         let actionBtn = '';
         if(isMine && l.players.length === 1) actionBtn = `<button class="btn" style="background:var(--neon-red); padding:5px; font-size:12px;" onclick="cancelBattle('${l._id}')">ОТМЕНА</button>`;
-        else if(imIn || isMine) actionBtn = `<button class="btn" style="background:#555; padding:5px; font-size:12px;" onclick="openBattleGame('${l._id}')">СМОТРЕТЬ</button>`;
-        else actionBtn = `<button class="btn" style="background:var(--neon); color:#000; padding:5px; font-size:12px;" onclick="joinBattle('${l._id}')">ВОЙТИ</button>`;
+        else actionBtn = `<button class="btn" style="background:var(--neon); color:#000; padding:5px 10px; font-size:12px; font-weight:bold;" onclick="openBattleGame('${l._id}')">${imIn ? 'СМОТРЕТЬ' : 'ВОЙТИ / СМОТРЕТЬ'}</button>`;
 
         const timeStr = new Date(l.createdAt).toLocaleTimeString("ru-RU", {timeZone:"Europe/Moscow", hour:"2-digit", minute:"2-digit"});
         
@@ -519,6 +586,7 @@ async function renderBattleLobbies() {
 }
 
 function openBattleGame(lobbyId) {
+    if(mode === 'demo') { showToast('Только REAL TON!'); return; }
     let lobby = typeof lobbyId === 'string' ? battleLobbies.find(l => l._id === lobbyId) : lobbyId;
     if(!lobby) return;
     currentBattle = lobby;
@@ -530,7 +598,15 @@ function openBattleGame(lobbyId) {
     drawBattleWheel(lobby);
     renderBattlePlayers(lobby);
     
-    // Подсчет времени (2 минуты с создания)
+    // Проверка, участвует ли юзер. Если нет — показываем инпут ставки внутри лобби
+    const imIn = lobby.players.some(p => p.id === user.id);
+    if (!imIn && lobby.status === 'waiting' && lobby.players.length < 4) {
+        $('battle-join-area').style.display = 'block';
+        $('battle-join-bet').placeholder = `Сумма (${lobby.minBet} - ${lobby.maxBet} TON)`;
+    } else {
+        $('battle-join-area').style.display = 'none';
+    }
+
     const updateTimer = () => {
         if(!currentBattle || currentBattle.status !== 'waiting') return;
         const endTime = new Date(currentBattle.createdAt).getTime() + 120000;
@@ -593,10 +669,11 @@ function renderBattlePlayers(lobby) {
 
 // ФИНАНСЫ И ПРОМО
 async function checkRealDeposit(btn) {
-    btn.innerText = "ПРОВЕРЯЕМ...";
+    btn.innerText = "ПРОВЕРЯЕМ..."; btn.disabled = true;
     const r = await fetch('/api/check_deposit', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id:user.id}) });
     if(r.ok) { const d = await r.json(); user = d.user; updateUI(); renderWithdrawHistory(); showToast(`+${d.added} TON`); } 
-    else { const e = await r.json(); showToast(e.error || 'Не найдено'); } btn.innerText = "ПРОВЕРИТЬ ОПЛАТУ";
+    else { const e = await r.json(); showToast(e.error || 'Не найдено'); } 
+    btn.innerText = "ПРОВЕРИТЬ ОПЛАТУ"; btn.disabled = false;
 }
 
 async function withdraw() {
@@ -606,7 +683,10 @@ async function withdraw() {
     if(!ad || !ad.trim()) return showToast('Введите адрес кошелька!');
     if(a > user.balance || a < 5) return showToast('Ошибка (Мин 5 TON)');
     
+    const btn = document.querySelector('.btn-withdraw'); btn.disabled = true; btn.innerText = "СОЗДАНИЕ...";
     const r = await fetch('/api/withdraw', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id:user.id, address:ad, amount:a}) });
+    btn.disabled = false; btn.innerText = "СОЗДАТЬ ЗАЯВКУ";
+    
     if(r.ok) { user = await r.json(); updateUI(); renderWithdrawHistory(); showToast('Заявка создана!'); $('with-amount').value=''; $('with-addr').value=''; } 
     else showToast('Ошибка вывода');
 }
@@ -688,7 +768,7 @@ function renderAdminContent(tab) {
     }
     if(tab === 'rtp') {
         c.innerHTML = `
-            <h4 style="color:var(--neon);">РАССЫЛКА В БОТА (Loonx Gifts)</h4>
+            <h4 style="color:var(--neon);">РАССЫЛКА В БОТА (LoonxGift)</h4>
             <textarea id="ad-bot-msg" class="input-box" style="height:60px; font-size:12px;" placeholder="Сообщение ВСЕМ в бота..."></textarea>
             <button class="btn" style="padding:8px; margin-top:0; margin-bottom:20px; background:var(--neon-blue); color:#000;" onclick="adminBotBroadcast()">ОТПРАВИТЬ ВСЕМ</button>
             <hr>
