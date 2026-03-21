@@ -16,7 +16,17 @@ header { padding: 15px; display: flex; justify-content: space-between; align-ite
 .h-left { display: flex; align-items: center; gap: 10px; }
 .avatar { width: 45px; height: 45px; border-radius: 50%; border: 2px solid var(--neon); object-fit: cover; }
 .bal-wrap { display: flex; align-items: center; gap: 5px; font-size: 18px; font-weight: 900; color: #fff; }
-.ton-icon { width: 20px; height: 20px; fill: #0098EA; }
+
+/* ИСПРАВЛЕНО: Настоящий значок TON */
+.ton-icon { 
+    width: 20px; 
+    height: 20px; 
+    background: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200"><path fill="%230098EA" d="M100 200c55.228 0 100-44.772 100-100S155.228 0 100 0 0 44.772 0 100s44.772 100 100 100z"/><path fill="%23FFF" d="M102.5 137.5L52.1 78.4c-2.3-2.7-4-6.4-.6-9.1 2.9-2.2 6.8-1.5 9.7.5l41.3 27.6 41.3-27.6c2.9-2 6.8-2.7 9.7-.5 3.4 2.7 1.7 6.4-.6 9.1l-50.4 59.1z"/></svg>') no-repeat center center; 
+    background-size: contain; 
+    display: inline-block; 
+}
+.ton-icon path { display: none; } /* Скрываем старый fill, если SVG зашит в HTML */
+
 .mode-btn { font-size: 10px; font-weight: bold; padding: 3px 8px; border-radius: 6px; border: 1px solid var(--neon); margin-top: 4px; display: inline-block; cursor: pointer; text-align: center; }
 
 .content { flex: 1; overflow-y: auto; padding: 15px; padding-bottom: 90px; position: relative; z-index: 5; }
@@ -41,14 +51,14 @@ header { padding: 15px; display: flex; justify-content: space-between; align-ite
 .input-box { width: 100%; padding: 16px; background: #080808; border: 1px solid #333; border-radius: 14px; color: #fff; text-align: center; font-size: 18px; font-weight: 700; margin-bottom: 10px; outline: none; }
 .input-box:focus { border-color: var(--neon); box-shadow: 0 0 10px rgba(0,255,136,0.1); }
 
-/* --- ПРОФИЛЬ (НОВОЕ) --- */
+/* --- ПРОФИЛЬ --- */
 .profile-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .prof-panel { background: #1a1a1a; border: 1px solid #333; border-radius: 14px; padding: 15px 10px; font-size: 12px; color: var(--sub); font-weight: bold; }
 .prof-panel span { font-size: 18px; color: #fff; display: block; margin-top: 5px; }
 .info-section .info-btn { display: flex; align-items: center; justify-content: center; gap: 10px; background: #1a1a1a; padding: 14px; border-radius: 14px; border: 1px solid #333; margin-bottom: 10px; color: #fff; text-decoration: none; font-weight: bold; font-size: 14px; transition: 0.2s; }
 .info-section .info-btn:active { border-color: var(--neon); background: rgba(0,255,136,0.05); transform: scale(0.98); }
 
-/* --- КОШЕЛЕК ФИКС --- */
+/* --- КОШЕЛЕК --- */
 .w-tab { flex: 1; padding: 12px; background: #222; color: #fff; border: none; border-radius: 12px; font-weight: bold; transition: 0.2s; }
 .w-tab.active { background: var(--neon); color: #000; box-shadow: 0 0 15px rgba(0,255,136,0.2); }
 #dep-wallet { color: var(--neon-blue); font-size: 13px; word-wrap: break-word; word-break: break-all; display: block; padding: 10px; background: #111; border-radius: 8px; border: 1px solid #333; }
@@ -81,11 +91,12 @@ header { padding: 15px; display: flex; justify-content: space-between; align-ite
 .c-face { position: absolute; width: 100%; height: 100%; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 60px; font-weight: 900; backface-visibility: hidden; background: #111; }
 .c-front { border: 5px solid var(--neon); color: var(--neon); box-shadow: 0 0 30px rgba(0,255,136,0.4); }
 .c-back { transform: rotateY(180deg); border: 5px solid #ffcc00; color: #ffcc00; box-shadow: 0 0 30px rgba(255,204,0,0.4); }
+
+/* ИСПРАВЛЕНО: ЦВЕТА ВЫБОРА COINFLIP */
 .coin-sides { display: flex; gap: 10px; margin-bottom: 15px; }
 .c-side { flex: 1; text-align: center; padding: 18px; background: #1a1a1a; border-radius: 14px; border: 2px solid #333; font-weight: 900; font-size: 16px; transition: 0.2s; }
-/* ФИКС ЦВЕТОВ COINFLIP */
-.c-side.active[data-side="L"] { border-color: var(--neon-red); background: rgba(255,0,85,0.1); color: var(--neon-red); box-shadow: 0 0 15px rgba(255,0,85,0.2); }
-.c-side.active[data-side="X"] { border-color: var(--neon-red); background: rgba(255,0,85,0.1); color: var(--neon-red); box-shadow: 0 0 15px rgba(255,0,85,0.2); }
+.c-side.active { border-color: var(--neon); background: rgba(0,255,136,0.1); color: var(--neon); box-shadow: 0 0 15px rgba(0,255,136,0.2); } /* Зеленая выбранная */
+.c-side.inactive { border-color: var(--neon-red); background: rgba(255,0,85,0.1); color: var(--neon-red); box-shadow: 0 0 15px rgba(255,0,85,0.2); } /* Красная невыбранная */
 
 .hotbar { position: fixed; bottom: 0; left: 0; width: 100%; height: 75px; background: rgba(5,5,5,0.95); border-top: 1px solid #222; display: flex; justify-content: space-around; align-items: center; z-index: 100; padding-bottom: env(safe-area-inset-bottom); backdrop-filter: blur(10px); }
 .nav-item { display: flex; flex-direction: column; align-items: center; gap: 5px; color: var(--sub); font-size: 11px; font-weight: 700; width: 25%; cursor: pointer; transition: 0.2s; }
@@ -93,14 +104,13 @@ header { padding: 15px; display: flex; justify-content: space-between; align-ite
 .nav-item.active { color: var(--neon); }
 .nav-item.active svg { filter: drop-shadow(0 0 8px rgba(0,255,136,0.6)); transform: translateY(-3px); }
 
-/* --- АДМИН ПАНЕЛЬ ФУЛЛСКРИН --- */
+/* --- АДМИН ПАНЕЛЬ И БАТЛ ФУЛЛСКРИН --- */
 #admin-modal, #battle-game-modal { position: fixed; inset: 0; width: 100vw; height: 100vh; background: var(--bg); z-index: 20000; padding: 20px; overflow-y: auto; display: none; flex-direction: column; }
 .admin-tabs { display: flex; gap: 5px; margin-bottom: 20px; overflow-x: auto; padding-bottom: 5px; }
 .admin-tabs::-webkit-scrollbar { display: none; }
 .admin-tab { background: #222; border: 1px solid #333; color: #fff; padding: 10px 15px; border-radius: 10px; font-weight: bold; white-space: nowrap; transition: 0.2s; flex: 1; text-align: center; }
 .admin-tab.active { background: var(--neon); color: #000; border-color: var(--neon); box-shadow: 0 0 15px rgba(0,255,136,0.2); }
 
-/* АНИМАЦИЯ ОТЛЕТАЮЩЕГО БАЛАНСА */
 @keyframes floatUp {
     0% { transform: translate(-50%, -50%) scale(0.5); opacity: 0; }
     20% { transform: translate(-50%, -50%) scale(1.2); opacity: 1; }
