@@ -756,57 +756,85 @@ async function searchAdminUsers(query, filterType = currentAdminFilter) {
 
 // ФИКС ПОЛНОЙ СТАТИСТИКИ ЮЗЕРА В АДМИНКЕ
 async function adminViewUser(userId, page = 1) {
-    const r = await fetch('/api/admin/user_details', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({pass: adminPass, userId, page}) });
+    const r = await fetch('/api/admin/user_details', { 
+        method:'POST', 
+        headers:{'Content-Type':'application/json'}, 
+        body:JSON.stringify({pass: adminPass, userId, page}) 
+    });
+    
     if(!r.ok) return showToast('Ошибка загрузки юзера');
     const data = await r.json();
     const u = data.user;
-    const hist = data.history || []; 
+    const hist = data.history || []; // Массив ставок из базы
     
     const c = $('admin-content');
     c.innerHTML = `
         <button onclick="renderAdminContent('users')" class="btn" style="margin-bottom:15px; background:#333; font-size:12px;">← НАЗАД К СПИСКУ</button>
+        
         <div style="background:#1a1a1a; padding:15px; border-radius:8px; margin-bottom:15px; border:1px solid var(--neon);">
-            <h3 style="color:var(--neon); margin-bottom:5px;">${u.username} (ID: ${u.id})</h3>
-            <p style="font-size:14px; margin-bottom:5px;"><b>Баланс:</b> ${u.balance.toFixed(2)} TON</p>
-            <p style="font-size:14px; margin-bottom:15px;"><b>Заработано с промо:</b> ${u.promoEarned ? u.promoEarned.toFixed(2) : '0.00'} TON</p>
+            <h3 style="color:var(--neon); margin-bottom:5px;">${u.username || 'Игрок'} (ID: ${u.id})</h3>
+            <p style="font-size:14px; margin-bottom:5px;"><b>Текущий баланс:</b> <span style="color:var(--neon); font-weight:bold;">${u.balance.toFixed(2)} TON</span></p>
+            <p style="font-size:14px; margin-bottom:15px; color:#888;">Заработано на реф: ${(u.refEarned || 0).toFixed(2)} TON</p>
             
             <div style="display:flex; gap:10px; margin-bottom:10px;">
-                <input type="number" id="ad-bal-val" class="input-box" placeholder="Сумма TON">
+                <input type="number" id="ad-bal-val" class="input-box" placeholder="Сумма TON" style="margin-bottom:0;">
             </div>
             <div style="display:flex; gap:10px;">
-                <button class="btn" style="background:var(--neon); color:#000;" onclick="adminChangeBal('${u.id}', 'add')">ВЫДАТЬ</button>
-                <button class="btn" style="background:var(--neon-red);" onclick="adminChangeBal('${u.id}', 'sub')">ЗАБРАТЬ</button>
+                <button class="btn" style="background:var(--neon); color:#000; font-size:12px;" onclick="adminChangeBal('${u.id}', 'add')">ВЫДАТЬ</button>
+                <button class="btn" style="background:var(--neon-red); font-size:12px;" onclick="adminChangeBal('${u.id}', 'sub')">ЗАБРАТЬ</button>
             </div>
         </div>
 
         <h4 style="color:var(--neon-blue); margin-top:20px; margin-bottom:10px;">История ставок (Стр. ${page})</h4>
-        <table style="width:100%; font-size:11px; text-align:left; border-collapse: collapse; background:#111; border-radius:8px; overflow:hidden;">
-            <tr style="background:#222; border-bottom:1px solid #444;"><th style="padding:8px;">Время</th><th>Игра</th><th>Ст. -> Выиг.</th><th>Баланс тогда</th></tr>
-            ${hist.length > 0 ? hist.map(h => `
-            <tr style="border-bottom:1px solid #222;">
-                <td style="padding:8px; color:#888;">${h.time}</td>
-                <td>${h.game}</td>
-                <td style="color:${h.win > 0 ? 'var(--neon)' : 'var(--neon-red)'}">${h.bet} -> ${h.win}</td>
-                <td style="color:#aaa;">${h.balanceAfter}</td>
-            </tr>
-            `).join('') : '<tr><td colspan="4" style="padding:10px; text-align:center;">Нет ставок на этой странице</td></tr>'}
-        </table>
+        <div style="overflow-x:auto;">
+            <table style="width:100%; font-size:11px; text-align:left; border-collapse: collapse; background:#111; border-radius:8px;">
+                <tr style="background:#222; border-bottom:1px solid #444;">
+                    <th style="padding:10px;">Время</th>
+                    <th>Игра</th>
+                    <th>Ставка -> Выигрыш</th>
+                    <th>Баланс ПОСЛЕ</th>
+                </tr>
+                ${hist.length > 0 ? hist.map(h => `
+                <tr style="border-bottom:1px solid #222;">
+                    <td style="padding:8px; color:#666;">${h.time || '---'}</td>
+                    <td style="font-weight:bold;">${h.game}</td>
+                    <td style="color:${parseFloat(h.win) > 0 ? 'var(--neon)' : '#ff4d4d'}">
+                        ${h.bet} -> ${h.win}
+                    </td>
+                    <td style="color:#aaa;">${(h.balanceAfter || 0).toFixed(2)}</td>
+                </tr>
+                `).join('') : '<tr><td colspan="4" style="padding:20px; text-align:center; color:#555;">История пуста</td></tr>'}
+            </table>
+        </div>
         
         <div style="display:flex; justify-content:space-between; margin-top:15px; margin-bottom:30px;">
-            <button class="btn" style="width:48%; background:#333;" onclick="adminViewUser('${u.id}', ${page > 1 ? page - 1 : 1})" ${page === 1 ? 'disabled' : ''}>НАЗАД</button>
-            <button class="btn" style="width:48%; background:#333;" onclick="adminViewUser('${u.id}', ${page + 1})" ${hist.length < 10 ? 'disabled' : ''}>ВПЕРЕД</button>
+            <button class="btn" style="width:48%; background:#222; font-size:12px;" onclick="adminViewUser('${u.id}', ${page > 1 ? page - 1 : 1})" ${page === 1 ? 'disabled' : ''}>← Назад</button>
+            <button class="btn" style="width:48%; background:#222; font-size:12px;" onclick="adminViewUser('${u.id}', ${page + 1})" ${hist.length < 10 ? 'disabled' : ''}>Вперед →</button>
         </div>
     `;
 }
 
 async function adminChangeBal(userId, type) {
-    const amount = parseFloat($('ad-bal-val').value);
-    if(isNaN(amount) || amount <= 0) return showToast('Введите корректную сумму');
-    await fetch('/api/admin/change_balance', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({pass: adminPass, userId, amount, type}) });
-    showToast('Баланс изменен');
-    adminViewUser(userId, 1); 
-}
+    const valInput = $('ad-bal-val');
+    const amount = parseFloat(valInput.value);
+    if(isNaN(amount) || amount <= 0) return showToast('Введите сумму');
 
+    const r = await fetch('/api/admin/change_balance', { 
+        method:'POST', 
+        headers:{'Content-Type':'application/json'}, 
+        body:JSON.stringify({pass: adminPass, userId, amount, type}) 
+    });
+
+    if(r.ok) {
+        showToast(type === 'add' ? 'Баланс пополнен' : 'Баланс списан');
+        valInput.value = ''; // Очищаем поле
+        // ВАЖНО: Перерисовываем экран этого же юзера, чтобы увидеть изменения
+        adminViewUser(userId, 1); 
+    } else {
+        const err = await r.json();
+        showToast(err.error || 'Ошибка изменения');
+    }
+}
 
 function renderAdminContent(tab) {
     const c = $('admin-content');
