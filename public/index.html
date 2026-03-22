@@ -40,7 +40,7 @@
 
             <div class="game-card" onclick="navGame('mines')">
                 <div class="g-icon mi">💣</div>
-                <div><h3 style="margin-bottom:5px;">Mines</h3><p style="color:var(--sub); font-size:12px; font-weight:600;">Ищи какашки</p></div>
+                <div><h3 style="margin-bottom:5px;">Mines</h3><p style="color:var(--sub); font-size:12px; font-weight:600;">Ищи кристаллы</p></div>
             </div>
 
             <div class="game-card" onclick="navGame('coinflip')">
@@ -213,11 +213,7 @@
     <div id="battle-modal" style="position:fixed; inset:0; background:rgba(0,0,0,0.9); z-index:9000; display:none; flex-direction:column; justify-content:center; padding:20px; backdrop-filter:blur(5px);">
         <div class="card" style="border-color:var(--neon-blue);">
             <h3 style="color:var(--neon-blue); margin-bottom:15px; text-align:center;">Создать Лобби</h3>
-            <input type="number" id="b-bet" class="input-box" placeholder="Ваша ставка (TON)">
-            <div style="display:flex; gap:10px; margin-bottom:10px;">
-                <input type="number" id="b-min" class="input-box" placeholder="Мин. вход">
-                <input type="number" id="b-max" class="input-box" placeholder="Макс. вход">
-            </div>
+            <input type="number" id="b-bet" class="input-box" placeholder="Сумма ставки (от 0.5 до 150 TON)">
             <button class="btn" style="background:var(--neon-blue); box-shadow:0 0 15px rgba(0,210,255,0.3);" onclick="createBattleLobby()">СОЗДАТЬ</button>
             <button class="btn" style="background:#333; margin-top:10px;" onclick="document.getElementById('battle-modal').style.display='none'">ОТМЕНА</button>
         </div>
@@ -228,7 +224,6 @@
             <div style="position:absolute; top:-20px; left:50%; transform:translateX(-50%); width:0; height:0; border-left:15px solid transparent; border-right:15px solid transparent; border-top:25px solid #fff; z-index:10;"></div>
             <canvas id="battle-wheel" width="280" height="280" style="border-radius:50%; box-shadow:0 0 30px rgba(0,0,0,0.8); border: 4px solid #222;"></canvas>
             <div id="battle-timer" style="margin-top:25px; font-size:24px; font-weight:900; color:var(--neon); text-shadow: 0 0 15px rgba(0,255,136,0.5); text-align:center;">ОЖИДАНИЕ ИГРОКОВ...</div>
-            <div style="color:var(--sub); font-size:12px; margin-top:5px; font-weight:bold; text-align:center;">Таймер запустится, когда зайдет минимум 2 игрока</div>
         </div>
         
         <div id="battle-join-area" style="display:none; text-align:center; margin-bottom:15px; background:#1a1a1a; padding:15px; border-radius:12px; border:1px solid var(--neon);">
@@ -241,12 +236,12 @@
         <button class="btn" style="background:#333; margin-bottom: 30px;" onclick="closeBattleGame()">ЗАКРЫТЬ И СМОТРЕТЬ В ФОНЕ</button>
     </div>
 
-    <div id="admin-modal">
+    <div id="admin-modal" class="modal-full" style="display:none; position:fixed; inset:0; background:#000; z-index:9999; flex-direction:column; padding:20px;">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
             <h2 style="color:var(--neon); text-shadow: 0 0 10px rgba(0,255,136,0.3);">Лоникс дай 30к</h2>
-            <button onclick="document.getElementById('admin-modal').style.display='none'" style="background:none; border:none; color:var(--neon-red); font-size:20px; font-weight:bold; cursor:pointer;">X</button>
+            <button onclick="document.getElementById('admin-modal').style.display='none'" style="background:none; border:none; color:var(--neon-red); font-size:24px; font-weight:bold; cursor:pointer;">×</button>
         </div>
-        <div class="admin-tabs">
+        <div class="admin-tabs" style="display:flex; gap:5px; margin-bottom:15px; overflow-x:auto;">
             <button class="admin-tab active" onclick="switchAdminTab('withdraws')">Выводы/Депы</button>
             <button class="admin-tab" onclick="switchAdminTab('users')">Юзеры</button>
             <button class="admin-tab" onclick="switchAdminTab('promo')">Промо</button>
@@ -257,4 +252,4 @@
 
     <script src="script.js"></script>
 </body>
-    </html>
+</html>
