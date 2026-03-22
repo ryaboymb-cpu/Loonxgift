@@ -75,7 +75,8 @@ const UserSchema = new mongoose.Schema({
         amount: Number,
         status: String,
         time: String
-    }]
+    }],
+    betHistory: { type: Array, default: [] } // ДОБАВЛЕНО: поддержка старого массива истории для совместимости с фронтом
 });
 
 const BetSchema = new mongoose.Schema({
@@ -372,7 +373,16 @@ app.post('/api/auth', async (req, res) => {
         }
     });
     
-    res.json({ user, adminWallet: process.env.ADMIN_WALLET, rtp: rtpData, maintenance: maintenanceData });
+    // ДОБАВЛЕНО: Инжектим историю ставок напрямую в юзера, чтобы фронтенд сразу видел её на главной
+    const userBets = await Bet.find({ userId: String(id) }).sort({ createdAt: -1 }).limit(50);
+    const userObj = user.toObject();
+    userObj.betHistory = userBets.map(b => ({
+        ...b.toObject(),
+        timeMsk: new Date(b.createdAt).toLocaleString("ru-RU", { timeZone: "Europe/Moscow" })
+    }));
+
+    // ИЗМЕНЕНО с user на userObj
+    res.json({ user: userObj, adminWallet: process.env.ADMIN_WALLET, rtp: rtpData, maintenance: maintenanceData });
 });
 
 app.post('/api/bet', async (req, res) => {
@@ -688,10 +698,18 @@ app.post('/api/admin/data', checkAdmin, async (req, res) => {
             if (s.key.startsWith('maintenance_')) maintenanceData[s.key.replace('maintenance_', '')] = s.value;
         }
     });
+
+    // ДОБАВЛЕНО: История ставок для дашборда админки (часто панель выводит их вместе с остальными данными)
+    const latestBetsRaw = await Bet.find().sort({createdAt: -1}).limit(20);
+    const latestBets = latestBetsRaw.map(b => ({
+        ...b.toObject(),
+        timeMsk: new Date(b.createdAt).toLocaleString("ru-RU", { timeZone: "Europe/Moscow" })
+    }));
     
     res.json({ 
         withdraws, promos, users, totalUsers, 
         totalDeposited, totalWithdrawn, latestDeposits,
+        latestBets, betHistory: latestBets, history: latestBets, // ДОБАВЛЕНО
         rtp: rtpData, maintenance: maintenanceData 
     });
 });
@@ -713,11 +731,13 @@ app.post('/api/admin/search_user', checkAdmin, async (req, res) => {
     res.json({ users });
 });
 
+// ДОБАВЛЕНА ПОДДЕРЖКА НЕСКОЛЬКИХ МАРШРУТОВ (Если фронт стучится на user_history)
 // ДЕТАЛЬНАЯ СТАТИСТИКА И ИСТОРИЯ СТАВОК ЮЗЕРА ДЛЯ АДМИНКИ
-app.post('/api/admin/user_details', checkAdmin, async (req, res) => {
-    const targetId = String(req.body.userId || req.body.id);
+app.post(['/api/admin/user_details', '/api/admin/user_history'], checkAdmin, async (req, res) => {
+    // РАСШИРЕНО: Поддержка tgId и user_id
+    const targetId = String(req.body.userId || req.body.id || req.body.tgId || req.body.user_id);
     const page = req.body.page || 1;
-    const limit = req.body.limit || 10;
+    const limit = req.body.limit || 50; // Увеличил со стоковых 10 до 50
     
     const user = await User.findOne({ id: targetId });
     if (!user) return res.status(404).json({error: 'User not found'});
@@ -734,9 +754,15 @@ app.post('/api/admin/user_details', checkAdmin, async (req, res) => {
         timeMsk: new Date(b.createdAt).toLocaleString("ru-RU", { timeZone: "Europe/Moscow" })
     }));
 
+    // ДОБАВЛЕНО: Формируем объект и прокидываем историю внутрь
+    const userObj = user.toObject();
+    userObj.betHistory = formattedBets;
+
     res.json({
-        user,
+        user: userObj, // ИЗМЕНЕНО на userObj
         bets: formattedBets,
+        betHistory: formattedBets, // ДОБАВЛЕНО для совместимости ключей
+        history: formattedBets,    // ДОБАВЛЕНО для совместимости ключей
         pagination: { 
             currentPage: Number(page), 
             totalPages, 
@@ -746,7 +772,8 @@ app.post('/api/admin/user_details', checkAdmin, async (req, res) => {
 });
 
 app.post('/api/admin/user_action', checkAdmin, async (req, res) => {
-    const targetId = String(req.body.userId || req.body.id);
+    // РАСШИРЕНО
+    const targetId = String(req.body.userId || req.body.id || req.body.tgId || req.body.user_id);
     const { action, msg } = req.body;
     
     const user = await User.findOne({ id: targetId });
@@ -817,8 +844,10 @@ app.post('/api/admin/set_rtp', checkAdmin, async (req, res) => {
 
 // СНЯТИЕ И НАЧИСЛЕНИЕ TON ЮЗЕРУ ЧЕРЕЗ АДМИНКУ
 app.post('/api/admin/edit_balance', checkAdmin, async (req, res) => {
-    const targetId = String(req.body.userId || req.body.id);
-    const { action, amount } = req.body;
+    // РАСШИРЕНО: Поддержка любого формата ID
+    const targetId = String(req.body.userId || req.body.id || req.body.tgId || req.body.user_id);
+    // РАСШИРЕНО: Добавлена поддержка type и method
+    const { action, amount, type, method } = req.body;
     
     const user = await User.findOne({id: targetId});
     if (!user) return res.status(404).json({error: 'User not found'});
@@ -827,21 +856,25 @@ app.post('/api/admin/edit_balance', checkAdmin, async (req, res) => {
     const val = Number(String(amount).replace(',', '.'));
     if (isNaN(val) || val < 0) return res.status(400).json({error: 'Неверная сумма'});
 
-    const act = action ? action.toLowerCase() : '';
+    // ДОБАВЛЕНО: Универсальное определение действия (action, type или method)
+    const act = String(action || type || method || '').toLowerCase();
 
     // Поддерживаем разные варианты кнопок (на всякий случай)
-    if (act === 'add' || act === 'plus') { 
+    // РАСШИРЕНО: добавлены give, increase, addbalance
+    if (act === 'add' || act === 'plus' || act === 'give' || act === 'increase' || act === 'addbalance') { 
         user.balance = Number((user.balance + val).toFixed(2)); 
         if(bot) bot.sendMessage(user.id, `💰 Ваш баланс был пополнен администратором на **${val} TON**!`, {parse_mode: 'Markdown'}).catch(()=>{});
     }
-    else if (act === 'sub' || act === 'minus') { 
+    // РАСШИРЕНО: добавлены take, remove, decrease, subbalance
+    else if (act === 'sub' || act === 'minus' || act === 'take' || act === 'remove' || act === 'decrease' || act === 'subbalance') { 
         user.balance = Number((user.balance - val).toFixed(2)); 
         if(user.balance < 0) user.balance = 0; 
         if(bot) bot.sendMessage(user.id, `📉 С вашего баланса было списано **${val} TON** администратором.`, {parse_mode: 'Markdown'}).catch(()=>{});
     }
 
     await user.save();
-    res.json({success: true, newBalance: user.balance});
+    // ДОБАВЛЕНО: `balance: user.balance` (некоторые фронты ищут не newBalance, а balance)
+    res.json({success: true, newBalance: user.balance, balance: user.balance});
 });
 
 app.post('/api/admin/withdraw_action', checkAdmin, async (req, res) => {
@@ -870,6 +903,18 @@ app.post('/api/admin/withdraw_action', checkAdmin, async (req, res) => {
     await w.save();
     
     res.json({success: true});
+});
+
+// ДОБАВЛЕНО: Резервный эндпоинт для запроса истории ставок прямо из Mini App
+app.post('/api/user/history', async (req, res) => {
+    const targetId = String(req.body.id || req.body.userId || req.body.tgId);
+    if (!targetId) return res.status(400).json({error: 'No ID provided'});
+    const bets = await Bet.find({ userId: targetId }).sort({ createdAt: -1 }).limit(50);
+    const formattedBets = bets.map(b => ({
+        ...b.toObject(),
+        timeMsk: new Date(b.createdAt).toLocaleString("ru-RU", { timeZone: "Europe/Moscow" })
+    }));
+    res.json({ bets: formattedBets, betHistory: formattedBets, history: formattedBets });
 });
 
 server.listen(process.env.PORT || 3000, () => console.log('🚀 Server Running on port 3000'));
