@@ -715,13 +715,16 @@ app.post('/api/admin/search_user', checkAdmin, async (req, res) => {
 
 // ДЕТАЛЬНАЯ СТАТИСТИКА И ИСТОРИЯ СТАВОК ЮЗЕРА ДЛЯ АДМИНКИ
 app.post('/api/admin/user_details', checkAdmin, async (req, res) => {
-    const { userId, page = 1, limit = 10 } = req.body;
-    const user = await User.findOne({ id: String(userId) });
+    const targetId = String(req.body.userId || req.body.id);
+    const page = req.body.page || 1;
+    const limit = req.body.limit || 10;
+    
+    const user = await User.findOne({ id: targetId });
     if (!user) return res.status(404).json({error: 'User not found'});
 
-    const totalBets = await Bet.countDocuments({ userId: String(userId) });
+    const totalBets = await Bet.countDocuments({ userId: targetId });
     const totalPages = Math.ceil(totalBets / limit);
-    const bets = await Bet.find({ userId: String(userId) })
+    const bets = await Bet.find({ userId: targetId })
         .sort({ createdAt: -1 }) // Сортировка: новые сверху
         .skip((page - 1) * limit)
         .limit(limit);
@@ -731,8 +734,6 @@ app.post('/api/admin/user_details', checkAdmin, async (req, res) => {
         timeMsk: new Date(b.createdAt).toLocaleString("ru-RU", { timeZone: "Europe/Moscow" })
     }));
 
-    // В объекте user уже есть user.stats.promo (заработок с промокодов)
-    // В formattedBets есть balanceAfter (состояние баланса после ставки)
     res.json({
         user,
         bets: formattedBets,
@@ -745,8 +746,10 @@ app.post('/api/admin/user_details', checkAdmin, async (req, res) => {
 });
 
 app.post('/api/admin/user_action', checkAdmin, async (req, res) => {
-    const { userId, action, msg } = req.body;
-    const user = await User.findOne({ id: String(userId) });
+    const targetId = String(req.body.userId || req.body.id);
+    const { action, msg } = req.body;
+    
+    const user = await User.findOne({ id: targetId });
     if(!user) return res.status(400).send();
 
     if(action === 'ban') user.isBlocked = true;
@@ -754,7 +757,7 @@ app.post('/api/admin/user_action', checkAdmin, async (req, res) => {
     await user.save();
 
     if(action === 'message' && bot) {
-        bot.sendMessage(userId, `📩 Сообщение от Администрации:\n\n${msg}`).catch(()=>{});
+        bot.sendMessage(targetId, `📩 Сообщение от Администрации:\n\n${msg}`).catch(()=>{});
     }
     res.json({ success: true });
 });
@@ -814,18 +817,24 @@ app.post('/api/admin/set_rtp', checkAdmin, async (req, res) => {
 
 // СНЯТИЕ И НАЧИСЛЕНИЕ TON ЮЗЕРУ ЧЕРЕЗ АДМИНКУ
 app.post('/api/admin/edit_balance', checkAdmin, async (req, res) => {
-    const { userId, action, amount } = req.body;
-    const user = await User.findOne({id: String(userId)});
+    const targetId = String(req.body.userId || req.body.id);
+    const { action, amount } = req.body;
+    
+    const user = await User.findOne({id: targetId});
     if (!user) return res.status(404).json({error: 'User not found'});
     
-    const val = Number(amount);
+    // Защита от запятых при вводе в поле (например, "10,5" превращаем в "10.5")
+    const val = Number(String(amount).replace(',', '.'));
     if (isNaN(val) || val < 0) return res.status(400).json({error: 'Неверная сумма'});
 
-    if (action === 'add') { 
+    const act = action ? action.toLowerCase() : '';
+
+    // Поддерживаем разные варианты кнопок (на всякий случай)
+    if (act === 'add' || act === 'plus') { 
         user.balance = Number((user.balance + val).toFixed(2)); 
         if(bot) bot.sendMessage(user.id, `💰 Ваш баланс был пополнен администратором на **${val} TON**!`, {parse_mode: 'Markdown'}).catch(()=>{});
     }
-    else if (action === 'sub') { 
+    else if (act === 'sub' || act === 'minus') { 
         user.balance = Number((user.balance - val).toFixed(2)); 
         if(user.balance < 0) user.balance = 0; 
         if(bot) bot.sendMessage(user.id, `📉 С вашего баланса было списано **${val} TON** администратором.`, {parse_mode: 'Markdown'}).catch(()=>{});
