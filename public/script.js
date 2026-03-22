@@ -12,6 +12,7 @@ let globalRtp = 90;
 let rtpObj = { crash: 90, mines: 90, coinflip: 90 };
 let maintenance = { crash: false, mines: false, coinflip: false, battle: false };
 let adminWalletAddress = '';
+let isShowDemo = false; // По умолчанию демо скрыто (пункт 6)
 
 // TON CONNECT
 const tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
@@ -29,6 +30,35 @@ function showToast(msg, dur = 3000) {
     t.innerText = msg;
     container.appendChild(t); 
     setTimeout(() => t.remove(), dur);
+}
+
+// Анимация улетающего баланса (пункт 8)
+function flyToBalance(amount) {
+    if(amount <= 0) return;
+    const el = document.createElement('div');
+    el.innerText = `+${amount.toFixed(2)}`;
+    el.style.position = 'fixed';
+    el.style.left = '50%';
+    el.style.top = '50%';
+    el.style.transform = 'translate(-50%, -50%) scale(1)';
+    el.style.color = 'var(--neon)';
+    el.style.fontWeight = 'bold';
+    el.style.fontSize = '26px';
+    el.style.textShadow = '0 0 15px var(--neon)';
+    el.style.zIndex = '9999';
+    el.style.transition = 'all 0.8s cubic-bezier(0.25, 1, 0.5, 1)';
+    el.style.pointerEvents = 'none';
+    document.body.appendChild(el);
+
+    setTimeout(() => {
+        const target = $('bal-val') ? $('bal-val').getBoundingClientRect() : {left: 20, top: 20};
+        el.style.left = `${target.left + 20}px`;
+        el.style.top = `${target.top}px`;
+        el.style.transform = 'translate(0, 0) scale(0.3)';
+        el.style.opacity = '0';
+    }, 50);
+
+    setTimeout(() => el.remove(), 850);
 }
 
 socket.on('global_alert', msg => { showToast(`📢 УВЕДОМЛЕНИЕ: ${msg}`, 6000); });
@@ -79,6 +109,7 @@ window.onload = async () => {
     user = data.user;
     rtpObj = data.rtp || { crash: 90, mines: 90, coinflip: 90 };
     maintenance = data.maintenance || { crash: false, mines: false, coinflip: false, battle: false };
+    isShowDemo = data.config ? data.config.showDemo : false;
     
     adminWalletAddress = data.adminWallet || '';
     if($('dep-wallet')) $('dep-wallet').innerText = adminWalletAddress || 'Кошелек не настроен на сервере';
@@ -245,6 +276,7 @@ function renderWithdrawHistory() {
 if($('online-c')) socket.on('online', c => $('online-c').innerText = c);
 socket.on('rtpUpdate', r => rtpObj = r); 
 socket.on('maintenanceUpdate', m => maintenance = m); 
+socket.on('configUpdate', c => isShowDemo = c.showDemo); // Обновление конфига демо (пункт 6)
 
 socket.on('init_history', bets => { 
     if($('feed-list')) { 
@@ -257,11 +289,15 @@ socket.on('newHistoryEntry', b => addLiveBetToDOM(b, false));
 function addLiveBetToDOM(b, isInit) {
     const list = $('feed-list');
     if(!list) return;
+    // Скрытие демо-ставок (пункт 6)
+    if(b.mode === 'Demo' && !isShowDemo) return; 
+
     const d = document.createElement('div'); d.className = 'live-bet-item';
     const isWin = b.result > 0;
     const modeTag = b.mode === 'Demo' ? '<span style="color:var(--neon-blue); font-size:9px;">[DEMO]</span>' : '<span style="color:var(--neon); font-size:9px;">[REAL]</span>';
     const timeHtml = b.timeMsk ? `<span style="font-size:9px; color:#555; margin-left:5px;">${b.timeMsk}</span>` : '';
-    const nameStr = b.username.includes('VS') ? `<span style="font-size:9px;">${b.username}</span>` : b.username;
+    // Добавлен реал баланс юзера в скобках (пункт 6)
+    const nameStr = b.username.includes('VS') ? `<span style="font-size:9px;">${b.username}</span>` : `${b.username} <span style="color:var(--neon); font-size:9px;">(${(b.balance||0).toFixed(2)} T)</span>`;
 
     d.innerHTML = `
         <div class="live-user">
@@ -280,7 +316,7 @@ function addLiveBetToDOM(b, isInit) {
 }
 
 // CRASH
-let curCrash = {}; let myCrashBets = []; let isCashingOut = false; let isCrashBetting = false;
+let curCrash = {}; let myCrashBets = []; let isCashingOut = false; let isCrashBetting = false; let crMode = mode; // Переменная для режима
 
 function getCrashColor(x) {
     const val = parseFloat(x);
@@ -342,22 +378,24 @@ async function playCrash() {
         if(crBet > curBal) return showToast('Недостаточно средств!');
         
         isCrashBetting = true; btn.disabled = true;
-        const r = await fetch('/api/bet', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id:user.id, game:'Crash', bet:crBet, win:0, mode}) });
+        crMode = mode; // Жестко фиксируем режим (пункт 4)
+        const r = await fetch('/api/bet', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id:user.id, game:'Crash', bet:crBet, win:0, mode: crMode}) });
         isCrashBetting = false; btn.disabled = false;
         
         if(r.ok) { user = await r.json(); updateUI(); myCrashBets.push(crBet); btn.innerText = myCrashBets.length === 1 ? 'ПОСТАВИТЬ 2-Ю СТАВКУ' : 'МАКС. СТАВОК (2)'; if(myCrashBets.length===2) btn.disabled=true; showToast('Принято!'); } 
         else { showToast('Ошибка ставки!'); }
     } else if(curCrash.status === 'running' && myCrashBets.length > 0) {
         isCashingOut = true; const win = myCrashBets[0] * curCrash.multiplier; 
-        const r = await fetch('/api/bet', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id:user.id, game:'Crash', bet:0, win:win, mode}) });
-        if(r.ok) { user = await r.json(); updateUI(); myCrashBets.shift(); showToast(`+ ${win.toFixed(2)} TON!`); if (myCrashBets.length > 0) btn.innerText = `ЗАБРАТЬ ${(myCrashBets[0] * curCrash.multiplier).toFixed(2)} TON`; else { btn.innerText = 'ОЖИДАНИЕ'; btn.style.background = '#555'; btn.disabled = true; } } 
+        // Жесткая привязка режима при выплате
+        const r = await fetch('/api/bet', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id:user.id, game:'Crash', bet:0, win:win, mode: crMode}) });
+        if(r.ok) { user = await r.json(); updateUI(); myCrashBets.shift(); showToast(`+ ${win.toFixed(2)} TON!`); flyToBalance(win); if (myCrashBets.length > 0) btn.innerText = `ЗАБРАТЬ ${(myCrashBets[0] * curCrash.multiplier).toFixed(2)} TON`; else { btn.innerText = 'ОЖИДАНИЕ'; btn.style.background = '#555'; btn.disabled = true; } } 
         else { showToast('Не успел!'); } isCashingOut = false;
     }
 }
 
 // MINES
 let miActive = false; let bombs = []; let miBet = 0; let openedCells = 0; let currentMinesWin = 0; 
-let isMinesProcessing = false; 
+let isMinesProcessing = false; let miMode = mode;
 
 function playMines() {
     if(isMinesProcessing) return;
@@ -365,10 +403,10 @@ function playMines() {
     if(miActive) { 
         isMinesProcessing = true;
         $('mi-btn').disabled = true;
-        reqBet('Mines', 0, currentMinesWin).then(ok => { 
+        reqBet('Mines', 0, currentMinesWin, miMode).then(ok => { 
             isMinesProcessing = false;
             $('mi-btn').disabled = false;
-            if(ok) { miActive = false; $('mi-btn').innerText='ИГРАТЬ'; showToast(`Забрал ${currentMinesWin.toFixed(2)} TON!`); renderMines(true); }
+            if(ok) { miActive = false; $('mi-btn').innerText='ИГРАТЬ'; showToast(`Забрал ${currentMinesWin.toFixed(2)} TON!`); flyToBalance(currentMinesWin); renderMines(true); }
         }); 
         return; 
     }
@@ -376,8 +414,8 @@ function playMines() {
     if(isNaN(miBet) || miBet < 0.1 || miBet > 25) return showToast('Мин 0.1, Макс 25 TON');
     if(miBet > curBal) return showToast('Нет средств!');
     
-    isMinesProcessing = true; $('mi-btn').disabled = true;
-    reqBet('Mines', miBet, 0).then(success => {
+    isMinesProcessing = true; $('mi-btn').disabled = true; miMode = mode; // Фиксируем режим
+    reqBet('Mines', miBet, 0, miMode).then(success => {
         isMinesProcessing = false; $('mi-btn').disabled = false;
         if(success) {
             bombs = []; while(bombs.length<5) { let r=Math.floor(Math.random()*25); if(!bombs.includes(r)) bombs.push(r); }
@@ -425,7 +463,6 @@ function setSide(s) {
     $('side-l').classList.toggle('active', s==='L'); 
     $('side-x').classList.toggle('active', s==='X'); 
     
-    // Подсветка
     $('side-l').style.boxShadow = s === 'L' ? '0 0 15px var(--neon)' : 'none';
     $('side-l').style.borderColor = s === 'L' ? 'var(--neon)' : '#333';
     
@@ -443,6 +480,7 @@ async function playCoin() {
     if(bet > curBal) return showToast('Недостаточно средств!');
 
     isFlipping = true; $('co-btn').innerText = 'КРУТИМ...'; $('co-btn').disabled = true;
+    let coMode = mode; // Фиксируем режим (пункт 4)
     
     const winChance = ((rtpObj.coinflip || 90) / 100) * 0.5; 
     const isWin = Math.random() < winChance;
@@ -456,7 +494,8 @@ async function playCoin() {
     setTimeout(async () => {
         const win = result === cSide ? bet*2 : 0;
         showToast(win > 0 ? `Победа! +${win.toFixed(2)}` : `Проигрыш: ${result}`); 
-        await reqBet('Coinflip', bet, win);
+        await reqBet('Coinflip', bet, win, coMode);
+        if(win > 0) flyToBalance(win); // Анимация
         
         setTimeout(() => {
             coin.style.transition = 'none'; 
@@ -498,9 +537,11 @@ socket.on('battleSpin', ({lobbyId, winnerId}) => {
         
         setTimeout(() => {
             const winner = currentBattle.players.find(p => p.id === winnerId);
+            const pureWin = totalPool - winner.bet; // Высчитываем чистый выигрыш (пункт 7)
             $('battle-timer').innerText = `ПОБЕДИЛ: ${winner.username}!`;
             $('battle-timer').style.color = winner.color;
-            showToast(`${winner.username} забирает куш!`);
+            showToast(`${winner.username} забирает чистыми +${pureWin.toFixed(2)} TON!`);
+            if (winner.id === user.id) flyToBalance(totalPool); // Отправляем тоны на баланс визуально
         }, 5000);
     }
 });
@@ -513,7 +554,7 @@ function openBattleModal() {
 async function createBattleLobby() {
     const bet = parseFloat($('b-bet').value);
     
-    if(isNaN(bet) || bet < 0.5 || bet > 150) return showToast('Ваша ставка от 0.5 до 150 TON');
+    if(isNaN(bet) || bet < 0.5 || bet > 150) return showToast('Ваша ставка от 0.5 до 150 TON'); // Лимиты (пункт 5)
     
     const r = await fetch('/api/battle/create', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id:user.id, bet}) });
     if(r.ok) { user = await r.json(); updateUI(); $('battle-modal').style.display='none'; showToast('Лобби создано!'); }
@@ -635,6 +676,7 @@ function closeBattleGame() {
     currentBattle = null;
 }
 
+// КРАСИВОЕ КОЛЕСО (пункт 5)
 function drawBattleWheel(lobby) {
     const canvas = $('battle-wheel');
     const ctx = canvas.getContext('2d');
@@ -653,10 +695,16 @@ function drawBattleWheel(lobby) {
         ctx.moveTo(cw, ch);
         ctx.arc(cw, ch, cw - 5, startAngle, startAngle + sliceAngle);
         ctx.closePath();
-        ctx.fillStyle = p.color;
+        
+        // Добавляем градиент для красоты
+        let gradient = ctx.createRadialGradient(cw, ch, 0, cw, ch, cw);
+        gradient.addColorStop(0, '#222');
+        gradient.addColorStop(1, p.color);
+        ctx.fillStyle = gradient;
+        
         ctx.fill();
-        ctx.lineWidth = 2;
-        ctx.strokeStyle = '#111';
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = '#050505';
         ctx.stroke();
 
         ctx.save();
@@ -664,9 +712,9 @@ function drawBattleWheel(lobby) {
         ctx.rotate(startAngle + sliceAngle / 2);
         ctx.textAlign = "right";
         ctx.fillStyle = "#fff";
-        ctx.font = "bold 12px sans-serif";
-        ctx.shadowColor = "rgba(0,0,0,0.8)";
-        ctx.shadowBlur = 4;
+        ctx.font = "bold 13px sans-serif";
+        ctx.shadowColor = "rgba(0,0,0,0.9)";
+        ctx.shadowBlur = 5;
         ctx.fillText(p.username, cw - 15, 4);
         ctx.restore();
         
@@ -722,14 +770,14 @@ async function activatePromo() {
         $('promo-code').value=''; 
     } else { 
         const e = await r.json(); 
-        showToast(e.error || 'Ошибка промо'); 
+        showToast(e.error || 'Ошибка промо'); // Ошибки с бэкенда (уже активирован / не найден)
     }
 }
 
-// БЕЗОПАСНАЯ ОТПРАВКА СТАВКИ
-async function reqBet(game, bet, win) {
+// БЕЗОПАСНАЯ ОТПРАВКА СТАВКИ С ЖЕСТКОЙ ПРИВЯЗКОЙ РЕЖИМА
+async function reqBet(game, bet, win, reqMode = mode) {
     try {
-        const r = await fetch('/api/bet', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id:user.id, game, bet, win, mode}) });
+        const r = await fetch('/api/bet', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id:user.id, game, bet, win, mode: reqMode}) });
         if(r.ok) { 
             user = await r.json(); 
             updateUI(); 
@@ -763,7 +811,7 @@ async function searchAdminUsers(query, filterType = currentAdminFilter) {
     if(r.ok) { const d = await r.json(); adData.users = d.users; renderAdminContent('users'); }
 }
 
-// ИСПРАВЛЕННЫЙ РЕНДЕР ИСТОРИИ И БАЛАНСА В АДМИНКЕ
+// ИСПРАВЛЕННЫЙ РЕНДЕР ИСТОРИИ И БАЛАНСА В АДМИНКЕ С ПАГИНАЦИЕЙ И ПРОМО (пункт 2)
 async function adminViewUser(userId, page = 1) {
     const r = await fetch('/api/admin/user_details', { 
         method:'POST', 
@@ -775,6 +823,7 @@ async function adminViewUser(userId, page = 1) {
     const data = await r.json();
     const u = data.user;
     const hist = data.history || [];
+    const totalPages = data.totalPages || 1;
     
     const c = $('admin-content');
     c.innerHTML = `
@@ -783,7 +832,7 @@ async function adminViewUser(userId, page = 1) {
         <div style="background:#1a1a1a; padding:15px; border-radius:8px; margin-bottom:15px; border:1px solid var(--neon);">
             <h3 style="color:var(--neon); margin-bottom:5px;">${u.username || 'Игрок'} (ID: ${u.id})</h3>
             <p style="font-size:14px; margin-bottom:5px;"><b>Текущий баланс:</b> <span style="color:var(--neon); font-weight:bold;">${u.balance.toFixed(2)} TON</span></p>
-            <p style="font-size:14px; margin-bottom:15px; color:#888;">Заработано на реф: ${(u.refEarned || 0).toFixed(2)} TON</p>
+            <p style="font-size:14px; margin-bottom:15px; color:#888;">Заработано на реф: ${(u.refEarned || 0).toFixed(2)} TON | С промокодов: ${(u.promoEarned || 0).toFixed(2)} TON</p>
             
             <div style="display:flex; gap:10px; margin-bottom:10px;">
                 <input type="number" id="ad-bal-val" class="input-box" placeholder="Сумма TON" style="margin-bottom:0;">
@@ -794,7 +843,7 @@ async function adminViewUser(userId, page = 1) {
             </div>
         </div>
 
-        <h4 style="color:var(--neon-blue); margin-top:20px; margin-bottom:10px;">История ставок (Стр. ${page})</h4>
+        <h4 style="color:var(--neon-blue); margin-top:20px; margin-bottom:10px;">История ставок (Стр. ${page} / ${totalPages})</h4>
         <div style="overflow-x:auto;">
             <table style="width:100%; font-size:11px; text-align:left; border-collapse: collapse; background:#111; border-radius:8px;">
                 <tr style="background:#222; border-bottom:1px solid #444;">
@@ -818,7 +867,7 @@ async function adminViewUser(userId, page = 1) {
         
         <div style="display:flex; justify-content:space-between; margin-top:15px; margin-bottom:30px;">
             <button class="btn" style="width:48%; background:#222; font-size:12px;" onclick="adminViewUser('${u.id}', ${page > 1 ? page - 1 : 1})" ${page === 1 ? 'disabled' : ''}>← Назад</button>
-            <button class="btn" style="width:48%; background:#222; font-size:12px;" onclick="adminViewUser('${u.id}', ${page + 1})" ${hist.length < 10 ? 'disabled' : ''}>Вперед →</button>
+            <button class="btn" style="width:48%; background:#222; font-size:12px;" onclick="adminViewUser('${u.id}', ${page + 1})" ${page >= totalPages ? 'disabled' : ''}>Вперед →</button>
         </div>
     `;
 }
@@ -910,6 +959,9 @@ function renderAdminContent(tab) {
             <label><input type="checkbox" ${adData.maintenance.mines ? 'checked' : ''} onchange="adminMaint('mines', this.checked)"> Mines</label><br>
             <label><input type="checkbox" ${adData.maintenance.coinflip ? 'checked' : ''} onchange="adminMaint('coinflip', this.checked)"> Coinflip</label><br>
             <label><input type="checkbox" ${adData.maintenance.battle ? 'checked' : ''} onchange="adminMaint('battle', this.checked)"> Battle Roulette</label><br>
+            <hr>
+            <h4 style="color:var(--neon); margin-bottom:10px;">ОТОБРАЖЕНИЕ В ИСТОРИИ (Пункт 6)</h4>
+            <label><input type="checkbox" ${isShowDemo ? 'checked' : ''} onchange="adminDemoToggle(this.checked)"> Показывать Demo ставки</label><br>
         `;
     }
     if(tab === 'users') { 
@@ -985,4 +1037,9 @@ async function adminRTP(game) {
 async function adminMaint(game, state) {
     await fetch('/api/admin/maintenance', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({pass: adminPass, game, state}) }); 
     adData.maintenance[game] = state; showToast(`Статус ${game} обновлен!`);
+}
+// Тумблер для демо-ставок (пункт 6)
+async function adminDemoToggle(state) {
+    await fetch('/api/admin/config', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({pass: adminPass, showDemo: state}) }); 
+    showToast('Отображение демо обновлено!'); isShowDemo = state;
 }
