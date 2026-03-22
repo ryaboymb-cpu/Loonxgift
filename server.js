@@ -815,15 +815,24 @@ app.post('/api/admin/set_rtp', checkAdmin, async (req, res) => {
 // СНЯТИЕ И НАЧИСЛЕНИЕ TON ЮЗЕРУ ЧЕРЕЗ АДМИНКУ
 app.post('/api/admin/edit_balance', checkAdmin, async (req, res) => {
     const { userId, action, amount } = req.body;
-    const user = await User.findOne({id: userId});
+    const user = await User.findOne({id: String(userId)});
     if (!user) return res.status(404).json({error: 'User not found'});
     
     const val = Number(amount);
-    if (action === 'add') user.balance = Number((user.balance + val).toFixed(2));
-    else if (action === 'sub') { user.balance = Number((user.balance - val).toFixed(2)); if(user.balance < 0) user.balance = 0; }
-    
+    if (isNaN(val) || val < 0) return res.status(400).json({error: 'Неверная сумма'});
+
+    if (action === 'add') { 
+        user.balance = Number((user.balance + val).toFixed(2)); 
+        if(bot) bot.sendMessage(user.id, `💰 Ваш баланс был пополнен администратором на **${val} TON**!`, {parse_mode: 'Markdown'}).catch(()=>{});
+    }
+    else if (action === 'sub') { 
+        user.balance = Number((user.balance - val).toFixed(2)); 
+        if(user.balance < 0) user.balance = 0; 
+        if(bot) bot.sendMessage(user.id, `📉 С вашего баланса было списано **${val} TON** администратором.`, {parse_mode: 'Markdown'}).catch(()=>{});
+    }
+
     await user.save();
-    res.json({success: true});
+    res.json({success: true, newBalance: user.balance});
 });
 
 app.post('/api/admin/withdraw_action', checkAdmin, async (req, res) => {
