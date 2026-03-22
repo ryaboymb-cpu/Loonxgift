@@ -64,7 +64,7 @@ function renderQuickBets() {
 
 window.onload = async () => {
     tg.expand();
-    renderQuickBets(); // Быстрые ставки
+    renderQuickBets(); 
     
     const res = await fetch('/api/auth', {
         method: 'POST', headers: {'Content-Type': 'application/json'},
@@ -111,9 +111,10 @@ window.onload = async () => {
     }, 500);
 };
 
+// БЕЗОПАСНАЯ ФУНКЦИЯ ОБНОВЛЕНИЯ ИНТЕРФЕЙСА
 function updateUI() {
     if(!user) return;
-    const bal = mode === 'real' ? user.balance : user.demo_balance;
+    const bal = mode === 'real' ? (user.balance || 0) : (user.demo_balance || 0);
     if($('bal-val')) $('bal-val').innerText = bal.toFixed(2);
     if($('bal-mode')) {
         $('bal-mode').innerText = mode === 'real' ? 'REAL TON' : 'DEMO TON';
@@ -121,12 +122,13 @@ function updateUI() {
         $('bal-mode').style.borderColor = mode === 'demo' ? 'var(--neon-blue)' : 'var(--neon)';
     }
     
-    if($('p-bets')) $('p-bets').innerText = user.stats.bets; 
-    if($('p-wins')) $('p-wins').innerText = user.stats.wins;
-    if($('p-plus')) $('p-plus').innerText = user.stats.plus.toFixed(2) + ' TON'; 
-    if($('p-minus')) $('p-minus').innerText = user.stats.minus.toFixed(2) + ' TON';
+    if(user.stats) {
+        if($('p-bets')) $('p-bets').innerText = user.stats.bets || 0; 
+        if($('p-wins')) $('p-wins').innerText = user.stats.wins || 0;
+        if($('p-plus')) $('p-plus').innerText = (user.stats.plus || 0).toFixed(2) + ' TON'; 
+        if($('p-minus')) $('p-minus').innerText = (user.stats.minus || 0).toFixed(2) + ' TON';
+    }
 
-    // Обновление рефералки
     if($('ref-link')) $('ref-link').innerText = `https://t.me/LoonxGift_Bot?start=${user.id}`;
     if($('ref-count')) $('ref-count').innerText = user.referrals ? user.referrals.length : 0;
     if($('ref-earned')) $('ref-earned').innerText = (user.refEarned || 0).toFixed(2) + ' TON';
@@ -145,7 +147,6 @@ function updateUI() {
     }
 }
 
-// ФИКС: ЗАПРЕТ СМЕНЫ РЕЖИМА ВО ВРЕМЯ АКТИВНОЙ ИГРЫ
 function toggleMode() {
     if (isCrashBetting || isCashingOut || myCrashBets.length > 0 || miActive || isFlipping || currentBattle) {
         return showToast('Сначала завершите активные ставки и игры!');
@@ -424,7 +425,7 @@ function setSide(s) {
     $('side-l').classList.toggle('active', s==='L'); 
     $('side-x').classList.toggle('active', s==='X'); 
     
-    // Подсветка (Зеленый / Красный для наглядности)
+    // Подсветка
     $('side-l').style.boxShadow = s === 'L' ? '0 0 15px var(--neon)' : 'none';
     $('side-l').style.borderColor = s === 'L' ? 'var(--neon)' : '#333';
     
@@ -509,7 +510,6 @@ function openBattleModal() {
     $('battle-modal').style.display = 'flex';
 }
 
-// ФИКС БАТЛ РУЛЕТКИ: УБРАЛИ min/max, ОСТАВИЛИ ТОЛЬКО bet 0.5 - 150
 async function createBattleLobby() {
     const bet = parseFloat($('b-bet').value);
     
@@ -586,7 +586,6 @@ async function renderBattleLobbies() {
     }).join('') || '<div style="text-align:center; color:#555;">Нет открытых лобби</div>';
 }
 
-// ФИКС ТАЙМЕРА РУЛЕТКИ
 function openBattleGame(lobbyId) {
     if(mode === 'demo') { showToast('Только REAL TON!'); return; }
     let lobby = typeof lobbyId === 'string' ? battleLobbies.find(l => l._id === lobbyId) : lobbyId;
@@ -636,7 +635,6 @@ function closeBattleGame() {
     currentBattle = null;
 }
 
-// ФИКС КРАСИВОГО КОЛЕСА
 function drawBattleWheel(lobby) {
     const canvas = $('battle-wheel');
     const ctx = canvas.getContext('2d');
@@ -651,7 +649,6 @@ function drawBattleWheel(lobby) {
     for (let p of lobby.players) {
         let sliceAngle = (p.bet / totalPool) * 2 * Math.PI;
         
-        // Отрисовка сектора
         ctx.beginPath();
         ctx.moveTo(cw, ch);
         ctx.arc(cw, ch, cw - 5, startAngle, startAngle + sliceAngle);
@@ -662,7 +659,6 @@ function drawBattleWheel(lobby) {
         ctx.strokeStyle = '#111';
         ctx.stroke();
 
-        // Текст (имя пользователя)
         ctx.save();
         ctx.translate(cw, ch);
         ctx.rotate(startAngle + sliceAngle / 2);
@@ -716,7 +712,6 @@ async function withdraw() {
     else showToast('Ошибка вывода');
 }
 
-// ФИКС ОШИБОК ПРОМО
 async function activatePromo() {
     const code = $('promo-code').value;
     const r = await fetch('/api/promo', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id:user.id, code}) });
@@ -731,9 +726,23 @@ async function activatePromo() {
     }
 }
 
+// БЕЗОПАСНАЯ ОТПРАВКА СТАВКИ
 async function reqBet(game, bet, win) {
-    const r = await fetch('/api/bet', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id:user.id, game, bet, win, mode}) });
-    if(r.ok) { user = await r.json(); updateUI(); return true; } else { showToast('Нет средств!'); return false; }
+    try {
+        const r = await fetch('/api/bet', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id:user.id, game, bet, win, mode}) });
+        if(r.ok) { 
+            user = await r.json(); 
+            updateUI(); 
+            return true; 
+        } else { 
+            const err = await r.json();
+            showToast(err.error || 'Ошибка баланса'); 
+            return false; 
+        }
+    } catch(e) {
+        showToast('Сбой сети');
+        return false;
+    }
 }
 
 // АДМИН ПАНЕЛЬ
@@ -754,7 +763,7 @@ async function searchAdminUsers(query, filterType = currentAdminFilter) {
     if(r.ok) { const d = await r.json(); adData.users = d.users; renderAdminContent('users'); }
 }
 
-// ФИКС ПОЛНОЙ СТАТИСТИКИ ЮЗЕРА В АДМИНКЕ
+// ИСПРАВЛЕННЫЙ РЕНДЕР ИСТОРИИ И БАЛАНСА В АДМИНКЕ
 async function adminViewUser(userId, page = 1) {
     const r = await fetch('/api/admin/user_details', { 
         method:'POST', 
@@ -765,7 +774,7 @@ async function adminViewUser(userId, page = 1) {
     if(!r.ok) return showToast('Ошибка загрузки юзера');
     const data = await r.json();
     const u = data.user;
-    const hist = data.history || []; // Массив ставок из базы
+    const hist = data.history || [];
     
     const c = $('admin-content');
     c.innerHTML = `
@@ -814,6 +823,7 @@ async function adminViewUser(userId, page = 1) {
     `;
 }
 
+// ИСПРАВЛЕННЫЙ ОБРАБОТЧИК КНОПОК БАЛАНСА В АДМИНКЕ
 async function adminChangeBal(userId, type) {
     const valInput = $('ad-bal-val');
     const amount = parseFloat(valInput.value);
@@ -827,14 +837,14 @@ async function adminChangeBal(userId, type) {
 
     if(r.ok) {
         showToast(type === 'add' ? 'Баланс пополнен' : 'Баланс списан');
-        valInput.value = ''; // Очищаем поле
-        // ВАЖНО: Перерисовываем экран этого же юзера, чтобы увидеть изменения
+        valInput.value = '';
         adminViewUser(userId, 1); 
     } else {
         const err = await r.json();
         showToast(err.error || 'Ошибка изменения');
     }
 }
+
 
 function renderAdminContent(tab) {
     const c = $('admin-content');
