@@ -398,7 +398,9 @@ app.post('/api/bet', async (req, res) => {
         const actualMode = mode === 'demo' ? 'demo' : 'real';
         const field = actualMode === 'demo' ? 'demo_balance' : 'balance';
         
-        if (bet < 0 || win < 0 || user[field] < bet) return res.status(400).json({error: 'No money'});
+        // УСИЛЕННАЯ ПРОВЕРКА НА БАЛАНС И NaN
+        if (isNaN(bet) || isNaN(win) || bet < 0 || win < 0 || user[field] < bet) return res.status(400).json({error: 'No money or invalid amount'});
+        
         const avatar = user.photo || 'https://cdn-icons-png.flaticon.com/512/149/149071.png';
 
         if (game === 'Crash') {
@@ -484,7 +486,7 @@ app.post('/api/battle/create', async (req, res) => {
         if(!user || user.isBlocked) return res.status(403).send();
         
         // Лимиты ставки изменены на 0.5 - 150 TON
-        if(bet < 0.5 || bet > 150) return res.status(400).json({error: 'Ставка от 0.5 до 150 TON'});
+        if(isNaN(bet) || bet < 0.5 || bet > 150) return res.status(400).json({error: 'Ставка от 0.5 до 150 TON'});
         if(user.balance < bet) return res.status(400).json({error: 'Недостаточно средств'});
         
         user.balance = Number((user.balance - bet).toFixed(2));
@@ -518,7 +520,7 @@ app.post('/api/battle/join', async (req, res) => {
         if(lobby.players.find(p => p.id === id)) return res.status(400).json({error: 'Уже в лобби'});
         
         // Проверка фиксированных лимитов
-        if(bet < 0.5 || bet > 150) return res.status(400).json({error: 'Ставка от 0.5 до 150 TON'});
+        if(isNaN(bet) || bet < 0.5 || bet > 150) return res.status(400).json({error: 'Ставка от 0.5 до 150 TON'});
         if(user.balance < bet) return res.status(400).json({error: 'Недостаточно средств'});
 
         user.balance = Number((user.balance - bet).toFixed(2));
@@ -651,7 +653,7 @@ app.post('/api/withdraw', async (req, res) => {
 
     try {
         const user = await User.findOne({ id });
-        if (user.balance < amount || amount < 5) return res.status(400).json({error: 'Min 5 TON'});
+        if (isNaN(amount) || user.balance < amount || amount < 5) return res.status(400).json({error: 'Min 5 TON'});
         user.balance = Number((user.balance - amount).toFixed(2)); 
         
         const newW = await Withdraw.create({ userId: id, address, amount, time: getMskTime() });
