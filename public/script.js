@@ -915,7 +915,7 @@ async function adminChangeBal(userId, type) {
 
     try {
         // ВАЖНО: Проверь, чтобы этот URL совпадал с тем, что в index.js (edit_balance или change_balance)
-        const r = await fetch('/api/admin/edit_balance', { 
+        const r = await fetch('/api/admin/change_balance', { 
             method:'POST', 
             headers:{'Content-Type':'application/json'}, 
             body:JSON.stringify({
