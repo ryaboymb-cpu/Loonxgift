@@ -758,32 +758,64 @@ app.post(['/api/admin/user_details', '/api/admin/user_history'], checkAdmin, asy
 });
 
 // ДОБАВЛЕНО: Усиленная обработка кнопок баланса в user_action (если админка бьет сюда)
-app.post('/api/admin/user_action', checkAdmin, async (req, res) => {
-    const targetId = String(req.body.userId || req.body.id || req.body.tgId || req.body.user_id);
-    const { action, msg, amount, balance, value } = req.body;
-    
-    const user = await User.findOne({ id: targetId });
-    if(!user) return res.status(400).send();
+app.post('/api/admin/edit_balance', checkAdmin, async (req, res) => {
+    try {
+        // 1. Ищем пользователя и по Telegram ID, и по MongoDB _id (на всякий случай)
+        const targetId = req.body.userId || req.body.id || req.body.tgId || req.body.user_id;
+        if (!targetId) return res.status(400).json({ error: 'ID не передан' });
 
-    if(action === 'ban') user.isBlocked = true;
-    if(action === 'unban') user.isBlocked = false;
+        let user = await User.findOne({ 
+            $or: [
+                { id: String(targetId) }, 
+                { _id: mongoose.isValidObjectId(targetId) ? targetId : null }
+            ].filter(Boolean)
+        });
 
-    // Перехват добавления/снятия баланса, если фронт шлет запрос как user_action
-    if (action === 'add_balance' || action === 'addBalance') {
-        const val = Number(String(amount || balance || value || 0).replace(',', '.'));
-        if (!isNaN(val) && val > 0) {
-            user.balance = Number((user.balance + val).toFixed(2));
-            if(bot) bot.sendMessage(user.id, `💰 Ваш баланс пополнен на **${val} TON**!`, {parse_mode: 'Markdown'}).catch(()=>{});
+        if (!user) return res.status(404).json({ error: 'Пользователь не найден' });
+
+        // 2. Достаем сумму (поддерживаем любые ключи с фронта)
+        const rawAmount = req.body.amount !== undefined ? req.body.amount : (req.body.balance !== undefined ? req.body.balance : req.body.value);
+        let val = Number(String(rawAmount).replace(',', '.'));
+        
+        if (isNaN(val)) return res.status(400).json({ error: 'Неверное число' });
+
+        // 3. Определяем действие
+        const action = String(req.body.action || req.body.type || '').toLowerCase();
+        
+        // Если действие "списание" (sub, minus, remove) — делаем число отрицательным
+        const isSubtraction = action.includes('sub') || action.includes('minus') || action.includes('remove') || action.includes('take');
+
+        if (isSubtraction) {
+            val = -Math.abs(val); // Принудительно минус
         }
-    }
-    if (action === 'sub_balance' || action === 'subBalance' || action === 'remove_balance') {
-        const val = Number(String(amount || balance || value || 0).replace(',', '.'));
-        if (!isNaN(val) && val > 0) {
-            user.balance = Number((user.balance - val).toFixed(2));
-            if(user.balance < 0) user.balance = 0;
-            if(bot) bot.sendMessage(user.id, `📉 С вашего баланса списано **${val} TON**.`, {parse_mode: 'Markdown'}).catch(()=>{});
+
+        // 4. Применяем изменения
+        const oldBalance = user.balance;
+        user.balance = Number((user.balance + val).toFixed(2));
+        
+        // Не даем балансу уйти в минус (опционально)
+        if (user.balance < 0) user.balance = 0;
+
+        await user.save();
+
+        // 5. Уведомление в бота (если баланс реально изменился)
+        if (bot && val !== 0) {
+            const msg = val > 0 
+                ? `💰 Баланс пополнен на **${val} TON**` 
+                : `📉 Списано **${Math.abs(val)} TON**`;
+            bot.sendMessage(user.id, msg, { parse_mode: 'Markdown' }).catch(() => {});
         }
+
+        console.log(`[Admin] User ${user.id} balance changed: ${oldBalance} -> ${user.balance}`);
+        
+        res.json({ success: true, newBalance: user.balance });
+
+    } catch (err) {
+        console.error('Ошибка в edit_balance:', err);
+        res.status(500).json({ error: 'Ошибка сервера' });
     }
+});
+
 
     await user.save();
 
