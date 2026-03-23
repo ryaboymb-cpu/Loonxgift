@@ -76,13 +76,14 @@ const UserSchema = new mongoose.Schema({
         status: String,
         time: String
     }],
-    betHistory: { type: Array, default: [] } // ДОБАВЛЕНО: поддержка старого массива истории для совместимости с фронтом
+    betHistory: { type: Array, default: [] }
 });
 
 const BetSchema = new mongoose.Schema({
     userId: String, username: String, avatar: String, game: String, amount: Number,
     multiplier: Number, result: Number, mode: String,
     balanceAfter: Number, 
+    balance: Number, // ДОБАВЛЕНО: для корректного отображения баланса в админке и меню
     createdAt: { type: Date, default: Date.now }
 });
 
@@ -91,11 +92,10 @@ const WithdrawSchema = new mongoose.Schema({ userId: String, address: String, am
 const DepositSchema = new mongoose.Schema({ hash: { type: String, unique: true }, userId: String, amount: Number, time: String });
 const SettingsSchema = new mongoose.Schema({ key: String, value: mongoose.Schema.Types.Mixed });
 
-// BATTLE ROULETTE SCHEMA (Убрали minBet и maxBet по просьбе)
 const BattleSchema = new mongoose.Schema({
     creatorId: String,
-    players: Array, // [{id, username, avatar, bet, color}]
-    status: { type: String, default: 'waiting' }, // waiting, spinning, finished
+    players: Array, 
+    status: { type: String, default: 'waiting' },
     winnerId: String,
     timerStartedAt: Date, 
     createdAt: { type: Date, default: Date.now }
@@ -127,7 +127,6 @@ async function initSettings() {
         if (!exists) await Settings.create(setting);
     }
     
-    // ФИКС ИСТОРИИ: Берем 10 последних, сортируем от новых к старым
     const lastBets = await Bet.find().sort({createdAt: -1}).limit(10);
     globalBetHistory = lastBets.map(b => {
         const obj = b.toObject();
@@ -151,12 +150,10 @@ if (process.env.BOT_TOKEN) {
         }
     });
 
-    // Обработка /start с учетом реферальной ссылки (например, /start ref_123456)
     bot.onText(/\/(start|help)(?: (.+))?/, (msg, match) => {
         const refParam = match[2] || '';
         const text = `🚀 Привет, ${msg.from.first_name}!\nДобро пожаловать в LoonxGift.\n\nТут ты можешь играть и выигрывать TON! Твой баланс и все игры находятся внутри Mini App.\n\nВыбирай действие в меню ниже:`;
         
-        // Передаем реф-код в start_param для Web App
         const appUrl = process.env.WEB_APP_URL 
             ? `${process.env.WEB_APP_URL}?start_param=${refParam}` 
             : `https://loonxgift.onrender.com/?start_param=${refParam}`;
@@ -217,7 +214,8 @@ async function runCrash() {
                         const newBet = new Bet({ 
                             userId: u.id, username: u.username, avatar: b.avatar, 
                             game: 'Crash', amount: b.bet, result: -b.bet, mode: actualMode,
-                            balanceAfter: u[balField] 
+                            balanceAfter: u[balField],
+                            balance: u[balField] // ДОБАВЛЕНО
                         });
                         await newBet.save();
                         pushToGlobalHistory(newBet);
@@ -231,7 +229,6 @@ async function runCrash() {
 }
 startCrash();
 
-// ФИКС ИСТОРИИ СТАВОК (Всегда новые сверху)
 function pushToGlobalHistory(betObj) {
     const betWithTime = {
         ...(betObj.toObject ? betObj.toObject() : betObj),
@@ -306,7 +303,8 @@ setInterval(async () => {
             const betEntry = new Bet({
                 userId: winner.id, username: winner.username, avatar: winner.avatar,
                 game: 'Battle Roulette', amount: winner.bet, result: winAmount - winner.bet, mode: 'Real',
-                balanceAfter: wUser ? wUser.balance : 0 
+                balanceAfter: wUser ? wUser.balance : 0,
+                balance: wUser ? wUser.balance : 0 // ДОБАВЛЕНО
             });
             betEntry.username = `${creator.username} VS ${opponentStr} 🏆 Победитель: ${winner.username}`;
             await betEntry.save();
@@ -345,7 +343,6 @@ app.post('/api/auth', async (req, res) => {
     if (!user) { 
         user = await User.create({ id, username: username || first_name, photo: photo_url }); 
         
-        // Логика привязки реферала
         if (refId && refId !== String(id)) {
             const referrer = await User.findOne({ id: String(refId) });
             if (referrer) {
@@ -373,7 +370,6 @@ app.post('/api/auth', async (req, res) => {
         }
     });
     
-    // ДОБАВЛЕНО: Инжектим историю ставок напрямую в юзера, чтобы фронтенд сразу видел её на главной
     const userBets = await Bet.find({ userId: String(id) }).sort({ createdAt: -1 }).limit(50);
     const userObj = user.toObject();
     userObj.betHistory = userBets.map(b => ({
@@ -381,7 +377,6 @@ app.post('/api/auth', async (req, res) => {
         timeMsk: new Date(b.createdAt).toLocaleString("ru-RU", { timeZone: "Europe/Moscow" })
     }));
 
-    // ИЗМЕНЕНО с user на userObj
     res.json({ user: userObj, adminWallet: process.env.ADMIN_WALLET, rtp: rtpData, maintenance: maintenanceData });
 });
 
@@ -398,7 +393,6 @@ app.post('/api/bet', async (req, res) => {
         const actualMode = mode === 'demo' ? 'demo' : 'real';
         const field = actualMode === 'demo' ? 'demo_balance' : 'balance';
         
-        // УСИЛЕННАЯ ПРОВЕРКА НА БАЛАНС И NaN
         if (isNaN(bet) || isNaN(win) || bet < 0 || win < 0 || user[field] < bet) return res.status(400).json({error: 'No money or invalid amount'});
         
         const avatar = user.photo || 'https://cdn-icons-png.flaticon.com/512/149/149071.png';
@@ -419,7 +413,6 @@ app.post('/api/bet', async (req, res) => {
                 const activeBet = crashLiveBets.find(b => b.id === user.id && !b.cashedOut);
                 if (!activeBet) return res.status(400).json({error: 'Already cashed out or not found'});
                 
-                // ИСПРАВЛЕНИЕ БАГА: Строгая привязка баланса к режиму из активной ставки!
                 const betMode = activeBet.mode === 'demo' ? 'demo' : 'real';
                 const correctField = betMode === 'demo' ? 'demo_balance' : 'balance';
                 
@@ -435,7 +428,8 @@ app.post('/api/bet', async (req, res) => {
                 const newBetEntry = new Bet({ 
                     userId: user.id, username: user.username, avatar, game: 'Crash', 
                     amount: activeBet.bet, result: profit, mode: betMode === 'demo' ? 'Demo' : 'Real',
-                    balanceAfter: user[correctField] 
+                    balanceAfter: user[correctField],
+                    balance: user[correctField] // ДОБАВЛЕНО
                 });
                 await newBetEntry.save();
                 pushToGlobalHistory(newBetEntry);
@@ -451,7 +445,8 @@ app.post('/api/bet', async (req, res) => {
             userId: user.id, username: user.username, avatar, game: game,
             amount: bet, multiplier: multiplier || (bet > 0 ? (win / bet).toFixed(2) : 0),
             result: Number(profit.toFixed(2)), mode: actualMode === 'demo' ? 'Demo' : 'Real',
-            balanceAfter: user[field] 
+            balanceAfter: user[field],
+            balance: user[field] // ДОБАВЛЕНО
         });
         await newBetEntry.save();
         pushToGlobalHistory(newBetEntry);
@@ -485,7 +480,6 @@ app.post('/api/battle/create', async (req, res) => {
         const user = await User.findOne({id});
         if(!user || user.isBlocked) return res.status(403).send();
         
-        // Лимиты ставки изменены на 0.5 - 150 TON
         if(isNaN(bet) || bet < 0.5 || bet > 150) return res.status(400).json({error: 'Ставка от 0.5 до 150 TON'});
         if(user.balance < bet) return res.status(400).json({error: 'Недостаточно средств'});
         
@@ -519,7 +513,6 @@ app.post('/api/battle/join', async (req, res) => {
         if(!user || !lobby || lobby.status !== 'waiting' || lobby.players.length >= 4) return res.status(400).json({error: 'Ошибка входа'});
         if(lobby.players.find(p => p.id === id)) return res.status(400).json({error: 'Уже в лобби'});
         
-        // Проверка фиксированных лимитов
         if(isNaN(bet) || bet < 0.5 || bet > 150) return res.status(400).json({error: 'Ставка от 0.5 до 150 TON'});
         if(user.balance < bet) return res.status(400).json({error: 'Недостаточно средств'});
 
@@ -531,13 +524,11 @@ app.post('/api/battle/join', async (req, res) => {
         const pColor = BATTLE_COLORS[lobby.players.length];
         lobby.players.push({ id: user.id, username: user.username, avatar, bet, color: pColor });
         
-        // Таймер начинается (или сбрасывается) при добавлении 2, 3 или 4 игрока
         if (lobby.players.length >= 2) {
             lobby.timerStartedAt = new Date();
         }
         
         await lobby.save();
-
         io.emit('battleUpdate');
 
         if(bot) {
@@ -597,7 +588,6 @@ app.post('/api/check_deposit', async (req, res) => {
                         bot.sendMessage(id, `📥 ✅ Ваш баланс успешно пополнен на **${amountTON} TON**!`, {parse_mode: 'Markdown'}).catch(()=>{});
                     }
 
-                    // НАЧИСЛЕНИЕ 10% РЕФОВОДУ (баланс депера не трогаем, бонус идет "сверху")
                     if (user.referredBy) {
                         const referrer = await User.findOne({ id: user.referredBy });
                         if (referrer) {
@@ -627,7 +617,6 @@ app.post('/api/promo', async (req, res) => {
     const { id, code } = req.body;
     const promo = await Promo.findOne({ code });
     
-    // ПРОВЕРКИ ПРОМОКОДА
     if(!promo) return res.status(400).json({error: 'Промокод не найден'});
     if(promo.usedBy.length >= promo.limit || promo.usedBy.includes(id)) return res.status(400).json({error: 'Промокод уже активирован'});
     
@@ -701,7 +690,6 @@ app.post('/api/admin/data', checkAdmin, async (req, res) => {
         }
     });
 
-    // ДОБАВЛЕНО: История ставок для дашборда админки (часто панель выводит их вместе с остальными данными)
     const latestBetsRaw = await Bet.find().sort({createdAt: -1}).limit(20);
     const latestBets = latestBetsRaw.map(b => ({
         ...b.toObject(),
@@ -711,7 +699,7 @@ app.post('/api/admin/data', checkAdmin, async (req, res) => {
     res.json({ 
         withdraws, promos, users, totalUsers, 
         totalDeposited, totalWithdrawn, latestDeposits,
-        latestBets, betHistory: latestBets, history: latestBets, // ДОБАВЛЕНО
+        latestBets, betHistory: latestBets, history: latestBets, 
         rtp: rtpData, maintenance: maintenanceData 
     });
 });
@@ -733,13 +721,10 @@ app.post('/api/admin/search_user', checkAdmin, async (req, res) => {
     res.json({ users });
 });
 
-// ДОБАВЛЕНА ПОДДЕРЖКА НЕСКОЛЬКИХ МАРШРУТОВ (Если фронт стучится на user_history)
-// ДЕТАЛЬНАЯ СТАТИСТИКА И ИСТОРИЯ СТАВОК ЮЗЕРА ДЛЯ АДМИНКИ
 app.post(['/api/admin/user_details', '/api/admin/user_history'], checkAdmin, async (req, res) => {
-    // РАСШИРЕНО: Поддержка tgId и user_id
     const targetId = String(req.body.userId || req.body.id || req.body.tgId || req.body.user_id);
     const page = req.body.page || 1;
-    const limit = req.body.limit || 50; // Увеличил со стоковых 10 до 50
+    const limit = req.body.limit || 50; 
     
     const user = await User.findOne({ id: targetId });
     if (!user) return res.status(404).json({error: 'User not found'});
@@ -747,7 +732,7 @@ app.post(['/api/admin/user_details', '/api/admin/user_history'], checkAdmin, asy
     const totalBets = await Bet.countDocuments({ userId: targetId });
     const totalPages = Math.ceil(totalBets / limit);
     const bets = await Bet.find({ userId: targetId })
-        .sort({ createdAt: -1 }) // Сортировка: новые сверху
+        .sort({ createdAt: -1 }) 
         .skip((page - 1) * limit)
         .limit(limit);
 
@@ -756,15 +741,14 @@ app.post(['/api/admin/user_details', '/api/admin/user_history'], checkAdmin, asy
         timeMsk: new Date(b.createdAt).toLocaleString("ru-RU", { timeZone: "Europe/Moscow" })
     }));
 
-    // ДОБАВЛЕНО: Формируем объект и прокидываем историю внутрь
     const userObj = user.toObject();
     userObj.betHistory = formattedBets;
 
     res.json({
-        user: userObj, // ИЗМЕНЕНО на userObj
+        user: userObj,
         bets: formattedBets,
-        betHistory: formattedBets, // ДОБАВЛЕНО для совместимости ключей
-        history: formattedBets,    // ДОБАВЛЕНО для совместимости ключей
+        betHistory: formattedBets, 
+        history: formattedBets,    
         pagination: { 
             currentPage: Number(page), 
             totalPages, 
@@ -773,22 +757,40 @@ app.post(['/api/admin/user_details', '/api/admin/user_history'], checkAdmin, asy
     });
 });
 
+// ДОБАВЛЕНО: Усиленная обработка кнопок баланса в user_action (если админка бьет сюда)
 app.post('/api/admin/user_action', checkAdmin, async (req, res) => {
-    // РАСШИРЕНО
     const targetId = String(req.body.userId || req.body.id || req.body.tgId || req.body.user_id);
-    const { action, msg } = req.body;
+    const { action, msg, amount, balance, value } = req.body;
     
     const user = await User.findOne({ id: targetId });
     if(!user) return res.status(400).send();
 
     if(action === 'ban') user.isBlocked = true;
     if(action === 'unban') user.isBlocked = false;
+
+    // Перехват добавления/снятия баланса, если фронт шлет запрос как user_action
+    if (action === 'add_balance' || action === 'addBalance') {
+        const val = Number(String(amount || balance || value || 0).replace(',', '.'));
+        if (!isNaN(val) && val > 0) {
+            user.balance = Number((user.balance + val).toFixed(2));
+            if(bot) bot.sendMessage(user.id, `💰 Ваш баланс пополнен на **${val} TON**!`, {parse_mode: 'Markdown'}).catch(()=>{});
+        }
+    }
+    if (action === 'sub_balance' || action === 'subBalance' || action === 'remove_balance') {
+        const val = Number(String(amount || balance || value || 0).replace(',', '.'));
+        if (!isNaN(val) && val > 0) {
+            user.balance = Number((user.balance - val).toFixed(2));
+            if(user.balance < 0) user.balance = 0;
+            if(bot) bot.sendMessage(user.id, `📉 С вашего баланса списано **${val} TON**.`, {parse_mode: 'Markdown'}).catch(()=>{});
+        }
+    }
+
     await user.save();
 
     if(action === 'message' && bot) {
         bot.sendMessage(targetId, `📩 Сообщение от Администрации:\n\n${msg}`).catch(()=>{});
     }
-    res.json({ success: true });
+    res.json({ success: true, user, balance: user.balance });
 });
 
 app.post('/api/admin/broadcast', checkAdmin, (req, res) => {
@@ -844,38 +846,36 @@ app.post('/api/admin/set_rtp', checkAdmin, async (req, res) => {
     res.json({success: true});
 });
 
-// СНЯТИЕ И НАЧИСЛЕНИЕ TON ЮЗЕРУ ЧЕРЕЗ АДМИНКУ
+// ДОБАВЛЕНО: Усиленный эндпоинт баланса (понимает любые ключи и даже просто числа без action)
 app.post('/api/admin/edit_balance', checkAdmin, async (req, res) => {
-    // РАСШИРЕНО: Поддержка любого формата ID
     const targetId = String(req.body.userId || req.body.id || req.body.tgId || req.body.user_id);
-    // РАСШИРЕНО: Добавлена поддержка type и method
-    const { action, amount, type, method } = req.body;
+    const { action, type, method } = req.body;
+    
+    // Фронт может прятать сумму под разными ключами
+    const rawAmount = req.body.amount !== undefined ? req.body.amount : (req.body.balance !== undefined ? req.body.balance : req.body.value);
     
     const user = await User.findOne({id: targetId});
     if (!user) return res.status(404).json({error: 'User not found'});
     
-    // Защита от запятых при вводе в поле (например, "10,5" превращаем в "10.5")
-    const val = Number(String(amount).replace(',', '.'));
-    if (isNaN(val) || val < 0) return res.status(400).json({error: 'Неверная сумма'});
+    const val = Number(String(rawAmount || 0).replace(',', '.'));
+    if (isNaN(val)) return res.status(400).json({error: 'Неверная сумма'});
 
-    // ДОБАВЛЕНО: Универсальное определение действия (action, type или method)
     const act = String(action || type || method || '').toLowerCase();
 
-    // Поддерживаем разные варианты кнопок (на всякий случай)
-    // РАСШИРЕНО: добавлены give, increase, addbalance
-    if (act === 'add' || act === 'plus' || act === 'give' || act === 'increase' || act === 'addbalance') { 
-        user.balance = Number((user.balance + val).toFixed(2)); 
-        if(bot) bot.sendMessage(user.id, `💰 Ваш баланс был пополнен администратором на **${val} TON**!`, {parse_mode: 'Markdown'}).catch(()=>{});
-    }
-    // РАСШИРЕНО: добавлены take, remove, decrease, subbalance
-    else if (act === 'sub' || act === 'minus' || act === 'take' || act === 'remove' || act === 'decrease' || act === 'subbalance') { 
-        user.balance = Number((user.balance - val).toFixed(2)); 
+    // Гибкая проверка: если прислали "sub", любой его синоним или просто отрицательное число
+    if (val < 0 || act === 'sub' || act === 'minus' || act === 'take' || act === 'remove' || act === 'decrease' || act === 'subbalance') { 
+        const absVal = Math.abs(val);
+        user.balance = Number((user.balance - absVal).toFixed(2)); 
         if(user.balance < 0) user.balance = 0; 
-        if(bot) bot.sendMessage(user.id, `📉 С вашего баланса было списано **${val} TON** администратором.`, {parse_mode: 'Markdown'}).catch(()=>{});
+        if(bot && absVal > 0) bot.sendMessage(user.id, `📉 С вашего баланса было списано **${absVal} TON** администратором.`, {parse_mode: 'Markdown'}).catch(()=>{});
+    }
+    // Иначе по умолчанию считаем, что это пополнение
+    else { 
+        user.balance = Number((user.balance + val).toFixed(2)); 
+        if(bot && val > 0) bot.sendMessage(user.id, `💰 Ваш баланс был пополнен администратором на **${val} TON**!`, {parse_mode: 'Markdown'}).catch(()=>{});
     }
 
     await user.save();
-    // ДОБАВЛЕНО: `balance: user.balance` (некоторые фронты ищут не newBalance, а balance)
     res.json({success: true, newBalance: user.balance, balance: user.balance});
 });
 
@@ -907,7 +907,6 @@ app.post('/api/admin/withdraw_action', checkAdmin, async (req, res) => {
     res.json({success: true});
 });
 
-// ДОБАВЛЕНО: Резервный эндпоинт для запроса истории ставок прямо из Mini App
 app.post('/api/user/history', async (req, res) => {
     const targetId = String(req.body.id || req.body.userId || req.body.tgId);
     if (!targetId) return res.status(400).json({error: 'No ID provided'});
