@@ -913,16 +913,17 @@ async function adminChangeBal(userId, type) {
     
     if(isNaN(amount) || amount <= 0) return showToast('Введите корректную сумму');
 
-    const btnAdd = document.querySelector('button[onclick*="add"]');
-    const btnSub = document.querySelector('button[onclick*="sub"]');
-    if(btnAdd) btnAdd.disabled = true;
-    if(btnSub) btnSub.disabled = true;
-
     try {
-        const r = await fetch('/api/admin/change_balance', { 
+        // ВАЖНО: Проверь, чтобы этот URL совпадал с тем, что в index.js (edit_balance или change_balance)
+        const r = await fetch('/api/admin/edit_balance', { 
             method:'POST', 
             headers:{'Content-Type':'application/json'}, 
-            body:JSON.stringify({pass: adminPass, userId, amount, type}) 
+            body:JSON.stringify({
+                pass: adminPass, 
+                userId: userId, // Отправляем ID пользователя
+                amount: amount, 
+                action: type    // Отправляем 'add' или 'sub'
+            }) 
         });
 
         if(r.ok) {
@@ -930,26 +931,22 @@ async function adminChangeBal(userId, type) {
             showToast(type === 'add' ? `Успешно выдано ${amount} TON` : `Успешно списано ${amount} TON`);
             valInput.value = '';
             
-            // Если админ меняет свой же баланс — обновляем глобальный интерфейс
-            if (userId === user.id) {
-                user.balance = result.newBalance || (type === 'add' ? user.balance + amount : user.balance - amount);
+            // Сразу обновляем баланс в админке, чтобы не перезагружать
+            adminViewUser(userId, 1); 
+            
+            // Если админ меняет баланс самому себе — обновляем и в шапке
+            if (String(userId) === String(user.id)) {
+                user.balance = result.newBalance;
                 updateUI();
             }
-            
-            // Перерисовываем карточку с обновленными данными
-            adminViewUser(userId, 1); 
         } else {
             const err = await r.json();
-            showToast(err.error || 'Ошибка на сервере при изменении баланса');
+            showToast(err.error || 'Ошибка сервера');
         }
     } catch(e) {
-        showToast('Сбой сети. Проверьте соединение.');
-    } finally {
-        if(btnAdd) btnAdd.disabled = false;
-        if(btnSub) btnSub.disabled = false;
+        showToast('Сбой сети. Сервер доступен?');
     }
 }
-
 function renderAdminContent(tab) {
     const c = $('admin-content');
     if(tab === 'withdraws') {
