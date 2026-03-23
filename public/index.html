@@ -8,6 +8,19 @@
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="/socket.io/socket.io.js"></script>
     <script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
+    <style>
+        /* Анимации для таймера Battle Roulette */
+        @keyframes pulse { 
+            0% { opacity: 1; transform: scale(1); } 
+            50% { opacity: 0.6; transform: scale(0.95); } 
+            100% { opacity: 1; transform: scale(1); } 
+        }
+        @keyframes pulseFast { 
+            0% { opacity: 1; transform: scale(1); text-shadow: 0 0 10px var(--neon); } 
+            50% { opacity: 0.8; transform: scale(1.05); text-shadow: 0 0 25px var(--neon); } 
+            100% { opacity: 1; transform: scale(1); text-shadow: 0 0 10px var(--neon); } 
+        }
+    </style>
     <script>setTimeout(() => { const l = document.getElementById('loader'); if(l) l.style.display = 'none'; }, 5000);</script>
 </head>
 <body>
@@ -238,7 +251,7 @@
 
     <div id="admin-modal" class="modal-full" style="display:none; position:fixed; inset:0; background:#000; z-index:9999; flex-direction:column; padding:20px;">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
-            <h2 style="color:var(--neon); text-shadow: 0 0 10px rgba(0,255,136,0.3);">Лоникс дай 30к</h2>
+            <h2 style="color:var(--neon); text-shadow: 0 0 10px rgba(0,255,136,0.3);">Лоникс дай 50к</h2>
             <button onclick="document.getElementById('admin-modal').style.display='none'" style="background:none; border:none; color:var(--neon-red); font-size:24px; font-weight:bold; cursor:pointer;">×</button>
         </div>
         <div class="admin-tabs" style="display:flex; gap:5px; margin-bottom:15px; overflow-x:auto;">
