@@ -542,6 +542,7 @@ socket.on('battleSpin', ({lobbyId, winnerId}) => {
             timerObj.innerText = `ПОБЕДИЛ: ${winner.username}!`;
             timerObj.style.color = winner.color;
             timerObj.style.textShadow = `0 0 15px ${winner.color}`;
+            currentBattle.status = 'finished'; // Устанавливаем статус завершено локально
             
             showToast(`${winner.username} забирает чистыми +${pureWin.toFixed(2)} TON!`);
             if (winner.id === user.id) flyToBalance(totalPool); 
@@ -611,16 +612,21 @@ async function renderBattleLobbies() {
         const imIn = l.players.some(p => p.id === user.id);
         
         let actionBtn = '';
-        if(isMine && l.players.length === 1) actionBtn = `<button class="btn" style="background:var(--neon-red); padding:5px; font-size:12px;" onclick="cancelBattle('${l._id}')">ОТМЕНА</button>`;
-        else actionBtn = `<button class="btn" style="background:var(--neon); color:#000; padding:5px 10px; font-size:12px; font-weight:bold;" onclick="openBattleGame('${l._id}')">${imIn ? 'СМОТРЕТЬ' : 'ВОЙТИ / СМОТРЕТЬ'}</button>`;
+        if(l.status === 'finished') {
+            actionBtn = `<button class="btn" style="background:#444; color:#aaa; padding:5px 10px; font-size:12px;" disabled>ЗАВЕРШЕНО</button>`;
+        } else if(isMine && l.players.length === 1) {
+            actionBtn = `<button class="btn" style="background:var(--neon-red); padding:5px; font-size:12px;" onclick="cancelBattle('${l._id}')">ОТМЕНА</button>`;
+        } else {
+            actionBtn = `<button class="btn" style="background:var(--neon); color:#000; padding:5px 10px; font-size:12px; font-weight:bold;" onclick="openBattleGame('${l._id}')">${imIn ? 'СМОТРЕТЬ' : 'ВОЙТИ / СМОТРЕТЬ'}</button>`;
+        }
 
         const timeStr = new Date(l.createdAt).toLocaleTimeString("ru-RU", {timeZone:"Europe/Moscow", hour:"2-digit", minute:"2-digit"});
         
         return `
         <div style="background:#1a1a1a; border:1px solid ${isMine?'var(--neon)':'#333'}; padding:10px; border-radius:8px; display:flex; justify-content:space-between; align-items:center;">
             <div style="display:flex; align-items:center; gap:10px;">
-                <img src="${creator.avatar}" style="width:30px; border-radius:50%;">
-                <div>
+                <img src="${creator.avatar}" style="width:30px; border-radius:50%; opacity: ${l.status==='finished'?'0.5':'1'};">
+                <div style="opacity: ${l.status==='finished'?'0.5':'1'};">
                     <b style="color:var(--text);">${creator.username}</b> <span style="font-size:10px; color:#555;">[${timeStr}]</span><br>
                     <span style="font-size:10px; color:var(--neon-blue);">Игроков: ${l.players.length}/4</span>
                 </div>
@@ -640,7 +646,6 @@ function openBattleGame(lobbyId) {
     $('battle-wheel').style.transition = 'none';
     $('battle-wheel').style.transform = 'rotate(0deg)';
     
-    // Сбрасываем стили таймера
     $('battle-timer').className = 'timer-wait';
     $('battle-timer').style.color = '#fff';
     $('battle-timer').style.textShadow = 'none';
@@ -657,11 +662,15 @@ function openBattleGame(lobbyId) {
     }
 
     const updateTimer = () => {
-        if(!currentBattle || currentBattle.status !== 'waiting') return;
+        if(!currentBattle) return;
+        if(currentBattle.status === 'finished') {
+            $('battle-timer').innerText = 'БИТВА ОКОНЧЕНА';
+            return;
+        }
+        if(currentBattle.status !== 'waiting') return;
         
         const timerObj = $('battle-timer');
         
-        // ЖДЕМ ВТОРОГО ИГРОКА. ТАЙМЕР НЕ ИДЕТ!
         if(currentBattle.players.length < 2) {
             timerObj.className = 'timer-wait';
             timerObj.innerText = 'ОЖИДАНИЕ ИГРОКОВ...';
@@ -669,7 +678,6 @@ function openBattleGame(lobbyId) {
             return;
         }
 
-        // Если игроков >= 2, берем время старта от сервера
         if (!currentBattle.timerEndTime) {
             timerObj.innerText = 'ПОДГОТОВКА...';
             setTimeout(updateTimer, 1000);
@@ -684,7 +692,7 @@ function openBattleGame(lobbyId) {
             timerObj.className = 'timer-pulse';
             timerObj.innerText = `СТАРТ ЧЕРЕЗ: 0${m}:${s<10?'0'+s:s}`;
             timerObj.style.color = '#fff';
-            timerObj.style.textShadow = 'none'; // Убрали цыганский неон
+            timerObj.style.textShadow = 'none'; 
             setTimeout(updateTimer, 1000);
         } else {
             timerObj.className = 'timer-pulse';
@@ -699,14 +707,12 @@ function closeBattleGame() {
     currentBattle = null;
 }
 
-// СТРОГОЕ, СТИЛЬНОЕ И ЧЕТКОЕ КОЛЕСО (БЕЗ МЫЛА И НЕОНА)
 function drawBattleWheel(lobby) {
     const canvas = $('battle-wheel');
     const ctx = canvas.getContext('2d');
     
-    // Фикс размытия Canvas (High DPI)
     const dpr = window.devicePixelRatio || 1;
-    const baseSize = 280; // Базовый размер в пикселях
+    const baseSize = 280; 
     canvas.style.width = baseSize + 'px';
     canvas.style.height = baseSize + 'px';
     canvas.width = baseSize * dpr;
@@ -727,10 +733,9 @@ function drawBattleWheel(lobby) {
         
         ctx.beginPath();
         ctx.moveTo(cw, ch);
-        ctx.arc(cw, ch, cw - 4, startAngle, startAngle + sliceAngle); // Радиус чуть меньше, чтобы оставить место для внешней рамки
+        ctx.arc(cw, ch, cw - 4, startAngle, startAngle + sliceAngle); 
         ctx.closePath();
         
-        // Строгий матовый градиент без мыльного неона
         let gradient = ctx.createLinearGradient(cw - baseSize/2, ch - baseSize/2, cw + baseSize/2, ch + baseSize/2);
         gradient.addColorStop(0, p.color);
         gradient.addColorStop(1, '#1a1a1a');
@@ -738,19 +743,16 @@ function drawBattleWheel(lobby) {
         ctx.fillStyle = gradient;
         ctx.fill();
         
-        // Чёткие границы секторов
         ctx.lineWidth = 2;
         ctx.strokeStyle = '#0a0a0a';
         ctx.stroke();
 
-        // Текст (Логин)
         ctx.save();
         ctx.translate(cw, ch);
         ctx.rotate(startAngle + sliceAngle / 2);
         ctx.textAlign = "right";
         ctx.fillStyle = "#ffffff";
         ctx.font = "bold 13px sans-serif";
-        // Легкая тень только для читаемости текста
         ctx.shadowColor = "rgba(0,0,0,0.8)";
         ctx.shadowBlur = 4;
         ctx.fillText(p.username, cw - 20, 4);
@@ -759,7 +761,6 @@ function drawBattleWheel(lobby) {
         startAngle += sliceAngle;
     }
     
-    // Центральный круг (ось) - строгий дизайн
     ctx.beginPath();
     ctx.arc(cw, ch, 25, 0, 2 * Math.PI);
     ctx.fillStyle = '#111';
@@ -787,7 +788,6 @@ function renderBattlePlayers(lobby) {
         </div>`;
     }).join('');
 }
-
 
 // ФИНАНСЫ И ПРОМО
 async function checkRealDeposit(btn) {
@@ -848,12 +848,24 @@ async function reqBet(game, bet, win, reqMode = mode) {
 // АДМИН ПАНЕЛЬ
 let aTaps = 0; let adminSearchQuery = ''; let currentAdminFilter = 'balance';
 async function checkAdmin() { aTaps++; if(aTaps >= 5) { aTaps = 0; let p = prompt('Пароль:'); if(p) { adminPass = p; loadAdminData(); } } }
-function switchAdminTab(tab) { document.querySelectorAll('.admin-tab').forEach(t => t.classList.remove('active')); event.target.classList.add('active'); renderAdminContent(tab); }
+
+function switchAdminTab(tab) { 
+    document.querySelectorAll('.admin-tab').forEach(t => t.classList.remove('active')); 
+    event.target.classList.add('active'); 
+    
+    if (tab === 'logs') {
+        const c = $('admin-content');
+        c.innerHTML = '<div style="text-align:center; padding:20px; color:var(--neon);">Загрузка логов...</div>';
+        loadAdminLogs(1, '');
+    } else {
+        renderAdminContent(tab); 
+    }
+}
 
 let adData = {};
 async function loadAdminData() {
     const r = await fetch('/api/admin/data', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({pass: adminPass}) });
-    if(r.ok) { adData = await r.json(); $('admin-modal').style.display = 'flex'; renderAdminContent('withdraws'); } else showToast('Неверный пароль');
+    if(r.ok) { adData = await r.json(); $('admin-modal').style.display = 'flex'; switchAdminTab('withdraws'); } else showToast('Неверный пароль');
 }
 
 async function searchAdminUsers(query, filterType = currentAdminFilter) {
@@ -923,7 +935,6 @@ async function adminViewUser(userId, page = 1) {
     `;
 }
 
-// ЖЕЛЕЗОБЕТОННОЕ ИЗМЕНЕНИЕ БАЛАНСА В АДМИНКЕ
 async function adminChangeBal(userId, type) {
     const valInput = document.getElementById('ad-bal-val');
     const amountStr = valInput.value;
@@ -932,42 +943,25 @@ async function adminChangeBal(userId, type) {
     if(isNaN(amount) || amount <= 0) {
         return showToast('Введите корректную сумму больше 0');
     }
-
-    // Если ваш сервер — это простой обработчик, который только ПРИБАВЛЯЕТ, 
-    // нам нужно отправить отрицательное число для типа 'sub'.
-    // Но мы отправим и сумму, и тип, чтобы сервер точно понял намерение.
     
     try {
         const response = await fetch('/api/admin/change_balance', { 
             method: 'POST', 
             headers: { 'Content-Type': 'application/json' }, 
-            body: JSON.stringify({
-                pass: adminPass, 
-                userId: userId, 
-                amount: amount, // Передаем положительное число
-                type: type      // 'add' или 'sub'
-            }) 
+            body: JSON.stringify({ pass: adminPass, userId: userId, amount: amount, type: type }) 
         });
 
         const result = await response.json();
 
         if (response.ok) {
             showToast(type === 'add' ? `✅ Начислено ${amount} TON` : `📉 Списано ${amount} TON`);
-            valInput.value = ''; // Чистим поле ввода
-
-            // 1. Обновляем детальную информацию (историю и баланс в карточке)
+            valInput.value = ''; 
             adminViewUser(userId, 1); 
             
-            // 2. ВАЖНО: Обновляем баланс в локальном кэше списка пользователей (adData.users)
-            // Это нужно, чтобы при нажатии кнопки "Назад" в списке был актуальный баланс
             if (adData.users) {
                 const userInList = adData.users.find(u => String(u.id) === String(userId));
-                if (userInList) {
-                    userInList.balance = result.newBalance; 
-                }
+                if (userInList) userInList.balance = result.newBalance; 
             }
-            
-            // 3. Если админ меняет баланс самому себе — обновляем и в главном UI
             if (user && String(userId) === String(user.id)) {
                 user.balance = result.newBalance;
                 updateUI();
@@ -977,10 +971,8 @@ async function adminChangeBal(userId, type) {
         }
     } catch (e) {
         console.error('Ошибка баланса:', e);
-        showToast('🆘 Сбой сети. Проверьте консоль.');
+        showToast('🆘 Сбой сети');
     }
-}
-
 }
 
 function renderAdminContent(tab) {
@@ -1084,6 +1076,70 @@ function renderAdminContent(tab) {
             <div style="margin-top:10px;">${usersHtml}</div>
         `;
     }
+}
+
+// НОВЫЙ ФУНКЦИОНАЛ ЛОГОВ АДМИНА
+let currentLogsPage = 1;
+let currentLogsDate = '';
+
+async function loadAdminLogs(page = 1, dateQuery = '') {
+    currentLogsPage = page;
+    currentLogsDate = dateQuery;
+    const c = $('admin-content');
+    
+    try {
+        const r = await fetch('/api/admin/logs', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ pass: adminPass, page: page, date: dateQuery, limit: 30 })
+        });
+        
+        if(r.ok) {
+            const data = await r.json();
+            renderLogsUI(data.logs, data.totalPages, page);
+        } else {
+            c.innerHTML = '<div style="color:red; text-align:center;">Ошибка загрузки логов</div>';
+        }
+    } catch(e) {
+        c.innerHTML = '<div style="color:red; text-align:center;">Сбой сети</div>';
+    }
+}
+
+function renderLogsUI(logs, totalPages, page) {
+    const c = $('admin-content');
+    
+    let logsHtml = logs.length > 0 ? logs.map(l => `
+        <tr style="border-bottom:1px solid #222;">
+            <td style="padding:6px; color:#888; white-space:nowrap;">${l.date} ${l.time}</td>
+            <td style="padding:6px; color:var(--neon-blue); font-weight:bold;">${l.adminUser || 'Система'}</td>
+            <td style="padding:6px; color:#fff;">${l.action}</td>
+        </tr>
+    `).join('') : '<tr><td colspan="3" style="text-align:center; padding:15px; color:#555;">Логи не найдены</td></tr>';
+
+    c.innerHTML = `
+        <h4 style="color:var(--neon); margin-bottom:10px;">Журнал действий</h4>
+        <div style="display:flex; gap:10px; margin-bottom:15px;">
+            <input type="text" id="log-date-search" class="input-box" placeholder="Поиск по дате (напр. 06.08)" value="${currentLogsDate}" style="margin:0; flex:1;">
+            <button class="btn" style="width:auto; padding:0 15px; background:var(--neon-blue);" onclick="loadAdminLogs(1, document.getElementById('log-date-search').value)">ПОИСК</button>
+        </div>
+        
+        <div style="overflow-x:auto;">
+            <table style="width:100%; font-size:11px; text-align:left; border-collapse: collapse; background:#111; border-radius:8px;">
+                <tr style="background:#222;">
+                    <th style="padding:8px;">Дата/Время</th>
+                    <th style="padding:8px;">Инициатор</th>
+                    <th style="padding:8px;">Действие</th>
+                </tr>
+                ${logsHtml}
+            </table>
+        </div>
+        
+        <div style="display:flex; justify-content:space-between; margin-top:15px; margin-bottom:20px;">
+            <button class="btn" style="width:48%; background:#333;" onclick="loadAdminLogs(${page > 1 ? page - 1 : 1}, currentLogsDate)" ${page === 1 ? 'disabled' : ''}>← Назад</button>
+            <div style="color:#555; font-size:12px; align-self:center;">Стр ${page} из ${totalPages || 1}</div>
+            <button class="btn" style="width:48%; background:#333;" onclick="loadAdminLogs(${page + 1}, currentLogsDate)" ${page >= totalPages ? 'disabled' : ''}>Вперед →</button>
+        </div>
+    `;
 }
 
 async function adminW(wId, action) {
