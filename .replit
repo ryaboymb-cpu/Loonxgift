@@ -15,6 +15,7 @@ BOT_TOKEN = "8723424935:AAGUQUeYExLcJfZAImpk6jWi_tJIG8lYa6k"
 MONGO_URI = "mongodb+srv://LoonxGifts:112233444@cluster0.yyo66l5.mongodb.net/loonxgifts?retryWrites=true&w=majority"
 TON_API_KEY = "90544364b2356ed439d5137077a22f353adf1a8dfec9b1470f6bc52aa66f1ac0"
 WEB_APP_URI = "loonxgift--ryaboymb.replit.app"
+WEB_APP_URL = "https://975a8f67-8085-43bf-9479-19ba8d1663af-00-2x30btvolomhf.janeway.replit.dev"
 
 [workflows]
 runButton = "Project"

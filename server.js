@@ -155,9 +155,8 @@ if (process.env.BOT_TOKEN) {
         const refParam = match[2] || '';
         const text = `🚀 Привет, ${msg.from.first_name}!\nДобро пожаловать в LoonxGift.\n\nТут ты можешь играть и выигрывать TON! Твой баланс и все игры находятся внутри Mini App.\n\nВыбирай действие в меню ниже:`;
         
-        const appUrl = process.env.WEB_APP_URL 
-            ? `${process.env.WEB_APP_URL}?start_param=${refParam}` 
-            : `https://loonxgift.onrender.com/?start_param=${refParam}`;
+        const baseUrl = process.env.WEB_APP_URL || `https://${process.env.REPLIT_DEV_DOMAIN}`;
+        const appUrl = `${baseUrl}?start_param=${refParam}`;
 
         bot.sendMessage(msg.chat.id, text, {
             reply_markup: {
