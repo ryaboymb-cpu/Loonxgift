@@ -127,7 +127,6 @@ window.onload = async () => {
     renderWithdrawHistory();
     renderBattleLobbies();
 
-    // ФИКС ИКОНКИ ПРОМО
     setTimeout(() => {
         document.querySelectorAll('.nav-item').forEach(nav => {
             const attr = nav.getAttribute('onclick');
@@ -142,7 +141,6 @@ window.onload = async () => {
     }, 500);
 };
 
-// БЕЗОПАСНАЯ ФУНКЦИЯ ОБНОВЛЕНИЯ ИНТЕРФЕЙСА
 function updateUI() {
     if(!user) return;
     const bal = mode === 'real' ? (user.balance || 0) : (user.demo_balance || 0);
@@ -644,7 +642,7 @@ function openBattleGame(lobbyId) {
     
     // Сбрасываем стили таймера
     $('battle-timer').className = 'timer-wait';
-    $('battle-timer').style.color = 'var(--sub)';
+    $('battle-timer').style.color = '#fff';
     $('battle-timer').style.textShadow = 'none';
     
     drawBattleWheel(lobby);
@@ -663,6 +661,7 @@ function openBattleGame(lobbyId) {
         
         const timerObj = $('battle-timer');
         
+        // ЖДЕМ ВТОРОГО ИГРОКА. ТАЙМЕР НЕ ИДЕТ!
         if(currentBattle.players.length < 2) {
             timerObj.className = 'timer-wait';
             timerObj.innerText = 'ОЖИДАНИЕ ИГРОКОВ...';
@@ -670,14 +669,22 @@ function openBattleGame(lobbyId) {
             return;
         }
 
-        const endTime = currentBattle.timerEndTime ? new Date(currentBattle.timerEndTime).getTime() : (new Date(currentBattle.createdAt).getTime() + 120000);
+        // Если игроков >= 2, берем время старта от сервера
+        if (!currentBattle.timerEndTime) {
+            timerObj.innerText = 'ПОДГОТОВКА...';
+            setTimeout(updateTimer, 1000);
+            return;
+        }
+
+        const endTime = new Date(currentBattle.timerEndTime).getTime();
         const left = Math.floor((endTime - Date.now()) / 1000);
         
         if(left > 0) {
             let m = Math.floor(left / 60); let s = left % 60;
             timerObj.className = 'timer-pulse';
             timerObj.innerText = `СТАРТ ЧЕРЕЗ: 0${m}:${s<10?'0'+s:s}`;
-            timerObj.style.color = 'var(--neon)';
+            timerObj.style.color = '#fff';
+            timerObj.style.textShadow = 'none'; // Убрали цыганский неон
             setTimeout(updateTimer, 1000);
         } else {
             timerObj.className = 'timer-pulse';
@@ -692,14 +699,25 @@ function closeBattleGame() {
     currentBattle = null;
 }
 
-// КРАСИВОЕ КОЛЕСО BATTLE ROULETTE
+// СТРОГОЕ, СТИЛЬНОЕ И ЧЕТКОЕ КОЛЕСО (БЕЗ МЫЛА И НЕОНА)
 function drawBattleWheel(lobby) {
     const canvas = $('battle-wheel');
     const ctx = canvas.getContext('2d');
-    const cw = canvas.width / 2;
-    const ch = canvas.height / 2;
     
-    ctx.clearRect(0,0, canvas.width, canvas.height);
+    // Фикс размытия Canvas (High DPI)
+    const dpr = window.devicePixelRatio || 1;
+    const baseSize = 280; // Базовый размер в пикселях
+    canvas.style.width = baseSize + 'px';
+    canvas.style.height = baseSize + 'px';
+    canvas.width = baseSize * dpr;
+    canvas.height = baseSize * dpr;
+    
+    ctx.scale(dpr, dpr);
+    
+    const cw = baseSize / 2;
+    const ch = baseSize / 2;
+    
+    ctx.clearRect(0, 0, baseSize, baseSize);
     
     const totalPool = lobby.players.reduce((sum, p) => sum + p.bet, 0);
     let startAngle = 0;
@@ -707,55 +725,54 @@ function drawBattleWheel(lobby) {
     for (let p of lobby.players) {
         let sliceAngle = (p.bet / totalPool) * 2 * Math.PI;
         
-        // Отрисовка сектора
         ctx.beginPath();
         ctx.moveTo(cw, ch);
-        ctx.arc(cw, ch, cw - 5, startAngle, startAngle + sliceAngle);
+        ctx.arc(cw, ch, cw - 4, startAngle, startAngle + sliceAngle); // Радиус чуть меньше, чтобы оставить место для внешней рамки
         ctx.closePath();
         
-        // Красивый градиент
-        let gradient = ctx.createRadialGradient(cw, ch, 0, cw, ch, cw);
-        gradient.addColorStop(0, '#111');
-        gradient.addColorStop(1, p.color);
+        // Строгий матовый градиент без мыльного неона
+        let gradient = ctx.createLinearGradient(cw - baseSize/2, ch - baseSize/2, cw + baseSize/2, ch + baseSize/2);
+        gradient.addColorStop(0, p.color);
+        gradient.addColorStop(1, '#1a1a1a');
+        
         ctx.fillStyle = gradient;
         ctx.fill();
         
-        // Обводка и неоновое свечение сектора
-        ctx.lineWidth = 4;
-        ctx.strokeStyle = '#050505';
+        // Чёткие границы секторов
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = '#0a0a0a';
         ctx.stroke();
-        
-        ctx.shadowBlur = 15;
-        ctx.shadowColor = p.color;
-        ctx.stroke();
-        ctx.shadowBlur = 0; // Сброс тени для текста
 
         // Текст (Логин)
         ctx.save();
         ctx.translate(cw, ch);
         ctx.rotate(startAngle + sliceAngle / 2);
         ctx.textAlign = "right";
-        ctx.fillStyle = "#fff";
-        ctx.font = "bold 14px sans-serif";
-        ctx.shadowColor = "rgba(0,0,0,0.9)";
-        ctx.shadowBlur = 5;
-        ctx.fillText(p.username, cw - 20, 5);
+        ctx.fillStyle = "#ffffff";
+        ctx.font = "bold 13px sans-serif";
+        // Легкая тень только для читаемости текста
+        ctx.shadowColor = "rgba(0,0,0,0.8)";
+        ctx.shadowBlur = 4;
+        ctx.fillText(p.username, cw - 20, 4);
         ctx.restore();
         
         startAngle += sliceAngle;
     }
     
-    // Центральный кружок-основание
+    // Центральный круг (ось) - строгий дизайн
     ctx.beginPath();
     ctx.arc(cw, ch, 25, 0, 2 * Math.PI);
-    ctx.fillStyle = '#1a1a1a';
+    ctx.fillStyle = '#111';
     ctx.fill();
-    ctx.lineWidth = 3;
-    ctx.strokeStyle = 'var(--neon)';
-    ctx.shadowBlur = 10;
-    ctx.shadowColor = 'var(--neon)';
+    ctx.lineWidth = 4;
+    ctx.strokeStyle = '#222';
     ctx.stroke();
-    ctx.shadowBlur = 0;
+    
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillStyle = "#555";
+    ctx.font = "bold 10px sans-serif";
+    ctx.fillText("TON", cw, ch);
 }
 
 function renderBattlePlayers(lobby) {
@@ -914,15 +931,15 @@ async function adminChangeBal(userId, type) {
     if(isNaN(amount) || amount <= 0) return showToast('Введите корректную сумму');
 
     try {
-        // ВАЖНО: Проверь, чтобы этот URL совпадал с тем, что в index.js (edit_balance или change_balance)
         const r = await fetch('/api/admin/change_balance', { 
             method:'POST', 
             headers:{'Content-Type':'application/json'}, 
+            // ИСПРАВЛЕН КЛЮЧ НА TYPE ДЛЯ СОВМЕСТИМОСТИ С СЕРВЕРОМ
             body:JSON.stringify({
                 pass: adminPass, 
-                userId: userId, // Отправляем ID пользователя
+                userId: userId, 
                 amount: amount, 
-                action: type    // Отправляем 'add' или 'sub'
+                type: type    
             }) 
         });
 
