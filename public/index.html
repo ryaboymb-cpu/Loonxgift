@@ -9,7 +9,6 @@
     <script src="/socket.io/socket.io.js"></script>
     <script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
     <style>
-        /* Анимации для таймера Battle Roulette */
         @keyframes pulse { 
             0% { opacity: 1; transform: scale(1); } 
             50% { opacity: 0.6; transform: scale(0.95); } 
@@ -259,6 +258,7 @@
             <button class="admin-tab" onclick="switchAdminTab('users')">Юзеры</button>
             <button class="admin-tab" onclick="switchAdminTab('promo')">Промо</button>
             <button class="admin-tab" onclick="switchAdminTab('rtp')">Настройки</button>
+            <button class="admin-tab" onclick="switchAdminTab('logs')">Логи</button>
         </div>
         <div id="admin-content" style="flex: 1; overflow-y: auto;"></div>
     </div>
