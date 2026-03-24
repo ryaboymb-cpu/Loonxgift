@@ -928,13 +928,16 @@ async function adminChangeBal(userId, type) {
     const valInput = $('ad-bal-val');
     const amount = parseFloat(valInput.value);
     
-    if(isNaN(amount) || amount <= 0) return showToast('Введите корректную сумму');
+    if(isNaN(amount) || amount <= 0) return showToast('Введи нормальную сумму больше нуля');
+
+    // Блокируем кнопки на время запроса, чтобы не накликали лишнего
+    const btns = document.querySelectorAll('#admin-content .btn');
+    btns.forEach(b => b.disabled = true);
 
     try {
         const r = await fetch('/api/admin/change_balance', { 
             method:'POST', 
             headers:{'Content-Type':'application/json'}, 
-            // ИСПРАВЛЕН КЛЮЧ НА TYPE ДЛЯ СОВМЕСТИМОСТИ С СЕРВЕРОМ
             body:JSON.stringify({
                 pass: adminPass, 
                 userId: userId, 
@@ -948,22 +951,26 @@ async function adminChangeBal(userId, type) {
             showToast(type === 'add' ? `Успешно выдано ${amount} TON` : `Успешно списано ${amount} TON`);
             valInput.value = '';
             
-            // Сразу обновляем баланс в админке, чтобы не перезагружать
-            adminViewUser(userId, 1); 
-            
-            // Если админ меняет баланс самому себе — обновляем и в шапке
+            // Если меняешь баланс самому себе — обновляем сразу и в шапке
             if (String(userId) === String(user.id)) {
-                user.balance = result.newBalance;
+                user.balance = result.newBalance !== undefined ? result.newBalance : user.balance;
                 updateUI();
             }
+            
+            // Обновляем стату юзера в админке
+            adminViewUser(userId, 1); 
         } else {
             const err = await r.json();
-            showToast(err.error || 'Ошибка сервера');
+            showToast(err.error || 'Ошибка сервера при изменении баланса');
         }
     } catch(e) {
-        showToast('Сбой сети. Сервер доступен?');
+        showToast('Сбой сети или сервер не отвечает');
+    } finally {
+        // Разблокируем кнопки обратно
+        btns.forEach(b => b.disabled = false);
     }
 }
+
 function renderAdminContent(tab) {
     const c = $('admin-content');
     if(tab === 'withdraws') {
