@@ -851,7 +851,7 @@ async function checkAdmin() { aTaps++; if(aTaps >= 5) { aTaps = 0; let p = promp
 
 function switchAdminTab(tab) { 
     document.querySelectorAll('.admin-tab').forEach(t => t.classList.remove('active')); 
-    event.target.classList.add('active'); 
+    if (typeof event !== 'undefined' && event && event.target) event.target.classList.add('active');
     
     if (tab === 'logs') {
         const c = $('admin-content');
