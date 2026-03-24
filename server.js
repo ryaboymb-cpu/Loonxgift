@@ -756,19 +756,19 @@ app.post(['/api/admin/user_details', '/api/admin/user_history'], checkAdmin, asy
         }
     });
 });
-
-// Усиленная обработка кнопок баланса (объединенная и исправленная версия)
+// Усиленная обработка кнопок баланса (исправленная версия без краша Mongoose)
 app.post('/api/admin/edit_balance', checkAdmin, async (req, res) => {
     try {
         const targetId = String(req.body.userId || req.body.id || req.body.tgId || req.body.user_id);
         if (!targetId) return res.status(400).json({ error: 'ID не передан' });
 
-        let user = await User.findOne({ 
-            $or: [
-                { id: targetId }, 
-                { _id: mongoose.isValidObjectId(targetId) ? targetId : null }
-            ].filter(Boolean)
-        });
+        // БЕЗОПАСНЫЙ ПОИСК: формируем условия динамически
+        const searchConditions = [{ id: targetId }];
+        if (mongoose.isValidObjectId(targetId)) {
+            searchConditions.push({ _id: targetId });
+        }
+
+        let user = await User.findOne({ $or: searchConditions });
 
         if (!user) return res.status(404).json({ error: 'Пользователь не найден' });
 
@@ -779,12 +779,13 @@ app.post('/api/admin/edit_balance', checkAdmin, async (req, res) => {
 
         const action = String(req.body.action || req.body.type || req.body.method || '').toLowerCase();
         
+        // Определяем, нужно ли вычесть деньги
         const isSubtraction = val < 0 || action.includes('sub') || action.includes('minus') || action.includes('remove') || action.includes('take') || action.includes('decrease');
         const absVal = Math.abs(val);
 
         if (isSubtraction) {
             user.balance = Number((user.balance - absVal).toFixed(2));
-            if (user.balance < 0) user.balance = 0;
+            if (user.balance < 0) user.balance = 0; // Защита от отрицательного баланса
             if (bot && absVal > 0) bot.sendMessage(user.id, `📉 С вашего баланса было списано **${absVal} TON** администратором.`, {parse_mode: 'Markdown'}).catch(() => {});
         } else {
             user.balance = Number((user.balance + absVal).toFixed(2));
@@ -796,30 +797,6 @@ app.post('/api/admin/edit_balance', checkAdmin, async (req, res) => {
 
     } catch (err) {
         console.error('Ошибка в edit_balance:', err);
-        res.status(500).json({ error: 'Ошибка сервера' });
-    }
-});
-
-// Обработка действий с пользователем (сообщения, бан, разбан)
-app.post('/api/admin/user_action', checkAdmin, async (req, res) => {
-    try {
-        const targetId = String(req.body.userId || req.body.id || req.body.tgId || req.body.user_id);
-        const { action, msg } = req.body;
-
-        const user = await User.findOne({ id: targetId });
-        if (!user) return res.status(404).json({ error: 'Пользователь не найден' });
-
-        if (action === 'ban') user.isBlocked = true;
-        if (action === 'unban') user.isBlocked = false;
-
-        await user.save();
-
-        if (action === 'message' && bot && msg) {
-            bot.sendMessage(targetId, `📩 Сообщение от Администрации:\n\n${msg}`).catch(() => {});
-        }
-        res.json({ success: true, user, balance: user.balance });
-    } catch (err) {
-        console.error('Ошибка в user_action:', err);
         res.status(500).json({ error: 'Ошибка сервера' });
     }
 });
