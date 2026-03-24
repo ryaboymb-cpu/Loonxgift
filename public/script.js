@@ -630,8 +630,6 @@ async function renderBattleLobbies() {
     }).join('') || '<div style="text-align:center; color:#555;">Нет открытых лобби</div>';
 }
 
-let battleTimerInterval; // Глобальная переменная для интервала таймера
-
 function openBattleGame(lobbyId) {
     if(mode === 'demo') { showToast('Только REAL TON!'); return; }
     let lobby = typeof lobbyId === 'string' ? battleLobbies.find(l => l._id === lobbyId) : lobbyId;
@@ -643,10 +641,9 @@ function openBattleGame(lobbyId) {
     $('battle-wheel').style.transform = 'rotate(0deg)';
     
     // Сбрасываем стили таймера
-    const timerObj = $('battle-timer');
-    timerObj.className = 'timer-wait';
-    timerObj.style.color = '#fff';
-    timerObj.style.textShadow = 'none';
+    $('battle-timer').className = 'timer-wait';
+    $('battle-timer').style.color = '#fff';
+    $('battle-timer').style.textShadow = 'none';
     
     drawBattleWheel(lobby);
     renderBattlePlayers(lobby);
@@ -659,31 +656,23 @@ function openBattleGame(lobbyId) {
         $('battle-join-area').style.display = 'none';
     }
 
-    // Очищаем старый интервал, если он был
-    if (battleTimerInterval) clearInterval(battleTimerInterval);
-
-    // Запускаем живой интервал
-    battleTimerInterval = setInterval(() => {
-        // Если окно закрыли или битва уже крутится, останавливаем интервал
-        if (!currentBattle || currentBattle.status !== 'waiting' || $('battle-game-modal').style.display === 'none') {
-            clearInterval(battleTimerInterval);
-            return;
-        }
+    const updateTimer = () => {
+        if(!currentBattle || currentBattle.status !== 'waiting') return;
         
-        // Обновляем данные лобби из глобального массива (вдруг кто-то зашел, пока окно открыто)
-        const updatedLobby = battleLobbies.find(l => l._id === currentBattle._id);
-        if (updatedLobby) currentBattle = updatedLobby;
+        const timerObj = $('battle-timer');
         
         // ЖДЕМ ВТОРОГО ИГРОКА. ТАЙМЕР НЕ ИДЕТ!
         if(currentBattle.players.length < 2) {
             timerObj.className = 'timer-wait';
             timerObj.innerText = 'ОЖИДАНИЕ ИГРОКОВ...';
+            setTimeout(updateTimer, 1000);
             return;
         }
 
-        // Если игроков >= 2, но таймер еще не пришел (на всякий случай)
+        // Если игроков >= 2, берем время старта от сервера
         if (!currentBattle.timerEndTime) {
             timerObj.innerText = 'ПОДГОТОВКА...';
+            setTimeout(updateTimer, 1000);
             return;
         }
 
@@ -695,12 +684,14 @@ function openBattleGame(lobbyId) {
             timerObj.className = 'timer-pulse';
             timerObj.innerText = `СТАРТ ЧЕРЕЗ: 0${m}:${s<10?'0'+s:s}`;
             timerObj.style.color = '#fff';
-            timerObj.style.textShadow = 'none';
+            timerObj.style.textShadow = 'none'; // Убрали цыганский неон
+            setTimeout(updateTimer, 1000);
         } else {
             timerObj.className = 'timer-pulse';
             timerObj.innerText = 'ЗАПУСК...';
         }
-    }, 1000); // Интервал срабатывает каждую секунду
+    };
+    updateTimer();
 }
 
 function closeBattleGame() {
@@ -943,12 +934,12 @@ async function adminChangeBal(userId, type) {
         const r = await fetch('/api/admin/change_balance', { 
             method:'POST', 
             headers:{'Content-Type':'application/json'}, 
-            // ИСПРАВЛЕН КЛЮЧ: теперь сервер поймет, что нужно сделать!
+            // ИСПРАВЛЕН КЛЮЧ НА TYPE ДЛЯ СОВМЕСТИМОСТИ С СЕРВЕРОМ
             body:JSON.stringify({
                 pass: adminPass, 
                 userId: userId, 
                 amount: amount, 
-                action: type // <- ЗДЕСЬ БЫЛА ОШИБКА, заменили type на action
+                type: type    
             }) 
         });
 
@@ -972,8 +963,6 @@ async function adminChangeBal(userId, type) {
     } catch(e) {
         showToast('Сбой сети. Сервер доступен?');
     }
-}
-
 }
 function renderAdminContent(tab) {
     const c = $('admin-content');
