@@ -757,58 +757,42 @@ app.post(['/api/admin/user_details', '/api/admin/user_history'], checkAdmin, asy
     });
 });
 
-// ДОБАВЛЕНО: Усиленная обработка кнопок баланса в user_action (если админка бьет сюда)
+// Усиленная обработка кнопок баланса (объединенная и исправленная версия)
 app.post('/api/admin/edit_balance', checkAdmin, async (req, res) => {
     try {
-        // 1. Ищем пользователя и по Telegram ID, и по MongoDB _id (на всякий случай)
-        const targetId = req.body.userId || req.body.id || req.body.tgId || req.body.user_id;
+        const targetId = String(req.body.userId || req.body.id || req.body.tgId || req.body.user_id);
         if (!targetId) return res.status(400).json({ error: 'ID не передан' });
 
         let user = await User.findOne({ 
             $or: [
-                { id: String(targetId) }, 
+                { id: targetId }, 
                 { _id: mongoose.isValidObjectId(targetId) ? targetId : null }
             ].filter(Boolean)
         });
 
         if (!user) return res.status(404).json({ error: 'Пользователь не найден' });
 
-        // 2. Достаем сумму (поддерживаем любые ключи с фронта)
         const rawAmount = req.body.amount !== undefined ? req.body.amount : (req.body.balance !== undefined ? req.body.balance : req.body.value);
-        let val = Number(String(rawAmount).replace(',', '.'));
+        let val = Number(String(rawAmount || 0).replace(',', '.'));
         
         if (isNaN(val)) return res.status(400).json({ error: 'Неверное число' });
 
-        // 3. Определяем действие
-        const action = String(req.body.action || req.body.type || '').toLowerCase();
+        const action = String(req.body.action || req.body.type || req.body.method || '').toLowerCase();
         
-        // Если действие "списание" (sub, minus, remove) — делаем число отрицательным
-        const isSubtraction = action.includes('sub') || action.includes('minus') || action.includes('remove') || action.includes('take');
+        const isSubtraction = val < 0 || action.includes('sub') || action.includes('minus') || action.includes('remove') || action.includes('take') || action.includes('decrease');
+        const absVal = Math.abs(val);
 
         if (isSubtraction) {
-            val = -Math.abs(val); // Принудительно минус
+            user.balance = Number((user.balance - absVal).toFixed(2));
+            if (user.balance < 0) user.balance = 0;
+            if (bot && absVal > 0) bot.sendMessage(user.id, `📉 С вашего баланса было списано **${absVal} TON** администратором.`, {parse_mode: 'Markdown'}).catch(() => {});
+        } else {
+            user.balance = Number((user.balance + absVal).toFixed(2));
+            if (bot && absVal > 0) bot.sendMessage(user.id, `💰 Ваш баланс был пополнен администратором на **${absVal} TON**!`, {parse_mode: 'Markdown'}).catch(() => {});
         }
-
-        // 4. Применяем изменения
-        const oldBalance = user.balance;
-        user.balance = Number((user.balance + val).toFixed(2));
-        
-        // Не даем балансу уйти в минус (опционально)
-        if (user.balance < 0) user.balance = 0;
 
         await user.save();
-
-        // 5. Уведомление в бота (если баланс реально изменился)
-        if (bot && val !== 0) {
-            const msg = val > 0 
-                ? `💰 Баланс пополнен на **${val} TON**` 
-                : `📉 Списано **${Math.abs(val)} TON**`;
-            bot.sendMessage(user.id, msg, { parse_mode: 'Markdown' }).catch(() => {});
-        }
-
-        console.log(`[Admin] User ${user.id} balance changed: ${oldBalance} -> ${user.balance}`);
-        
-        res.json({ success: true, newBalance: user.balance });
+        res.json({ success: true, newBalance: user.balance, balance: user.balance });
 
     } catch (err) {
         console.error('Ошибка в edit_balance:', err);
@@ -816,13 +800,28 @@ app.post('/api/admin/edit_balance', checkAdmin, async (req, res) => {
     }
 });
 
+// Обработка действий с пользователем (сообщения, бан, разбан)
+app.post('/api/admin/user_action', checkAdmin, async (req, res) => {
+    try {
+        const targetId = String(req.body.userId || req.body.id || req.body.tgId || req.body.user_id);
+        const { action, msg } = req.body;
 
-    await user.save();
+        const user = await User.findOne({ id: targetId });
+        if (!user) return res.status(404).json({ error: 'Пользователь не найден' });
 
-    if(action === 'message' && bot) {
-        bot.sendMessage(targetId, `📩 Сообщение от Администрации:\n\n${msg}`).catch(()=>{});
+        if (action === 'ban') user.isBlocked = true;
+        if (action === 'unban') user.isBlocked = false;
+
+        await user.save();
+
+        if (action === 'message' && bot && msg) {
+            bot.sendMessage(targetId, `📩 Сообщение от Администрации:\n\n${msg}`).catch(() => {});
+        }
+        res.json({ success: true, user, balance: user.balance });
+    } catch (err) {
+        console.error('Ошибка в user_action:', err);
+        res.status(500).json({ error: 'Ошибка сервера' });
     }
-    res.json({ success: true, user, balance: user.balance });
 });
 
 app.post('/api/admin/broadcast', checkAdmin, (req, res) => {
@@ -876,39 +875,6 @@ app.post('/api/admin/set_rtp', checkAdmin, async (req, res) => {
     const key = `rtp_${game}`;
     await Settings.updateOne({key}, {value: Number(value)}, {upsert: true});
     res.json({success: true});
-});
-
-// ДОБАВЛЕНО: Усиленный эндпоинт баланса (понимает любые ключи и даже просто числа без action)
-app.post('/api/admin/edit_balance', checkAdmin, async (req, res) => {
-    const targetId = String(req.body.userId || req.body.id || req.body.tgId || req.body.user_id);
-    const { action, type, method } = req.body;
-    
-    // Фронт может прятать сумму под разными ключами
-    const rawAmount = req.body.amount !== undefined ? req.body.amount : (req.body.balance !== undefined ? req.body.balance : req.body.value);
-    
-    const user = await User.findOne({id: targetId});
-    if (!user) return res.status(404).json({error: 'User not found'});
-    
-    const val = Number(String(rawAmount || 0).replace(',', '.'));
-    if (isNaN(val)) return res.status(400).json({error: 'Неверная сумма'});
-
-    const act = String(action || type || method || '').toLowerCase();
-
-    // Гибкая проверка: если прислали "sub", любой его синоним или просто отрицательное число
-    if (val < 0 || act === 'sub' || act === 'minus' || act === 'take' || act === 'remove' || act === 'decrease' || act === 'subbalance') { 
-        const absVal = Math.abs(val);
-        user.balance = Number((user.balance - absVal).toFixed(2)); 
-        if(user.balance < 0) user.balance = 0; 
-        if(bot && absVal > 0) bot.sendMessage(user.id, `📉 С вашего баланса было списано **${absVal} TON** администратором.`, {parse_mode: 'Markdown'}).catch(()=>{});
-    }
-    // Иначе по умолчанию считаем, что это пополнение
-    else { 
-        user.balance = Number((user.balance + val).toFixed(2)); 
-        if(bot && val > 0) bot.sendMessage(user.id, `💰 Ваш баланс был пополнен администратором на **${val} TON**!`, {parse_mode: 'Markdown'}).catch(()=>{});
-    }
-
-    await user.save();
-    res.json({success: true, newBalance: user.balance, balance: user.balance});
 });
 
 app.post('/api/admin/withdraw_action', checkAdmin, async (req, res) => {
