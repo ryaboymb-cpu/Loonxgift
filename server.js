@@ -22,11 +22,12 @@ process.on('unhandledRejection', (reason, promise) => console.error('Необр�
 // Защита от мультикликов (глобальная блокировка активных запросов юзера)
 const actionLocks = new Set();
 
-// АНТИ-СОН ДЛЯ RENDER (Будит сервер каждые 10 минут)
-setInterval(() => {
-    const url = process.env.WEB_APP_URL || "https://loonxgift.onrender.com";
-    fetch(url).then(() => console.log('🔄 Анти-сон: Сервер пинганул сам себя')).catch(() => {});
-}, 10 * 60 * 1000);
+// Анти-сон (пинг себя, если задан WEB_APP_URL)
+if (process.env.WEB_APP_URL) {
+    setInterval(() => {
+        fetch(process.env.WEB_APP_URL).then(() => console.log('🔄 Анти-сон: Сервер пинганул сам себя')).catch(() => {});
+    }, 10 * 60 * 1000);
+}
 
 // Подключение к БД
 mongoose.connect(process.env.MONGO_URI).then(() => console.log('✅ DB Connected')).catch(err => console.log('❌ DB Error:', err));
@@ -34,7 +35,7 @@ mongoose.connect(process.env.MONGO_URI).then(() => console.log('✅ DB Connected
 // --- 1. TON CONNECT MANIFEST ---
 app.get('/tonconnect-manifest.json', (req, res) => {
     res.json({
-        url: process.env.WEB_APP_URL || "https://loonxgift.onrender.com",
+        url: process.env.WEB_APP_URL || `https://${process.env.REPLIT_DEV_DOMAIN || 'localhost'}`,
         name: "LoonxGift", 
         iconUrl: "https://cdn-icons-png.flaticon.com/512/149/149071.png"
     });
@@ -893,5 +894,5 @@ app.post('/api/user/history', async (req, res) => {
     res.json({ bets: formattedBets, betHistory: formattedBets, history: formattedBets });
 });
 
-const PORT = process.env.PORT || 5000;
+const PORT = 5000;
 server.listen(PORT, '0.0.0.0', () => console.log(`🚀 Server Running on port ${PORT}`));
