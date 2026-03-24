@@ -16,9 +16,9 @@
             100% { opacity: 1; transform: scale(1); } 
         }
         @keyframes pulseFast { 
-            0% { opacity: 1; transform: scale(1); text-shadow: 0 0 10px var(--neon); } 
-            50% { opacity: 0.8; transform: scale(1.05); text-shadow: 0 0 25px var(--neon); } 
-            100% { opacity: 1; transform: scale(1); text-shadow: 0 0 10px var(--neon); } 
+            0% { opacity: 1; transform: scale(1); } 
+            50% { opacity: 0.8; transform: scale(1.05); } 
+            100% { opacity: 1; transform: scale(1); } 
         }
     </style>
     <script>setTimeout(() => { const l = document.getElementById('loader'); if(l) l.style.display = 'none'; }, 5000);</script>
@@ -235,8 +235,8 @@
     <div id="battle-game-modal" style="position:fixed; inset:0; background:rgba(0,0,0,0.95); z-index:9001; display:none; flex-direction:column; padding:20px; overflow-y:auto; backdrop-filter:blur(10px);">
         <div style="flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; margin-bottom:20px; position:relative; margin-top:30px;">
             <div style="position:absolute; top:-20px; left:50%; transform:translateX(-50%); width:0; height:0; border-left:15px solid transparent; border-right:15px solid transparent; border-top:25px solid #fff; z-index:10;"></div>
-            <canvas id="battle-wheel" width="280" height="280" style="border-radius:50%; box-shadow:0 0 30px rgba(0,0,0,0.8); border: 4px solid #222;"></canvas>
-            <div id="battle-timer" style="margin-top:25px; font-size:24px; font-weight:900; color:var(--neon); text-shadow: 0 0 15px rgba(0,255,136,0.5); text-align:center;">ОЖИДАНИЕ ИГРОКОВ...</div>
+            <canvas id="battle-wheel"></canvas>
+            <div id="battle-timer" style="margin-top:25px; font-size:24px; font-weight:900; color:#fff; text-align:center;">ОЖИДАНИЕ ИГРОКОВ...</div>
         </div>
         
         <div id="battle-join-area" style="display:none; text-align:center; margin-bottom:15px; background:#1a1a1a; padding:15px; border-radius:12px; border:1px solid var(--neon);">
