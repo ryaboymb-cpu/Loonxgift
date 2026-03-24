@@ -925,50 +925,62 @@ async function adminViewUser(userId, page = 1) {
 
 // ЖЕЛЕЗОБЕТОННОЕ ИЗМЕНЕНИЕ БАЛАНСА В АДМИНКЕ
 async function adminChangeBal(userId, type) {
-    const valInput = $('ad-bal-val');
-    const amount = parseFloat(valInput.value);
+    const valInput = document.getElementById('ad-bal-val');
+    const amountStr = valInput.value;
+    const amount = parseFloat(amountStr);
     
-    if(isNaN(amount) || amount <= 0) return showToast('Введи нормальную сумму больше нуля');
+    if(isNaN(amount) || amount <= 0) {
+        return showToast('Введите корректную сумму больше 0');
+    }
 
-    // Блокируем кнопки на время запроса, чтобы не накликали лишнего
-    const btns = document.querySelectorAll('#admin-content .btn');
-    btns.forEach(b => b.disabled = true);
-
+    // Если ваш сервер — это простой обработчик, который только ПРИБАВЛЯЕТ, 
+    // нам нужно отправить отрицательное число для типа 'sub'.
+    // Но мы отправим и сумму, и тип, чтобы сервер точно понял намерение.
+    
     try {
-        const r = await fetch('/api/admin/change_balance', { 
-            method:'POST', 
-            headers:{'Content-Type':'application/json'}, 
-            body:JSON.stringify({
+        const response = await fetch('/api/admin/change_balance', { 
+            method: 'POST', 
+            headers: { 'Content-Type': 'application/json' }, 
+            body: JSON.stringify({
                 pass: adminPass, 
                 userId: userId, 
-                amount: amount, 
-                type: type    
+                amount: amount, // Передаем положительное число
+                type: type      // 'add' или 'sub'
             }) 
         });
 
-        if(r.ok) {
-            const result = await r.json();
-            showToast(type === 'add' ? `Успешно выдано ${amount} TON` : `Успешно списано ${amount} TON`);
-            valInput.value = '';
+        const result = await response.json();
+
+        if (response.ok) {
+            showToast(type === 'add' ? `✅ Начислено ${amount} TON` : `📉 Списано ${amount} TON`);
+            valInput.value = ''; // Чистим поле ввода
+
+            // 1. Обновляем детальную информацию (историю и баланс в карточке)
+            adminViewUser(userId, 1); 
             
-            // Если меняешь баланс самому себе — обновляем сразу и в шапке
-            if (String(userId) === String(user.id)) {
-                user.balance = result.newBalance !== undefined ? result.newBalance : user.balance;
-                updateUI();
+            // 2. ВАЖНО: Обновляем баланс в локальном кэше списка пользователей (adData.users)
+            // Это нужно, чтобы при нажатии кнопки "Назад" в списке был актуальный баланс
+            if (adData.users) {
+                const userInList = adData.users.find(u => String(u.id) === String(userId));
+                if (userInList) {
+                    userInList.balance = result.newBalance; 
+                }
             }
             
-            // Обновляем стату юзера в админке
-            adminViewUser(userId, 1); 
+            // 3. Если админ меняет баланс самому себе — обновляем и в главном UI
+            if (user && String(userId) === String(user.id)) {
+                user.balance = result.newBalance;
+                updateUI();
+            }
         } else {
-            const err = await r.json();
-            showToast(err.error || 'Ошибка сервера при изменении баланса');
+            showToast(`❌ Ошибка: ${result.error || 'Сервер отклонил запрос'}`);
         }
-    } catch(e) {
-        showToast('Сбой сети или сервер не отвечает');
-    } finally {
-        // Разблокируем кнопки обратно
-        btns.forEach(b => b.disabled = false);
+    } catch (e) {
+        console.error('Ошибка баланса:', e);
+        showToast('🆘 Сбой сети. Проверьте консоль.');
     }
+}
+
 }
 
 function renderAdminContent(tab) {
