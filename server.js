@@ -12,8 +12,7 @@ const server = http.createServer(app);
 const io = socketIo(server, { cors: { origin: "*" } });
 
 app.use(cors()); 
-app.use(express.json()); 
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.json());
 
 // Защита от падения сервера
 process.on('uncaughtException', (err) => console.error('Критическая ошибка:', err));
@@ -40,6 +39,9 @@ app.get('/tonconnect-manifest.json', (req, res) => {
         iconUrl: "https://cdn-icons-png.flaticon.com/512/149/149071.png"
     });
 });
+
+// Статические файлы (после манифеста, чтобы роут имел приоритет)
+app.use(express.static(path.join(__dirname, 'public')));
 
 // --- ВРЕМЯ МСК ---
 const getMskTime = () => new Date().toLocaleString("ru-RU", { timeZone: "Europe/Moscow", hour12: false });
@@ -92,6 +94,7 @@ const PromoSchema = new mongoose.Schema({ code: String, amount: Number, limit: N
 const WithdrawSchema = new mongoose.Schema({ userId: String, address: String, amount: Number, status: { type: String, default: 'pending' }, reason: String, time: String });
 const DepositSchema = new mongoose.Schema({ hash: { type: String, unique: true }, userId: String, amount: Number, time: String });
 const SettingsSchema = new mongoose.Schema({ key: String, value: mongoose.Schema.Types.Mixed });
+const AdminLogSchema = new mongoose.Schema({ action: String, createdAt: { type: Date, default: Date.now } });
 
 const BattleSchema = new mongoose.Schema({
     creatorId: String,
@@ -109,6 +112,11 @@ const Withdraw = mongoose.model('Withdraw', WithdrawSchema);
 const Deposit = mongoose.model('Deposit', DepositSchema);
 const Settings = mongoose.model('Settings', SettingsSchema);
 const Battle = mongoose.model('Battle', BattleSchema);
+const AdminLog = mongoose.model('AdminLog', AdminLogSchema);
+
+async function logAdmin(action) {
+    try { await AdminLog.create({ action }); } catch(e) {}
+}
 
 let globalBetHistory = [];
 
@@ -793,12 +801,42 @@ app.post('/api/admin/edit_balance', checkAdmin, async (req, res) => {
         }
 
         await user.save();
+        const logStr = isSubtraction
+            ? `Списал ${absVal} TON у пользователя ${user.username || user.id} (новый баланс: ${user.balance} TON)`
+            : `Выдал ${absVal} TON пользователю ${user.username || user.id} (новый баланс: ${user.balance} TON)`;
+        await logAdmin(logStr);
         res.json({ success: true, newBalance: user.balance, balance: user.balance });
 
     } catch (err) {
         console.error('Ошибка в edit_balance:', err);
         res.status(500).json({ error: 'Ошибка сервера' });
     }
+});
+
+// Алиас для фронтенда (вызывает ту же логику)
+app.post('/api/admin/change_balance', checkAdmin, async (req, res) => {
+    const targetId = String(req.body.userId || req.body.id || '');
+    if (!targetId) return res.status(400).json({ error: 'ID не передан' });
+    const searchConditions = [{ id: targetId }];
+    if (mongoose.isValidObjectId(targetId)) searchConditions.push({ _id: targetId });
+    let user = await User.findOne({ $or: searchConditions });
+    if (!user) return res.status(404).json({ error: 'Пользователь не найден' });
+    const rawAmount = req.body.amount !== undefined ? req.body.amount : 0;
+    const absVal = Math.abs(Number(String(rawAmount).replace(',', '.')));
+    if (isNaN(absVal) || absVal <= 0) return res.status(400).json({ error: 'Неверная сумма' });
+    const type = String(req.body.type || '').toLowerCase();
+    const isSub = type === 'sub' || type === 'minus' || type === 'remove';
+    if (isSub) {
+        user.balance = Number(Math.max(0, user.balance - absVal).toFixed(2));
+        if (bot) bot.sendMessage(user.id, `📉 С вашего баланса было списано **${absVal} TON** администратором.`, {parse_mode: 'Markdown'}).catch(() => {});
+        await logAdmin(`Списал ${absVal} TON у пользователя ${user.username || user.id} (новый баланс: ${user.balance} TON)`);
+    } else {
+        user.balance = Number((user.balance + absVal).toFixed(2));
+        if (bot) bot.sendMessage(user.id, `💰 Ваш баланс был пополнен администратором на **${absVal} TON**!`, {parse_mode: 'Markdown'}).catch(() => {});
+        await logAdmin(`Выдал ${absVal} TON пользователю ${user.username || user.id} (новый баланс: ${user.balance} TON)`);
+    }
+    await user.save();
+    res.json({ success: true, newBalance: user.balance, balance: user.balance });
 });
 
 app.post('/api/admin/broadcast', checkAdmin, (req, res) => {
@@ -875,11 +913,56 @@ app.post('/api/admin/withdraw_action', checkAdmin, async (req, res) => {
         await u.save();
     }
     
-    if(action === 'reject') { w.status = 'rejected'; w.reason = reason; } 
-    else { w.status = 'approved'; }
+    if(action === 'reject') { 
+        w.status = 'rejected'; w.reason = reason;
+        await logAdmin(`Отклонил вывод ${w.amount} TON (ID юзера: ${w.userId}) — причина: ${reason}`);
+    } else { 
+        w.status = 'approved';
+        await logAdmin(`Одобрил вывод ${w.amount} TON (ID юзера: ${w.userId}) на адрес ${w.address}`);
+    }
     await w.save();
     
     res.json({success: true});
+});
+
+app.post('/api/admin/user_action', checkAdmin, async (req, res) => {
+    const { userId, action } = req.body;
+    if (!userId || !action) return res.status(400).json({ error: 'Не указаны параметры' });
+    const user = await User.findOne({ id: String(userId) });
+    if (!user) return res.status(404).json({ error: 'Пользователь не найден' });
+    if (action === 'ban') {
+        user.isBlocked = true;
+        await logAdmin(`Забанил пользователя ${user.username || user.id}`);
+        if (bot) bot.sendMessage(user.id, '🚫 Ваш аккаунт заблокирован администратором.').catch(() => {});
+    } else if (action === 'unban') {
+        user.isBlocked = false;
+        await logAdmin(`Разбанил пользователя ${user.username || user.id}`);
+        if (bot) bot.sendMessage(user.id, '✅ Ваш аккаунт разблокирован.').catch(() => {});
+    } else {
+        return res.status(400).json({ error: 'Неизвестное действие' });
+    }
+    await user.save();
+    res.json({ success: true });
+});
+
+app.post('/api/admin/logs', checkAdmin, async (req, res) => {
+    try {
+        const page = Math.max(1, parseInt(req.body.page) || 1);
+        const limit = Math.min(50, parseInt(req.body.limit) || 30);
+        const dateQuery = req.body.date || '';
+        const filter = dateQuery ? { action: { $regex: dateQuery, $options: 'i' } } : {};
+        const total = await AdminLog.countDocuments(filter);
+        const totalPages = Math.max(1, Math.ceil(total / limit));
+        const logs = await AdminLog.find(filter).sort({ createdAt: -1 }).skip((page - 1) * limit).limit(limit);
+        const formatted = logs.map(l => {
+            const d = new Date(l.createdAt).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' });
+            const parts = d.split(', ');
+            return { date: parts[0] || '', time: parts[1] || '', adminUser: 'Админ', action: l.action };
+        });
+        res.json({ logs: formatted, totalPages, total });
+    } catch(e) {
+        res.status(500).json({ error: 'Ошибка сервера' });
+    }
 });
 
 app.post('/api/user/history', async (req, res) => {
