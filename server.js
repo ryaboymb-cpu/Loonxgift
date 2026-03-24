@@ -893,4 +893,5 @@ app.post('/api/user/history', async (req, res) => {
     res.json({ bets: formattedBets, betHistory: formattedBets, history: formattedBets });
 });
 
-server.listen(process.env.PORT || 3000, () => console.log('🚀 Server Running on port 3000'));
+const PORT = process.env.PORT || 5000;
+server.listen(PORT, '0.0.0.0', () => console.log(`🚀 Server Running on port ${PORT}`));
