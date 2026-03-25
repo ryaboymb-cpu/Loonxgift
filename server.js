@@ -131,11 +131,17 @@ async function initSettings() {
         { key: 'maintenance_mines', value: false },
         { key: 'maintenance_coinflip', value: false },
         { key: 'maintenance_battle', value: false },
-        { key: 'rtp_spin', value: 94 }
+        { key: 'rtp_spin', value: 40 }
     ];
     for (let setting of defaultSettings) {
         const exists = await Settings.findOne({ key: setting.key });
         if (!exists) await Settings.create(setting);
+    }
+    
+    // Принудительное снижение RTP spin если стоит старое значение 94
+    const oldSpinRtp = await Settings.findOne({key: 'rtp_spin'});
+    if (oldSpinRtp && oldSpinRtp.value >= 94) {
+        await Settings.updateOne({key: 'rtp_spin'}, {$set: {value: 40}});
     }
     
     const lastBets = await Bet.find().sort({createdAt: -1}).limit(10);
@@ -676,10 +682,17 @@ app.post('/api/spin', async (req, res) => {
         const maxWin = betAmount * 40;
         if (actualWin > maxWin) actualWin = maxWin;
 
-        // RTP control: if RTP too high, dampen wins; if too low, boost
-        const rtpRoll = Math.random() * 100;
-        if (rtpRoll > rtpTarget && actualWin > 0 && !freeSpinsMode) {
-            actualWin = 0; // suppress win to lower RTP toward target
+        // RTP control: строгий контроль частоты выигрышей
+        // rtpTarget (например 94) / 100 * 0.22 = ~20% шанс выигрыша при 94 RTP
+        // При низком RTP (например 30) — шанс ~6%
+        if (!freeSpinsMode && actualWin > 0) {
+            const winChance = (rtpTarget / 100) * 0.22;
+            if (Math.random() > winChance) {
+                actualWin = 0;
+            } else {
+                // Урезаем размер выигрыша: максимум 3x от ставки за обычный спин
+                actualWin = Math.min(actualWin, betAmount * 3);
+            }
         }
 
         let progressGain = gCount * 20 + hiddenGs.length * 10;
