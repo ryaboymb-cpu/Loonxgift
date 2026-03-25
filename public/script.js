@@ -1454,11 +1454,10 @@ async function playSpin() {
             showToast(`🎁 БОНУС! +${data.bonusSpins || 1} фриспин! Множитель ×${spinFreeSpinsMult}!`, 4000);
         }
 
-        // Free spins won from scatter G
-        if (data.freeSpinsWon > 0) {
-            const wasInFreespins = isFreeSpins;
-            spinFreeSpins += data.freeSpinsWon;
-            if (!wasInFreespins) spinFreeSpinsMult = 1;
+        // Free spins won from scatter G (max 8, нет ре-триггера во фриспинах)
+        if (data.freeSpinsWon > 0 && !isFreeSpins) {
+            spinFreeSpins = Math.min(8, spinFreeSpins + data.freeSpinsWon);
+            spinFreeSpinsMult = 1;
             // Показываем оверлей активации по центру
             showFreeSpinActivation(spinFreeSpins);
         }

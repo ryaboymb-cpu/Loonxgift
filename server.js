@@ -575,21 +575,27 @@ app.post('/api/battle/cancel', async (req, res) => {
 // === SPIN GAME ===
 const spinUserStreaks = {};
 
+// 9 чистых пейлайнов: ряды + V-образные + ступеньки (только прямые и плавные линии)
 const SPIN_PAYLINES = [
-    [1,1,1,1,1],[0,0,0,0,0],[2,2,2,2,2],
-    [0,1,2,1,0],[2,1,0,1,2],[0,0,1,2,2],
-    [2,2,1,0,0],[1,0,1,0,1],[0,1,0,1,0],
-    [1,2,1,2,1],[2,1,2,1,2],[0,1,1,1,2],
-    [2,1,1,1,0],[1,1,0,1,1],[1,1,2,1,1]
+    [0,0,0,0,0],  // верхний ряд
+    [1,1,1,1,1],  // средний ряд
+    [2,2,2,2,2],  // нижний ряд
+    [0,1,2,1,0],  // V-вниз
+    [2,1,0,1,2],  // V-вверх
+    [0,0,1,2,2],  // ступенька вниз
+    [2,2,1,0,0],  // ступенька вверх
+    [0,1,1,1,2],  // прогиб вниз
+    [2,1,1,1,0],  // прогиб вверх
 ];
 
 const SPIN_PAYTABLE = { 'L': { 3: 0.5, 4: 1, 5: 2 }, 'X': { 3: 2, 4: 5, 5: 10 } };
 
 function generateSpinGrid(userId) {
     const streak = spinUserStreaks[userId] || { losses: 0, wins: 0, progress: 0 };
-    let freqG = 0.07, freqX = 0.28;
-    if (streak.losses >= 4) { freqX = Math.min(0.38, freqX + streak.losses * 0.02); freqG = Math.min(0.10, freqG + 0.01); }
-    else if (streak.wins >= 4) { freqX = Math.max(0.18, freqX - streak.wins * 0.02); freqG = Math.max(0.04, freqG - 0.01); }
+    // G очень редкий символ: 2.5% базово. При проигрышной серии чуть выше, при выигрышной — ниже
+    let freqG = 0.025, freqX = 0.28;
+    if (streak.losses >= 4) { freqX = Math.min(0.36, freqX + streak.losses * 0.015); freqG = Math.min(0.04, freqG + 0.005); }
+    else if (streak.wins >= 4) { freqX = Math.max(0.18, freqX - streak.wins * 0.02); freqG = Math.max(0.015, freqG - 0.005); }
     const grid = [];
     for (let r = 0; r < 3; r++) {
         const row = [];
@@ -629,7 +635,8 @@ function countSymbols(grid, sym) {
 
 function applyHiddenG(grid) {
     const rand = Math.random();
-    let hiddenCount = rand < 0.05 ? 2 : rand < 0.21 ? 1 : 0;
+    // Скрытая G очень редко: 4% — одна штука, двух больше нет
+    let hiddenCount = rand < 0.04 ? 1 : 0;
     const positions = [];
     if (hiddenCount > 0) {
         const nonG = [];
@@ -674,11 +681,13 @@ app.post('/api/spin', async (req, res) => {
         const gCount = countSymbols(grid, 'G'); // после hidden G, для прогресс-бара
         const xCount = winLines.filter(wl => wl.symbol === 'X').length; // только X на выигрышных линиях
 
-        // Фриспины только от настоящих G (без hidden), уменьшенное кол-во
+        // Фриспины только от настоящих G (без hidden), ре-триггер во фриспинах запрещён
         let freeSpinsWon = 0;
-        if (gCountBase === 3) freeSpinsWon = 3;
-        else if (gCountBase === 4) freeSpinsWon = 5;
-        else if (gCountBase >= 5) freeSpinsWon = 7;
+        if (!freeSpinsMode) {
+            if (gCountBase === 3) freeSpinsWon = 3;
+            else if (gCountBase === 4) freeSpinsWon = 5;
+            else if (gCountBase >= 5) freeSpinsWon = 8;
+        }
 
         const freeMult = freeSpinsMode ? (parseFloat(currentMultiplier) || 1) : 1;
         let actualWin = Number((totalWin * freeMult).toFixed(2));
@@ -727,7 +736,7 @@ app.post('/api/spin', async (req, res) => {
             pushToGlobalHistory(betEntry);
         }
 
-        res.json({ grid, win: actualWin, winLines, freeSpinsWon, hiddenGs, progressGain, progressValue: streak.progress, bonusTriggered, bonusSpins, xCountInGrid: xCount, gForExtraSpins: freeSpinsMode ? gCount : 0, user });
+        res.json({ grid, win: actualWin, winLines, freeSpinsWon, hiddenGs, progressGain, progressValue: streak.progress, bonusTriggered, bonusSpins, xCountInGrid: xCount, gForExtraSpins: 0, user });
     } catch (err) {
         console.error('Spin error:', err);
         res.status(500).json({ error: 'Ошибка сервера' });
