@@ -101,7 +101,8 @@ const BattleSchema = new mongoose.Schema({
     players: Array, 
     status: { type: String, default: 'waiting' },
     winnerId: String,
-    timerStartedAt: Date, 
+    timerStartedAt: Date,
+    timerEndTime: Date,
     createdAt: { type: Date, default: Date.now }
 });
 
@@ -129,7 +130,8 @@ async function initSettings() {
         { key: 'maintenance_crash', value: false },
         { key: 'maintenance_mines', value: false },
         { key: 'maintenance_coinflip', value: false },
-        { key: 'maintenance_battle', value: false }
+        { key: 'maintenance_battle', value: false },
+        { key: 'rtp_spin', value: 94 }
     ];
     for (let setting of defaultSettings) {
         const exists = await Settings.findOne({ key: setting.key });
@@ -534,6 +536,7 @@ app.post('/api/battle/join', async (req, res) => {
         
         if (lobby.players.length >= 2) {
             lobby.timerStartedAt = new Date();
+            lobby.timerEndTime = new Date(Date.now() + 2 * 60 * 1000);
         }
         
         await lobby.save();
@@ -561,6 +564,160 @@ app.post('/api/battle/cancel', async (req, res) => {
     await Battle.findByIdAndDelete(lobbyId);
     io.emit('battleUpdate');
     res.json(user);
+});
+
+// === SPIN GAME ===
+const spinUserStreaks = {};
+
+const SPIN_PAYLINES = [
+    [1,1,1,1,1],[0,0,0,0,0],[2,2,2,2,2],
+    [0,1,2,1,0],[2,1,0,1,2],[0,0,1,2,2],
+    [2,2,1,0,0],[1,0,1,0,1],[0,1,0,1,0],
+    [1,2,1,2,1],[2,1,2,1,2],[0,1,1,1,2],
+    [2,1,1,1,0],[1,1,0,1,1],[1,1,2,1,1]
+];
+
+const SPIN_PAYTABLE = { 'L': { 3: 0.5, 4: 1, 5: 2 }, 'X': { 3: 2, 4: 5, 5: 10 } };
+
+function generateSpinGrid(userId) {
+    const streak = spinUserStreaks[userId] || { losses: 0, wins: 0, progress: 0 };
+    let freqG = 0.07, freqX = 0.28;
+    if (streak.losses >= 4) { freqX = Math.min(0.38, freqX + streak.losses * 0.02); freqG = Math.min(0.10, freqG + 0.01); }
+    else if (streak.wins >= 4) { freqX = Math.max(0.18, freqX - streak.wins * 0.02); freqG = Math.max(0.04, freqG - 0.01); }
+    const grid = [];
+    for (let r = 0; r < 3; r++) {
+        const row = [];
+        for (let c = 0; c < 5; c++) {
+            const rand = Math.random();
+            if (rand < freqG) row.push('G');
+            else if (rand < freqG + freqX) row.push('X');
+            else row.push('L');
+        }
+        grid.push(row);
+    }
+    return grid;
+}
+
+function checkSpinWins(grid, bet) {
+    let totalWin = 0; const winLines = [];
+    for (let li = 0; li < SPIN_PAYLINES.length; li++) {
+        const line = SPIN_PAYLINES[li];
+        const first = grid[line[0]][0];
+        if (first === 'G') continue;
+        let count = 1;
+        for (let i = 1; i < 5; i++) { if (grid[line[i]][i] === first) count++; else break; }
+        if (count >= 3 && SPIN_PAYTABLE[first] && SPIN_PAYTABLE[first][count]) {
+            const mult = SPIN_PAYTABLE[first][count];
+            totalWin += bet * mult;
+            winLines.push({ lineIndex: li, symbol: first, count, multiplier: mult });
+        }
+    }
+    return { totalWin, winLines };
+}
+
+function countSymbols(grid, sym) {
+    let n = 0;
+    for (let row of grid) for (let s of row) if (s === sym) n++;
+    return n;
+}
+
+function applyHiddenG(grid) {
+    const rand = Math.random();
+    let hiddenCount = rand < 0.05 ? 2 : rand < 0.21 ? 1 : 0;
+    const positions = [];
+    if (hiddenCount > 0) {
+        const nonG = [];
+        for (let r = 0; r < 3; r++) for (let c = 0; c < 5; c++) if (grid[r][c] !== 'G') nonG.push([r, c]);
+        for (let i = nonG.length - 1; i > 0; i--) { const j = Math.floor(Math.random()*(i+1)); [nonG[i],nonG[j]]=[nonG[j],nonG[i]]; }
+        for (let i = 0; i < Math.min(hiddenCount, nonG.length); i++) {
+            const [r, c] = nonG[i]; grid[r][c] = 'G'; positions.push({ row: r, col: c });
+        }
+    }
+    return positions;
+}
+
+app.post('/api/spin', async (req, res) => {
+    const { id, bet, mode, freeSpinsMode, currentMultiplier } = req.body;
+    if (actionLocks.has(id)) return res.status(429).json({ error: 'Подождите...' });
+    actionLocks.add(id);
+    try {
+        const user = await User.findOne({ id });
+        if (!user || user.isBlocked) return res.status(403).send();
+        const isDemo = mode === 'demo';
+        const field = isDemo ? 'demo_balance' : 'balance';
+        const betAmount = parseFloat(bet) || 0;
+        if (betAmount <= 0) return res.status(400).json({ error: 'Неверная ставка' });
+        if (!freeSpinsMode && user[field] < betAmount) return res.status(400).json({ error: 'Недостаточно средств' });
+
+        const rtpSetting = await Settings.findOne({ key: 'rtp_spin' });
+        const rtpTarget = rtpSetting ? Number(rtpSetting.value) : 94;
+
+        if (!spinUserStreaks[id]) spinUserStreaks[id] = { losses: 0, wins: 0, progress: 0 };
+        const streak = spinUserStreaks[id];
+
+        if (!freeSpinsMode) {
+            user[field] = Number((user[field] - betAmount).toFixed(2));
+            if (!isDemo) { user.stats.bets++; user.stats.minus += betAmount; }
+        }
+
+        const grid = generateSpinGrid(id);
+        const hiddenGs = applyHiddenG(grid);
+        const { totalWin, winLines } = checkSpinWins(grid, betAmount);
+        const gCount = countSymbols(grid, 'G');
+        const xCount = countSymbols(grid, 'X');
+
+        let freeSpinsWon = 0;
+        if (gCount === 3) freeSpinsWon = 5;
+        else if (gCount === 4) freeSpinsWon = 6;
+        else if (gCount >= 5) freeSpinsWon = 8;
+
+        const freeMult = freeSpinsMode ? (parseFloat(currentMultiplier) || 1) : 1;
+        let actualWin = Number((totalWin * freeMult).toFixed(2));
+        const maxWin = betAmount * 40;
+        if (actualWin > maxWin) actualWin = maxWin;
+
+        // RTP control: if RTP too high, dampen wins; if too low, boost
+        const rtpRoll = Math.random() * 100;
+        if (rtpRoll > rtpTarget && actualWin > 0 && !freeSpinsMode) {
+            actualWin = 0; // suppress win to lower RTP toward target
+        }
+
+        let progressGain = gCount * 20 + hiddenGs.length * 10;
+        streak.progress = (streak.progress || 0) + progressGain;
+        let bonusTriggered = false;
+        let bonusSpins = 0;
+        if (streak.progress >= 100) { streak.progress -= 100; bonusTriggered = true; bonusSpins = 1; }
+
+        if (actualWin > 0) { streak.wins = Math.min(8, (streak.wins||0)+1); streak.losses = 0; }
+        else { streak.losses = Math.min(8, (streak.losses||0)+1); streak.wins = 0; }
+
+        if (actualWin > 0) {
+            user[field] = Number((user[field] + actualWin).toFixed(2));
+            if (!isDemo) { user.stats.wins++; user.stats.plus += actualWin; }
+        }
+
+        await user.save();
+
+        if (!isDemo && (!freeSpinsMode || actualWin > 0)) {
+            const betEntry = new Bet({
+                userId: user.id, username: user.username,
+                avatar: user.photo || 'https://cdn-icons-png.flaticon.com/512/149/149071.png',
+                game: 'Spin', amount: freeSpinsMode ? 0 : betAmount,
+                multiplier: betAmount > 0 ? (actualWin / betAmount) : 1,
+                result: freeSpinsMode ? actualWin : (actualWin - betAmount),
+                mode: 'Real', balanceAfter: user[field], balance: user[field]
+            });
+            await betEntry.save();
+            pushToGlobalHistory(betEntry);
+        }
+
+        res.json({ grid, win: actualWin, winLines, freeSpinsWon, hiddenGs, progressGain, progressValue: streak.progress, bonusTriggered, bonusSpins, xCountInGrid: xCount, gForExtraSpins: freeSpinsMode ? gCount : 0, user });
+    } catch (err) {
+        console.error('Spin error:', err);
+        res.status(500).json({ error: 'Ошибка сервера' });
+    } finally {
+        actionLocks.delete(id);
+    }
 });
 
 app.post('/api/check_deposit', async (req, res) => {

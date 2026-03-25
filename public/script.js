@@ -9,14 +9,14 @@ let user = null;
 let mode = 'real';
 let adminPass = '';
 let globalRtp = 90;
-let rtpObj = { crash: 90, mines: 90, coinflip: 90 };
-let maintenance = { crash: false, mines: false, coinflip: false, battle: false };
+let rtpObj = { crash: 90, mines: 90, coinflip: 90, spin: 94 };
+let maintenance = { crash: false, mines: false, coinflip: false, battle: false, spin: false };
 let adminWalletAddress = '';
 let isShowDemo = false;
 
 // TON CONNECT
 const tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
-    manifestUrl: 'https://loonxgift.onrender.com/tonconnect-manifest.json', 
+    manifestUrl: window.location.origin + '/tonconnect-manifest.json',
     buttonRootId: 'ton-connect-btn'
 });
 
@@ -84,12 +84,17 @@ function getMskTime() {
 
 function renderQuickBets() {
     const vals = [0.1, 0.5, 1, 5, 10, 25];
+    const map = { cr: 'crash', mi: 'mines', co: 'coinflip' };
     ['cr', 'mi', 'co'].forEach(prefix => {
-        const el = $(`qb-${prefix === 'cr' ? 'crash' : prefix === 'mi' ? 'mines' : 'coinflip'}`);
+        const el = $(`qb-${map[prefix]}`);
         if(el) {
-            el.innerHTML = vals.map(v => `<button type="button" onclick="setQuickBet('${prefix}-bet', ${v})" style="padding: 6px 12px; background: #222; border: 1px solid var(--neon); color: var(--neon); border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 11px;">${v}</button>`).join('');
+            el.innerHTML = vals.map(v => `<button type="button" onclick="setQuickBet('${prefix}-bet', ${v})" style="padding:6px 12px; background:#222; border:1px solid var(--neon); color:var(--neon); border-radius:6px; font-weight:bold; cursor:pointer; font-size:11px;">${v}</button>`).join('');
         }
     });
+    const spinQb = $('qb-spin');
+    if(spinQb) {
+        spinQb.innerHTML = vals.map(v => `<button type="button" onclick="setQuickBet('sp-bet', ${v})" style="padding:6px 12px; background:#222; border:1px solid #ff6b00; color:#ff6b00; border-radius:6px; font-weight:bold; cursor:pointer; font-size:11px;">${v}</button>`).join('');
+    }
 }
 
 window.onload = async () => {
@@ -107,8 +112,8 @@ window.onload = async () => {
     }
 
     user = data.user;
-    rtpObj = data.rtp || { crash: 90, mines: 90, coinflip: 90 };
-    maintenance = data.maintenance || { crash: false, mines: false, coinflip: false, battle: false };
+    rtpObj = data.rtp || { crash: 90, mines: 90, coinflip: 90, spin: 94 };
+    maintenance = data.maintenance || { crash: false, mines: false, coinflip: false, battle: false, spin: false };
     isShowDemo = data.config ? data.config.showDemo : false;
     
     adminWalletAddress = data.adminWallet || '';
@@ -197,6 +202,7 @@ function navGame(game) {
     if (maintenance[mKey]) return showToast('Временно тех. перерыв'); 
     nav(game); 
     if(game === 'battle') renderBattleLobbies();
+    if(game === 'spin') initSpinPage();
 }
 
 function setQuickBet(inputId, amount) { if($(inputId)) $(inputId).value = amount; }
@@ -1033,12 +1039,14 @@ function renderAdminContent(tab) {
             <div><b>Crash RTP (%):</b> <input type="number" id="rtp-crash" value="${adData.rtp.crash||90}" class="input-box" style="padding:5px; width:70px; display:inline-block;"> <button class="btn" style="padding:5px; width:auto; display:inline-block;" onclick="adminRTP('crash')">OK</button></div>
             <div><b>Mines RTP (%):</b> <input type="number" id="rtp-mines" value="${adData.rtp.mines||90}" class="input-box" style="padding:5px; width:70px; display:inline-block;"> <button class="btn" style="padding:5px; width:auto; display:inline-block;" onclick="adminRTP('mines')">OK</button></div>
             <div><b>Coinflip RTP (%):</b> <input type="number" id="rtp-coinflip" value="${adData.rtp.coinflip||90}" class="input-box" style="padding:5px; width:70px; display:inline-block;"> <button class="btn" style="padding:5px; width:auto; display:inline-block;" onclick="adminRTP('coinflip')">OK</button></div>
+            <div><b>🎰 Spin RTP (%):</b> <input type="number" id="rtp-spin" value="${adData.rtp.spin||94}" class="input-box" style="padding:5px; width:70px; display:inline-block;"> <button class="btn" style="padding:5px; width:auto; display:inline-block; background:linear-gradient(90deg,#ff6b00,#ff0055);" onclick="adminRTP('spin')">OK</button></div>
             <hr>
             <h4 style="color:var(--neon); margin-bottom:10px;">ОТКЛЮЧЕНИЕ ИГР (ТЕХ. РАБОТЫ)</h4>
             <label><input type="checkbox" ${adData.maintenance.crash ? 'checked' : ''} onchange="adminMaint('crash', this.checked)"> Crash</label><br>
             <label><input type="checkbox" ${adData.maintenance.mines ? 'checked' : ''} onchange="adminMaint('mines', this.checked)"> Mines</label><br>
             <label><input type="checkbox" ${adData.maintenance.coinflip ? 'checked' : ''} onchange="adminMaint('coinflip', this.checked)"> Coinflip</label><br>
             <label><input type="checkbox" ${adData.maintenance.battle ? 'checked' : ''} onchange="adminMaint('battle', this.checked)"> Battle Roulette</label><br>
+            <label><input type="checkbox" ${adData.maintenance.spin ? 'checked' : ''} onchange="adminMaint('spin', this.checked)"> 🎰 Spin</label><br>
             <hr>
             <h4 style="color:var(--neon); margin-bottom:10px;">ОТОБРАЖЕНИЕ В ИСТОРИИ</h4>
             <label><input type="checkbox" ${isShowDemo ? 'checked' : ''} onchange="adminDemoToggle(this.checked)"> Показывать Demo ставки</label><br>
@@ -1185,4 +1193,272 @@ async function adminMaint(game, state) {
 async function adminDemoToggle(state) {
     await fetch('/api/admin/config', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({pass: adminPass, showDemo: state}) }); 
     showToast('Отображение демо обновлено!'); isShowDemo = state;
+}
+
+// ===================== SPIN GAME =====================
+let spinBet = 0.5;
+let spinFreeSpins = 0;
+let spinFreeSpinsMult = 1;
+let spinProgressValue = 0;
+let spinIsSpinning = false;
+let spinAnimInterval = null;
+
+const SPIN_SYMS_ANIM = ['L','L','X','L','G','L','X','L','L'];
+
+const SPIN_PAYLINES_FE = [
+    [1,1,1,1,1],[0,0,0,0,0],[2,2,2,2,2],
+    [0,1,2,1,0],[2,1,0,1,2],[0,0,1,2,2],
+    [2,2,1,0,0],[1,0,1,0,1],[0,1,0,1,0],
+    [1,2,1,2,1],[2,1,2,1,2],[0,1,1,1,2],
+    [2,1,1,1,0],[1,1,0,1,1],[1,1,2,1,1]
+];
+
+function initSpinPage() {
+    if (!$('spin-grid')) return;
+    buildSpinGrid();
+    updateSpinProgress(spinProgressValue);
+    updateSpinUI();
+    // Pre-fill idle grid with nice pattern
+    const symbols = ['L','L','X','L','G','X','L','L','X','L','L','X','L','X','L'];
+    for (let r = 0; r < 3; r++) {
+        for (let c = 0; c < 5; c++) {
+            const cell = $(`sc-${r}-${c}`);
+            if (cell) {
+                const sym = symbols[r * 5 + c];
+                cell.className = `spin-cell sym-${sym}`;
+                cell.innerText = sym === 'G' ? '🎁' : sym;
+            }
+        }
+    }
+}
+
+function buildSpinGrid() {
+    const grid = $('spin-grid');
+    if (!grid) return;
+    grid.innerHTML = '';
+    for (let r = 0; r < 3; r++) {
+        for (let c = 0; c < 5; c++) {
+            const cell = document.createElement('div');
+            cell.className = 'spin-cell sym-L';
+            cell.id = `sc-${r}-${c}`;
+            cell.innerText = 'L';
+            grid.appendChild(cell);
+        }
+    }
+}
+
+function updateSpinProgress(val) {
+    spinProgressValue = Math.max(0, Math.min(100, val));
+    const fill = $('spin-progress-fill');
+    if (fill) fill.style.width = spinProgressValue + '%';
+    const label = $('spin-progress-label');
+    if (label) label.innerText = `БОНУС ПРОГРЕСС: ${Math.round(spinProgressValue)}%`;
+}
+
+function updateSpinUI() {
+    const btn = $('sp-btn');
+    const badge = $('spin-free-badge');
+    const betInput = $('sp-bet');
+    if (!btn) return;
+    if (spinFreeSpins > 0) {
+        btn.innerText = `🎰 ФРИСПИН ×${spinFreeSpinsMult} (${spinFreeSpins} ост.)`;
+        btn.style.background = 'linear-gradient(90deg,#ff0055,#ff6b00)';
+        btn.style.boxShadow = '0 0 20px rgba(255,0,85,0.4)';
+        if (badge) { badge.style.display = 'block'; badge.innerText = `🎰 ФРИСПИНЫ: ${spinFreeSpins} ост. | Множитель: ×${spinFreeSpinsMult}`; }
+        if (betInput) betInput.disabled = true;
+    } else {
+        btn.innerText = 'КРУТИТЬ 🎰';
+        btn.style.background = '';
+        btn.style.boxShadow = '';
+        if (badge) badge.style.display = 'none';
+        if (betInput) betInput.disabled = false;
+        spinFreeSpinsMult = 1;
+    }
+}
+
+function startSpinAnim() {
+    let frame = 0;
+    for (let r = 0; r < 3; r++) {
+        for (let c = 0; c < 5; c++) {
+            const cell = $(`sc-${r}-${c}`);
+            if (cell) { cell.className = 'spin-cell spinning'; cell.style.borderColor = '#333'; cell.style.boxShadow = ''; }
+        }
+    }
+    spinAnimInterval = setInterval(() => {
+        for (let r = 0; r < 3; r++) {
+            for (let c = 0; c < 5; c++) {
+                const cell = $(`sc-${r}-${c}`);
+                if (cell) {
+                    const sym = SPIN_SYMS_ANIM[(frame + r + c * 3) % SPIN_SYMS_ANIM.length];
+                    cell.innerText = sym === 'G' ? '🎁' : sym;
+                }
+            }
+        }
+        frame++;
+    }, 100);
+}
+
+async function stopSpinAnim(grid, hiddenGs) {
+    return new Promise(resolve => {
+        setTimeout(() => {
+            clearInterval(spinAnimInterval);
+            spinAnimInterval = null;
+
+            // Reveal result
+            for (let r = 0; r < 3; r++) {
+                for (let c = 0; c < 5; c++) {
+                    const cell = $(`sc-${r}-${c}`);
+                    const sym = grid[r][c];
+                    if (cell) {
+                        cell.className = `spin-cell sym-${sym}`;
+                        cell.style.borderColor = '';
+                        cell.style.boxShadow = '';
+                        cell.innerText = sym === 'G' ? '🎁' : sym;
+                    }
+                }
+            }
+
+            // Animate G symbols (gift reveal)
+            for (let r = 0; r < 3; r++) {
+                for (let c = 0; c < 5; c++) {
+                    if (grid[r][c] === 'G') {
+                        const cell = $(`sc-${r}-${c}`);
+                        if (cell) { cell.classList.add('gift-reveal'); setTimeout(() => cell.classList.remove('gift-reveal'), 600); }
+                    }
+                }
+            }
+
+            // Animate hidden G with glitch after 400ms
+            if (hiddenGs && hiddenGs.length > 0) {
+                setTimeout(() => {
+                    hiddenGs.forEach(({ row, col }) => {
+                        const cell = $(`sc-${row}-${col}`);
+                        if (cell) {
+                            cell.classList.add('hidden-g-anim');
+                            cell.innerText = '🎁';
+                            setTimeout(() => cell.classList.remove('hidden-g-anim'), 700);
+                        }
+                    });
+                }, 350);
+            }
+
+            resolve();
+        }, 1500);
+    });
+}
+
+function highlightSpinWins(winLines, grid) {
+    if (!winLines || !winLines.length) return;
+    winLines.forEach(wl => {
+        const line = SPIN_PAYLINES_FE[wl.lineIndex];
+        if (!line) return;
+        for (let col = 0; col < wl.count; col++) {
+            const row = line[col];
+            const cell = $(`sc-${row}-${col}`);
+            if (cell) {
+                cell.classList.add('win-cell');
+                // X impact animation
+                if (wl.symbol === 'X') {
+                    cell.classList.add('x-impact');
+                    setTimeout(() => cell.classList.remove('x-impact'), 450);
+                }
+                setTimeout(() => cell.classList.remove('win-cell'), 2000);
+            }
+        }
+    });
+}
+
+async function playSpin() {
+    if (spinIsSpinning) return;
+    const isFreeSpins = spinFreeSpins > 0;
+
+    if (!isFreeSpins) {
+        const betVal = parseFloat($('sp-bet') ? $('sp-bet').value : 0);
+        if (isNaN(betVal) || betVal <= 0) return showToast('Введите ставку');
+        const bal = mode === 'demo' ? user.demo_balance : user.balance;
+        if (betVal > bal) return showToast('Недостаточно средств');
+        spinBet = betVal;
+    }
+
+    spinIsSpinning = true;
+    const btn = $('sp-btn');
+    if (btn) { btn.disabled = true; }
+
+    const winDisp = $('spin-win-display');
+    if (winDisp) winDisp.style.display = 'none';
+
+    if (isFreeSpins) spinFreeSpins--;
+
+    startSpinAnim();
+
+    try {
+        const r = await fetch('/api/spin', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                id: user.id, bet: spinBet, mode,
+                freeSpinsMode: isFreeSpins,
+                currentMultiplier: spinFreeSpinsMult
+            })
+        });
+
+        const data = await r.json();
+        if (!r.ok) {
+            clearInterval(spinAnimInterval);
+            for (let ri = 0; ri < 3; ri++) for (let ci = 0; ci < 5; ci++) { const c = $(`sc-${ri}-${ci}`); if(c) { c.className='spin-cell sym-L'; c.innerText='L'; } }
+            showToast(data.error || 'Ошибка');
+            return;
+        }
+
+        user = data.user;
+
+        await stopSpinAnim(data.grid, data.hiddenGs);
+
+        // Show win
+        if (data.win > 0) {
+            if (winDisp) { winDisp.innerText = `+${data.win.toFixed(2)} TON`; winDisp.style.display = 'block'; }
+            highlightSpinWins(data.winLines, data.grid);
+            flyToBalance(data.win);
+            showToast(`💰 +${data.win.toFixed(2)} TON!`);
+        }
+
+        // Progress bar
+        updateSpinProgress(data.progressValue);
+
+        // Bonus triggered
+        if (data.bonusTriggered) {
+            const bonusMult = Math.min(7, spinFreeSpinsMult * 2);
+            spinFreeSpins += data.bonusSpins || 1;
+            spinFreeSpinsMult = bonusMult;
+            showToast(`🎁 БОНУС! +${data.bonusSpins || 1} фриспин! Множитель ×${spinFreeSpinsMult}!`, 4000);
+        }
+
+        // Free spins won from scatter G
+        if (data.freeSpinsWon > 0) {
+            spinFreeSpins += data.freeSpinsWon;
+            if (!isFreeSpins) spinFreeSpinsMult = 1;
+            showToast(`🎰 ${data.freeSpinsWon} ФРИСПИНОВ!`, 4000);
+        }
+
+        // In free spins mode: X = +1 mult, G = +1 spin
+        if (isFreeSpins) {
+            const newMult = Math.min(7, spinFreeSpinsMult + (data.xCountInGrid || 0));
+            if (data.xCountInGrid > 0) showToast(`⚡ +${data.xCountInGrid} к множителю! ×${newMult}`, 2500);
+            spinFreeSpinsMult = newMult;
+            if (data.gForExtraSpins > 0) { spinFreeSpins += data.gForExtraSpins; showToast(`🎁 +${data.gForExtraSpins} фриспин!`, 2000); }
+        }
+
+        updateSpinUI();
+        updateUI();
+
+    } catch(e) {
+        clearInterval(spinAnimInterval);
+        showToast('Ошибка соединения');
+    } finally {
+        spinIsSpinning = false;
+        if (btn) {
+            btn.disabled = false;
+            updateSpinUI();
+        }
+    }
 }

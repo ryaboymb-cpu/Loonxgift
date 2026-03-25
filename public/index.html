@@ -65,6 +65,11 @@
                 <div><h3 style="margin-bottom:5px;">Battle Roulette</h3><p style="color:var(--sub); font-size:12px; font-weight:600;">Сразись за TON</p></div>
             </div>
 
+            <div class="game-card" onclick="navGame('spin')" style="border-color: #ff6b00;">
+                <div class="g-icon sp">🎰</div>
+                <div><h3 style="margin-bottom:5px;">Spin</h3><p style="color:var(--sub); font-size:12px; font-weight:600;">Слот 5×3 с фриспинами</p></div>
+            </div>
+
             <h3 style="margin:20px 0 10px 0; color:var(--sub); font-size:14px; text-transform:uppercase;">Лайв Ставки</h3>
             <div class="live-bets-container" id="feed-list"></div>
         </div>
@@ -187,6 +192,34 @@
             <div class="quick-bets" id="qb-coinflip" style="display:flex; justify-content:center; gap:5px; flex-wrap:wrap; margin-bottom:10px;"></div>
             <input type="number" id="co-bet" class="input-box" placeholder="Сумма ставки (TON)">
             <button id="co-btn" class="btn" onclick="playCoin()">КРУТИТЬ</button>
+        </div>
+
+        <div id="page-spin" class="page">
+            <div class="spin-screen card">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                    <span id="spin-progress-label" style="font-size:11px; color:var(--neon); font-weight:bold; letter-spacing:1px;">БОНУС ПРОГРЕСС: 0%</span>
+                    <span style="font-size:10px; color:var(--sub); font-weight:bold;">MAX ×40</span>
+                </div>
+                <div class="spin-progress-bar"><div class="spin-progress-fill" id="spin-progress-fill" style="width:0%"></div></div>
+
+                <div id="spin-free-badge" class="spin-free-badge" style="display:none;">🎰 ФРИСПИНЫ</div>
+
+                <div id="spin-win-display" class="spin-win-display" style="display:none;"></div>
+
+                <div class="spin-reels-wrap">
+                    <div class="spin-grid" id="spin-grid"></div>
+                    <div id="spin-lines-svg" style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;"></div>
+                </div>
+
+                <div class="spin-paytable">
+                    <span class="spin-pay-item"><span style="color:var(--neon);">L</span> 3=×0.5 4=×1 5=×2</span>
+                    <span class="spin-pay-item"><span style="color:#ffcc00;">X</span> 3=×2 4=×5 5=×10</span>
+                    <span class="spin-pay-item"><span style="color:#ff0055;">G</span> 3=5FS 4=6FS 5=8FS</span>
+                </div>
+            </div>
+            <div class="quick-bets" id="qb-spin"></div>
+            <input type="number" id="sp-bet" class="input-box" placeholder="Сумма ставки (TON)" step="0.1" min="0.1">
+            <button id="sp-btn" class="btn sp-btn-style" onclick="playSpin()">КРУТИТЬ 🎰</button>
         </div>
 
         <div id="page-battle" class="page">
