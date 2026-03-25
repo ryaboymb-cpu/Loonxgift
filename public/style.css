@@ -148,3 +148,5 @@ header { padding: 15px; display: flex; justify-content: space-between; align-ite
 .spin-pay-item { font-size: 10px; color: var(--sub); font-weight: bold; text-align: center; }
 .sp-btn-style { background: linear-gradient(90deg, #ff6b00, #ff0055); box-shadow: 0 0 20px rgba(255,107,0,0.3); color: #fff; }
 .sp-btn-style:disabled { background: #555 !important; box-shadow: none !important; color: #888 !important; }
+@keyframes fsPopIn { 0% { transform: scale(0.3); opacity: 0; } 70% { transform: scale(1.1); } 100% { transform: scale(1); opacity: 1; } }
+@keyframes fsCountUp { 0% { transform: scale(0.5); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }

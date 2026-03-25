@@ -1259,21 +1259,42 @@ function updateSpinUI() {
     const btn = $('sp-btn');
     const badge = $('spin-free-badge');
     const betInput = $('sp-bet');
+    const betLock = $('sp-bet-lock');
     if (!btn) return;
     if (spinFreeSpins > 0) {
         btn.innerText = `🎰 ФРИСПИН ×${spinFreeSpinsMult} (${spinFreeSpins} ост.)`;
         btn.style.background = 'linear-gradient(90deg,#ff0055,#ff6b00)';
         btn.style.boxShadow = '0 0 20px rgba(255,0,85,0.4)';
-        if (badge) { badge.style.display = 'block'; badge.innerText = `🎰 ФРИСПИНЫ: ${spinFreeSpins} ост. | Множитель: ×${spinFreeSpinsMult}`; }
-        if (betInput) betInput.disabled = true;
+        if (badge) { badge.style.display = 'block'; badge.innerText = `🎰 ${spinFreeSpins} ост. | Множитель: ×${spinFreeSpinsMult}`; }
+        if (betInput) { betInput.disabled = true; betInput.style.opacity = '0.4'; }
+        if (betLock) betLock.style.display = 'block';
     } else {
         btn.innerText = 'КРУТИТЬ 🎰';
         btn.style.background = '';
         btn.style.boxShadow = '';
         if (badge) badge.style.display = 'none';
-        if (betInput) betInput.disabled = false;
+        if (betInput) { betInput.disabled = false; betInput.style.opacity = '1'; }
+        if (betLock) betLock.style.display = 'none';
         spinFreeSpinsMult = 1;
     }
+}
+
+function showFreeSpinActivation(count) {
+    const overlay = $('freespin-overlay');
+    const countEl = $('freespin-overlay-count');
+    if (!overlay) return;
+    if (countEl) countEl.innerText = count;
+    overlay.style.display = 'flex';
+    // Закрыть через 2.5 секунды
+    setTimeout(() => {
+        overlay.style.opacity = '0';
+        overlay.style.transition = 'opacity 0.4s';
+        setTimeout(() => {
+            overlay.style.display = 'none';
+            overlay.style.opacity = '1';
+            overlay.style.transition = '';
+        }, 400);
+    }, 2100);
 }
 
 function startSpinAnim() {
@@ -1435,15 +1456,18 @@ async function playSpin() {
 
         // Free spins won from scatter G
         if (data.freeSpinsWon > 0) {
+            const wasInFreespins = isFreeSpins;
             spinFreeSpins += data.freeSpinsWon;
-            if (!isFreeSpins) spinFreeSpinsMult = 1;
-            showToast(`🎰 ${data.freeSpinsWon} ФРИСПИНОВ!`, 4000);
+            if (!wasInFreespins) spinFreeSpinsMult = 1;
+            // Показываем оверлей активации по центру
+            showFreeSpinActivation(spinFreeSpins);
         }
 
-        // In free spins mode: X = +1 mult, G = +1 spin
+        // В режиме фриспинов: X на выигрышной линии = +1 к множителю (максимум +1 за спин)
         if (isFreeSpins) {
-            const newMult = Math.min(7, spinFreeSpinsMult + (data.xCountInGrid || 0));
-            if (data.xCountInGrid > 0) showToast(`⚡ +${data.xCountInGrid} к множителю! ×${newMult}`, 2500);
+            const xBonus = data.xCountInGrid > 0 ? 1 : 0; // +1 только если есть X на линии, не на каждый X
+            const newMult = Math.min(7, spinFreeSpinsMult + xBonus);
+            if (xBonus > 0 && newMult > spinFreeSpinsMult) showToast(`⚡ Множитель ×${newMult}!`, 2000);
             spinFreeSpinsMult = newMult;
             if (data.gForExtraSpins > 0) { spinFreeSpins += data.gForExtraSpins; showToast(`🎁 +${data.gForExtraSpins} фриспин!`, 2000); }
         }

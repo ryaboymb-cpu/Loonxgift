@@ -667,15 +667,18 @@ app.post('/api/spin', async (req, res) => {
         }
 
         const grid = generateSpinGrid(id);
+        // Считаем G ДО hidden G — только настоящие скаттеры триггерят фриспины
+        const gCountBase = countSymbols(grid, 'G');
         const hiddenGs = applyHiddenG(grid);
         const { totalWin, winLines } = checkSpinWins(grid, betAmount);
-        const gCount = countSymbols(grid, 'G');
-        const xCount = countSymbols(grid, 'X');
+        const gCount = countSymbols(grid, 'G'); // после hidden G, для прогресс-бара
+        const xCount = winLines.filter(wl => wl.symbol === 'X').length; // только X на выигрышных линиях
 
+        // Фриспины только от настоящих G (без hidden), уменьшенное кол-во
         let freeSpinsWon = 0;
-        if (gCount === 3) freeSpinsWon = 5;
-        else if (gCount === 4) freeSpinsWon = 6;
-        else if (gCount >= 5) freeSpinsWon = 8;
+        if (gCountBase === 3) freeSpinsWon = 3;
+        else if (gCountBase === 4) freeSpinsWon = 5;
+        else if (gCountBase >= 5) freeSpinsWon = 7;
 
         const freeMult = freeSpinsMode ? (parseFloat(currentMultiplier) || 1) : 1;
         let actualWin = Number((totalWin * freeMult).toFixed(2));
