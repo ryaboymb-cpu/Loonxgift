@@ -180,8 +180,8 @@ header { padding: 15px; display: flex; justify-content: space-between; align-ite
 @keyframes xImpact { 0% { transform: scale(1.5); filter: brightness(3); } 50% { transform: scale(0.9); } 100% { transform: scale(1); filter: none; } }
 .spin-paytable { display: flex; justify-content: space-around; margin-top: 10px; padding-top: 10px; border-top: 1px solid #1a1a1a; }
 .spin-pay-item { font-size: 10px; color: var(--sub); font-weight: bold; text-align: center; }
-.sp-btn-style { background: linear-gradient(90deg, #ff6b00, #ff0055); box-shadow: 0 0 20px rgba(255,107,0,0.3); color: #fff; }
-.sp-btn-style:disabled { background: #555 !important; box-shadow: none !important; color: #888 !important; }
+.sp-btn-style { background: linear-gradient(135deg, rgba(0,255,136,0.92), rgba(0,200,100,0.88)); box-shadow: 0 0 20px rgba(0,255,136,0.3); color: #000; font-weight: 800; }
+.sp-btn-style:disabled { background: #333 !important; box-shadow: none !important; color: #666 !important; }
 @keyframes fsPopIn { 0% { transform: scale(0.3); opacity: 0; } 70% { transform: scale(1.1); } 100% { transform: scale(1); opacity: 1; } }
 @keyframes fsCountUp { 0% { transform: scale(0.5); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
 
@@ -268,15 +268,15 @@ header { padding: 15px; display: flex; justify-content: space-between; align-ite
   overflow: visible;
 }
 
-/* ─── ШАХТА 5×3 ─── */
+/* ─── ШАХТА 5×5 ─── */
 .mc-shaft {
   flex-shrink: 0;
   width: 100%;
-  aspect-ratio: 5 / 3;
+  aspect-ratio: 1;
   height: auto;
   display: grid;
   grid-template-columns: repeat(5, 1fr);
-  grid-template-rows: repeat(3, 1fr);
+  grid-template-rows: repeat(5, 1fr);
   gap: 2px;
   background: #080402;
   border: 3px solid;
@@ -349,13 +349,13 @@ header { padding: 15px; display: flex; justify-content: space-between; align-ite
 }
 /* Анимации */
 .mc-blk.reveal-drop { animation: mcDrop 0.32s cubic-bezier(0.22,1,0.36,1); }
-.mc-blk.crack-hit   { animation: mcCrackHit 0.15s ease-out; }
+.mc-blk.crack-hit   { animation: mcCrackHit 0.18s ease-out; }
 .mc-blk.win-pulse   { animation: mcWinPulse 0.55s ease-in-out infinite alternate; }
-.mc-blk.breaking    { animation: mcBreak 0.22s ease-out forwards; pointer-events:none; }
+.mc-blk.breaking    { animation: mcBreak 0.28s ease-out forwards; pointer-events:none; }
 @keyframes mcDrop     { 0%{transform:translateY(-20px)scale(0.6);opacity:0} 65%{transform:translateY(3px)scale(1.05)} 100%{transform:none;opacity:1} }
-@keyframes mcCrackHit { 0%{transform:scale(1)} 35%{transform:scale(0.9)rotate(-1deg);filter:brightness(2.5)} 70%{transform:scale(1.03)} 100%{transform:scale(1)} }
+@keyframes mcCrackHit { 0%{transform:translate(0,0)scale(1)} 15%{transform:translate(-2px,1px)scale(0.92)rotate(-2deg);filter:brightness(2.2)} 35%{transform:translate(3px,-1px)scale(0.88)rotate(1.5deg);filter:brightness(3)} 55%{transform:translate(-1px,2px)scale(0.95)rotate(-0.5deg)} 75%{transform:translate(1px,0)scale(1.02)} 100%{transform:translate(0,0)scale(1)} }
 @keyframes mcWinPulse { 0%{filter:brightness(1)saturate(1)} 100%{filter:brightness(1.9)saturate(1.8)} }
-@keyframes mcBreak    { 0%{transform:scale(1);opacity:1} 25%{transform:scale(1.15);filter:brightness(4)} 60%{transform:scale(0.7)rotate(6deg);opacity:0.6} 100%{transform:scale(0.1)rotate(18deg);opacity:0} }
+@keyframes mcBreak    { 0%{transform:scale(1);opacity:1} 15%{transform:scale(1.2)rotate(-2deg);filter:brightness(4)} 35%{transform:scale(1.05)rotate(3deg);filter:brightness(2)} 60%{transform:scale(0.6)rotate(8deg);opacity:0.5} 100%{transform:scale(0.1)rotate(20deg);opacity:0} }
 
 /* Всплывающий попап мультипликатора сундука */
 .mine-chest-mult-popup {
@@ -679,22 +679,23 @@ header { padding: 15px; display: flex; justify-content: space-between; align-ite
 .mine-bet-row { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
 .mine-card .quick-bets { margin: 0 !important; }
 .mine-btn {
-  background: linear-gradient(180deg, #a05818 0%, #6a3810 100%);
-  box-shadow: 0 2px 8px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,200,100,0.3);
-  color: #ffe0a0;
+  background: linear-gradient(180deg, #00cc55 0%, #008833 100%);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.5), inset 0 1px 0 rgba(150,255,150,0.3);
+  color: #fff;
   font-weight: 900;
   letter-spacing: 1px;
   border: 2px solid;
-  border-color: #c8881a #3a1a04 #3a1a04 #c8881a;
-  height: 36px;
-  padding: 0 10px;
+  border-color: #00ee66 #005522 #005522 #00ee66;
+  height: 40px;
+  padding: 0 14px;
   white-space: nowrap;
-  font-size: 13px;
-  border-radius: 4px;
+  font-size: 14px;
+  border-radius: 6px;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.4);
 }
 .mine-btn:active { transform: translateY(1px); box-shadow: 0 1px 4px rgba(0,0,0,0.5); }
-#page-mine .input-box { height: 36px; padding: 0 10px; font-size: 13px; margin: 0; }
-.mine-btn:disabled { background: #1e1008 !important; border-color: #333 !important; box-shadow: none !important; color: #555 !important; }
+#page-mine .input-box { height: 40px; padding: 0 10px; font-size: 13px; margin: 0; }
+.mine-btn:disabled { background: #1a2a1a !important; border-color: #333 !important; box-shadow: none !important; color: #555 !important; }
 
 /* Pickaxe color filters */
 .px-wooden  { filter: sepia(1) saturate(2.5) hue-rotate(15deg) brightness(1.1); }

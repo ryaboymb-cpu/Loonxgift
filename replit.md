@@ -1,5 +1,5 @@
 # LoonxGift
-<!-- Last updated: Mine game overhaul v3 - blocks visible, random pickaxe types, no grid shift -->
+<!-- Last updated: Mine 5x5 grid, sound system, green buttons, bet limits -->
 
 A Telegram Mini App (TMA) backend and frontend for a gambling platform integrated with the TON blockchain.
 
@@ -76,19 +76,36 @@ Server runs on port 5000, binding to `0.0.0.0`.
 
 ## Mine Game Details
 
-- Grid: 5 columns × 3 rows = 15 blocks, Minecraft pixel-art aesthetic
+- Grid: 5 columns × 5 rows = 25 blocks, Minecraft pixel-art aesthetic
 - Block types: stone, redstone, gold, diamond, obsidian, book, tnt
+- Block durability by rarity: stone:2, redstone:3, gold:4, diamond:5, obsidian:6 hits
 - Blocks always visible from start with ore textures (never hidden)
-- N pickaxes (1-9), each randomly assigned a type: wooden, stone, iron, golden, diamond
+- N pickaxes (1-5), each randomly assigned a type: wooden, stone, iron, golden, diamond
 - Durability per pickaxe: wooden:3, stone:5, iron:7, golden:4, diamond:10
+- Column-order mining: each pickaxe mines its assigned columns top-to-bottom
 - Pickaxe breaks visually (shake, redden, shatter) when durability runs out
 - Broken blocks stay in DOM (visibility:hidden) to prevent grid shift
-- Per-column chests open only when all 3 rows in that column are broken
+- Per-column chests open only when all 5 rows in that column are broken
 - Chest multiplier applied to column wins
+- Inventory: 3×5 grid (separate from shaft grid)
 - Books and TNT go to inventory cells (not direct win)
 - Win scaled proportionally to blocks actually broken by pickaxes
 - Minimum 8% guaranteed win per round (server-side)
 - Block hit modifiers: wooden +1 extra hit, golden/diamond -1 hit
+- Cracking animations: 3 stages with chaotic shaking, 3D box-shadow effect
+
+## Sound System
+
+- Web Audio API synthesized sounds (no external audio files)
+- Sound effects: hit (square wave), break (noise burst), chest (ascending sine), win (arpeggio), click (short ping), spin (triangle sweep)
+- Ambient background music: slow bass notes with harmonic overtones, auto-starts on first user interaction
+- All sounds use gain envelopes for natural decay
+
+## UI Polish
+
+- All play/spin buttons use green gradient styling (rgba(0,255,136))
+- Bet limits enforced: 0.1-25 TON (client-side + server-side validation)
+- Mine button: "⛏ Крутить" with green Minecraft-style border
 
 ## Admin Panel
 

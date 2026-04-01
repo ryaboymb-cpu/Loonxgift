@@ -7,6 +7,143 @@ const tg = window.Telegram.WebApp;
 const socket = io();
 let user = null; 
 let mode = 'real';
+
+// ═══ SOUND SYSTEM (Web Audio API) ═══
+let _audioCtx = null;
+let _bgMusicGain = null;
+let _bgMusicPlaying = false;
+let _soundEnabled = true;
+
+function getAudioCtx() {
+    if (!_audioCtx) _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (_audioCtx.state === 'suspended') _audioCtx.resume();
+    return _audioCtx;
+}
+
+function playSound(name) {
+    if (!_soundEnabled) return;
+    try {
+        const ctx = getAudioCtx();
+        const now = ctx.currentTime;
+        const g = ctx.createGain();
+        g.connect(ctx.destination);
+        if (name === 'hit') {
+            g.gain.setValueAtTime(0.15, now);
+            g.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
+            const o = ctx.createOscillator();
+            o.type = 'square';
+            o.frequency.setValueAtTime(800 + Math.random() * 400, now);
+            o.frequency.exponentialRampToValueAtTime(200, now + 0.06);
+            o.connect(g); o.start(now); o.stop(now + 0.08);
+            const n = ctx.createBufferSource();
+            const nb = ctx.createBuffer(1, ctx.sampleRate * 0.04, ctx.sampleRate);
+            const nd = nb.getChannelData(0);
+            for (let i = 0; i < nd.length; i++) nd[i] = (Math.random() * 2 - 1) * 0.3;
+            n.buffer = nb;
+            const ng = ctx.createGain();
+            ng.gain.setValueAtTime(0.08, now);
+            ng.gain.exponentialRampToValueAtTime(0.001, now + 0.04);
+            n.connect(ng); ng.connect(ctx.destination);
+            n.start(now); n.stop(now + 0.04);
+        } else if (name === 'break') {
+            g.gain.setValueAtTime(0.2, now);
+            g.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
+            const n = ctx.createBufferSource();
+            const nb = ctx.createBuffer(1, ctx.sampleRate * 0.18, ctx.sampleRate);
+            const nd = nb.getChannelData(0);
+            for (let i = 0; i < nd.length; i++) nd[i] = (Math.random() * 2 - 1) * (1 - i / nd.length);
+            n.buffer = nb; n.connect(g); n.start(now); n.stop(now + 0.2);
+        } else if (name === 'chest') {
+            g.gain.setValueAtTime(0.12, now);
+            g.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
+            const o = ctx.createOscillator();
+            o.type = 'sine';
+            o.frequency.setValueAtTime(600, now);
+            o.frequency.linearRampToValueAtTime(1200, now + 0.15);
+            o.frequency.linearRampToValueAtTime(1600, now + 0.3);
+            o.connect(g); o.start(now); o.stop(now + 0.4);
+        } else if (name === 'win') {
+            g.gain.setValueAtTime(0.1, now);
+            g.gain.linearRampToValueAtTime(0.15, now + 0.2);
+            g.gain.exponentialRampToValueAtTime(0.001, now + 0.6);
+            const o = ctx.createOscillator();
+            o.type = 'sine';
+            const notes = [523, 659, 784, 1047];
+            notes.forEach((f, i) => {
+                o.frequency.setValueAtTime(f, now + i * 0.12);
+            });
+            o.connect(g); o.start(now); o.stop(now + 0.6);
+        } else if (name === 'click') {
+            g.gain.setValueAtTime(0.08, now);
+            g.gain.exponentialRampToValueAtTime(0.001, now + 0.04);
+            const o = ctx.createOscillator();
+            o.type = 'sine';
+            o.frequency.setValueAtTime(1200, now);
+            o.connect(g); o.start(now); o.stop(now + 0.04);
+        } else if (name === 'spin') {
+            g.gain.setValueAtTime(0.06, now);
+            g.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
+            const o = ctx.createOscillator();
+            o.type = 'triangle';
+            o.frequency.setValueAtTime(400, now);
+            o.frequency.linearRampToValueAtTime(800, now + 0.1);
+            o.connect(g); o.start(now); o.stop(now + 0.15);
+        }
+    } catch(e) {}
+}
+
+function startBgMusic() {
+    if (_bgMusicPlaying) return;
+    try {
+        const ctx = getAudioCtx();
+        _bgMusicGain = ctx.createGain();
+        _bgMusicGain.gain.value = 0.03;
+        _bgMusicGain.connect(ctx.destination);
+        const bassNotes = [65.41, 73.42, 82.41, 87.31, 73.42, 65.41];
+        let noteIdx = 0;
+        function playNote() {
+            if (!_bgMusicPlaying) return;
+            const now = ctx.currentTime;
+            const o1 = ctx.createOscillator();
+            o1.type = 'sine';
+            o1.frequency.value = bassNotes[noteIdx % bassNotes.length];
+            const g1 = ctx.createGain();
+            g1.gain.setValueAtTime(0.04, now);
+            g1.gain.exponentialRampToValueAtTime(0.001, now + 3.5);
+            o1.connect(g1); g1.connect(_bgMusicGain);
+            o1.start(now); o1.stop(now + 3.8);
+            const o2 = ctx.createOscillator();
+            o2.type = 'sine';
+            o2.frequency.value = bassNotes[noteIdx % bassNotes.length] * 3;
+            const g2 = ctx.createGain();
+            g2.gain.setValueAtTime(0.015, now);
+            g2.gain.exponentialRampToValueAtTime(0.001, now + 2.5);
+            o2.connect(g2); g2.connect(_bgMusicGain);
+            o2.start(now); o2.stop(now + 2.8);
+            const pad = ctx.createOscillator();
+            pad.type = 'sine';
+            pad.frequency.value = bassNotes[noteIdx % bassNotes.length] * 6;
+            const pg = ctx.createGain();
+            pg.gain.setValueAtTime(0.008, now);
+            pg.gain.linearRampToValueAtTime(0.012, now + 1.5);
+            pg.gain.exponentialRampToValueAtTime(0.001, now + 3.5);
+            pad.connect(pg); pg.connect(_bgMusicGain);
+            pad.start(now); pad.stop(now + 3.8);
+            noteIdx++;
+            setTimeout(playNote, 3200);
+        }
+        _bgMusicPlaying = true;
+        playNote();
+    } catch(e) {}
+}
+
+function stopBgMusic() {
+    _bgMusicPlaying = false;
+    if (_bgMusicGain) { _bgMusicGain.gain.value = 0; _bgMusicGain = null; }
+}
+
+document.addEventListener('click', () => { if (!_bgMusicPlaying) startBgMusic(); }, { once: true });
+document.addEventListener('touchstart', () => { if (!_bgMusicPlaying) startBgMusic(); }, { once: true });
 let adminPass = '';
 let globalRtp = 90;
 let rtpObj = { crash: 90, mines: 90, coinflip: 90, spin: 94, mine: 40 };
@@ -396,6 +533,7 @@ async function playCrash() {
         if(isNaN(crBet) || crBet < 0.1 || crBet > 25) return showToast('Мин 0.1, Макс 25 TON');
         if(crBet > curBal) return showToast('Недостаточно средств!');
         
+        playSound('click');
         isCrashBetting = true; btn.disabled = true;
         crMode = mode;
         const r = await fetch('/api/bet', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id:user.id, game:'Crash', bet:crBet, win:0, mode: crMode}) });
@@ -497,6 +635,7 @@ async function playCoin() {
     if(isNaN(bet) || bet < 0.1 || bet > 25) return showToast('Мин 0.1, Макс 25 TON');
     if(bet > curBal) return showToast('Недостаточно средств!');
 
+    playSound('click');
     isFlipping = true; $('co-btn').innerText = 'КРУТИМ...'; $('co-btn').disabled = true;
     let coMode = mode; 
     
@@ -511,6 +650,7 @@ async function playCoin() {
     
     setTimeout(async () => {
         const win = result === cSide ? bet*2 : 0;
+        if (win > 0) playSound('win');
         showToast(win > 0 ? `Победа! +${win.toFixed(2)}` : `Проигрыш: ${result}`); 
         await reqBet('Coinflip', bet, win, coMode);
         if(win > 0) flyToBalance(win); 
@@ -1304,8 +1444,10 @@ const MINE_BLOCK_CLASS = {
     diamond:'diamond-blk', obsidian:'obsidian-blk',
     tnt:'tnt-blk', book:'book-blk', unknown:'unknown-blk'
 };
-const MC_ROWS = 3;
+const MC_ROWS = 5;
 const MC_COLS = 5;
+const INV_ROWS = 3;
+const INV_COLS = 5;
 let mineIsSpinning    = false;
 let mineBookCount     = 0;
 let mineAutoRemaining = 0;
@@ -1319,42 +1461,36 @@ let mineRunningTotal  = 0;
 // Голова вверху-слева, рукоять уходит по диагонали вправо-вниз
 function drawPickaxeCanvas(type) {
     const c = document.createElement('canvas');
-    c.width = 64; c.height = 64;
+    c.width = 128; c.height = 128;
     const ctx = c.getContext('2d');
     ctx.imageSmoothingEnabled = false;
     const cols = {
-        wooden:  { L:'#e8d080', H:'#c8ad64', D:'#8a6e30', W:'#b07830', V:'#7a5018' },
-        stone:   { L:'#d0d0d0', H:'#9c9c9c', D:'#606060', W:'#b07830', V:'#7a5018' },
-        iron:    { L:'#ffffff', H:'#d8dce0', D:'#8898a0', W:'#b07830', V:'#7a5018' },
-        golden:  { L:'#fff070', H:'#ffd800', D:'#b09000', W:'#b07830', V:'#7a5018' },
-        diamond: { L:'#a0f8ff', H:'#44d4f0', D:'#10a0b8', W:'#b07830', V:'#7a5018' },
+        wooden:  { L:'#e8d080', H:'#c8a050', D:'#8a6828', DK:'#5a3a10', W:'#b07830', WD:'#7a4e18', WK:'#4a2e10' },
+        stone:   { L:'#d8d8d8', H:'#9c9c9c', D:'#6a6a6a', DK:'#3a3a3a', W:'#b07830', WD:'#7a4e18', WK:'#4a2e10' },
+        iron:    { L:'#ffffff', H:'#d8dce8', D:'#90a0b0', DK:'#607080', W:'#b07830', WD:'#7a4e18', WK:'#4a2e10' },
+        golden:  { L:'#fff870', H:'#ffd800', D:'#c09800', DK:'#806000', W:'#b07830', WD:'#7a4e18', WK:'#4a2e10' },
+        diamond: { L:'#b0ffff', H:'#5ae8f8', D:'#20b0d0', DK:'#007898', W:'#b07830', WD:'#7a4e18', WK:'#4a2e10' },
     };
-    const { L, H, D, W, V } = cols[type] || cols.wooden;
-    const S = 4;
+    const { L, H, D, DK, W, WD, WK } = cols[type] || cols.wooden;
+    const S = 8;
     const px = (x, y, col) => { ctx.fillStyle = col; ctx.fillRect(x*S, y*S, S, S); };
-    // Minecraft pickaxe: 2 prongs at top, horizontal bar, diagonal handle to bottom-right
-    // Row 0-1: left prong
     px(1,0,L); px(2,0,H);
     px(1,1,H); px(2,1,D);
-    // Row 0-1: right prong
     px(5,0,L); px(6,0,H);
     px(5,1,H); px(6,1,D);
-    // Row 2: horizontal connecting bar
-    px(1,2,L); px(2,2,H); px(3,2,H); px(4,2,H); px(5,2,H); px(6,2,D);
-    // Row 3: bar shadow
-    px(2,3,D); px(3,3,D); px(4,3,D); px(5,3,D);
-    // Row 3-4: neck to handle
-    px(4,3,H); px(4,4,D);
-    // Handle (diagonal right-down, 2px wide)
-    px(5,4,W); px(5,5,V);
-    px(6,5,W); px(6,6,V);
-    px(7,6,W); px(7,7,V);
-    px(8,7,W); px(8,8,V);
-    px(9,8,W); px(9,9,V);
-    px(10,9,W); px(10,10,V);
-    px(11,10,W); px(11,11,V);
-    px(12,11,W); px(12,12,V);
-    px(13,12,W);
+    px(9,0,L); px(10,0,H);
+    px(9,1,H); px(10,1,D);
+    px(1,2,L); px(2,2,H); px(3,2,H); px(4,2,H); px(5,2,H); px(6,2,H); px(7,2,H); px(8,2,H); px(9,2,H); px(10,2,D);
+    px(2,3,D); px(3,3,DK); px(4,3,D); px(5,3,DK); px(6,3,D); px(7,3,DK); px(8,3,D); px(9,3,DK);
+    px(6,3,H); px(6,4,D);
+    px(7,4,W); px(7,5,WD);
+    px(8,5,W); px(8,6,WD);
+    px(9,6,W); px(9,7,WD);
+    px(10,7,W); px(10,8,WD);
+    px(11,8,W); px(11,9,WD);
+    px(12,9,W); px(12,10,WD);
+    px(13,10,W); px(13,11,WD);
+    px(14,11,W); px(14,12,WK);
     return c.toDataURL('image/png');
 }
 
@@ -1415,19 +1551,17 @@ function generateWorkerTypes(count) {
 }
 
 function initMineInventory(pickaxeCount, pickaxeType) {
-    if (pickaxeCount) mineLastPickaxeCount = Math.max(1, Math.min(9, pickaxeCount));
+    if (pickaxeCount) mineLastPickaxeCount = Math.max(1, Math.min(5, pickaxeCount));
     if (pickaxeType)  mineLastPickaxeType  = pickaxeType;
 
     mineWorkerTypes = generateWorkerTypes(mineLastPickaxeCount);
-    const totalDur = mineWorkerTypes.reduce((s, t) => s + (PICKAXE_DURABILITY[t] || 3), 0);
-    initDurabilityBar(null, null, totalDur);
 
     const inv = $('mc-inventory');
     if (!inv) return;
     inv.innerHTML = '';
     const cells = [];
-    for (let r = 0; r < MC_ROWS; r++) {
-        for (let c = 0; c < MC_COLS; c++) {
+    for (let r = 0; r < INV_ROWS; r++) {
+        for (let c = 0; c < INV_COLS; c++) {
             const cell = document.createElement('div');
             cell.className = 'inv-cell';
             cell.id = `inv-${r}-${c}`;
@@ -1459,11 +1593,12 @@ function initMineShaft(keepPersist, idlePreview) {
     const shaft = $('mc-shaft');
     if (!shaft) return;
     shaft.innerHTML = '';
-    // Блоки для idle-превью (чаще всего камень, реже руды, ценные снизу)
     const IDLE_BY_ROW = [
-        ['stone','stone','stone','stone','redstone','redstone'],
-        ['stone','stone','redstone','redstone','gold','gold'],
-        ['redstone','gold','gold','diamond','diamond','obsidian'],
+        ['stone','stone','stone','stone','stone','redstone'],
+        ['stone','stone','stone','redstone','redstone','redstone'],
+        ['stone','redstone','redstone','gold','gold','gold'],
+        ['redstone','gold','gold','gold','diamond','diamond'],
+        ['gold','diamond','diamond','diamond','obsidian','obsidian'],
     ];
     for (let r = 0; r < MC_ROWS; r++) {
         for (let c = 0; c < MC_COLS; c++) {
@@ -1495,7 +1630,6 @@ function initMineShaft(keepPersist, idlePreview) {
     const wd = $('mine-win-display');
     if (wd) { wd.innerText = ''; wd.style.color = ''; wd.classList.remove('show'); }
     mineRunningTotal = 0;
-    hideDurabilityBar();
 }
 
 // Плавная анимация числа (считает от start до end)
@@ -1635,8 +1769,7 @@ function spawnPickaxeWorker(blockQueue, pickaxeType, workerIdx, onWorkerDone, on
             if (el.parentNode) el.parentNode.removeChild(el);
         }
 
-        // Падение до позиции прямо над блоком
-        _animProp(el, 'top', startY, hover, 120, t => t*t, () => {
+        _animProp(el, 'top', startY, hover, 200, t => t*t, () => {
             if (!mineIsActive) { removeEl(); return; }
             blkEl.classList.add('cracking-1');
             doHits(hitsCanDo, 0);
@@ -1644,37 +1777,39 @@ function spawnPickaxeWorker(blockQueue, pickaxeType, workerIdx, onWorkerDone, on
 
         function doHits(hitsLeft, hitNum) {
             if (!mineIsActive) { removeEl(); return; }
-            _animProp(el, 'top', hover, hitY, 110, t => t*t, () => {
+            _animProp(el, 'top', hover, hitY, 160, t => t*t, () => {
                 if (!mineIsActive) { removeEl(); return; }
+                playSound('hit');
                 blkEl.classList.add('crack-hit');
-                setTimeout(() => blkEl.classList.remove('crack-hit'), 60);
-                consumeDurability(1);
+                setTimeout(() => blkEl.classList.remove('crack-hit'), 80);
 
                 blkEl.classList.remove('cracking-1','cracking-2','cracking-3');
-                if (hitsLeft <= 1 && blockWillBreak) blkEl.classList.add('cracking-3');
-                else if (hitNum === 0)               blkEl.classList.add('cracking-1');
-                else                                 blkEl.classList.add('cracking-2');
+                const progress = (hitNum + 1) / blk.hits;
+                if (progress >= 0.9 && blockWillBreak) blkEl.classList.add('cracking-3');
+                else if (progress >= 0.5)              blkEl.classList.add('cracking-2');
+                else                                    blkEl.classList.add('cracking-1');
 
                 if (hitsLeft <= 1) {
                     if (blockWillBreak) {
+                        playSound('break');
                         doBreakBlock(blkEl, blk, null, () => {
                             if (onBlockBroken) onBlockBroken(blk.r, blk.c);
                         });
-                        _animProp(el, 'top', hitY, startY - 30, 170, t => 1-(1-t)*(1-t), () => {
+                        _animProp(el, 'top', hitY, startY - 20, 220, t => 1-(1-t)*(1-t), () => {
                             removeEl();
-                            setTimeout(processNext, 75);
+                            setTimeout(processNext, 120);
                         });
                     } else {
                         blkEl.classList.add('cracking-2');
-                        _animProp(el, 'top', hitY, hover, 75, t => 1-(1-t)*(1-t), () => {
+                        _animProp(el, 'top', hitY, hover, 100, t => 1-(1-t)*(1-t), () => {
                             if (!mineIsActive) { removeEl(); return; }
                             doPickaxeBreak(null, () => { removeEl(); if (onWorkerDone) onWorkerDone(); }, true, el, bx, hover);
                         });
                     }
                 } else {
-                    _animProp(el, 'top', hitY, hover, 75, t => 1-(1-t)*(1-t), () => {
+                    _animProp(el, 'top', hitY, hover, 120, t => 1-(1-t)*(1-t), () => {
                         if (!mineIsActive) { removeEl(); return; }
-                        setTimeout(() => doHits(hitsLeft - 1, hitNum + 1), 20);
+                        setTimeout(() => doHits(hitsLeft - 1, hitNum + 1), 60);
                     });
                 }
             });
@@ -1900,21 +2035,17 @@ function spawnBreakParticles(blockEl, blockType) {
 
 // ─── Основное раскрытие: grid[r][c] из сервера, blockWins[r][c] ───
 function revealMineShaft(grid, blockWins, pickaxe, win, balanceBefore, chestMult) {
-    const BLOCK_HITS_MAP  = { stone:2, redstone:2, gold:3, diamond:3, obsidian:4, book:2, tnt:2 };
+    const BLOCK_HITS_MAP  = { stone:2, redstone:3, gold:4, diamond:5, obsidian:6, book:2, tnt:2 };
     const PICKAXE_MOD_MAP = { wooden:+1, stone:0, iron:0, golden:-1, diamond:-1 };
     const N = Math.max(1, mineLastPickaxeCount);
     let workerTypes = mineWorkerTypes;
     if (workerTypes.length !== N) {
         workerTypes = generateWorkerTypes(N);
         mineWorkerTypes = workerTypes;
-        const totalDur = workerTypes.reduce((s, t) => s + (PICKAXE_DURABILITY[t] || 3), 0);
-        initDurabilityBar(null, null, totalDur);
     }
 
-    // Очистить кэш кирок (для нового стиля)
     Object.keys(_pxImgs).forEach(k => delete _pxImgs[k]);
 
-    // ПОКАЗАТЬ ВСЕ БЛОКИ сразу с их текстурами (НЕ скрытые!)
     for (let r = 0; r < MC_ROWS; r++) {
         for (let c = 0; c < MC_COLS; c++) {
             const blkEl = $(`mc-blk-${r}-${c}`);
@@ -1929,7 +2060,6 @@ function revealMineShaft(grid, blockWins, pickaxe, win, balanceBefore, chestMult
         }
     }
 
-    // Список всех блоков с количеством ударов (модификатор зависит от типа кирки)
     const allBlocks = [];
     for (let r = 0; r < MC_ROWS; r++) {
         for (let c = 0; c < MC_COLS; c++) {
@@ -1940,17 +2070,20 @@ function revealMineShaft(grid, blockWins, pickaxe, win, balanceBefore, chestMult
         }
     }
 
-    // Разделить блоки по N кирках (round-robin)
+    // Column-order queues: each pickaxe mines top-to-bottom in its assigned columns
+    const colBlocks = Array.from({ length: MC_COLS }, (_, c) =>
+        allBlocks.filter(b => b.c === c).sort((a, b) => a.r - b.r)
+    );
     const queues = Array.from({ length: N }, () => []);
-    allBlocks.forEach((b, i) => queues[i % N].push(b));
+    for (let c = 0; c < MC_COLS; c++) {
+        queues[c % N].push(...colBlocks[c]);
+    }
 
-    // Применить pickaxe modifier к каждому воркеру
     queues.forEach((queue, wi) => {
         const pMod = PICKAXE_MOD_MAP[workerTypes[wi]] || 0;
         queue.forEach(b => { b.hits = Math.max(1, b.hits + pMod); });
     });
 
-    // ── Симуляция: какие блоки РЕАЛЬНО сломает каждая кирка ──
     const brokenSet = new Set();
     queues.forEach((queue, wi) => {
         let rem = PICKAXE_DURABILITY[workerTypes[wi]] || 3;
@@ -1960,15 +2093,13 @@ function revealMineShaft(grid, blockWins, pickaxe, win, balanceBefore, chestMult
         }
     });
 
-    // Масштабировать win — только сломанные блоки получают долю
     const brokenWinSum = allBlocks.filter(b => brokenSet.has(`${b.r},${b.c}`)).reduce((s,b) => s + b.win, 0);
     const scaleFactor  = (brokenWinSum > 0 && win > 0) ? win / brokenWinSum : 0;
     allBlocks.forEach(b => {
         b.win = brokenSet.has(`${b.r},${b.c}`) ? parseFloat((b.win * scaleFactor).toFixed(4)) : 0;
     });
 
-    // ── Сундуки: открываются только когда ВСЕ 3 строки в столбце сломаны ──
-    const liveColBroken  = [0, 0, 0, 0, 0];
+    const liveColBroken  = Array(MC_COLS).fill(0);
     const openedChests   = new Set();
     const effectiveChestMult = chestMult || 2;
 
@@ -1977,6 +2108,7 @@ function revealMineShaft(grid, blockWins, pickaxe, win, balanceBefore, chestMult
         if (liveColBroken[c] >= MC_ROWS && !openedChests.has(c)) {
             openedChests.add(c);
             setTimeout(() => {
+                playSound('chest');
                 const ch = $(`mc-chest-${c}`);
                 if (!ch) return;
                 ch.classList.add('open', 'open-anim');
@@ -1986,31 +2118,31 @@ function revealMineShaft(grid, blockWins, pickaxe, win, balanceBefore, chestMult
                 pop.textContent = `×${effectiveChestMult}`;
                 ch.appendChild(pop);
                 setTimeout(() => { if (pop.parentNode) pop.parentNode.removeChild(pop); }, 3000);
-            }, 200);
+            }, 250);
         }
     }
 
-    // Оценка времени (per-worker durability)
     const longestQ = Math.max(...queues.map((q, wi) => {
         let dur = PICKAXE_DURABILITY[workerTypes[wi]] || 3;
         let t = 0;
         for (const b of q) {
             const hcando = Math.min(b.hits, dur);
-            if (hcando <= 0) { t += 400; break; }
-            t += hcando * 220 + 270;
+            if (hcando <= 0) { t += 500; break; }
+            t += hcando * 300 + 350;
             dur -= hcando;
-            if (dur <= 0) { t += 320; break; }
+            if (dur <= 0) { t += 400; break; }
         }
         return t;
     }));
-    const estimatedReveal = longestQ + N * 90 + 300;
+    const estimatedReveal = longestQ + N * 120 + 400;
 
-    // Активировать Mine и запустить N кирок (каждая со своим типом и прочностью)
     mineIsActive = true;
     queues.forEach((queue, wi) => {
         const pType = workerTypes[wi];
         const pDur  = PICKAXE_DURABILITY[pType] || 3;
-        spawnPickaxeWorker(queue, pType, wi, null, onBlockBroken, pDur);
+        setTimeout(() => {
+            spawnPickaxeWorker(queue, pType, wi, null, onBlockBroken, pDur);
+        }, wi * 150);
     });
 
     // Итоговый результат после всех анимаций
@@ -2018,6 +2150,7 @@ function revealMineShaft(grid, blockWins, pickaxe, win, balanceBefore, chestMult
     setTimeout(() => {
         const newBal = user ? (user.balance || 0) : (balanceBefore + win);
         if (win > 0) {
+            playSound('win');
             const balSpan = $('bal-val');
             if (balSpan) animateCounter(balSpan, balanceBefore, newBal, 900, '', '');
             flyToBalance(win);
@@ -2280,12 +2413,12 @@ async function playMine() {
     const statusEl = $('mine-book-status');
     if (statusEl) statusEl.style.display = 'none';
 
+    playSound('click');
     mineIsSpinning = true;
     if (btn) btn.disabled = true;
     const balanceBefore = user ? (user.balance || 0) : 0;
-    // Keep blocks visible (colored) during API loading — just reset chests/counter
     initMineInventory();
-    initMineShaft(false, true);   // show colored ores while waiting for server
+    initMineShaft(false, true);
 
     try {
         const resp = await fetch('/api/mine', {
@@ -2425,11 +2558,12 @@ async function playSpin() {
 
     if (!isFreeSpins) {
         const betVal = parseFloat($('sp-bet') ? $('sp-bet').value : 0);
-        if (isNaN(betVal) || betVal <= 0) return showToast('Введите ставку');
+        if (isNaN(betVal) || betVal < 0.1 || betVal > 25) return showToast('Мин 0.1, Макс 25 TON');
         const bal = mode === 'demo' ? user.demo_balance : user.balance;
         if (betVal > bal) return showToast('Недостаточно средств');
         spinBet = betVal;
     }
+    playSound('spin');
 
     spinIsSpinning = true;
     const btn = $('sp-btn');
@@ -2465,8 +2599,8 @@ async function playSpin() {
 
         await stopSpinAnim(data.grid, data.hiddenGs);
 
-        // Show win
         if (data.win > 0) {
+            playSound('win');
             if (winDisp) { winDisp.innerText = `+${data.win.toFixed(2)} TON`; winDisp.style.display = 'block'; }
             highlightSpinWins(data.winLines, data.grid);
             flyToBalance(data.win);

@@ -412,6 +412,7 @@ app.post('/api/bet', async (req, res) => {
         const field = actualMode === 'demo' ? 'demo_balance' : 'balance';
         
         if (isNaN(bet) || isNaN(win) || bet < 0 || win < 0 || user[field] < bet) return res.status(400).json({error: 'No money or invalid amount'});
+        if (bet > 0 && (bet < 0.1 || bet > 25)) return res.status(400).json({error: 'Bet must be 0.1-25 TON'});
         
         const avatar = user.photo || 'https://cdn-icons-png.flaticon.com/512/149/149071.png';
 
@@ -751,9 +752,11 @@ app.post('/api/spin', async (req, res) => {
 const MINE_BLOCKS = ['stone', 'redstone', 'gold', 'diamond', 'obsidian'];
 const MINE_BLOCK_MULTS = { stone: 0, redstone: 0.7, gold: 1.5, diamond: 3, obsidian: 6 };
 const MINE_ROW_WEIGHTS = [
-    [0.68, 0.25, 0.06, 0.01, 0.00], // row 0 — top (common)
-    [0.42, 0.30, 0.18, 0.08, 0.02], // row 1 — middle
-    [0.20, 0.25, 0.30, 0.18, 0.07]  // row 2 — bottom (rare)
+    [0.70, 0.22, 0.06, 0.015, 0.005], // row 0 — top (mostly stone)
+    [0.55, 0.28, 0.12, 0.04, 0.01],   // row 1
+    [0.38, 0.30, 0.20, 0.09, 0.03],   // row 2 — middle
+    [0.22, 0.28, 0.28, 0.15, 0.07],   // row 3
+    [0.12, 0.22, 0.30, 0.22, 0.14]    // row 4 — bottom (rare ores)
 ];
 const MINE_PICKAXES = ['wooden', 'stone', 'iron', 'golden', 'diamond'];
 const MINE_PICKAXE_WEIGHTS = [0.46, 0.28, 0.14, 0.08, 0.04];
@@ -774,15 +777,14 @@ function pickChestMult() {
 
 function generateMineGrid() {
     const grid = [];
-    const BOOK_CHANCE = 0.06; // ~6% chance per block to be a magic book
-    for (let r = 0; r < 3; r++) {
+    const BOOK_CHANCE = 0.05;
+    for (let r = 0; r < 5; r++) {
         const row = [];
         for (let c = 0; c < 5; c++) {
             const weights = MINE_ROW_WEIGHTS[r];
             const rand = Math.random(); let cum = 0; let block = 'stone';
             for (let b = 0; b < MINE_BLOCKS.length; b++) { cum += weights[b]; if (rand < cum) { block = MINE_BLOCKS[b]; break; } }
-            // Book bonus (no TNT in blocks)
-            if (!(r === 2 && c === 2)) {
+            if (!(r === 4 && c === 2)) {
                 if (Math.random() < BOOK_CHANCE) block = 'book';
             }
             row.push(block);
@@ -815,17 +817,16 @@ app.post('/api/mine', async (req, res) => {
         if (!isDemo) { user.stats.bets++; user.stats.minus += betAmount; }
 
         const grid = generateMineGrid();
-        const mainBlock = grid[2][2]; // row 2, col 2 = centre result block
+        const mainBlock = grid[4][2]; // bottom centre = main result block
         const baseMult  = MINE_BLOCK_MULTS[mainBlock] || 0;
 
         // Pickaxe type — always pick one
         const pr = Math.random(); let cum2 = 0; let pickaxe = 'wooden';
         for (let i = 0; i < MINE_PICKAXES.length; i++) { cum2 += MINE_PICKAXE_WEIGHTS[i]; if (pr < cum2) { pickaxe = MINE_PICKAXES[i]; break; } }
         const pickaxeMult = MINE_PICKAXE_MULTS[pickaxe] || 1;
-        // Pickaxe count: 1–9, weighted heavily to low (1–3 most common)
-        const PICK_COUNT_W = [0, 0.32, 0.24, 0.17, 0.11, 0.07, 0.04, 0.03, 0.015, 0.005];
+        const PICK_COUNT_W = [0, 0.35, 0.28, 0.20, 0.12, 0.05];
         const pcr = Math.random(); let pcum = 0; let pickaxeCount = 1;
-        for (let i = 1; i <= 9; i++) { pcum += PICK_COUNT_W[i]; if (pcr < pcum) { pickaxeCount = i; break; } }
+        for (let i = 1; i <= 5; i++) { pcum += PICK_COUNT_W[i]; if (pcr < pcum) { pickaxeCount = i; break; } }
 
         // Chest multiplier — shown after all chests open
         const chestMult = pickChestMult();
@@ -846,12 +847,12 @@ app.post('/api/mine', async (req, res) => {
         // book blocks get no direct win (they're bonuses)
         const BLOCK_PAY_MULTS = { stone:0.25, redstone:1.0, gold:2.2, diamond:5.0, obsidian:10.0, book:0.5, tnt:0 };
         let totalBlockMult = 0;
-        for (let r = 0; r < 3; r++)
+        for (let r = 0; r < 5; r++)
             for (let c = 0; c < 5; c++)
                 totalBlockMult += (BLOCK_PAY_MULTS[grid[r][c]] || 0);
 
         const blockWins = [];
-        for (let r = 0; r < 3; r++) {
+        for (let r = 0; r < 5; r++) {
             const row = [];
             for (let c = 0; c < 5; c++) {
                 const bm = BLOCK_PAY_MULTS[grid[r][c]] || 0;
