@@ -307,120 +307,80 @@ header { padding: 15px; display: flex; justify-content: space-between; align-ite
 @keyframes mcWinPulse { 0%{filter:brightness(1)saturate(1)} 100%{filter:brightness(1.9)saturate(1.8)} }
 @keyframes mcBreak    { 0%{transform:scale(1);opacity:1} 30%{transform:scale(1.1);filter:brightness(3)} 70%{transform:scale(0.8)rotate(8deg);opacity:0.5} 100%{transform:scale(0)rotate(15deg);opacity:0} }
 
-/* ══════════════ ТЕКСТУРЫ БЛОКОВ (Minecraft SVG pixel-art) ══════════════ */
+/* ══════════════ ТЕКСТУРЫ БЛОКОВ — реальные PNG спрайты ══════════════ */
 
-/* Скрытый блок — тёмная земля/камень (до удара кирки) */
+/* Скрытый блок (до удара кирки) — тёмная земля */
 .mc-blk.hidden-blk {
-  background-color: #6a3c1c;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' shape-rendering='crispEdges'%3E%3Crect width='8' height='8' fill='%236a3c1c'/%3E%3Crect x='0' y='0' width='4' height='4' fill='%23401c08'/%3E%3Crect x='4' y='4' width='4' height='4' fill='%23401c08'/%3E%3Crect x='2' y='2' width='2' height='2' fill='%23864a28'/%3E%3Crect x='6' y='6' width='2' height='2' fill='%23864a28'/%3E%3Crect x='4' y='1' width='2' height='1' fill='%23904e2c'/%3E%3Crect x='0' y='5' width='2' height='1' fill='%23904e2c'/%3E%3C/svg%3E");
-  background-size: 8px 8px;
-  border-color: #8a5030 #1e0c04 #1e0c04 #8a5030;
+  background: url('/blk-stone.png') center/cover;
+  filter: brightness(0.28) saturate(0.2);
+  border-color: #6a4020 #200e04 #200e04 #6a4020;
 }
 
-/* Камень */
+/* Камень ×0 */
 .mc-blk.stone-blk {
-  background-color: #888;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' shape-rendering='crispEdges'%3E%3Crect width='8' height='8' fill='%23888'/%3E%3Crect x='0' y='0' width='4' height='4' fill='%236e6e6e'/%3E%3Crect x='4' y='4' width='4' height='4' fill='%236e6e6e'/%3E%3Crect x='4' y='0' width='4' height='4' fill='%23a0a0a0'/%3E%3Crect x='0' y='4' width='4' height='4' fill='%23a0a0a0'/%3E%3Crect x='2' y='2' width='2' height='2' fill='%23888'/%3E%3Crect x='6' y='6' width='2' height='2' fill='%23888'/%3E%3C/svg%3E");
-  background-size: 8px 8px;
-  border-color: #b8b8b8 #505050 #505050 #b8b8b8;
+  background: url('/blk-stone.png') center/cover;
+  border-color: #c0c0c0 #484848 #484848 #c0c0c0;
 }
 
-/* Редстоун руда — серый камень с красными прожилками */
+/* Редстоун-руда ×0.7 */
 .mc-blk.redstone-blk {
-  background-color: #787878;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' shape-rendering='crispEdges'%3E%3Crect width='16' height='16' fill='%23787878'/%3E%3Crect x='0' y='0' width='4' height='4' fill='%23686868'/%3E%3Crect x='4' y='4' width='4' height='4' fill='%23686868'/%3E%3Crect x='8' y='8' width='4' height='4' fill='%23686868'/%3E%3Crect x='12' y='12' width='4' height='4' fill='%23686868'/%3E%3Crect x='4' y='0' width='4' height='4' fill='%23888'/%3E%3Crect x='0' y='4' width='4' height='4' fill='%23888'/%3E%3Crect x='3' y='2' width='3' height='2' fill='%23e82020'/%3E%3Crect x='10' y='1' width='3' height='2' fill='%23e82020'/%3E%3Crect x='1' y='10' width='3' height='2' fill='%23e82020'/%3E%3Crect x='11' y='9' width='2' height='3' fill='%23e82020'/%3E%3Crect x='6' y='13' width='3' height='2' fill='%23cc1818'/%3E%3C/svg%3E");
-  background-size: 16px 16px;
-  border-color: #cc2020 #440000 #440000 #cc2020;
-  box-shadow: 0 0 8px rgba(220,20,20,0.65) inset;
+  background: url('/blk-redstone.png') center/cover;
+  border-color: #e82020 #440000 #440000 #e82020;
+  box-shadow: 0 0 10px rgba(232,20,20,0.7) inset;
 }
 
-/* Золото */
+/* Золото ×1.5 */
 .mc-blk.gold-blk {
-  background-color: #c8a000;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' shape-rendering='crispEdges'%3E%3Crect width='8' height='8' fill='%23c8a000'/%3E%3Crect x='0' y='0' width='4' height='4' fill='%23b89000'/%3E%3Crect x='4' y='4' width='4' height='4' fill='%23b89000'/%3E%3Crect x='4' y='0' width='4' height='4' fill='%23deb800'/%3E%3Crect x='0' y='4' width='4' height='4' fill='%23deb800'/%3E%3Crect x='1' y='1' width='2' height='2' fill='%23ffd820'/%3E%3Crect x='5' y='5' width='2' height='2' fill='%23ffd820'/%3E%3C/svg%3E");
-  background-size: 8px 8px;
+  background: url('/blk-gold.png') center/cover;
   border-color: #ffe060 #7a5000 #7a5000 #ffe060;
-  box-shadow: 0 0 10px rgba(255,200,0,0.55) inset;
+  box-shadow: 0 0 12px rgba(255,200,0,0.6) inset;
 }
 
-/* Алмаз */
+/* Алмаз ×3 */
 .mc-blk.diamond-blk {
-  background-color: #0578a0;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' shape-rendering='crispEdges'%3E%3Crect width='16' height='16' fill='%230578a0'/%3E%3Crect x='0' y='0' width='4' height='4' fill='%23046880'/%3E%3Crect x='8' y='8' width='4' height='4' fill='%23046880'/%3E%3Crect x='4' y='4' width='4' height='4' fill='%23046880'/%3E%3Crect x='12' y='12' width='4' height='4' fill='%23046880'/%3E%3Crect x='4' y='0' width='4' height='4' fill='%230690c0'/%3E%3Crect x='0' y='4' width='4' height='4' fill='%230690c0'/%3E%3Crect x='3' y='2' width='4' height='3' fill='%2300e4ff'/%3E%3Crect x='10' y='10' width='4' height='3' fill='%2300e4ff'/%3E%3Crect x='1' y='11' width='3' height='3' fill='%2300ccee'/%3E%3Crect x='11' y='1' width='3' height='3' fill='%2300ccee'/%3E%3C/svg%3E");
-  background-size: 16px 16px;
-  border-color: #00d4e8 #023040 #023040 #00d4e8;
-  box-shadow: 0 0 14px rgba(0,210,240,0.7) inset;
+  background: url('/blk-diamond.png') center/cover;
+  border-color: #00e4ff #023848 #023848 #00e4ff;
+  box-shadow: 0 0 16px rgba(0,220,255,0.7) inset;
 }
 
-/* Обсидиан */
+/* Обсидиан ×6 */
 .mc-blk.obsidian-blk {
-  background-color: #0e0420;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' shape-rendering='crispEdges'%3E%3Crect width='8' height='8' fill='%230e0420'/%3E%3Crect x='0' y='0' width='4' height='4' fill='%23060214'/%3E%3Crect x='4' y='4' width='4' height='4' fill='%23060214'/%3E%3Crect x='4' y='0' width='4' height='4' fill='%23160828'/%3E%3Crect x='0' y='4' width='4' height='4' fill='%23160828'/%3E%3Crect x='1' y='1' width='2' height='2' fill='%23280a40'/%3E%3Crect x='5' y='5' width='2' height='2' fill='%23280a40'/%3E%3Crect x='3' y='3' width='2' height='2' fill='%23380c54'/%3E%3C/svg%3E");
-  background-size: 8px 8px;
-  border-color: #5020a0 #040110 #040110 #5020a0;
-  box-shadow: 0 0 16px rgba(90,30,180,0.8) inset;
+  background: url('/blk-obsidian.png') center/cover;
+  border-color: #6030b0 #0a0120 #0a0120 #6030b0;
+  box-shadow: 0 0 18px rgba(100,40,200,0.9) inset;
 }
 
 /* TNT */
 .mc-blk.tnt-blk {
-  background-color: #cc1010;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' shape-rendering='crispEdges'%3E%3Crect width='8' height='8' fill='%23cc1010'/%3E%3Crect x='0' y='2' width='8' height='4' fill='%23dcdcdc'/%3E%3Crect x='0' y='0' width='2' height='2' fill='%23880000'/%3E%3Crect x='6' y='0' width='2' height='2' fill='%23880000'/%3E%3Crect x='0' y='6' width='2' height='2' fill='%23880000'/%3E%3Crect x='6' y='6' width='2' height='2' fill='%23880000'/%3E%3C/svg%3E");
-  background-size: 8px 8px;
+  background: url('/blk-tnt.png') center/cover;
   border-color: #ff4040 #880000 #880000 #ff4040;
-  box-shadow: 0 0 8px rgba(255,50,50,0.6) inset;
+  box-shadow: 0 0 10px rgba(255,40,40,0.65) inset;
 }
-.tnt-blk::after {
-  content: 'TNT';
-  position: absolute;
-  top: 50%; left: 50%;
-  transform: translate(-50%,-50%);
-  font-size: 7px;
-  font-weight: 900;
-  color: #cc0000;
-  font-family: monospace;
-  letter-spacing: 0.5px;
-  z-index: 4;
-  pointer-events: none;
-  text-shadow: 0 0 2px rgba(255,255,255,0.5);
-}
-.mc-blk.tnt-explode { animation: tntBoom 0.45s ease-out; }
+.mc-blk.tnt-explode { animation: tntBoom 0.5s ease-out; }
 @keyframes tntBoom {
-  0%  { transform:scale(1);    filter:brightness(1); }
-  20% { transform:scale(1.4);  filter:brightness(6) saturate(2); }
-  50% { transform:scale(1.5);  filter:brightness(3); }
-  80% { transform:scale(0.8);  filter:brightness(1.5); opacity:0.6; }
-  100%{ transform:scale(0);    opacity:0; }
+  0%  { transform:scale(1);   filter:brightness(1); }
+  15% { transform:scale(1.5); filter:brightness(8) saturate(3); }
+  45% { transform:scale(1.6); filter:brightness(4); }
+  80% { transform:scale(0.7); filter:brightness(1.5); opacity:0.5; }
+  100%{ transform:scale(0);   opacity:0; }
 }
-.mc-blk.blast-zone { animation: blastDamage 0.4s ease-out forwards; }
+.mc-blk.blast-zone { animation: blastDamage 0.45s ease-out forwards; }
 @keyframes blastDamage {
-  0%  { filter:brightness(3) saturate(2); border-color:#ff6600 !important; }
-  40% { filter:brightness(2); }
-  100%{ filter:brightness(0.5); opacity:0.7; }
+  0%  { filter:brightness(4) saturate(3); border-color:#ff6600 !important; }
+  40% { filter:brightness(2.5); }
+  100%{ filter:brightness(0.45); opacity:0.65; }
 }
 
-/* Книга */
+/* Книга ×3 */
 .mc-blk.book-blk {
-  background-color: #4c1090;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' shape-rendering='crispEdges'%3E%3Crect width='8' height='8' fill='%234c1090'/%3E%3Crect x='0' y='0' width='4' height='4' fill='%23380c70'/%3E%3Crect x='4' y='4' width='4' height='4' fill='%23380c70'/%3E%3Crect x='4' y='0' width='4' height='4' fill='%235e18a8'/%3E%3Crect x='0' y='4' width='4' height='4' fill='%235e18a8'/%3E%3Crect x='2' y='2' width='4' height='4' fill='%23500eb8'/%3E%3C/svg%3E");
-  background-size: 8px 8px;
+  background: url('/blk-book.png') center/cover;
   border-color: #ffd700 #8a6000 #8a6000 #ffd700;
-  box-shadow: 0 0 14px rgba(160,80,255,0.9) inset;
+  box-shadow: 0 0 20px rgba(180,80,255,0.95) inset, 0 0 8px rgba(255,200,0,0.6);
+  animation: bookGlow 1.2s ease-in-out infinite alternate;
 }
-.book-blk::after {
-  content: '✦';
-  position: absolute;
-  top: 50%; left: 50%;
-  transform: translate(-50%,-50%);
-  font-size: 12px;
-  color: #ffe060;
-  text-shadow: 0 0 8px rgba(255,220,0,1);
-  z-index: 4;
-  pointer-events: none;
-  animation: bookSparkle 0.9s ease-in-out infinite alternate;
-}
-@keyframes bookSparkle {
-  0%  { opacity:0.6; transform:translate(-50%,-50%) scale(0.85); }
-  100%{ opacity:1;   transform:translate(-50%,-50%) scale(1.2); }
+@keyframes bookGlow {
+  0%  { box-shadow: 0 0 14px rgba(180,80,255,0.7) inset, 0 0 5px rgba(255,200,0,0.4); }
+  100%{ box-shadow: 0 0 28px rgba(220,100,255,1.0) inset, 0 0 14px rgba(255,220,0,0.8); }
 }
 .book-collect { animation: bookCollect 0.5s cubic-bezier(0.34,1.56,0.64,1); }
 @keyframes bookCollect { 0%{transform:scale(1)} 40%{transform:scale(1.4)rotate(15deg);filter:brightness(3)} 100%{transform:scale(1)rotate(0)} }
@@ -479,42 +439,26 @@ header { padding: 15px; display: flex; justify-content: space-between; align-ite
   flex-shrink: 0;
 }
 .mc-chest {
-  background: linear-gradient(175deg, #c07828 10%, #8a4c14 60%, #6a3810 100%);
-  border: 2px solid;
-  border-color: #e09040 #3a1e08 #3a1e08 #e09040;
-  border-radius: 2px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 38px;
-  font-size: 0;
+  background: url('/blk-chest-closed.png') center/contain no-repeat;
+  background-color: transparent;
+  border: none;
+  height: 40px;
   position: relative;
-  overflow: hidden;
-  transition: all 0.25s;
+  transition: background-image 0.1s;
+  image-rendering: auto;
 }
-.mc-chest::before {
-  content: '';
-  position: absolute;
-  left: 15%; right: 15%;
-  top: 20%; height: 28%;
-  background: rgba(0,0,0,0.3);
-  border-radius: 1px;
-  border-top: 2px solid rgba(180,100,20,0.5);
+.mc-chest::before, .mc-chest::after { display: none; }
+.mc-chest.open {
+  background-image: url('/blk-chest-open.png');
+  filter: drop-shadow(0 0 6px rgba(255,190,50,0.85));
 }
-.mc-chest::after {
-  content: '';
-  position: absolute;
-  width: 26%; height: 20%;
-  background: #888;
-  border: 1px solid #aaa;
-  border-radius: 1px;
-  top: 38%; left: 37%;
-}
-.mc-chest.open { background: linear-gradient(175deg, #c07828 0%, #4a2808 50%, #1a0c04 100%); border-color: #e09040 #1a0c04 #1a0c04 #e09040; box-shadow: 0 0 10px rgba(255,180,50,0.5); }
-.mc-chest.open::before { top: 0; height: 20%; border-radius: 2px 2px 0 0; background: linear-gradient(180deg, #c07828 0%, #7a4010 100%); }
-.mc-chest.open::after  { background: #ccc; top: 28%; }
 .mc-chest.open-anim { animation: chestOpen 0.4s cubic-bezier(0.34,1.56,0.64,1); }
-@keyframes chestOpen { 0%{transform:scale(1)} 30%{transform:scale(1.15)translateY(-4px)} 60%{transform:scale(0.95)} 100%{transform:scale(1)} }
+@keyframes chestOpen {
+  0%  { transform:scale(1); }
+  25% { transform:scale(1.18) translateY(-5px); }
+  60% { transform:scale(0.94); }
+  100%{ transform:scale(1); }
+}
 
 /* ─── СЧЁТЧИК ─── */
 .mine-running-total {

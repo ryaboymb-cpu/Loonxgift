@@ -1361,32 +1361,59 @@ function animateCounter(el, start, end, durationMs, prefix, suffix) {
     requestAnimationFrame(step);
 }
 
-// ──── Снаряд-кирка: летит из ячейки инвентаря к блоку ────
-function spawnPickaxeProj(invCellEl, blockEl, pickaxeType, onImpact) {
-    if (!blockEl || !invCellEl) { onImpact(); return; }
-    const src = invCellEl.getBoundingClientRect();
-    const dst = blockEl.getBoundingClientRect();
+// ──── Снаряд-кирка: плавный параболический полёт из случайной ячейки к блоку ────
+function spawnPickaxeProj(fromEl, toEl, pickaxeType, onImpact) {
+    if (!toEl) { if (onImpact) onImpact(); return; }
+
+    const dstRect = toEl.getBoundingClientRect();
+    const dx = dstRect.left + dstRect.width / 2;
+    const dy = dstRect.top  + dstRect.height / 2;
+
+    let sx, sy;
+    if (fromEl) {
+        const r = fromEl.getBoundingClientRect();
+        sx = r.left + r.width / 2;
+        sy = r.top  + r.height / 2;
+    } else {
+        sx = dx;
+        sy = dy - 80;
+    }
+
+    // Контрольная точка для параболы (дуга в сторону)
+    const midX = (sx + dx) / 2 + (dy - sy) * 0.18;
+    const midY = Math.min(sy, dy) - 22;
 
     const px = document.createElement('div');
     px.className = 'pickaxe-proj';
     px.textContent = '⛏️';
-    px.style.left = (src.left + src.width / 2) + 'px';
-    px.style.top  = (src.top + src.height / 2) + 'px';
+    px.style.cssText = `position:fixed; font-size:20px; z-index:9999; pointer-events:none; user-select:none; line-height:1; left:${sx}px; top:${sy}px; transform:translate(-50%,-50%)`;
     document.body.appendChild(px);
 
-    const tx = dst.left + dst.width / 2 - (src.left + src.width / 2);
-    const ty = dst.top + dst.height / 2 - (src.top + src.height / 2);
+    const DURATION = 260;
+    let t0 = null;
 
-    px.animate([
-        { transform: 'translate(0,0) rotate(-40deg) scale(1)',   opacity: 1 },
-        { transform: `translate(${tx * 0.6}px,${ty * 0.4}px) rotate(10deg) scale(1.3)`, opacity: 1, offset: 0.5 },
-        { transform: `translate(${tx}px,${ty}px) rotate(35deg) scale(0.7)`, opacity: 1, offset: 0.85 },
-        { transform: `translate(${tx}px,${ty - 6}px) rotate(-10deg) scale(0.9)`, opacity: 0.4, offset: 0.95 },
-        { transform: `translate(${tx}px,${ty}px) rotate(0deg) scale(0)`, opacity: 0 },
-    ], { duration: 320, easing: 'ease-in', fill: 'forwards' }).onfinish = () => {
-        px.remove();
-        onImpact();
-    };
+    function frame(ts) {
+        if (!t0) t0 = ts;
+        const t = Math.min((ts - t0) / DURATION, 1);
+        const u = 1 - t;
+        // Квадратичная безье
+        const cx = u*u*sx + 2*u*t*midX + t*t*dx;
+        const cy = u*u*sy + 2*u*t*midY + t*t*dy;
+        const angle = (t < 0.5 ? -35 + t * 80 : 5 + (t - 0.5) * 50);
+        const scale = t < 0.6 ? 1 + t * 0.35 : 1.21 - (t - 0.6) * 1.5;
+        px.style.left = cx + 'px';
+        px.style.top  = cy + 'px';
+        px.style.transform = `translate(-50%,-50%) rotate(${angle}deg) scale(${Math.max(scale, 0.1)})`;
+        px.style.opacity = t > 0.85 ? String(1 - (t - 0.85) / 0.15) : '1';
+
+        if (t < 1) {
+            requestAnimationFrame(frame);
+        } else {
+            px.remove();
+            if (onImpact) onImpact();
+        }
+    }
+    requestAnimationFrame(frame);
 }
 
 // ──── TNT взрыв: подсвечивает соседей ────
@@ -1467,70 +1494,98 @@ function fillInvCell(row, col, blockType, pickaxeType) {
 
 // ─── Основное раскрытие: grid[r][c] из сервера, blockWins[r][c] ───
 function revealMineShaft(grid, blockWins, pickaxe, win, balanceBefore) {
-    const BLOCK_DELAY = 160; // ms между каждым блоком
-    let schedDelay = 0;
+    // ── Timing ──
+    const HITS      = 3;    // удара кирки на один блок
+    const FLIGHT_MS = 260;  // время полёта кирки (мс)
+    const PAUSE_MS  = 160;  // пауза между ударами (вибрация блока)
+    const BLK_GAP   = 200;  // сдвиг старта следующего блока (перекрытие анимаций)
+    // Полная длительность одного блока: HITS*(FLIGHT_MS+PAUSE_MS)+120 ≈ 1360ms
+    // Всего: 14*BLK_GAP + 1360 ≈ 4.2s
+
+    // Случайная ячейка инвентаря (НЕ совпадает с текущим блоком)
+    function randInvEl(skipR, skipC) {
+        let attempts = 0;
+        let idx;
+        do {
+            idx = Math.floor(Math.random() * (MC_ROWS * MC_COLS));
+            attempts++;
+        } while (attempts < 12 && Math.floor(idx / MC_COLS) === skipR && (idx % MC_COLS) === skipC);
+        return $(`inv-${Math.floor(idx / MC_COLS)}-${idx % MC_COLS}`);
+    }
+
+    let blkStart = 0;
 
     for (let r = 0; r < MC_ROWS; r++) {
         for (let c = 0; c < MC_COLS; c++) {
-            const blockType  = grid[r][c];
-            const blockWin   = blockWins[r][c] || 0;
-            const captR = r, captC = c;
+            const blockType = grid[r][c];
+            const blockWin  = blockWins[r][c] || 0;
+            const captR = r, captC = c, captStart = blkStart;
 
-            setTimeout(() => {
-                const blkEl  = $(`mc-blk-${captR}-${captC}`);
-                const invEl  = $(`inv-${captR}-${captC}`);
-                if (!blkEl || blkEl.dataset.revealed === '1') return;
+            // Три удара: hit=0,1,2
+            for (let hit = 0; hit < HITS; hit++) {
+                const captHit = hit;
+                const hitTime = captStart + captHit * (FLIGHT_MS + PAUSE_MS);
 
-                // 1. Заполняем инвентарь
-                fillInvCell(captR, captC, blockType, pickaxe);
+                setTimeout(() => {
+                    const blkEl = $(`mc-blk-${captR}-${captC}`);
+                    if (!blkEl || blkEl.dataset.revealed === '1') return;
 
-                // 2. Кирка летит из инвентаря к блоку
-                spawnPickaxeProj(invEl, blkEl, pickaxe, () => {
-                    // 3. Трещины
-                    blkEl.classList.add('cracking-1', 'crack-hit');
-                    setTimeout(() => { blkEl.classList.remove('cracking-1'); blkEl.classList.add('cracking-2'); }, 70);
-                    setTimeout(() => { blkEl.classList.remove('cracking-2'); blkEl.classList.add('cracking-3'); }, 140);
+                    // Стадия трещин перед ударом
+                    blkEl.classList.remove('cracking-1','cracking-2','cracking-3');
+                    if (captHit === 0) blkEl.classList.add('cracking-1');
+                    else if (captHit === 1) blkEl.classList.add('cracking-2');
+                    else blkEl.classList.add('cracking-3');
 
-                    // 4. Разлом → раскрытие блока
-                    setTimeout(() => {
-                        blkEl.classList.remove('cracking-1','cracking-2','cracking-3','crack-hit');
-                        const cls = MINE_BLOCK_CLASS[blockType] || 'stone-blk';
-                        blkEl.className = `mc-blk ${cls} reveal-drop`;
-                        blkEl.dataset.revealed = '1';
-                        blkEl.dataset.blockType = blockType;
+                    // Кирка летит из случайной ячейки
+                    const invEl = randInvEl(captR, captC);
+                    spawnPickaxeProj(invEl, blkEl, pickaxe, () => {
+                        // Удар!
+                        blkEl.classList.add('crack-hit');
+                        setTimeout(() => blkEl.classList.remove('crack-hit'), 90);
 
-                        // 5. Спец-эффекты
-                        if (blockType === 'tnt')  triggerTNTEffect(captR, captC);
-                        if (blockType === 'book') collectBook(blkEl);
+                        if (captHit === HITS - 1) {
+                            // Финальный удар → разлом → раскрытие
+                            setTimeout(() => {
+                                blkEl.classList.remove('cracking-1','cracking-2','cracking-3','crack-hit');
+                                const cls = MINE_BLOCK_CLASS[blockType] || 'stone-blk';
+                                blkEl.className = `mc-blk ${cls} reveal-drop`;
+                                blkEl.dataset.revealed = '1';
+                                blkEl.dataset.blockType = blockType;
 
-                        // 6. Попап и счётчик
-                        if (blockWin > 0) {
-                            spawnBlockWinPopup(blkEl, blockWin);
-                            blkEl.classList.add('win-pulse');
-                            mineRunningTotal += blockWin;
-                            const rt = $('mine-running-total');
-                            if (rt) {
-                                rt.classList.add('has-win');
-                                animateCounter(rt, mineRunningTotal - blockWin, mineRunningTotal, 400, '', ' TON');
-                            }
+                                // Инвентарь заполняется ПОСЛЕ разбивки блока
+                                fillInvCell(captR, captC, blockType, pickaxe);
+
+                                // Спец-эффекты
+                                if (blockType === 'tnt')  triggerTNTEffect(captR, captC);
+                                if (blockType === 'book') collectBook(blkEl);
+
+                                // Попап выигрыша и счётчик
+                                if (blockWin > 0) {
+                                    spawnBlockWinPopup(blkEl, blockWin);
+                                    blkEl.classList.add('win-pulse');
+                                    mineRunningTotal += blockWin;
+                                    const rt = $('mine-running-total');
+                                    if (rt) {
+                                        rt.classList.add('has-win');
+                                        animateCounter(rt, mineRunningTotal - blockWin, mineRunningTotal, 380, '', ' TON');
+                                    }
+                                    const invCell = $(`inv-${captR}-${captC}`);
+                                    if (invCell) invCell.classList.add('win-slot');
+                                }
+                            }, 115);
                         }
+                    });
+                }, hitTime);
+            }
 
-                        // Подсветить ячейку инвентаря если выигрыш
-                        if (blockWin > 0) {
-                            const invCell = $(`inv-${captR}-${captC}`);
-                            if (invCell) invCell.classList.add('win-slot');
-                        }
-                    }, 220);
-                });
-            }, schedDelay);
-
-            schedDelay += BLOCK_DELAY;
+            blkStart += BLK_GAP;
         }
     }
 
-    const afterReveal = schedDelay + 400;
+    // Время после последнего блока
+    const lastBlkReveal = blkStart - BLK_GAP + HITS * (FLIGHT_MS + PAUSE_MS) + 200;
 
-    // Сундуки открываются
+    // Сундуки открываются волной
     setTimeout(() => {
         for (let i = 0; i < MC_COLS; i++) {
             setTimeout(() => {
@@ -1538,11 +1593,12 @@ function revealMineShaft(grid, blockWins, pickaxe, win, balanceBefore) {
                 if (!ch) return;
                 ch.classList.add('open', 'open-anim');
                 setTimeout(() => ch.classList.remove('open-anim'), 600);
-            }, i * 80);
+            }, i * 90);
         }
-    }, afterReveal);
+    }, lastBlkReveal + 100);
 
     // Итоговый результат и баланс
+    const afterReveal = lastBlkReveal + 500;
     setTimeout(() => {
         const wd = $('mine-win-display');
         if (win > 0) {
@@ -1573,9 +1629,9 @@ function revealMineShaft(grid, blockWins, pickaxe, win, balanceBefore) {
             const statusEl = $('mine-book-status');
             if (statusEl) { statusEl.innerHTML = '✅ Серия завершена!'; setTimeout(() => { statusEl.style.display='none'; }, 2000); }
         }
-    }, afterReveal + 500);
+    }, afterReveal);
 
-    return afterReveal + 800;
+    return afterReveal + 400;
 }
 
 function initMineGrid() {
