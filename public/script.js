@@ -1727,8 +1727,9 @@ function setupMineTextures() {
     function stoneBase(ctx, seed, dark) {
         for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
             const n = rnd(x, y, seed) % 32;
-            const lo = dark ? 14 : 96, hi = dark ? 27 : 148, mid = dark ? 20 : 128;
-            const v = n < 4 ? lo : n < 9 ? hi : mid;
+            // Bright stone: light grey with noisy darker/lighter pixels
+            const lo = dark ? 28 : 118, hi = dark ? 52 : 192, mid = dark ? 38 : 162;
+            const v = n < 3 ? lo : n < 7 ? hi : mid;
             ctx.fillStyle = `rgb(${v},${v},${v})`;
             ctx.fillRect(x, y, 1, 1);
         }

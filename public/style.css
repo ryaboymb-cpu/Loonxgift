@@ -207,14 +207,14 @@ header { padding: 15px; display: flex; justify-content: space-between; align-ite
 .mine-card {
   flex: 0 0 auto !important;
   width: 100%;
-  max-width: 290px;
-  padding: 5px 6px 5px;
+  max-width: 252px;
+  padding: 4px 5px;
   display: flex !important;
   flex-direction: column;
-  gap: 3px;
+  gap: 2px;
   overflow-y: visible;
   overflow-x: hidden;
-  border-radius: 12px !important;
+  border-radius: 10px !important;
   margin-bottom: 0 !important;
 }
 
@@ -260,7 +260,7 @@ header { padding: 15px; display: flex; justify-content: space-between; align-ite
 /* ─── ЗОНА ПОЛЁТА (пространство между инвентарём и шахтой) ─── */
 .mine-flight-zone {
   flex-shrink: 0;
-  height: 28px;
+  height: 14px;
   position: relative;
   background: linear-gradient(180deg, #1c1008 0%, #080402 100%);
   border-left: 3px solid #2a1808;
@@ -295,20 +295,20 @@ header { padding: 15px; display: flex; justify-content: space-between; align-ite
   overflow: hidden;
   image-rendering: pixelated;
   transition: transform 0.08s;
-  box-shadow: inset 2px 2px 0 rgba(255,255,255,0.35), inset -2px -2px 0 rgba(0,0,0,0.55);
+  box-shadow: inset 2px 2px 0 rgba(255,255,255,0.40), inset -2px -2px 0 rgba(0,0,0,0.28);
 }
-/* Освещение: светлый верх-лево, тёмный низ-право — сильный 3D эффект */
+/* Освещение: светлый верх-лево, тёмный низ-право */
 .mc-blk::before {
   content: '';
   position: absolute;
   inset: 0;
   background:
     linear-gradient(135deg,
-      rgba(255,255,255,0.40) 0%,
-      rgba(255,255,255,0.12) 28%,
-      transparent 48%,
-      rgba(0,0,0,0.28) 72%,
-      rgba(0,0,0,0.50) 100%);
+      rgba(255,255,255,0.32) 0%,
+      rgba(255,255,255,0.08) 30%,
+      transparent 50%,
+      rgba(0,0,0,0.18) 75%,
+      rgba(0,0,0,0.30) 100%);
   z-index: 2;
   pointer-events: none;
   border-radius: 1px;
@@ -395,52 +395,52 @@ header { padding: 15px; display: flex; justify-content: space-between; align-ite
 /* Камень ×0 */
 .mc-blk.stone-blk {
   background:
-    repeating-linear-gradient(-48deg, rgba(0,0,0,0.14) 0 4px, transparent 4px 10px, rgba(255,255,255,0.05) 10px 11px, transparent 11px 18px),
-    repeating-linear-gradient( 42deg, rgba(0,0,0,0.07) 0 3px, transparent 3px 11px),
-    #808080;
-  border-color: #b4b4b4 #484848 #484848 #b4b4b4;
+    repeating-linear-gradient(-48deg, rgba(0,0,0,0.12) 0 4px, transparent 4px 10px, rgba(255,255,255,0.08) 10px 11px, transparent 11px 18px),
+    repeating-linear-gradient( 42deg, rgba(0,0,0,0.06) 0 3px, transparent 3px 11px),
+    #a0a0a0;
+  border-color: #d0d0d0 #606060 #606060 #d0d0d0;
 }
 
 /* Редстоун-руда ×0.7 */
 .mc-blk.redstone-blk {
   background:
-    radial-gradient(circle at 18% 26%, #ff1818 0%, #ff1818 11%, transparent 12%),
-    radial-gradient(circle at 65% 18%, #ee0808 0%, #ee0808 10%, transparent 11%),
-    radial-gradient(circle at 80% 68%, #ff2828 0%, #ff2828 12%, transparent 13%),
-    radial-gradient(circle at 38% 76%, #dd1010 0%, #dd1010  9%, transparent 10%),
-    radial-gradient(circle at 54% 46%, #cc0808 0%, #cc0808  8%, transparent  9%),
-    repeating-linear-gradient(-48deg, rgba(0,0,0,0.12) 0 4px, transparent 4px 10px),
-    #6e6e6e;
-  border-color: #e82020 #440000 #440000 #e82020;
-  box-shadow: 0 0 10px rgba(232,20,20,0.65) inset;
+    radial-gradient(circle at 18% 26%, #ff2424 0%, #ff2424 11%, transparent 12%),
+    radial-gradient(circle at 65% 18%, #ff1010 0%, #ff1010 10%, transparent 11%),
+    radial-gradient(circle at 80% 68%, #ff3030 0%, #ff3030 12%, transparent 13%),
+    radial-gradient(circle at 38% 76%, #ee1818 0%, #ee1818  9%, transparent 10%),
+    radial-gradient(circle at 54% 46%, #dd1010 0%, #dd1010  8%, transparent  9%),
+    repeating-linear-gradient(-48deg, rgba(0,0,0,0.10) 0 4px, transparent 4px 10px),
+    #8e8e8e;
+  border-color: #ff3030 #550000 #550000 #ff3030;
+  box-shadow: 0 0 10px rgba(255,30,30,0.55) inset;
 }
 
 /* Золото ×1.5 */
 .mc-blk.gold-blk {
   background:
-    radial-gradient(circle at 22% 28%, #ffd700 0%, #ffd700 15%, transparent 16%),
-    radial-gradient(circle at 68% 22%, #ffb800 0%, #ffb800 13%, transparent 14%),
-    radial-gradient(circle at 78% 70%, #ffc800 0%, #ffc800 15%, transparent 16%),
-    radial-gradient(circle at 40% 74%, #ffaa00 0%, #ffaa00 11%, transparent 12%),
-    radial-gradient(circle at 54% 46%, #e8a000 0%, #e8a000  9%, transparent 10%),
-    repeating-linear-gradient(-48deg, rgba(0,0,0,0.12) 0 4px, transparent 4px 10px),
-    #6e6e6e;
-  border-color: #ffe060 #7a5000 #7a5000 #ffe060;
-  box-shadow: 0 0 12px rgba(255,200,0,0.55) inset;
+    radial-gradient(circle at 22% 28%, #ffe030 0%, #ffe030 15%, transparent 16%),
+    radial-gradient(circle at 68% 22%, #ffc800 0%, #ffc800 13%, transparent 14%),
+    radial-gradient(circle at 78% 70%, #ffd800 0%, #ffd800 15%, transparent 16%),
+    radial-gradient(circle at 40% 74%, #ffba00 0%, #ffba00 11%, transparent 12%),
+    radial-gradient(circle at 54% 46%, #f0b000 0%, #f0b000  9%, transparent 10%),
+    repeating-linear-gradient(-48deg, rgba(0,0,0,0.10) 0 4px, transparent 4px 10px),
+    #8e8e8e;
+  border-color: #ffe878 #886000 #886000 #ffe878;
+  box-shadow: 0 0 12px rgba(255,210,0,0.50) inset;
 }
 
 /* Алмаз ×3 */
 .mc-blk.diamond-blk {
   background:
-    radial-gradient(circle at 20% 32%, #00e4ff 0%, #00e4ff 13%, transparent 14%),
-    radial-gradient(circle at 66% 20%, #00ccee 0%, #00ccee 11%, transparent 12%),
-    radial-gradient(circle at 78% 66%, #22d8ff 0%, #22d8ff 14%, transparent 15%),
-    radial-gradient(circle at 42% 74%, #00d0f0 0%, #00d0f0 10%, transparent 11%),
-    radial-gradient(circle at 54% 46%, #18d8ff 0%, #18d8ff  9%, transparent 10%),
-    repeating-linear-gradient(-48deg, rgba(0,0,0,0.12) 0 4px, transparent 4px 10px),
-    #6e6e6e;
-  border-color: #00e4ff #023848 #023848 #00e4ff;
-  box-shadow: 0 0 16px rgba(0,220,255,0.65) inset;
+    radial-gradient(circle at 20% 32%, #20e8ff 0%, #20e8ff 13%, transparent 14%),
+    radial-gradient(circle at 66% 20%, #00d8f0 0%, #00d8f0 11%, transparent 12%),
+    radial-gradient(circle at 78% 66%, #38dcff 0%, #38dcff 14%, transparent 15%),
+    radial-gradient(circle at 42% 74%, #10d8f8 0%, #10d8f8 10%, transparent 11%),
+    radial-gradient(circle at 54% 46%, #28dcff 0%, #28dcff  9%, transparent 10%),
+    repeating-linear-gradient(-48deg, rgba(0,0,0,0.10) 0 4px, transparent 4px 10px),
+    #8e8e8e;
+  border-color: #20e8ff #024058 #024058 #20e8ff;
+  box-shadow: 0 0 16px rgba(0,230,255,0.60) inset;
 }
 
 /* Обсидиан ×6 */
@@ -575,10 +575,10 @@ header { padding: 15px; display: flex; justify-content: space-between; align-ite
   border-color: #686868 #303030 #303030 #686868;
   border-radius: 3px;
   text-align: center;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 900;
   color: #e0e0e0;
-  padding: 3px 8px;
+  padding: 2px 6px;
   font-family: 'Courier New', monospace;
   letter-spacing: 1px;
   flex-shrink: 0;
@@ -652,7 +652,7 @@ header { padding: 15px; display: flex; justify-content: space-between; align-ite
 
 /* ─── БЕТ-СТРОКА ─── */
 .mine-bet-row { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
-.mine-bet-row .quick-bets { margin: 0 !important; }
+.mine-card .quick-bets { margin: 0 !important; }
 .mine-btn {
   background: linear-gradient(180deg, #a05818 0%, #6a3810 100%);
   box-shadow: 0 2px 8px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,200,100,0.3);
