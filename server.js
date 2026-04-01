@@ -761,12 +761,20 @@ const MINE_PICKAXE_MULTS = { wooden: 1.2, stone: 1.5, iron: 2.0, golden: 3.0, di
 
 function generateMineGrid() {
     const grid = [];
+    const TNT_CHANCE = 0.06;  // ~6% chance per non-result block
+    const BOOK_CHANCE = 0.04; // ~4% chance per non-result block
     for (let r = 0; r < 3; r++) {
         const row = [];
-        for (let c = 0; c < 3; c++) {
+        for (let c = 0; c < 5; c++) {
             const weights = MINE_ROW_WEIGHTS[r];
             const rand = Math.random(); let cum = 0; let block = 'stone';
             for (let b = 0; b < MINE_BLOCKS.length; b++) { cum += weights[b]; if (rand < cum) { block = MINE_BLOCKS[b]; break; } }
+            // Randomly upgrade some blocks to special types (not the result block)
+            if (!(r === 2 && c === 2)) {
+                const sp = Math.random();
+                if (sp < TNT_CHANCE) block = 'tnt';
+                else if (sp < TNT_CHANCE + BOOK_CHANCE) block = 'book';
+            }
             row.push(block);
         }
         grid.push(row);
@@ -797,23 +805,39 @@ app.post('/api/mine', async (req, res) => {
         if (!isDemo) { user.stats.bets++; user.stats.minus += betAmount; }
 
         const grid = generateMineGrid();
-        const mainBlock = grid[2][1]; // bottom-center is the result
-        const baseMult = MINE_BLOCK_MULTS[mainBlock] || 0;
+        const mainBlock = grid[2][2]; // row 2, col 2 = centre result block
+        const baseMult  = MINE_BLOCK_MULTS[mainBlock] || 0;
 
-        // Pickaxe — 25% chance
-        let pickaxe = null; let pickaxeMult = 1;
-        if (Math.random() < 0.25) {
-            const r = Math.random(); let cum = 0;
-            for (let i = 0; i < MINE_PICKAXES.length; i++) { cum += MINE_PICKAXE_WEIGHTS[i]; if (r < cum) { pickaxe = MINE_PICKAXES[i]; break; } }
-            pickaxeMult = MINE_PICKAXE_MULTS[pickaxe] || 1;
-        }
+        // Pickaxe — always pick one
+        const pr = Math.random(); let cum2 = 0; let pickaxe = 'wooden';
+        for (let i = 0; i < MINE_PICKAXES.length; i++) { cum2 += MINE_PICKAXE_WEIGHTS[i]; if (pr < cum2) { pickaxe = MINE_PICKAXES[i]; break; } }
+        const pickaxeMult = MINE_PICKAXE_MULTS[pickaxe] || 1;
 
+        // Win decision: same logic, but now spread across blocks
         let actualWin = 0;
         if (baseMult > 0) {
             actualWin = Number((betAmount * baseMult * pickaxeMult).toFixed(2));
             const winChance = (rtpTarget / 100) * 0.22;
             if (Math.random() > winChance) { actualWin = 0; }
             else { actualWin = Math.min(actualWin, betAmount * 18); }
+        }
+
+        // Distribute actualWin across blocks proportionally by their base multiplier
+        // TNT/book blocks get no direct win (they're bonuses)
+        const BLOCK_PAY_MULTS = { stone:0, redstone:0.7, gold:1.5, diamond:3, obsidian:6, tnt:0, book:0 };
+        let totalBlockMult = 0;
+        for (let r = 0; r < 3; r++)
+            for (let c = 0; c < 5; c++)
+                totalBlockMult += (BLOCK_PAY_MULTS[grid[r][c]] || 0);
+
+        const blockWins = [];
+        for (let r = 0; r < 3; r++) {
+            const row = [];
+            for (let c = 0; c < 5; c++) {
+                const bm = BLOCK_PAY_MULTS[grid[r][c]] || 0;
+                row.push(totalBlockMult > 0 && actualWin > 0 ? parseFloat((actualWin * bm / totalBlockMult).toFixed(4)) : 0);
+            }
+            blockWins.push(row);
         }
 
         if (actualWin > 0) {
@@ -834,7 +858,7 @@ app.post('/api/mine', async (req, res) => {
             pushToGlobalHistory(betEntry);
         }
 
-        res.json({ grid, mainBlock, pickaxe, pickaxeMult, baseMult, win: actualWin, user });
+        res.json({ grid, blockWins, mainBlock, pickaxe, pickaxeMult, baseMult, win: actualWin, user });
     } catch (err) {
         console.error('Mine error:', err);
         res.status(500).json({ error: 'Ошибка сервера' });

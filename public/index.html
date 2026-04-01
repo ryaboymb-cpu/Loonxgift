@@ -232,49 +232,30 @@
         <div id="page-mine" class="page">
             <div class="card mine-card">
 
-                <!-- ХОТБАР: 5 кирок -->
-                <div class="mc-hotbar" id="mc-hotbar">
-                    <div class="mc-hb-slot" id="hb-wooden">
-                        <span class="px-wooden" id="hb-wooden-icon">⛏️</span>
-                        <div class="hb-label" style="color:#c8a040;">×1.2</div>
-                    </div>
-                    <div class="mc-hb-slot" id="hb-stone">
-                        <span class="px-stone" id="hb-stone-icon">⛏️</span>
-                        <div class="hb-label" style="color:#9a9a9a;">×1.5</div>
-                    </div>
-                    <div class="mc-hb-slot" id="hb-iron">
-                        <span class="px-iron" id="hb-iron-icon">⛏️</span>
-                        <div class="hb-label" style="color:#c8d0d8;">×2.0</div>
-                    </div>
-                    <div class="mc-hb-slot" id="hb-golden">
-                        <span class="px-golden" id="hb-golden-icon">⛏️</span>
-                        <div class="hb-label" style="color:#ffd700;">×3.0</div>
-                    </div>
-                    <div class="mc-hb-slot" id="hb-diamond">
-                        <span class="px-diamond" id="hb-diamond-icon">⛏️</span>
-                        <div class="hb-label" style="color:#00e8ff;">×5.0</div>
-                    </div>
-                </div>
+                <!-- ИНВЕНТАРЬ 5×3: заполняется предметами по ходу игры -->
+                <div class="mc-inventory" id="mc-inventory"></div>
 
-                <!-- ШАХТА — 5 колонок × 3 ряда блоков -->
+                <!-- ШАХТА 5×3 -->
                 <div class="mc-shaft" id="mc-shaft"></div>
 
-                <!-- КНИЖКА СЧЁТЧИК + WIN DISPLAY -->
-                <div class="mc-bottom-row">
-                    <div class="mc-chests-row">
-                        <div class="mc-chest" id="mc-chest-0"></div>
-                        <div class="mc-chest" id="mc-chest-1"></div>
-                        <div class="mc-chest" id="mc-chest-2"></div>
-                        <div class="mc-chest" id="mc-chest-3"></div>
-                        <div class="mc-chest" id="mc-chest-4"></div>
-                    </div>
-                    <div id="mine-win-display" class="mine-win-display" style="visibility:hidden;"></div>
+                <!-- СУНДУКИ -->
+                <div class="mc-chests-row" id="mc-chests-row">
+                    <div class="mc-chest" id="mc-chest-0"></div>
+                    <div class="mc-chest" id="mc-chest-1"></div>
+                    <div class="mc-chest" id="mc-chest-2"></div>
+                    <div class="mc-chest" id="mc-chest-3"></div>
+                    <div class="mc-chest" id="mc-chest-4"></div>
                 </div>
 
-                <!-- КНИГА / АВТО-СПИН СТАТУС -->
+                <!-- СЧЁТЧИК ВЫИГРЫША -->
+                <div class="mine-running-total" id="mine-running-total">0.00 TON</div>
+                <!-- ИТОГ РАУНДА -->
+                <div class="mine-win-display" id="mine-win-display"></div>
+
+                <!-- КНИГА СТАТУС -->
                 <div id="mine-book-status" class="mine-book-status" style="display:none;"></div>
 
-                <!-- ПАБЛИЦА (одна строка) -->
+                <!-- ПАБЛИЦА -->
                 <div class="mine-pay-line">
                     <span class="mc-blk-mini stone-blk"></span><span>×0</span>
                     <span class="mc-blk-mini redstone-blk"></span><span>×0.7</span>

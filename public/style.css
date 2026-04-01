@@ -177,52 +177,61 @@ header { padding: 15px; display: flex; justify-content: space-between; align-ite
   margin-bottom: 0 !important;
 }
 
-/* ─── ХОТБАР (5 слотов) ─── */
-.mc-hotbar {
+/* ─── ИНВЕНТАРЬ 5×3 (Minecraft стиль) ─── */
+.mc-inventory {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
+  grid-template-rows: repeat(3, 1fr);
   gap: 3px;
-  background: #3a3a3a;
+  background: #8b8b8b;
   border: 3px solid;
-  border-color: #666 #222 #222 #666;
+  border-color: #fff #555 #555 #fff;
   border-radius: 4px;
   padding: 3px;
   flex-shrink: 0;
+  aspect-ratio: 5/3;
 }
-.mc-hb-slot {
+.inv-cell {
   background: #8b8b8b;
   border: 2px solid;
-  border-color: #bbb #444 #444 #bbb;
+  border-color: #555 #fff #fff #555;
   border-radius: 2px;
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 2px 1px;
   font-size: 18px;
-  cursor: default;
-  transition: all 0.2s;
-  min-height: 40px;
-  opacity: 0.5;
+  position: relative;
+  overflow: visible;
+  transition: background 0.15s;
 }
-.mc-hb-slot.active {
-  border-color: #ffd700 #aa8800 #aa8800 #ffd700;
+.inv-cell.filled {
   background: #7a7a7a;
-  opacity: 1;
-  transform: translateY(-2px);
-  box-shadow: 0 3px 12px rgba(255,215,0,0.5);
-  animation: hbPop 0.4s cubic-bezier(0.34,1.56,0.64,1);
+  animation: invPop 0.25s cubic-bezier(0.34,1.56,0.64,1);
 }
-.hb-label { font-size: 9px; font-weight: 900; font-family: monospace; margin-top: 1px; }
-@keyframes hbPop { 0%{transform:translateY(0)scale(0.7)} 60%{transform:translateY(-4px)scale(1.1)} 100%{transform:translateY(-2px)scale(1)} }
+.inv-cell.win-slot {
+  border-color: #ffd700 #997700 #997700 #ffd700 !important;
+  background: #6a6a3a !important;
+  box-shadow: 0 0 8px rgba(255,215,0,0.7);
+}
+@keyframes invPop { 0%{transform:scale(0)} 70%{transform:scale(1.2)} 100%{transform:scale(1)} }
+
+/* Иконки предметов в ячейках инвентаря */
+.inv-icon { font-size: 18px; line-height: 1; pointer-events: none; }
+.inv-icon.px-wooden  { filter: sepia(1) saturate(2) hue-rotate(10deg) brightness(0.9); }
+.inv-icon.px-stone   { filter: grayscale(1) brightness(0.85); }
+.inv-icon.px-iron    { filter: grayscale(0.5) brightness(1.1); }
+.inv-icon.px-golden  { filter: sepia(1) saturate(4) hue-rotate(0deg) brightness(1.1); }
+.inv-icon.px-diamond { filter: hue-rotate(190deg) saturate(4) brightness(1.4); }
+.inv-icon.inv-tnt    { font-size: 14px; }
+.inv-icon.inv-book   { font-size: 14px; }
 
 /* ─── ШАХТА 5×3 ─── */
 .mc-shaft {
-  flex: 1;
-  min-height: 0;
-  max-height: 220px;
+  flex-shrink: 0;
+  aspect-ratio: 5/3;
   display: grid;
   grid-template-columns: repeat(5, 1fr);
+  grid-template-rows: repeat(3, 1fr);
   gap: 3px;
   background: #120c04;
   border: 3px solid;
@@ -231,9 +240,9 @@ header { padding: 15px; display: flex; justify-content: space-between; align-ite
   padding: 4px;
   position: relative;
 }
-.mc-col { display: flex; flex-direction: column; gap: 3px; min-height: 0; height: 100%; }
 .mc-blk {
-  flex: 1;
+  width: 100%;
+  height: 100%;
   min-height: 0;
   border-radius: 3px;
   border: 3px solid;
@@ -477,9 +486,51 @@ header { padding: 15px; display: flex; justify-content: space-between; align-ite
 .mc-blk-mini.tnt-blk      { background:linear-gradient(180deg,#cc1010 0%,#cc1010 30%,#eee 30%,#eee 70%,#cc1010 70%,#cc1010 100%); border-color:#ff3030 #880000 #880000 #ff3030; }
 .mc-blk-mini.book-blk     { background:#5010a0; border-color:#ffd700 #8a6000 #8a6000 #ffd700; }
 
-/* ─── СУНДУКИ + WIN ROW ─── */
-.mc-bottom-row { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
-.mc-chests-row { display:grid; grid-template-columns:repeat(5,1fr); gap:3px; background:#5c3010; border:3px solid; border-color:#8a5018 #2a1408 #2a1408 #8a5018; border-radius:4px; padding:3px; flex: 1; }
+/* ─── СУНДУКИ (standalone, под шахтой) ─── */
+.mc-chests-row { display:grid; grid-template-columns:repeat(5,1fr); gap:3px; background:#5c3010; border:3px solid; border-color:#8a5018 #2a1408 #2a1408 #8a5018; border-radius:4px; padding:3px; flex-shrink:0; }
+
+/* ─── СЧЁТЧИК НАКОПЛЕНИЯ ─── */
+.mine-running-total {
+  background: linear-gradient(180deg, #555 0%, #444 100%);
+  border: 2px solid #333;
+  border-top: 2px solid #666;
+  border-radius: 3px;
+  text-align: center;
+  font-size: 14px;
+  font-weight: 900;
+  color: #fff;
+  padding: 3px 8px;
+  font-family: monospace;
+  letter-spacing: 1px;
+  flex-shrink: 0;
+  text-shadow: 0 1px 4px rgba(0,0,0,0.8);
+}
+.mine-running-total.has-win {
+  color: #ffe060;
+  text-shadow: 0 0 10px rgba(255,220,0,0.8), 0 1px 4px rgba(0,0,0,0.8);
+}
+
+/* ─── ПОПАП ВЫИГРЫША НА БЛОКЕ ─── */
+.block-win-popup {
+  position: absolute;
+  left: 50%;
+  top: 20%;
+  transform: translateX(-50%);
+  font-size: 10px;
+  font-weight: 900;
+  color: #ffe060;
+  text-shadow: 0 1px 4px rgba(0,0,0,0.9), 0 0 8px rgba(255,220,0,0.8);
+  z-index: 20;
+  pointer-events: none;
+  white-space: nowrap;
+  font-family: monospace;
+  animation: blockWinFloat 1.2s ease-out forwards;
+}
+@keyframes blockWinFloat {
+  0%   { opacity:1; transform:translateX(-50%) translateY(0) scale(1); }
+  40%  { opacity:1; transform:translateX(-50%) translateY(-12px) scale(1.1); }
+  100% { opacity:0; transform:translateX(-50%) translateY(-24px) scale(0.8); }
+}
 .mc-chest {
   background: linear-gradient(175deg, #c07828 10%, #8a4c14 60%, #6a3810 100%);
   border: 2px solid;
