@@ -755,9 +755,9 @@ const MINE_ROW_WEIGHTS = [
     [0.42, 0.30, 0.18, 0.08, 0.02], // row 1 — middle
     [0.20, 0.25, 0.30, 0.18, 0.07]  // row 2 — bottom (rare)
 ];
-const MINE_PICKAXES = ['wooden', 'stone', 'iron', 'golden'];
-const MINE_PICKAXE_WEIGHTS = [0.50, 0.30, 0.15, 0.05];
-const MINE_PICKAXE_MULTS = { wooden: 1.2, stone: 1.5, iron: 2.0, golden: 3.0 };
+const MINE_PICKAXES = ['wooden', 'stone', 'iron', 'golden', 'diamond'];
+const MINE_PICKAXE_WEIGHTS = [0.46, 0.28, 0.14, 0.08, 0.04];
+const MINE_PICKAXE_MULTS = { wooden: 1.2, stone: 1.5, iron: 2.0, golden: 3.0, diamond: 5.0 };
 
 function generateMineGrid() {
     const grid = [];

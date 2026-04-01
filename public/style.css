@@ -177,10 +177,10 @@ header { padding: 15px; display: flex; justify-content: space-between; align-ite
   margin-bottom: 0 !important;
 }
 
-/* ─── ХОТБАР ─── */
+/* ─── ХОТБАР (5 слотов) ─── */
 .mc-hotbar {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   gap: 3px;
   background: #3a3a3a;
   border: 3px solid;
@@ -216,19 +216,20 @@ header { padding: 15px; display: flex; justify-content: space-between; align-ite
 .hb-label { font-size: 9px; font-weight: 900; font-family: monospace; margin-top: 1px; }
 @keyframes hbPop { 0%{transform:translateY(0)scale(0.7)} 60%{transform:translateY(-4px)scale(1.1)} 100%{transform:translateY(-2px)scale(1)} }
 
-/* ─── ШАХТА — занимает оставшееся место, но не бесконечно ─── */
+/* ─── ШАХТА 5×3 ─── */
 .mc-shaft {
   flex: 1;
   min-height: 0;
-  max-height: 240px;
+  max-height: 220px;
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   gap: 3px;
   background: #120c04;
   border: 3px solid;
   border-color: #3a2008 #1a0c04 #1a0c04 #3a2008;
   border-radius: 5px;
   padding: 4px;
+  position: relative;
 }
 .mc-col { display: flex; flex-direction: column; gap: 3px; min-height: 0; height: 100%; }
 .mc-blk {
@@ -364,6 +365,108 @@ header { padding: 15px; display: flex; justify-content: space-between; align-ite
   box-shadow: 0 0 18px rgba(90,30,180,0.7);
 }
 
+/* TNT блок: красный с белой полосой и надписью */
+.tnt-blk {
+  background:
+    linear-gradient(180deg,
+      #cc1010 0%, #cc1010 28%,
+      #e8e8e8 28%, #e8e8e8 72%,
+      #cc1010 72%, #cc1010 100%
+    );
+  border-color: #ff3030 #880000 #880000 #ff3030;
+  box-shadow: 0 0 10px rgba(255,50,50,0.6);
+}
+/* "TNT" текст через after */
+.tnt-blk::after {
+  content: 'TNT';
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%,-50%);
+  font-size: 9px;
+  font-weight: 900;
+  color: #cc0000;
+  font-family: monospace;
+  letter-spacing: 1px;
+  z-index: 4;
+  pointer-events: none;
+  background: transparent !important;
+}
+/* Взрыв TNT анимация */
+.mc-blk.tnt-explode {
+  animation: tntBoom 0.45s ease-out;
+}
+@keyframes tntBoom {
+  0%  { transform: scale(1);    filter: brightness(1); }
+  20% { transform: scale(1.35); filter: brightness(5) saturate(2); background: #ff6600 !important; }
+  50% { transform: scale(1.5);  filter: brightness(3); }
+  80% { transform: scale(0.8);  filter: brightness(1.5); opacity: 0.6; }
+  100%{ transform: scale(0);    opacity: 0; }
+}
+/* Зона взрыва (смежные блоки) */
+.mc-blk.blast-zone {
+  animation: blastDamage 0.4s ease-out forwards;
+}
+@keyframes blastDamage {
+  0%  { filter: brightness(3) saturate(2); border-color: #ff6600 !important; }
+  40% { filter: brightness(2); }
+  100%{ filter: brightness(0.5); opacity: 0.7; }
+}
+
+/* Книжка (Enchanted Book): фиолетово-золотая */
+.book-blk {
+  background:
+    radial-gradient(ellipse 50% 60% at 50% 50%, #9040e0 0%, #5010a0 60%, #2a0060 100%);
+  border-color: #ffd700 #8a6000 #8a6000 #ffd700;
+  box-shadow: 0 0 14px rgba(160,80,255,0.9);
+}
+/* Золотая искра на книжке */
+.book-blk::after {
+  content: '✦';
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%,-50%);
+  font-size: 14px;
+  color: #ffe060;
+  text-shadow: 0 0 8px rgba(255,220,0,1);
+  z-index: 4;
+  pointer-events: none;
+  background: transparent !important;
+  animation: bookSparkle 1s ease-in-out infinite alternate;
+}
+@keyframes bookSparkle {
+  0%  { opacity: 0.7; transform: translate(-50%,-50%) scale(0.9); }
+  100%{ opacity: 1;   transform: translate(-50%,-50%) scale(1.2); }
+}
+.book-collect { animation: bookCollect 0.5s cubic-bezier(0.34,1.56,0.64,1); }
+@keyframes bookCollect { 0%{transform:scale(1)} 40%{transform:scale(1.4)rotate(15deg);filter:brightness(3)} 100%{transform:scale(1)rotate(0)} }
+
+/* ─── КИРКА-СНАРЯД ─── */
+.pickaxe-proj {
+  position: fixed;
+  font-size: 20px;
+  z-index: 9999;
+  pointer-events: none;
+  line-height: 1;
+  user-select: none;
+}
+
+/* ─── КНИГА СТАТУС-СТРОКА ─── */
+.mine-book-status {
+  background: linear-gradient(90deg, #1a0840, #2a1060);
+  border: 1px solid #6020c0;
+  border-radius: 6px;
+  padding: 3px 8px;
+  font-size: 11px;
+  font-weight: 900;
+  color: #c080ff;
+  text-align: center;
+  flex-shrink: 0;
+  animation: mcDrop 0.3s ease;
+}
+
+/* Алмазная кирка filter */
+.px-diamond { filter: hue-rotate(190deg) saturate(4) brightness(1.4); }
+
 /* ─── МИНИ БЛОКИ (паблица) ─── */
 .mc-blk-mini { display:inline-block; width:14px; height:14px; border-radius:2px; border:2px solid; flex-shrink:0; vertical-align:middle; }
 .mc-blk-mini.stone-blk    { background:#787878; border-color:#aaa #4a4a4a #4a4a4a #aaa; }
@@ -371,10 +474,12 @@ header { padding: 15px; display: flex; justify-content: space-between; align-ite
 .mc-blk-mini.gold-blk     { background:#c89400; border-color:#ffe060 #7a5000 #7a5000 #ffe060; }
 .mc-blk-mini.diamond-blk  { background:#055870; border-color:#00d4e8 #023040 #023040 #00d4e8; }
 .mc-blk-mini.obsidian-blk { background:#080318; border-color:#5020a0 #040110 #040110 #5020a0; }
+.mc-blk-mini.tnt-blk      { background:linear-gradient(180deg,#cc1010 0%,#cc1010 30%,#eee 30%,#eee 70%,#cc1010 70%,#cc1010 100%); border-color:#ff3030 #880000 #880000 #ff3030; }
+.mc-blk-mini.book-blk     { background:#5010a0; border-color:#ffd700 #8a6000 #8a6000 #ffd700; }
 
 /* ─── СУНДУКИ + WIN ROW ─── */
 .mc-bottom-row { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
-.mc-chests-row { display:grid; grid-template-columns:repeat(4,1fr); gap:3px; background:#5c3010; border:3px solid; border-color:#8a5018 #2a1408 #2a1408 #8a5018; border-radius:4px; padding:3px; flex: 1; }
+.mc-chests-row { display:grid; grid-template-columns:repeat(5,1fr); gap:3px; background:#5c3010; border:3px solid; border-color:#8a5018 #2a1408 #2a1408 #8a5018; border-radius:4px; padding:3px; flex: 1; }
 .mc-chest {
   background: linear-gradient(175deg, #c07828 10%, #8a4c14 60%, #6a3810 100%);
   border: 2px solid;
