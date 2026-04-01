@@ -196,6 +196,8 @@ function toggleMode() {
 }
 
 function nav(pageId, el) {
+    // Если уходим с mine — убить все анимации кирок
+    if (pageId !== 'mine' && typeof killAllPickaxes === 'function') killAllPickaxes();
     document.querySelectorAll('.page').forEach(p => p.classList.remove('active')); 
     if($('page-'+pageId)) $('page-'+pageId).classList.add('active');
     if(el) { document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active')); el.classList.add('active'); }
@@ -204,11 +206,13 @@ function nav(pageId, el) {
 function navGame(game) { 
     let mKey = game;
     if(game === 'coin') mKey = 'coinflip'; 
-    if (maintenance[mKey]) return showToast('Временно тех. перерыв'); 
+    if (maintenance[mKey]) return showToast('Временно тех. перерыв');
+    // При уходе с Mine — убить все анимации кирок
+    if (game !== 'mine') killAllPickaxes();
     nav(game); 
     if(game === 'battle') renderBattleLobbies();
     if(game === 'spin') initSpinPage();
-    if(game === 'mine') initMineGrid();
+    if(game === 'mine') { mineIsActive = true; initMineGrid(); }
 }
 
 function setQuickBet(inputId, amount, btn) {
@@ -1537,12 +1541,23 @@ function _animXY(el, x0, y0, x1, y1, dur, cb) {
     requestAnimationFrame(frame);
 }
 
-// ── Разбивка блока: flash типа → частицы → исчезновение → инвентарь ──
+// ── Флаг активности Mine-игры (для чистки анимаций при выходе) ──
+let mineIsActive = false;
+const _pickaxeEls = new Set();
+
+function killAllPickaxes() {
+    _pickaxeEls.forEach(el => { try { if (el.parentNode) el.parentNode.removeChild(el); } catch(e){} });
+    _pickaxeEls.clear();
+    mineIsActive = false;
+}
+
+// ── Разбивка блока: flash типа → частицы → исчезновение (БЕЗ инвентаря) ──
 function doBreakBlock(blkEl, blk, onDone) {
     blkEl.classList.remove('cracking-1','cracking-2','cracking-3','crack-hit');
     const oreClass = MINE_BLOCK_CLASS[blk.type] || 'stone-blk';
     blkEl.className = `mc-blk ${oreClass}`;
 
+    // Показать выигрыш любого блока (даже 0 — для каждого что-то)
     if (blk.win > 0) {
         spawnBlockWinPopup(blkEl, blk.win);
         mineRunningTotal += blk.win;
@@ -1551,7 +1566,7 @@ function doBreakBlock(blkEl, blk, onDone) {
     }
     spawnBreakParticles(blkEl, blk.type);
 
-    // Небольшой флэш (160мс) потом исчезает
+    // Флэш 160мс потом блок исчезает НА МЕСТЕ (не летит вверх)
     setTimeout(() => {
         blkEl.style.transition = 'transform 0.18s cubic-bezier(0.5,0,1,1), opacity 0.14s';
         blkEl.style.transform = 'scale(0.04)';
@@ -1560,52 +1575,23 @@ function doBreakBlock(blkEl, blk, onDone) {
         setTimeout(() => { if (blkEl.parentNode) blkEl.parentNode.removeChild(blkEl); }, 200);
     }, 160);
 
-    // Кладём в инвентарь
-    fillInvCell(blk.r, blk.c, blk.type, null);
+    // Книга запускает авто-спин (но НЕ уходит в инвентарь)
     if (blk.type === 'book') collectBook(blkEl);
     if (onDone) setTimeout(onDone, 110);
 }
 
-// ── ОДНА КИРКА: обрабатывает свою очередь блоков ПОСЛЕДОВАТЕЛЬНО ──
-// workerIdx: индекс кирки (0, 1, 2, ...)
-// blockQueue: массив блоков для этой кирки
+// ── ВОРКЕР-КИРКА: обрабатывает очередь блоков по одному ──
+// Каждый блок получает СВОЮ кирку, которая падает и исчезает.
+// Никакого горизонтального перемещения между блоками.
 function spawnPickaxeWorker(blockQueue, pickaxeType, workerIdx, onWorkerDone) {
     if (!blockQueue.length) { if (onWorkerDone) onWorkerDone(); return; }
 
-    const pUrl = getPickaxeImg(pickaxeType);
-    const el = document.createElement('img');
-    el.src = pUrl;
-    el.style.cssText = 'position:fixed;width:30px;height:30px;z-index:9999;pointer-events:none;image-rendering:pixelated;transform:translate(-50%,-50%) rotate(135deg);opacity:0;left:-999px;top:-999px;';
-    document.body.appendChild(el);
-
-    // Предпозиционировать над первым блоком (скрытый)
-    const _fb = blockQueue[0];
-    const _fbEl = $(`mc-blk-${_fb.r}-${_fb.c}`);
-    if (_fbEl) {
-        const _r = _fbEl.getBoundingClientRect();
-        el.style.left = (_r.left + _r.width / 2) + 'px';
-        el.style.top  = (_r.top - 70) + 'px';
-    }
-
     let qi = 0;
 
-    // Убрать иконку кирки из инвентаря после использования
-    function clearInvPickaxe() {
-        const inv = $('mc-inventory');
-        if (!inv) return;
-        const picks = Array.from(inv.querySelectorAll('.inv-cell[data-has-pick="1"]'));
-        if (picks[0]) {
-            picks[0].removeAttribute('data-has-pick');
-            picks[0].innerHTML = '';
-        }
-    }
-
     function processNext() {
+        if (!mineIsActive) return;  // Игра закрыта — стоп
         if (qi >= blockQueue.length) {
-            clearInvPickaxe();
-            el.style.transition = 'opacity 0.15s';
-            el.style.opacity = '0';
-            setTimeout(() => { el.remove(); if (onWorkerDone) onWorkerDone(); }, 180);
+            if (onWorkerDone) onWorkerDone();
             return;
         }
         const blk = blockQueue[qi++];
@@ -1613,52 +1599,67 @@ function spawnPickaxeWorker(blockQueue, pickaxeType, workerIdx, onWorkerDone) {
         if (!blkEl || blkEl.dataset.revealed === '1') { processNext(); return; }
 
         const rect = blkEl.getBoundingClientRect();
-        const bx   = rect.left + rect.width / 2;
-        const by   = rect.top + rect.height * 0.12;   // top edge of block
-        const hover = by - 46;                          // holding position above block
+        const bx    = rect.left + rect.width / 2;
+        const by    = rect.top + rect.height * 0.1;  // верх блока
+        const startY = by - 80;                        // стартовая точка кирки (выше блока)
+        const hover  = by - 44;                        // позиция над блоком
 
-        // Переместить кирку над блоком
-        const curX = parseFloat(el.style.left) || bx;
-        const curY = parseFloat(el.style.top) || (hover - 50);
-        el.style.opacity = '1';
+        // Создать НОВУЮ кирку для ЭТОГО блока
+        const pUrl = getPickaxeImg(pickaxeType);
+        const el = document.createElement('img');
+        el.src = pUrl;
+        el.style.cssText = `position:fixed;width:30px;height:30px;z-index:9999;pointer-events:none;image-rendering:pixelated;transform:translate(-50%,-50%) rotate(135deg);left:${bx}px;top:${startY}px;`;
+        document.body.appendChild(el);
+        _pickaxeEls.add(el);
 
-        _animXY(el, curX, curY, bx, hover, 170, () => {
+        function removeEl() {
+            _pickaxeEls.delete(el);
+            if (el.parentNode) el.parentNode.removeChild(el);
+        }
+
+        // Начальное падение с высоты до позиции над блоком
+        _animProp(el, 'top', startY, hover, 160, t => t*t, () => {
+            if (!mineIsActive) { removeEl(); return; }
             blkEl.classList.add('cracking-1');
             doHits(blk.hits, blk.hits, 0);
         });
 
         function doHits(hitsLeft, totalHits, hitNum) {
-            // Падение на блок (гравитация: ease-in)
-            _animProp(el, 'top', hover, by, 125, t => t*t, () => {
-                // УДАР!
+            if (!mineIsActive) { removeEl(); return; }
+            // Удар: падение вниз
+            _animProp(el, 'top', hover, by, 120, t => t*t, () => {
+                if (!mineIsActive) { removeEl(); return; }
                 blkEl.classList.add('crack-hit');
                 setTimeout(() => blkEl.classList.remove('crack-hit'), 65);
                 consumeDurability(1);
 
                 blkEl.classList.remove('cracking-1','cracking-2','cracking-3');
-                if (hitsLeft <= 1)       blkEl.classList.add('cracking-3');
-                else if (hitNum === 0)   blkEl.classList.add('cracking-1');
-                else                     blkEl.classList.add('cracking-2');
+                if (hitsLeft <= 1)     blkEl.classList.add('cracking-3');
+                else if (hitNum === 0) blkEl.classList.add('cracking-1');
+                else                   blkEl.classList.add('cracking-2');
 
                 if (hitsLeft <= 1) {
-                    // Финальный удар — ломаем блок, потом к следующему
-                    doBreakBlock(blkEl, blk, () => {
-                        _animProp(el, 'top', by, hover, 95, t => 1-(1-t)*(1-t), () => {
-                            setTimeout(processNext, 35);
-                        });
+                    // Финальный удар — блок ломается
+                    doBreakBlock(blkEl, blk, null);
+                    // Кирка улетает ВВЕРХ и исчезает (строго вертикально)
+                    _animProp(el, 'top', by, startY - 20, 180, t => 1-(1-t)*(1-t), () => {
+                        removeEl();
+                        // Следующий блок в очереди (небольшая пауза)
+                        setTimeout(processNext, 80);
                     });
                 } else {
-                    // Отскок и ещё удар
-                    _animProp(el, 'top', by, hover, 85, t => 1-(1-t)*(1-t), () => {
-                        setTimeout(() => doHits(hitsLeft - 1, totalHits, hitNum + 1), 30);
+                    // Отскок вверх и ещё удар
+                    _animProp(el, 'top', by, hover, 80, t => 1-(1-t)*(1-t), () => {
+                        if (!mineIsActive) { removeEl(); return; }
+                        setTimeout(() => doHits(hitsLeft - 1, totalHits, hitNum + 1), 25);
                     });
                 }
             });
         }
     }
 
-    // Начало: небольшой старт с задержкой по индексу
-    setTimeout(processNext, workerIdx * 80);
+    // Небольшой старт с задержкой по индексу кирки
+    setTimeout(processNext, workerIdx * 90);
 }
 
 // ──── TNT взрыв: подсвечивает соседей ────
@@ -1862,7 +1863,8 @@ function revealMineShaft(grid, blockWins, pickaxe, win, balanceBefore, chestMult
     const longestQ = Math.max(...queues.map(q => q.reduce((s, b) => s + b.hits * 240 + 280, 0)));
     const estimatedReveal = longestQ + N * 80 + 200;  // + stagger + buffer
 
-    // Запустить N кирок
+    // Активировать Mine и запустить N кирок
+    mineIsActive = true;
     queues.forEach((queue, wi) => spawnPickaxeWorker(queue, pickaxe, wi, null));
 
     const lastBlkReveal = estimatedReveal;
