@@ -1318,57 +1318,56 @@ let mineRunningTotal  = 0;
 // Рисует пиксельную кирку как в Minecraft (item sprite, 16×16 → 32×32)
 // Голова вверху-слева, рукоять уходит по диагонали вправо-вниз
 function drawPickaxeCanvas(type) {
+    // 16×16 logical pixels, each drawn 4×4 px → 64×64 canvas
     const c = document.createElement('canvas');
-    c.width = 32; c.height = 32;
+    c.width = 64; c.height = 64;
     const ctx = c.getContext('2d');
     ctx.imageSmoothingEnabled = false;
-    // Цветовые схемы (H=основной, D=тень головы, W=рукоять, V=тень рукояти)
     const cols = {
-        wooden:  { H:'#c8ad64', D:'#8a7030', W:'#b07830', V:'#7a5018' },
-        stone:   { H:'#9c9c9c', D:'#575757', W:'#b07830', V:'#7a5018' },
-        iron:    { H:'#e8eef0', D:'#9aacb4', W:'#b07830', V:'#7a5018' },
-        golden:  { H:'#ffe840', D:'#c09018', W:'#b07830', V:'#7a5018' },
-        diamond: { H:'#5de8f8', D:'#08b0c8', W:'#b07830', V:'#7a5018' },
+        wooden:  { H:'#c8ad64', L:'#e8d080', D:'#8a7030', DK:'#543e00', W:'#c08040', V:'#7a5018', VD:'#3e2800' },
+        stone:   { H:'#aaaaaa', L:'#d8d8d8', D:'#606060', DK:'#303030', W:'#c08040', V:'#7a5018', VD:'#3e2800' },
+        iron:    { H:'#e8eef4', L:'#ffffff', D:'#9aacb8', DK:'#6080a0', W:'#c08040', V:'#7a5018', VD:'#3e2800' },
+        golden:  { H:'#ffd800', L:'#fff060', D:'#c09000', DK:'#806000', W:'#c08040', V:'#7a5018', VD:'#3e2800' },
+        diamond: { H:'#44d4f0', L:'#a0f8ff', D:'#10a8c8', DK:'#006888', W:'#c08040', V:'#7a5018', VD:'#3e2800' },
     };
-    const { H, D, W, V } = cols[type] || cols.wooden;
-    // 1 логический пиксель = 2×2 canvas-пикселя
-    const px = (lx, ly, col) => { ctx.fillStyle = col; ctx.fillRect(lx*2, ly*2, 2, 2); };
+    const { H, L, D, DK, W, V, VD } = cols[type] || cols.wooden;
+    const S = 4; // px per logical pixel
+    const px = (lx, ly, col) => { ctx.fillStyle = col; ctx.fillRect(lx*S, ly*S, S, S); };
+    const blk = (col) => col; // alias for clarity
 
-    // ── Голова кирки (реальная форма из Minecraft) ──
-    // Строка 0: верхний горизонтальный стержень
-    px(1,0,H); px(2,0,H); px(3,0,H); px(4,0,H); px(5,0,H);
-    // Строка 1: расширяется + правый кончик
-    px(0,1,H); px(1,1,H); px(2,1,H); px(3,1,H); px(4,1,H); px(5,1,H); px(6,1,H);
-    // Строка 2: левый зубец + тело + правый зубец (разрыв посередине)
-    px(0,2,H); px(1,2,H); px(2,2,H);                  // левый зубец
-    px(4,2,H); px(5,2,H); px(6,2,H);                  // правый зубец
-    // Строка 3: нижние тени + основание головы
-    px(0,3,D); px(1,3,D); px(2,3,D);                  // низ левого зубца
-    px(4,3,D); px(5,3,D); px(6,3,D);                  // низ правого зубца
-    // Строка 4: переход к рукояти
-    px(3,4,H); px(4,4,D);
-    // Строка 1 затемнение (нижний край горизонтального стержня)
-    px(0,1,D); // самый левый пиксель строки 1 — тень
-    px(6,1,D); // самый правый пиксель строки 1 — тень
+    // ── Голова кирки (стиль Minecraft item sprite, голова слева-вверху) ──
+    // r0: вершина левого зубца
+    px(0,0,L); px(1,0,H); px(2,0,D);
+    // r1: верхний зубец расширяется
+    px(0,1,L); px(1,1,H); px(2,1,H); px(3,1,D);
+    // r2: верхний горизонтальный стержень головы
+    px(0,2,L); px(1,2,H); px(2,2,H); px(3,2,H); px(4,2,H); px(5,2,D);
+    // r3: тело головы + верх нижнего зубца
+    px(0,3,L); px(1,3,H); px(2,3,H); px(3,3,H); px(4,3,H); px(5,3,H); px(6,3,D);
+    // r4: нижний зубец + переход к рукояти
+    px(0,4,L); px(1,4,H); px(2,4,H); px(3,4,D);
+                                      px(4,4,H); px(5,4,H); px(6,4,D);
+    // r5: основание зубцов (тень)
+    px(0,5,D); px(1,5,DK); px(2,5,DK);
+                            px(4,5,D); px(5,5,DK);
+    // r4 переход к рукояти
+    px(4,4,H); px(5,4,D);
 
-    // ── Рукоять (диагональ, 2 пикселя широкая, вправо-вниз) ──
-    // Каждая "ступенька": 2 пикселя на позицию
-    const handleSteps = [
-        [4,5],[5,5],
-        [5,6],[6,6],
-        [6,7],[7,7],
-        [7,8],[8,8],
-        [8,9],[9,9],
-        [9,10],[10,10],
-        [10,11],[11,11],
-        [11,12],[12,12],
-        [12,13],[13,13],
-        [13,14],[14,14],
+    // ── Рукоять (диагональ вправо-вниз, 2px широкая) ──
+    const handle = [
+        [5,5],[6,5],   [6,6],[7,6],   [7,7],[8,7],   [8,8],[9,8],
+        [9,9],[10,9],  [10,10],[11,10],[11,11],[12,11],[12,12],[13,12],
+        [13,13],[14,13],[14,14],[15,14],
     ];
-    handleSteps.forEach(([x,y], i) => {
-        // Чётные — основной цвет, нечётные — тень
-        px(x, y, i % 2 === 0 ? W : V);
+    handle.forEach(([x,y], i) => {
+        if (i % 2 === 0) px(x, y, W);
+        else             px(x, y, V);
     });
+    // тень рукояти (нижний край)
+    const handleShadow = [
+        [6,6],[7,7],[8,8],[9,9],[10,10],[11,11],[12,12],[13,13],[14,14],[15,15],
+    ];
+    handleShadow.forEach(([x,y]) => { if (y < 16) px(x, y, VD); });
 
     return c.toDataURL('image/png');
 }
@@ -1551,13 +1550,13 @@ function killAllPickaxes() {
     mineIsActive = false;
 }
 
-// ── Разбивка блока: flash типа → частицы → исчезновение (БЕЗ инвентаря) ──
-function doBreakBlock(blkEl, blk, onDone) {
+// ── Разбивка блока: flash типа → частицы → исчезновение ──
+function doBreakBlock(blkEl, blk, onDone, onBlockFullyGone) {
     blkEl.classList.remove('cracking-1','cracking-2','cracking-3','crack-hit');
     const oreClass = MINE_BLOCK_CLASS[blk.type] || 'stone-blk';
     blkEl.className = `mc-blk ${oreClass}`;
 
-    // Показать выигрыш любого блока (даже 0 — для каждого что-то)
+    // Показать выигрыш блока
     if (blk.win > 0) {
         spawnBlockWinPopup(blkEl, blk.win);
         mineRunningTotal += blk.win;
@@ -1566,49 +1565,66 @@ function doBreakBlock(blkEl, blk, onDone) {
     }
     spawnBreakParticles(blkEl, blk.type);
 
-    // Флэш 160мс потом блок исчезает НА МЕСТЕ (не летит вверх)
+    // Книга и ТНТ → в инвентарь
+    if (blk.type === 'book') { collectBook(blkEl); fillInvCell(blk.r, blk.c, 'book', null); }
+    if (blk.type === 'tnt')  { fillInvCell(blk.r, blk.c, 'tnt', null); }
+
+    // Флэш 160мс → блок исчезает НА МЕСТЕ (масштаб 0)
     setTimeout(() => {
         blkEl.style.transition = 'transform 0.18s cubic-bezier(0.5,0,1,1), opacity 0.14s';
         blkEl.style.transform = 'scale(0.04)';
         blkEl.style.opacity = '0';
         blkEl.dataset.revealed = '1';
-        setTimeout(() => { if (blkEl.parentNode) blkEl.parentNode.removeChild(blkEl); }, 200);
+        setTimeout(() => {
+            if (blkEl.parentNode) blkEl.parentNode.removeChild(blkEl);
+            if (onBlockFullyGone) onBlockFullyGone();
+        }, 200);
     }, 160);
 
-    // Книга запускает авто-спин (но НЕ уходит в инвентарь)
-    if (blk.type === 'book') collectBook(blkEl);
     if (onDone) setTimeout(onDone, 110);
 }
 
-// ── ВОРКЕР-КИРКА: обрабатывает очередь блоков по одному ──
-// Каждый блок получает СВОЮ кирку, которая падает и исчезает.
-// Никакого горизонтального перемещения между блоками.
-function spawnPickaxeWorker(blockQueue, pickaxeType, workerIdx, onWorkerDone) {
+// ── ВОРКЕР-КИРКА: обрабатывает очередь до конца прочности ──
+// maxDur   — хит-пойнты этой кирки; когда заканчиваются — кирка ломается
+// onBlockBroken(r,c) — вызывается после того как конкретный блок полностью исчез
+function spawnPickaxeWorker(blockQueue, pickaxeType, workerIdx, onWorkerDone, onBlockBroken, maxDur) {
     if (!blockQueue.length) { if (onWorkerDone) onWorkerDone(); return; }
 
     let qi = 0;
+    let remainDur = (maxDur && maxDur > 0) ? maxDur : 999;
 
     function processNext() {
-        if (!mineIsActive) return;  // Игра закрыта — стоп
-        if (qi >= blockQueue.length) {
-            if (onWorkerDone) onWorkerDone();
+        if (!mineIsActive) return;
+        if (qi >= blockQueue.length) { if (onWorkerDone) onWorkerDone(); return; }
+
+        const blk = blockQueue[qi];
+        const blkEl = $(`mc-blk-${blk.r}-${blk.c}`);
+        if (!blkEl || blkEl.dataset.revealed === '1') { qi++; processNext(); return; }
+
+        // Сколько ударов может нанести кирка по этому блоку
+        const hitsCanDo = Math.min(blk.hits, remainDur);
+        const willBreak = hitsCanDo < blk.hits; // кирка сломается на этом блоке
+        const blockWillBreak = hitsCanDo >= blk.hits; // блок будет сломан
+
+        if (hitsCanDo <= 0) {
+            // Прочность ноль — кирка ломается не начиная
+            doPickaxeBreak(blkEl, () => { if (onWorkerDone) onWorkerDone(); }, false);
             return;
         }
-        const blk = blockQueue[qi++];
-        const blkEl = $(`mc-blk-${blk.r}-${blk.c}`);
-        if (!blkEl || blkEl.dataset.revealed === '1') { processNext(); return; }
+
+        qi++;
+        remainDur -= hitsCanDo;
 
         const rect = blkEl.getBoundingClientRect();
-        const bx    = rect.left + rect.width / 2;
-        const by    = rect.top + rect.height * 0.1;  // верх блока
-        const startY = by - 80;                        // стартовая точка кирки (выше блока)
-        const hover  = by - 44;                        // позиция над блоком
+        const bx     = rect.left + rect.width / 2;
+        const by     = rect.top + rect.height * 0.1;
+        const startY = by - 80;
+        const hover  = by - 44;
 
-        // Создать НОВУЮ кирку для ЭТОГО блока
         const pUrl = getPickaxeImg(pickaxeType);
         const el = document.createElement('img');
         el.src = pUrl;
-        el.style.cssText = `position:fixed;width:30px;height:30px;z-index:9999;pointer-events:none;image-rendering:pixelated;transform:translate(-50%,-50%) rotate(135deg);left:${bx}px;top:${startY}px;`;
+        el.style.cssText = `position:fixed;width:36px;height:36px;z-index:9999;pointer-events:none;image-rendering:pixelated;transform:translate(-50%,-50%) rotate(135deg);left:${bx}px;top:${startY}px;`;
         document.body.appendChild(el);
         _pickaxeEls.add(el);
 
@@ -1617,48 +1633,109 @@ function spawnPickaxeWorker(blockQueue, pickaxeType, workerIdx, onWorkerDone) {
             if (el.parentNode) el.parentNode.removeChild(el);
         }
 
-        // Начальное падение с высоты до позиции над блоком
-        _animProp(el, 'top', startY, hover, 160, t => t*t, () => {
+        // Падение до позиции над блоком
+        _animProp(el, 'top', startY, hover, 150, t => t*t, () => {
             if (!mineIsActive) { removeEl(); return; }
             blkEl.classList.add('cracking-1');
-            doHits(blk.hits, blk.hits, 0);
+            doHits(hitsCanDo, 0);
         });
 
-        function doHits(hitsLeft, totalHits, hitNum) {
+        function doHits(hitsLeft, hitNum) {
             if (!mineIsActive) { removeEl(); return; }
-            // Удар: падение вниз
-            _animProp(el, 'top', hover, by, 120, t => t*t, () => {
+            _animProp(el, 'top', hover, by, 110, t => t*t, () => {
                 if (!mineIsActive) { removeEl(); return; }
                 blkEl.classList.add('crack-hit');
-                setTimeout(() => blkEl.classList.remove('crack-hit'), 65);
+                setTimeout(() => blkEl.classList.remove('crack-hit'), 60);
                 consumeDurability(1);
 
                 blkEl.classList.remove('cracking-1','cracking-2','cracking-3');
-                if (hitsLeft <= 1)     blkEl.classList.add('cracking-3');
-                else if (hitNum === 0) blkEl.classList.add('cracking-1');
-                else                   blkEl.classList.add('cracking-2');
+                if (hitsLeft <= 1 && blockWillBreak) blkEl.classList.add('cracking-3');
+                else if (hitNum === 0)               blkEl.classList.add('cracking-1');
+                else                                 blkEl.classList.add('cracking-2');
 
                 if (hitsLeft <= 1) {
-                    // Финальный удар — блок ломается
-                    doBreakBlock(blkEl, blk, null);
-                    // Кирка улетает ВВЕРХ и исчезает (строго вертикально)
-                    _animProp(el, 'top', by, startY - 20, 180, t => 1-(1-t)*(1-t), () => {
-                        removeEl();
-                        // Следующий блок в очереди (небольшая пауза)
-                        setTimeout(processNext, 80);
-                    });
+                    if (blockWillBreak) {
+                        // Блок полностью сломан
+                        doBreakBlock(blkEl, blk, null, () => {
+                            if (onBlockBroken) onBlockBroken(blk.r, blk.c);
+                        });
+                        _animProp(el, 'top', by, startY - 30, 170, t => 1-(1-t)*(1-t), () => {
+                            removeEl();
+                            setTimeout(processNext, 75);
+                        });
+                    } else {
+                        // Кирка сломалась — блок остаётся повреждённым (cracking-2)
+                        blkEl.classList.add('cracking-2');
+                        _animProp(el, 'top', by, hover, 75, t => 1-(1-t)*(1-t), () => {
+                            if (!mineIsActive) { removeEl(); return; }
+                            // Вибрация и излом кирки
+                            doPickaxeBreak(null, () => { removeEl(); if (onWorkerDone) onWorkerDone(); }, true, el, bx, hover);
+                        });
+                    }
                 } else {
-                    // Отскок вверх и ещё удар
-                    _animProp(el, 'top', by, hover, 80, t => 1-(1-t)*(1-t), () => {
+                    _animProp(el, 'top', by, hover, 75, t => 1-(1-t)*(1-t), () => {
                         if (!mineIsActive) { removeEl(); return; }
-                        setTimeout(() => doHits(hitsLeft - 1, totalHits, hitNum + 1), 25);
+                        setTimeout(() => doHits(hitsLeft - 1, hitNum + 1), 20);
                     });
                 }
             });
         }
     }
 
-    // Небольшой старт с задержкой по индексу кирки
+    // Анимация излома кирки: вибрация → покраснение → исчезновение
+    // useExisting=true → анимируем уже существующий элемент `existingEl`
+    function doPickaxeBreak(blkEl, cb, useExisting, existingEl, bx, hoverY) {
+        let el = existingEl;
+        let startY, hover, by;
+
+        function removeEl() {
+            if (!el) return;
+            _pickaxeEls.delete(el);
+            if (el.parentNode) el.parentNode.removeChild(el);
+        }
+
+        function shakeAndBreak(el) {
+            el.style.filter = 'hue-rotate(100deg) saturate(2) brightness(1.6)';
+            let shakeN = 0;
+            const baseL = parseFloat(el.style.left);
+            const shakeId = setInterval(() => {
+                shakeN++;
+                el.style.left = (baseL + (shakeN % 2 === 0 ? 5 : -5)) + 'px';
+                if (shakeN >= 6) {
+                    clearInterval(shakeId);
+                    el.style.transition = 'opacity 0.2s, transform 0.2s';
+                    el.style.opacity = '0';
+                    el.style.transform = 'translate(-50%,-50%) rotate(200deg) scale(0.15)';
+                    setTimeout(() => { removeEl(); if (cb) cb(); }, 220);
+                }
+            }, 35);
+        }
+
+        if (useExisting && el) {
+            shakeAndBreak(el);
+            return;
+        }
+
+        if (!blkEl) { if (cb) cb(); return; }
+        const rect  = blkEl.getBoundingClientRect();
+        const bxx   = rect.left + rect.width / 2;
+        const byy   = rect.top + rect.height * 0.1;
+        const sY    = byy - 80;
+        const hov   = byy - 44;
+
+        const pUrl = getPickaxeImg(pickaxeType);
+        el = document.createElement('img');
+        el.src = pUrl;
+        el.style.cssText = `position:fixed;width:36px;height:36px;z-index:9999;pointer-events:none;image-rendering:pixelated;transform:translate(-50%,-50%) rotate(135deg);left:${bxx}px;top:${sY}px;`;
+        document.body.appendChild(el);
+        _pickaxeEls.add(el);
+
+        _animProp(el, 'top', sY, hov, 140, t => t*t, () => {
+            if (!mineIsActive) { removeEl(); if(cb)cb(); return; }
+            shakeAndBreak(el);
+        });
+    }
+
     setTimeout(processNext, workerIdx * 90);
 }
 
@@ -1825,10 +1902,11 @@ function spawnBreakParticles(blockEl, blockType) {
 
 // ─── Основное раскрытие: grid[r][c] из сервера, blockWins[r][c] ───
 function revealMineShaft(grid, blockWins, pickaxe, win, balanceBefore, chestMult) {
-    const BLOCK_HITS_MAP = { stone:2, redstone:2, gold:3, diamond:3, obsidian:4, book:2 };
+    const BLOCK_HITS_MAP  = { stone:2, redstone:2, gold:3, diamond:3, obsidian:4, book:2, tnt:2 };
     const PICKAXE_MOD_MAP = { wooden:+1, stone:0, iron:0, golden:-1, diamond:-1 };
     const pMod = PICKAXE_MOD_MAP[pickaxe] || 0;
-    const N = Math.max(1, mineLastPickaxeCount);  // exactly N pickaxes
+    const N = Math.max(1, mineLastPickaxeCount);
+    const perPickaxeDur = PICKAXE_DURABILITY[pickaxe] || 8;
 
     // Сбросить все блоки шахты в СКРЫТОЕ состояние
     for (let r = 0; r < MC_ROWS; r++) {
@@ -1841,7 +1919,7 @@ function revealMineShaft(grid, blockWins, pickaxe, win, balanceBefore, chestMult
         }
     }
 
-    // Список всех блоков
+    // Список всех блоков с количеством ударов
     const allBlocks = [];
     for (let r = 0; r < MC_ROWS; r++) {
         for (let c = 0; c < MC_COLS; c++) {
@@ -1852,61 +1930,81 @@ function revealMineShaft(grid, blockWins, pickaxe, win, balanceBefore, chestMult
         }
     }
 
-    // Разделить блоки между N кирками (round-robin)
-    // Кирка 0: блоки 0, N, 2N, ...
-    // Кирка 1: блоки 1, N+1, 2N+1, ...
+    // Разделить блоки по N кирках (round-robin)
     const queues = Array.from({ length: N }, () => []);
     allBlocks.forEach((b, i) => queues[i % N].push(b));
 
-    // Оценка времени: кирка с самой длинной очередью
-    // Каждый блок занимает: hits * (125+85+30) + 170 + 110 ≈ (hits * 240 + 280) мс
-    const longestQ = Math.max(...queues.map(q => q.reduce((s, b) => s + b.hits * 240 + 280, 0)));
-    const estimatedReveal = longestQ + N * 80 + 200;  // + stagger + buffer
+    // ── Симуляция: какие блоки РЕАЛЬНО сломает кирка с учётом прочности ──
+    const brokenSet = new Set();
+    queues.forEach(queue => {
+        let rem = perPickaxeDur;
+        for (const blk of queue) {
+            if (rem >= blk.hits) { rem -= blk.hits; brokenSet.add(`${blk.r},${blk.c}`); }
+            else break; // кирка ломается — дальнейшие блоки остаются
+        }
+    });
 
-    // Активировать Mine и запустить N кирок
-    mineIsActive = true;
-    queues.forEach((queue, wi) => spawnPickaxeWorker(queue, pickaxe, wi, null));
+    // Масштабировать win на реально сломанные блоки
+    const brokenWinSum = allBlocks.filter(b => brokenSet.has(`${b.r},${b.c}`)).reduce((s,b) => s + b.win, 0);
+    const scaleFactor  = (brokenWinSum > 0 && win > 0) ? win / brokenWinSum : 0;
+    allBlocks.forEach(b => {
+        b.win = brokenSet.has(`${b.r},${b.c}`) ? parseFloat((b.win * scaleFactor).toFixed(4)) : 0;
+    });
 
-    const lastBlkReveal = estimatedReveal;
+    // ── Сундуки: открываются только когда ВСЕ 3 строки в столбце сломаны ──
+    const liveColBroken  = [0, 0, 0, 0, 0];   // сколько блоков в каждом столбце уже исчезло
+    const openedChests   = new Set();
     const effectiveChestMult = chestMult || 2;
 
-    // Сундуки открываются волной — и КАЖДЫЙ показывает ×N ВЫШЕ себя
-    setTimeout(() => {
-        for (let i = 0; i < MC_COLS; i++) {
+    function onBlockBroken(r, c) {
+        liveColBroken[c]++;
+        if (liveColBroken[c] >= MC_ROWS && !openedChests.has(c)) {
+            openedChests.add(c);
+            // Небольшая задержка чтобы блок успел исчезнуть визуально
             setTimeout(() => {
-                const ch = $(`mc-chest-${i}`);
+                const ch = $(`mc-chest-${c}`);
                 if (!ch) return;
                 ch.classList.add('open', 'open-anim');
                 setTimeout(() => ch.classList.remove('open-anim'), 600);
-                // Показать ×N над каждым сундуком
                 const pop = document.createElement('div');
                 pop.className = 'chest-mult-tag';
                 pop.textContent = `×${effectiveChestMult}`;
                 ch.appendChild(pop);
-                setTimeout(() => { if (pop.parentNode) pop.parentNode.removeChild(pop); }, 2800);
-            }, i * 110);
+                setTimeout(() => { if (pop.parentNode) pop.parentNode.removeChild(pop); }, 3000);
+            }, 200);
         }
-    }, lastBlkReveal + 150);
+    }
 
-    // Итоговый результат и баланс
-    const afterReveal = lastBlkReveal + 500;
+    // Оценка времени: кирка с самой длинной очередью (учитываем прочность)
+    const longestQ = Math.max(...queues.map(q => {
+        let dur = perPickaxeDur;
+        let t = 0;
+        for (const b of q) {
+            const hcando = Math.min(b.hits, dur);
+            if (hcando <= 0) { t += 400; break; }
+            t += hcando * 220 + 270;
+            dur -= hcando;
+            if (dur <= 0) { t += 320; break; } // break animation
+        }
+        return t;
+    }));
+    const estimatedReveal = longestQ + N * 90 + 300;
+
+    // Активировать Mine и запустить N кирок
+    mineIsActive = true;
+    queues.forEach((queue, wi) => {
+        spawnPickaxeWorker(queue, pickaxe, wi, null, onBlockBroken, perPickaxeDur);
+    });
+
+    // Итоговый результат после всех анимаций
+    const afterReveal = estimatedReveal + 500;
     setTimeout(() => {
-        const wd = $('mine-win-display');
+        const newBal = user ? (user.balance || 0) : (balanceBefore + win);
         if (win > 0) {
-            const newBal = user ? (user.balance || 0) : (balanceBefore + win);
-            if (wd) {
-                wd.style.color = 'var(--neon)';
-                wd.classList.add('show');
-                wd.innerHTML = '<span id="mine-win-num">+0.00 TON</span>';
-                animateCounter(document.getElementById('mine-win-num'), 0, win, 900, '+', ' TON');
-            }
             const balSpan = $('bal-val');
-            if (balSpan) animateCounter(balSpan, balanceBefore, newBal, 1000, '', '');
+            if (balSpan) animateCounter(balSpan, balanceBefore, newBal, 900, '', '');
             flyToBalance(win);
-            showToast(`💰 +${win.toFixed(2)} TON!`);
-        } else {
-            if (wd) { wd.innerText = 'Не повезло...'; wd.style.color = '#ff4444'; wd.classList.add('show'); }
-            showToast('⛏️ Не повезло!', 2000);
+            if (win > mineLastBet) showToast(`💰 +${win.toFixed(2)} TON!`);
         }
         updateUI();
 

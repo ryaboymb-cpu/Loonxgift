@@ -830,19 +830,21 @@ app.post('/api/mine', async (req, res) => {
         // Chest multiplier — shown after all chests open
         const chestMult = pickChestMult();
 
-        // Win decision — base win is pre-divided by expected chest mult so RTP stays correct
-        let baseWin = 0;
+        // Win decision — guaranteed minimum 8% of bet always returned; rare bonus on top
+        const MIN_WIN_RATIO = 0.08;
+        let baseWin = betAmount * MIN_WIN_RATIO; // every round returns minimum
         if (baseMult > 0) {
-            baseWin = betAmount * baseMult * pickaxeMult / CHEST_MULT_EXPECTED;
-            const winChance = (rtpTarget / 100) * 0.22;
-            if (Math.random() > winChance) { baseWin = 0; }
-            else { baseWin = Math.min(baseWin, betAmount * 6); }
+            const bonusBase = betAmount * baseMult * pickaxeMult / CHEST_MULT_EXPECTED;
+            const winChance = (rtpTarget / 100) * 0.16;
+            if (Math.random() < winChance) {
+                baseWin = Math.max(baseWin, Math.min(bonusBase, betAmount * 5));
+            }
         }
-        const actualWin = baseWin > 0 ? Number((baseWin * chestMult).toFixed(2)) : 0;
+        const actualWin = Number((baseWin * chestMult).toFixed(2));
 
         // Distribute baseWin across blocks proportionally by their base multiplier
         // book blocks get no direct win (they're bonuses)
-        const BLOCK_PAY_MULTS = { stone:0, redstone:0.7, gold:1.5, diamond:3, obsidian:6, book:0 };
+        const BLOCK_PAY_MULTS = { stone:0.25, redstone:1.0, gold:2.2, diamond:5.0, obsidian:10.0, book:0.5, tnt:0 };
         let totalBlockMult = 0;
         for (let r = 0; r < 3; r++)
             for (let c = 0; c < 5; c++)
@@ -858,10 +860,8 @@ app.post('/api/mine', async (req, res) => {
             blockWins.push(row);
         }
 
-        if (actualWin > 0) {
-            user[field] = Number((user[field] + actualWin).toFixed(2));
-            if (!isDemo) { user.stats.wins++; user.stats.plus += actualWin; }
-        }
+        user[field] = Number((user[field] + actualWin).toFixed(2));
+        if (!isDemo && actualWin > 0) { user.stats.wins++; user.stats.plus += actualWin; }
         await user.save();
 
         if (!isDemo) {
@@ -1304,5 +1304,17 @@ app.post('/api/user/history', async (req, res) => {
     res.json({ bets: formattedBets, betHistory: formattedBets, history: formattedBets });
 });
 
+// Keep-alive endpoint (for uptime monitors like UptimeRobot)
+app.get('/ping', (req, res) => res.status(200).json({ ok: true, time: Date.now() }));
+
 const PORT = 5000;
-server.listen(PORT, '0.0.0.0', () => console.log(`🚀 Server Running on port ${PORT}`));
+server.listen(PORT, '0.0.0.0', () => {
+    console.log(`🚀 Server Running on port ${PORT}`);
+    // Self-ping every 10 minutes to prevent cold starts on free hosting
+    const SELF_URL = process.env.REPLIT_DEV_DOMAIN
+        ? `https://${process.env.REPLIT_DEV_DOMAIN}/ping`
+        : `http://localhost:${PORT}/ping`;
+    setInterval(() => {
+        fetch(SELF_URL).catch(() => {});
+    }, 10 * 60 * 1000);
+});

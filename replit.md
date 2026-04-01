@@ -1,4 +1,5 @@
 # LoonxGift
+<!-- Last updated: Mine game overhaul v2 -->
 
 A Telegram Mini App (TMA) backend and frontend for a gambling platform integrated with the TON blockchain.
 
