@@ -232,46 +232,58 @@
         <div id="page-mine" class="page">
             <div class="card mine-card">
 
-                <!-- Pickaxe compact bar -->
-                <div class="mc-px-bar">
-                    <div class="mc-px-slot" id="mc-px-slot"></div>
-                    <div class="mc-px-info">
-                        <div class="mc-px-title">ИНСТРУМЕНТ</div>
-                        <div id="mc-pickaxe-label" class="mc-px-label">Нет кирки</div>
+                <!-- ХОТБАР: 4 кирки -->
+                <div class="mc-hotbar">
+                    <div class="mc-hb-slot" id="hb-wooden">
+                        <span class="px-wooden">⛏️</span>
+                        <div class="hb-label" style="color:#c8a040;">×1.2</div>
+                    </div>
+                    <div class="mc-hb-slot" id="hb-stone">
+                        <span class="px-stone">⛏️</span>
+                        <div class="hb-label" style="color:#9a9a9a;">×1.5</div>
+                    </div>
+                    <div class="mc-hb-slot" id="hb-iron">
+                        <span class="px-iron">⛏️</span>
+                        <div class="hb-label" style="color:#c8d0d8;">×2.0</div>
+                    </div>
+                    <div class="mc-hb-slot" id="hb-golden">
+                        <span class="px-golden">⛏️</span>
+                        <div class="hb-label" style="color:#ffd700;">×3.0</div>
                     </div>
                 </div>
 
                 <!-- ШАХТА — 4 колонки блоков -->
-                <div class="mc-shaft" id="mc-shaft">
-                    <!-- 4 columns × 4 blocks each, built by JS -->
-                </div>
+                <div class="mc-shaft" id="mc-shaft"></div>
 
-                <!-- СУНДУКИ -->
-                <div class="mc-chests-row">
-                    <div class="mc-chest">📦</div>
-                    <div class="mc-chest">📦</div>
-                    <div class="mc-chest">📦</div>
-                    <div class="mc-chest">📦</div>
-                </div>
-
-                <!-- WIN DISPLAY -->
-                <div id="mine-win-display" class="mine-win-display" style="display:none;"></div>
-
-                <!-- PAYTABLE 2-col -->
-                <div class="mine-paytable">
-                    <div class="mine-pay-2col">
-                        <div class="mine-pay-row"><span class="mc-blk-mini stone-blk"></span><span>Камень — ×0</span></div>
-                        <div class="mine-pay-row"><span class="mc-blk-mini redstone-blk"></span><span>Редстоун — ×0.7</span></div>
-                        <div class="mine-pay-row"><span class="mc-blk-mini gold-blk"></span><span>Золото — ×1.5</span></div>
-                        <div class="mine-pay-row"><span class="mc-blk-mini diamond-blk"></span><span>Алмаз — ×3</span></div>
-                        <div class="mine-pay-row"><span class="mc-blk-mini obsidian-blk"></span><span>Обсидиан — ×6</span></div>
-                        <div class="mine-pay-row" style="color:#666; font-size:9px;">⛏️ кирка (25%) ×мульт</div>
+                <!-- СУНДУКИ + WIN DISPLAY -->
+                <div class="mc-bottom-row">
+                    <div class="mc-chests-row">
+                        <div class="mc-chest" id="mc-chest-0">🟫</div>
+                        <div class="mc-chest" id="mc-chest-1">🟫</div>
+                        <div class="mc-chest" id="mc-chest-2">🟫</div>
+                        <div class="mc-chest" id="mc-chest-3">🟫</div>
                     </div>
+                    <div id="mine-win-display" class="mine-win-display" style="visibility:hidden;"></div>
                 </div>
 
-                <div id="qb-mine" class="quick-bets" style="margin-top:10px;"></div>
-                <input type="number" id="mn-bet" class="input-box" placeholder="Ставка (0.1–25 TON)" step="0.1" min="0.1" max="25">
-                <button id="mn-btn" class="btn mine-btn" onclick="playMine()">⛏️ ДОБЫТЬ</button>
+                <!-- ПАБЛИЦА (одна строка) -->
+                <div class="mine-pay-line">
+                    <span class="mc-blk-mini stone-blk"></span><span>×0</span>
+                    <span class="mc-blk-mini redstone-blk"></span><span>×0.7</span>
+                    <span class="mc-blk-mini gold-blk"></span><span>×1.5</span>
+                    <span class="mc-blk-mini diamond-blk"></span><span>×3</span>
+                    <span class="mc-blk-mini obsidian-blk"></span><span>×6</span>
+                    <span style="color:#666;font-size:9px;margin-left:4px;">⛏️25%×мульт</span>
+                </div>
+
+                <!-- СТАВКА -->
+                <div class="mine-bet-row">
+                    <div id="qb-mine" class="quick-bets" style="flex:1;"></div>
+                </div>
+                <div class="mine-bet-row" style="gap:6px;">
+                    <input type="number" id="mn-bet" class="input-box" placeholder="0.1–25 TON" step="0.1" min="0.1" max="25" style="flex:1;margin:0;">
+                    <button id="mn-btn" class="btn mine-btn" onclick="playMine()" style="flex:0 0 auto;width:100px;margin:0;">⛏️ БИТ</button>
+                </div>
             </div>
         </div>
 

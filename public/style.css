@@ -151,106 +151,310 @@ header { padding: 15px; display: flex; justify-content: space-between; align-ite
 @keyframes fsPopIn { 0% { transform: scale(0.3); opacity: 0; } 70% { transform: scale(1.1); } 100% { transform: scale(1); opacity: 1; } }
 @keyframes fsCountUp { 0% { transform: scale(0.5); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
 
-/* === MINE GAME — Compact Minecraft Shaft === */
-.mine-card { padding: 8px; }
+/* === MINE GAME — Full-Screen Fixed Layout === */
 
-/* Компактная полоска инструмента */
-.mc-px-bar { display: flex; align-items: center; gap: 10px; background: #5a5a5a; border: 3px solid; border-color: #8a8a8a #333 #333 #8a8a8a; border-radius: 3px; padding: 5px 10px; margin-bottom: 6px; }
-.mc-px-slot { width: 46px; height: 46px; flex-shrink: 0; background: #7a7a7a; border: 3px solid; border-color: #373737 #bbb #bbb #373737; display: flex; align-items: center; justify-content: center; font-size: 26px; border-radius: 2px; position: relative; transition: all 0.3s; }
-.mc-px-slot.has-item { animation: slotPop 0.45s cubic-bezier(0.34,1.56,0.64,1); }
-.mc-px-info { flex: 1; }
-.mc-px-title { font-size: 9px; color: #aaa; font-weight: 900; letter-spacing: 2px; font-family: monospace; margin-bottom: 2px; }
-.mc-px-label { font-size: 13px; color: #eee; font-weight: 900; font-family: monospace; }
-@keyframes slotPop { 0%{transform:scale(0.3)rotate(-15deg);opacity:0} 60%{transform:scale(1.2)rotate(5deg)} 100%{transform:scale(1)rotate(0);opacity:1} }
+/* Страница Mine — фиксированная высота, не скроллится */
+#page-mine.active {
+  height: 100%;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+/* Убираем нижний padding контента когда активна Mine страница */
+.content:has(#page-mine.active) {
+  padding-bottom: 0 !important;
+  overflow: hidden !important;
+}
 
-/* Шахта — основной элемент, занимает максимум пространства */
-.mc-shaft { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; background: #1a1004; border: 3px solid #3a2008; border-radius: 5px; padding: 7px; margin-bottom: 4px; }
-.mc-col { display: flex; flex-direction: column; gap: 4px; }
-.mc-blk { aspect-ratio: 1; border-radius: 3px; border: 3px solid; position: relative; overflow: hidden; image-rendering: pixelated; transition: transform 0.15s; }
+.mine-card {
+  height: 100% !important;
+  padding: 5px 6px;
+  display: flex !important;
+  flex-direction: column;
+  gap: 4px;
+  overflow: hidden;
+  border-radius: 12px !important;
+  margin-bottom: 0 !important;
+}
 
-/* Световые грани (Minecraft lighting) */
-.mc-blk::before { content:''; position:absolute; inset:0; background: linear-gradient(135deg, rgba(255,255,255,0.25) 0%, transparent 40%, rgba(0,0,0,0.35) 100%); z-index:2; pointer-events:none; }
+/* ─── ХОТБАР ─── */
+.mc-hotbar {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 3px;
+  background: #3a3a3a;
+  border: 3px solid;
+  border-color: #666 #222 #222 #666;
+  border-radius: 4px;
+  padding: 3px;
+  flex-shrink: 0;
+}
+.mc-hb-slot {
+  background: #8b8b8b;
+  border: 2px solid;
+  border-color: #bbb #444 #444 #bbb;
+  border-radius: 2px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3px 2px 2px;
+  font-size: 22px;
+  cursor: default;
+  transition: all 0.2s;
+  min-height: 50px;
+  opacity: 0.5;
+}
+.mc-hb-slot.active {
+  border-color: #ffd700 #aa8800 #aa8800 #ffd700;
+  background: #7a7a7a;
+  opacity: 1;
+  transform: translateY(-2px);
+  box-shadow: 0 3px 12px rgba(255,215,0,0.5);
+  animation: hbPop 0.4s cubic-bezier(0.34,1.56,0.64,1);
+}
+.hb-label { font-size: 9px; font-weight: 900; font-family: monospace; margin-top: 1px; }
+@keyframes hbPop { 0%{transform:translateY(0)scale(0.7)} 60%{transform:translateY(-4px)scale(1.1)} 100%{transform:translateY(-2px)scale(1)} }
+
+/* ─── ШАХТА — занимает оставшееся место ─── */
+.mc-shaft {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 3px;
+  background: #120c04;
+  border: 3px solid;
+  border-color: #3a2008 #1a0c04 #1a0c04 #3a2008;
+  border-radius: 5px;
+  padding: 5px;
+}
+.mc-col { display: flex; flex-direction: column; gap: 3px; min-height: 0; height: 100%; }
+.mc-blk {
+  flex: 1;
+  min-height: 0;
+  border-radius: 3px;
+  border: 3px solid;
+  position: relative;
+  overflow: hidden;
+  image-rendering: pixelated;
+  transition: transform 0.1s;
+}
+/* Minecraft грани освещения */
+.mc-blk::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(255,255,255,0.22) 0%, transparent 38%, rgba(0,0,0,0.32) 100%);
+  z-index: 2;
+  pointer-events: none;
+}
+/* Трещины при ударе */
+.mc-blk::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  background: transparent;
+  border-radius: 2px;
+}
+.mc-blk.cracking-1::after {
+  background:
+    linear-gradient(142deg, transparent 45%, rgba(0,0,0,0.6) 45.5%, transparent 46%),
+    linear-gradient(38deg, transparent 35%, rgba(0,0,0,0.5) 35.5%, transparent 36%);
+}
+.mc-blk.cracking-2::after {
+  background:
+    linear-gradient(142deg, transparent 40%, rgba(0,0,0,0.7) 40.5%, transparent 41%),
+    linear-gradient(38deg, transparent 35%, rgba(0,0,0,0.6) 35.5%, transparent 36%),
+    linear-gradient(88deg, transparent 55%, rgba(0,0,0,0.5) 55.5%, transparent 56%),
+    linear-gradient(168deg, transparent 45%, rgba(0,0,0,0.5) 45.5%, transparent 46%);
+}
+.mc-blk.cracking-3::after {
+  background:
+    linear-gradient(142deg, transparent 38%, rgba(0,0,0,0.8) 38.5%, transparent 39%),
+    linear-gradient(38deg, transparent 33%, rgba(0,0,0,0.7) 33.5%, transparent 34%),
+    linear-gradient(88deg, transparent 52%, rgba(0,0,0,0.7) 52.5%, transparent 53%),
+    linear-gradient(168deg, transparent 43%, rgba(0,0,0,0.6) 43.5%, transparent 44%),
+    linear-gradient(58deg, transparent 62%, rgba(0,0,0,0.6) 62.5%, transparent 63%),
+    linear-gradient(115deg, transparent 28%, rgba(0,0,0,0.5) 28.5%, transparent 29%);
+  filter: brightness(1.4);
+}
 
 /* Скрытый блок */
-.mc-blk.hidden-blk { background: #2a1a08; border-color: #4a2e12 #1a0c04 #1a0c04 #4a2e12; }
+.mc-blk.hidden-blk {
+  background:
+    radial-gradient(ellipse 60% 50% at 40% 45%, #3a2010 0%, transparent 100%),
+    #1e1206;
+  border-color: #3a2010 #0e0804 #0e0804 #3a2010;
+}
 
-/* Анимации */
-.mc-blk.reveal-drop { animation: mcDrop 0.4s cubic-bezier(0.22,1,0.36,1); }
-.mc-blk.is-result   { transform: scale(1.07); z-index: 3; }
-.mc-blk.win-pulse   { animation: mcWinPulse 0.65s ease-in-out infinite alternate; }
-@keyframes mcDrop { 0%{transform:translateY(-30px)scale(0.6);opacity:0} 65%{transform:translateY(5px)scale(1.06)} 100%{transform:translateY(0)scale(1);opacity:1} }
-@keyframes mcWinPulse { 0%{filter:brightness(1)saturate(1);transform:scale(1.07)} 100%{filter:brightness(1.7)saturate(1.6);transform:scale(1.13)} }
+/* Анимации блоков */
+.mc-blk.reveal-drop  { animation: mcDrop 0.35s cubic-bezier(0.22,1,0.36,1); }
+.mc-blk.crack-hit    { animation: mcCrackHit 0.18s ease-out; }
+.mc-blk.break-anim   { animation: mcBreak 0.35s ease-in forwards; }
+.mc-blk.is-result    { transform: scale(1.08); z-index: 3; }
+.mc-blk.win-pulse    { animation: mcWinPulse 0.6s ease-in-out infinite alternate; }
 
-/* ─── ТЕКСТУРЫ БЛОКОВ (CSS pixel-art ore spots) ─── */
+@keyframes mcDrop    { 0%{transform:translateY(-28px)scale(0.55);opacity:0} 65%{transform:translateY(4px)scale(1.06)} 100%{transform:translateY(0)scale(1);opacity:1} }
+@keyframes mcCrackHit{ 0%{transform:scale(1)} 30%{transform:scale(0.92)rotate(-1.5deg);filter:brightness(2.5)} 70%{transform:scale(1.04)rotate(0.5deg)} 100%{transform:scale(1)} }
+@keyframes mcBreak   { 0%{transform:scale(1);opacity:1;filter:brightness(1)} 30%{transform:scale(1.1);filter:brightness(3)} 70%{transform:scale(0.8)rotate(8deg);opacity:0.5} 100%{transform:scale(0)rotate(15deg);opacity:0} }
+@keyframes mcWinPulse{ 0%{filter:brightness(1)saturate(1);transform:scale(1.08)} 100%{filter:brightness(1.8)saturate(1.7);transform:scale(1.14)} }
 
-/* Камень: серая каменная текстура с трещинами */
+/* ─── ТЕКСТУРЫ БЛОКОВ — по образцу фото ─── */
+
+/* Камень: серый с трещинами */
 .stone-blk {
   background:
-    radial-gradient(ellipse 30% 20% at 25% 35%, #9a9a9a 0%, transparent 100%),
-    radial-gradient(ellipse 20% 30% at 70% 60%, #606060 0%, transparent 100%),
-    radial-gradient(ellipse 25% 15% at 55% 20%, #8a8a8a 0%, transparent 100%),
-    #727272;
-  border-color: #9e9e9e #4a4a4a #4a4a4a #9e9e9e;
+    linear-gradient(145deg, transparent 38%, #5a5a5a 38.5%, transparent 39%),
+    linear-gradient(52deg, transparent 55%, #666 55.5%, transparent 56%),
+    linear-gradient(120deg, transparent 62%, #5a5a5a 62.5%, transparent 63%),
+    radial-gradient(ellipse 55% 45% at 30% 38%, #8e8e8e 0%, transparent 100%),
+    radial-gradient(ellipse 40% 35% at 72% 65%, #6a6a6a 0%, transparent 100%),
+    radial-gradient(ellipse 30% 40% at 60% 25%, #848484 0%, transparent 100%),
+    #787878;
+  border-color: #aaa #4a4a4a #4a4a4a #aaa;
 }
 
-/* Редстоун: тёмный камень с красными ore-пятнами */
+/* Редстоун ОРА: серый камень с яркими красными прямоугольниками */
 .redstone-blk {
   background:
-    radial-gradient(circle 5px at 28% 38%, #ff2020 0%, #cc0000 60%, transparent 70%),
-    radial-gradient(circle 4px at 68% 62%, #ee1111 0%, #bb0000 60%, transparent 70%),
-    radial-gradient(circle 3px at 50% 25%, #ff3333 0%, #cc1111 60%, transparent 70%),
-    radial-gradient(circle 4px at 75% 30%, #ff1111 0%, #cc0000 60%, transparent 70%),
-    #5a0a0a;
-  border-color: #b01010 #380404 #380404 #b01010;
-  box-shadow: 0 0 8px rgba(220,20,20,0.6);
+    radial-gradient(rect 14% 10% at 22% 32%, #ff1a1a 0%, #cc0000 80%, transparent 100%),
+    radial-gradient(rect 12% 8% at 65% 28%, #ff2222 0%, #bb0000 80%, transparent 100%),
+    radial-gradient(rect 10% 12% at 38% 68%, #ee1111 0%, #cc0000 80%, transparent 100%),
+    radial-gradient(rect 13% 9% at 74% 65%, #ff1111 0%, #bb0000 80%, transparent 100%),
+    radial-gradient(rect 8% 10% at 50% 48%, #dd0000 0%, #990000 80%, transparent 100%),
+    linear-gradient(145deg, transparent 38%, #5a5a5a 38.5%, transparent 39%),
+    #787878;
+  border-color: #cc2020 #440000 #440000 #cc2020;
+  box-shadow: 0 0 9px rgba(220,20,20,0.55);
 }
 
-/* Золото: золотые ore-пятна на коричневом */
+/* Золото: жёлтый блок с тёмными краями */
 .gold-blk {
   background:
-    radial-gradient(ellipse 40% 25% at 30% 40%, #ffd700 0%, #c8a000 70%, transparent 100%),
-    radial-gradient(ellipse 30% 20% at 70% 65%, #ffcc00 0%, #b89000 70%, transparent 100%),
-    radial-gradient(ellipse 25% 30% at 60% 20%, #ffe040 0%, #c0a010 70%, transparent 100%),
-    #8a6000;
-  border-color: #d4a800 #5a3e00 #5a3e00 #d4a800;
+    radial-gradient(ellipse 70% 60% at 35% 38%, #ffe560 0%, #f0c000 50%, transparent 100%),
+    radial-gradient(ellipse 50% 45% at 70% 70%, #f4d020 0%, #d4a800 60%, transparent 100%),
+    linear-gradient(160deg, #ffd700 0%, #c89400 40%, #b87800 100%);
+  border-color: #ffe060 #7a5000 #7a5000 #ffe060;
   box-shadow: 0 0 10px rgba(255,210,0,0.5);
 }
 
-/* Алмаз: синий камень с голубыми кристаллами */
+/* Алмаз: голубые двойные кристаллы */
 .diamond-blk {
   background:
-    radial-gradient(ellipse 35% 20% at 32% 42%, #00e8ff 0%, #009ab0 70%, transparent 100%),
-    radial-gradient(ellipse 25% 30% at 68% 60%, #00d4e8 0%, #007890 70%, transparent 100%),
-    radial-gradient(ellipse 20% 25% at 55% 22%, #00f0ff 0%, #00a0b8 70%, transparent 100%),
-    #074858;
-  border-color: #00c0d4 #022c38 #022c38 #00c0d4;
-  box-shadow: 0 0 14px rgba(0,200,220,0.6);
+    linear-gradient(90deg, transparent 49%, #00a8c0 49.5%, transparent 50%),
+    radial-gradient(ellipse 42% 70% at 25% 50%, #00e8ff 0%, #0090b0 60%, transparent 100%),
+    radial-gradient(ellipse 42% 70% at 75% 50%, #00ddf0 0%, #0088a8 60%, transparent 100%),
+    #055870;
+  border-color: #00d4e8 #023040 #023040 #00d4e8;
+  box-shadow: 0 0 14px rgba(0,210,240,0.65);
 }
 
-/* Обсидиан: почти чёрный с фиолетовым свечением */
+/* Обсидиан: очень тёмный с фиолетовыми блоками */
 .obsidian-blk {
   background:
-    radial-gradient(ellipse 40% 30% at 35% 45%, #5020a0 0%, #2a0860 80%, transparent 100%),
-    radial-gradient(ellipse 25% 20% at 70% 65%, #401888 0%, #200850 80%, transparent 100%),
-    radial-gradient(circle 4px at 60% 25%, #6028c0 0%, #301070 80%, transparent 100%),
-    #0c0520;
-  border-color: #5828a0 #060210 #060210 #5828a0;
-  box-shadow: 0 0 18px rgba(100,40,200,0.7);
+    radial-gradient(ellipse 35% 30% at 28% 35%, #3a1870 0%, #18083a 80%, transparent 100%),
+    radial-gradient(ellipse 30% 25% at 72% 70%, #301468 0%, #150630 80%, transparent 100%),
+    radial-gradient(ellipse 20% 20% at 55% 22%, #4a1880 0%, #1a0840 80%, transparent 100%),
+    #080318;
+  border-color: #5020a0 #040110 #040110 #5020a0;
+  box-shadow: 0 0 18px rgba(90,30,180,0.7);
 }
 
-/* Мини блоки для паблицы */
-.mc-blk-mini { display:inline-block; width:16px; height:16px; border-radius:2px; border:2px solid; flex-shrink:0; }
-.mc-blk-mini.stone-blk    { background:#727272; border-color:#9e9e9e #4a4a4a #4a4a4a #9e9e9e; }
-.mc-blk-mini.redstone-blk { background:#5a0a0a; border-color:#b01010 #380404 #380404 #b01010; }
-.mc-blk-mini.gold-blk     { background:#8a6000; border-color:#d4a800 #5a3e00 #5a3e00 #d4a800; }
-.mc-blk-mini.diamond-blk  { background:#074858; border-color:#00c0d4 #022c38 #022c38 #00c0d4; }
-.mc-blk-mini.obsidian-blk { background:#0c0520; border-color:#5828a0 #060210 #060210 #5828a0; }
+/* ─── МИНИ БЛОКИ (паблица) ─── */
+.mc-blk-mini { display:inline-block; width:14px; height:14px; border-radius:2px; border:2px solid; flex-shrink:0; vertical-align:middle; }
+.mc-blk-mini.stone-blk    { background:#787878; border-color:#aaa #4a4a4a #4a4a4a #aaa; }
+.mc-blk-mini.redstone-blk { background:#6a1a1a; border-color:#cc2020 #440000 #440000 #cc2020; }
+.mc-blk-mini.gold-blk     { background:#c89400; border-color:#ffe060 #7a5000 #7a5000 #ffe060; }
+.mc-blk-mini.diamond-blk  { background:#055870; border-color:#00d4e8 #023040 #023040 #00d4e8; }
+.mc-blk-mini.obsidian-blk { background:#080318; border-color:#5020a0 #040110 #040110 #5020a0; }
 
-/* Сундуки */
-.mc-chests-row { display:grid; grid-template-columns:repeat(4,1fr); gap:4px; background:#5c3010; border:3px solid; border-color:#8a5018 #2a1408 #2a1408 #8a5018; border-radius:4px; padding:5px; margin-bottom:6px; }
-.mc-chest { background: linear-gradient(175deg, #a06828 30%, #6a3c14 100%); border:2px solid; border-color:#d08030 #3a1e08 #3a1e08 #d08030; border-radius:2px; font-size:20px; display:flex; align-items:center; justify-content:center; aspect-ratio:1; transition:all 0.3s; }
-.mc-chest.open-anim { animation: chestPop 0.5s cubic-bezier(0.34,1.56,0.64,1); }
-@keyframes chestPop { 0%{transform:scale(1)} 40%{transform:scale(1.2)translateY(-5px)} 70%{transform:scale(0.95)} 100%{transform:scale(1)} }
+/* ─── СУНДУКИ + WIN ROW ─── */
+.mc-bottom-row { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.mc-chests-row { display:grid; grid-template-columns:repeat(4,1fr); gap:3px; background:#5c3010; border:3px solid; border-color:#8a5018 #2a1408 #2a1408 #8a5018; border-radius:4px; padding:4px; flex: 1; }
+.mc-chest {
+  background: linear-gradient(175deg, #c07828 10%, #8a4c14 60%, #6a3810 100%);
+  border: 2px solid;
+  border-color: #e09040 #3a1e08 #3a1e08 #e09040;
+  border-radius: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 1;
+  font-size: 0;
+  position: relative;
+  overflow: hidden;
+  transition: all 0.3s;
+}
+/* Крышка сундука (закрытый) */
+.mc-chest::before {
+  content: '';
+  position: absolute;
+  left: 15%;
+  right: 15%;
+  top: 20%;
+  height: 30%;
+  background: rgba(0,0,0,0.35);
+  border-radius: 1px;
+  border-top: 2px solid rgba(180,100,20,0.6);
+}
+/* Замок сундука */
+.mc-chest::after {
+  content: '';
+  position: absolute;
+  width: 28%;
+  height: 22%;
+  background: #888;
+  border: 1px solid #aaa;
+  border-radius: 1px;
+  top: 38%;
+  left: 36%;
+}
+.mc-chest.open {
+  background: linear-gradient(175deg, #c07828 0%, #4a2808 50%, #1a0c04 100%);
+  border-color: #e09040 #1a0c04 #1a0c04 #e09040;
+  box-shadow: 0 0 10px rgba(255,180,50,0.5);
+}
+.mc-chest.open::before { top: 0; height: 22%; border-radius: 2px 2px 0 0; background: linear-gradient(180deg, #c07828 0%, #7a4010 100%); transform: rotateX(-60deg); transform-origin: bottom; }
+.mc-chest.open::after  { background: #bbb; top: 30%; }
+.mc-chest.open-anim { animation: chestOpen 0.5s cubic-bezier(0.34,1.56,0.64,1); }
+@keyframes chestOpen { 0%{transform:scale(1)} 30%{transform:scale(1.18)translateY(-5px)} 60%{transform:scale(0.94)} 100%{transform:scale(1)} }
+
+.mine-win-display {
+  flex: 1;
+  text-align: center;
+  font-size: 17px;
+  font-weight: 900;
+  color: var(--neon);
+  text-shadow: 0 0 16px rgba(0,255,136,0.9);
+  line-height: 1.2;
+  visibility: hidden;
+}
+.mine-win-display.show { visibility: visible; animation: mcDrop 0.45s cubic-bezier(0.22,1,0.36,1); }
+
+/* ─── ПАБЛИЦА (одна строка) ─── */
+.mine-pay-line {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: #080808;
+  border: 1px solid #181818;
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 10px;
+  color: #888;
+  font-weight: 700;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+/* ─── БЕТ СТРОКА ─── */
+.mine-bet-row { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+.mine-bet-row .quick-bets { margin: 0 !important; }
+.mine-btn { background: linear-gradient(90deg, #5c3010, #9a5820); box-shadow: 0 0 15px rgba(150,90,30,0.5); color: #ffe0a0; font-weight:900; letter-spacing:1px; border: 2px solid #c8881a; height: 42px; padding: 0 10px; white-space: nowrap; }
+.mine-btn:disabled { background:#1e1008 !important; border-color:#333 !important; box-shadow:none !important; color:#555 !important; }
 
 /* Таблица выплат */
 .mine-paytable { background:#080808; border:1px solid #181818; border-radius:7px; padding:6px 8px; margin-bottom:8px; }

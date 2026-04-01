@@ -1326,27 +1326,42 @@ function initMineShaft() {
         shaft.appendChild(col);
     }
 
-    // Reset pickaxe slot
-    const slot = $('mc-px-slot');
-    if (slot) { slot.innerHTML = ''; slot.className = 'mc-px-slot'; }
-    const lbl = $('mc-pickaxe-label');
-    if (lbl) { lbl.innerText = 'Нет кирки'; lbl.style.color = ''; }
+    // Сбросить хотбар
+    ['hb-wooden','hb-stone','hb-iron','hb-golden'].forEach(id => {
+        const s = $(id); if (s) s.classList.remove('active');
+    });
 
-    // Reset chests
-    document.querySelectorAll('.mc-chest').forEach(ch => { ch.innerText = '📦'; ch.classList.remove('open-anim'); });
+    // Сбросить сундуки (закрытые)
+    for (let i = 0; i < 4; i++) {
+        const ch = $(`mc-chest-${i}`);
+        if (ch) { ch.classList.remove('open', 'open-anim'); }
+    }
 
     const wd = $('mine-win-display');
-    if (wd) wd.style.display = 'none';
+    if (wd) { wd.innerText = ''; wd.style.color = ''; wd.classList.remove('show'); }
 }
 
-function revealMineShaft(mainBlock, pickaxe, win) {
-    // Build grid: fill each row with random picks, result col bottom row = mainBlock
+// Плавная анимация числа (считает от start до end)
+function animateCounter(el, start, end, durationMs, prefix, suffix) {
+    if (!el) return;
+    const startTime = performance.now();
+    const diff = end - start;
+    function step(now) {
+        const p = Math.min((now - startTime) / durationMs, 1);
+        const eased = 1 - Math.pow(1 - p, 3);  // ease-out cubic
+        el.innerText = prefix + (start + diff * eased).toFixed(2) + suffix;
+        if (p < 1) requestAnimationFrame(step);
+    }
+    requestAnimationFrame(step);
+}
+
+function revealMineShaft(mainBlock, pickaxe, win, balanceBefore) {
     const grid = [];
     for (let c = 0; c < MC_COLS; c++) {
         const col = [];
         for (let r = 0; r < MC_ROWS; r++) {
             if (r === MC_ROWS - 1 && c === MC_RESULT_COL) {
-                col.push(mainBlock); // real result
+                col.push(mainBlock);
             } else {
                 const pool = MC_ROW_POOL[r];
                 col.push(pool[Math.floor(Math.random() * pool.length)]);
@@ -1355,52 +1370,98 @@ function revealMineShaft(mainBlock, pickaxe, win) {
         grid.push(col);
     }
 
-    const totalBlocks = MC_COLS * MC_ROWS;
+    // Reveal: для каждой строки — сначала crack-hit анимация, потом класс текстуры
     let delay = 0;
-    // Reveal row by row, top to bottom (all columns simultaneously per row)
     for (let r = 0; r < MC_ROWS; r++) {
         for (let c = 0; c < MC_COLS; c++) {
             const blockType = grid[c][r];
-            const isResult = (r === MC_ROWS - 1 && c === MC_RESULT_COL);
+            const isResult  = (r === MC_ROWS - 1 && c === MC_RESULT_COL);
+
+            // Стадия 1: crack-hit (удар киркой)
             setTimeout(() => {
                 const el = $(`mc-blk-${c}-${r}`);
                 if (!el) return;
+                el.classList.add('cracking-1', 'crack-hit');
+            }, delay);
+
+            // Стадия 2: crack-2
+            setTimeout(() => {
+                const el = $(`mc-blk-${c}-${r}`);
+                if (!el) return;
+                el.classList.remove('cracking-1');
+                el.classList.add('cracking-2');
+            }, delay + 80);
+
+            // Стадия 3: crack-3 + яркость
+            setTimeout(() => {
+                const el = $(`mc-blk-${c}-${r}`);
+                if (!el) return;
+                el.classList.remove('cracking-2');
+                el.classList.add('cracking-3');
+            }, delay + 160);
+
+            // Разлом → показываем тип блока
+            setTimeout(() => {
+                const el = $(`mc-blk-${c}-${r}`);
+                if (!el) return;
+                el.classList.remove('cracking-3', 'crack-hit', 'cracking-1', 'cracking-2');
                 const cls = MINE_BLOCK_CLASS[blockType] || 'stone-blk';
                 el.className = `mc-blk ${cls} reveal-drop${isResult ? ' is-result' : ''}`;
                 if (isResult && win > 0) {
-                    setTimeout(() => { el.classList.add('win-pulse'); }, 200);
+                    setTimeout(() => el.classList.add('win-pulse'), 200);
                 }
-            }, delay);
+            }, delay + 240);
         }
-        delay += 160;
+        delay += 280; // задержка между строками
     }
 
     const afterReveal = delay + 200;
 
-    // Open chests + show win after reveal
+    // Открытие сундуков поочерёдно
     setTimeout(() => {
-        document.querySelectorAll('.mc-chest').forEach((ch, i) => {
+        for (let i = 0; i < 4; i++) {
             setTimeout(() => {
-                ch.classList.add('open-anim');
-                ch.innerText = win > 0 ? '🎁' : '📦';
-            }, i * 80);
-        });
+                const ch = $(`mc-chest-${i}`);
+                if (!ch) return;
+                ch.classList.add('open', 'open-anim');
+                setTimeout(() => ch.classList.remove('open-anim'), 600);
+            }, i * 100);
+        }
     }, afterReveal);
 
+    // Win display + баланс-анимация
     setTimeout(() => {
         const wd = $('mine-win-display');
         if (win > 0) {
-            if (wd) { wd.innerText = `+${win.toFixed(2)} TON`; wd.style.display = 'block'; }
+            const oldBal = balanceBefore;
+            const newBal = user ? (user.balance || 0) : (balanceBefore + win);
+
+            if (wd) {
+                wd.style.color = 'var(--neon)';
+                wd.classList.add('show');
+                // Анимируем текст +0 → +win
+                wd.innerHTML = '<span id="mine-win-num">+0.00 TON</span>';
+                animateCounter(document.getElementById('mine-win-num'), 0, win, 900, '+', ' TON');
+            }
+
+            // Анимируем баланс вверх
+            const balSpan = $('bal-val');
+            if (balSpan) animateCounter(balSpan, oldBal, newBal, 1000, '', '');
+
             flyToBalance(win);
             showToast(`💰 +${win.toFixed(2)} TON!`);
         } else {
-            if (wd) { wd.innerText = 'Не повезло...'; wd.style.color = '#ff4444'; wd.style.display = 'block'; }
+            if (wd) {
+                wd.innerText = 'Не повезло...';
+                wd.style.color = '#ff4444';
+                wd.classList.add('show');
+            }
             showToast('⛏️ Не повезло, попробуй ещё!', 2000);
         }
         updateUI();
-    }, afterReveal + 400);
+    }, afterReveal + 450);
 
-    return afterReveal + 600;
+    return afterReveal + 700;
 }
 
 function initMineGrid() { initMineShaft(); }
@@ -1419,6 +1480,7 @@ async function playMine() {
 
     mineIsSpinning = true;
     if (btn) btn.disabled = true;
+    const balanceBefore = user ? (user.balance || 0) : 0;
     initMineShaft();
 
     try {
@@ -1432,22 +1494,16 @@ async function playMine() {
 
         user = data.user;
 
-        // Show pickaxe in compact slot
+        // Активируем слот хотбара
         if (data.pickaxe) {
-            const pi = MINE_PICKAXE_INFO[data.pickaxe];
-            const slot = $('mc-px-slot');
-            if (slot) {
-                slot.className = 'mc-px-slot has-item';
-                slot.innerHTML = `<span class="${pi.cssClass}" style="font-size:28px;">⛏️</span>`;
-            }
-            const lbl = $('mc-pickaxe-label');
-            if (lbl) { lbl.innerText = pi.label; lbl.style.color = pi.color; }
-            await new Promise(res => setTimeout(res, 450));
+            const slotId = 'hb-' + data.pickaxe;
+            const slot = $(slotId);
+            if (slot) slot.classList.add('active');
+            await new Promise(res => setTimeout(res, 300));
         }
 
-        // Reveal shaft
-        const totalTime = revealMineShaft(data.mainBlock, data.pickaxe, data.win);
-
+        // Reveal shaft с анимацией разлома
+        const totalTime = revealMineShaft(data.mainBlock, data.pickaxe, data.win, balanceBefore);
         setTimeout(() => { mineIsSpinning = false; if (btn) btn.disabled = false; }, totalTime + 100);
 
     } catch(e) {
