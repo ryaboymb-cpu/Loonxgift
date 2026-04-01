@@ -849,46 +849,17 @@ app.post('/api/check_deposit', async (req, res) => {
     const apiKey = process.env.TON_API_KEY;
     
     if (!adminWallet) return res.status(500).json({error: 'Адрес кошелька не настроен'});
+    if (!apiKey) return res.status(500).json({error: 'TON_API_KEY не установлен'});
 
     try {
-        // Первичный запрос через TON API (без ключа, надёжнее)
-        let txList = null;
-        let useTonApi = true;
-        try {
-            const taRes = await fetch(`https://tonapi.io/v2/blockchain/accounts/${adminWallet}/transactions?limit=50`, {
-                headers: { 'Accept': 'application/json' }
-            });
-            if (taRes.ok) {
-                const taData = await taRes.json();
-                txList = (taData.transactions || []).map(tx => {
-                    const inMsg = tx.in_msg || {};
-                    const comment = (inMsg.decoded_body && inMsg.decoded_body.comment) || (inMsg.msg_data && inMsg.msg_data.text) || '';
-                    return { hash: tx.hash, memo: String(comment).trim(), value: inMsg.value || 0 };
-                });
-            }
-        } catch(e) { useTonApi = false; }
-
-        // Fallback: TonCenter v2
-        if (!txList) {
-            const tcUrl = apiKey
-                ? `https://toncenter.com/api/v2/getTransactions?address=${adminWallet}&limit=50&api_key=${apiKey}`
-                : `https://toncenter.com/api/v2/getTransactions?address=${adminWallet}&limit=50`;
-            const tcRes = await fetch(tcUrl);
-            const tcData = await tcRes.json();
-            if (!tcData.ok) return res.status(400).json({ error: 'Не удалось проверить оплату. Попробуй позже.' });
-            txList = (tcData.result || []).map(tx => ({
-                hash: tx.transaction_id.hash,
-                memo: String((tx.in_msg && tx.in_msg.message) || '').trim(),
-                value: (tx.in_msg && tx.in_msg.value) || 0
-            }));
+        // TonCenter v2 с API ключом (прямое обращение)
+        const tcUrl = `https://toncenter.com/api/v2/getTransactions?address=${adminWallet}&limit=50&api_key=${apiKey}`;
+        const tcRes = await fetch(tcUrl);
+        const data = await tcRes.json();
+        if (!data.ok) {
+            console.error('TonCenter error:', data.error);
+            return res.status(400).json({ error: `Ошибка проверки: ${data.error || 'нет ответа от TonCenter'}` });
         }
-
-        // Ищем транзакции с memo = userId
-        const data = { ok: true, result: txList.map(t => ({
-            transaction_id: { hash: t.hash },
-            in_msg: { message: t.memo, value: t.value }
-        })) };
-        if(!data.ok) return res.status(400).json({error: 'Ошибка проверки транзакций'});
         
         let foundNew = false;
         let totalAdded = 0;

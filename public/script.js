@@ -1326,9 +1326,9 @@ function initMineShaft() {
         shaft.appendChild(col);
     }
 
-    // Reset inventory slot
-    const slot = $('mc-slot-4');
-    if (slot) { slot.innerHTML = ''; slot.className = 'mc-slot mc-slot-result'; }
+    // Reset pickaxe slot
+    const slot = $('mc-px-slot');
+    if (slot) { slot.innerHTML = ''; slot.className = 'mc-px-slot'; }
     const lbl = $('mc-pickaxe-label');
     if (lbl) { lbl.innerText = 'Нет кирки'; lbl.style.color = ''; }
 
@@ -1432,13 +1432,13 @@ async function playMine() {
 
         user = data.user;
 
-        // Show pickaxe in inventory slot
+        // Show pickaxe in compact slot
         if (data.pickaxe) {
             const pi = MINE_PICKAXE_INFO[data.pickaxe];
-            const slot = $('mc-slot-4');
+            const slot = $('mc-px-slot');
             if (slot) {
-                slot.className = 'mc-slot mc-slot-result has-item';
-                slot.innerHTML = `<span class="${pi.cssClass}" style="font-size:26px;">⛏️</span><span class="mc-qty">×1</span>`;
+                slot.className = 'mc-px-slot has-item';
+                slot.innerHTML = `<span class="${pi.cssClass}" style="font-size:28px;">⛏️</span>`;
             }
             const lbl = $('mc-pickaxe-label');
             if (lbl) { lbl.innerText = pi.label; lbl.style.color = pi.color; }

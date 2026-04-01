@@ -232,22 +232,13 @@
         <div id="page-mine" class="page">
             <div class="card mine-card">
 
-                <!-- ИНВЕНТАРЬ (Minecraft-style inventory) -->
-                <div class="mc-inventory">
-                    <div class="mc-inv-label">ИНВЕНТАРЬ</div>
-                    <div class="mc-inv-grid" id="mc-inv-grid">
-                        <!-- 9 slots, pickaxe appears in slot 4 (center) -->
-                        <div class="mc-slot" id="mc-slot-0"></div>
-                        <div class="mc-slot" id="mc-slot-1"></div>
-                        <div class="mc-slot" id="mc-slot-2"></div>
-                        <div class="mc-slot" id="mc-slot-3"></div>
-                        <div class="mc-slot mc-slot-result" id="mc-slot-4"></div>
-                        <div class="mc-slot" id="mc-slot-5"></div>
-                        <div class="mc-slot" id="mc-slot-6"></div>
-                        <div class="mc-slot" id="mc-slot-7"></div>
-                        <div class="mc-slot" id="mc-slot-8"></div>
+                <!-- Pickaxe compact bar -->
+                <div class="mc-px-bar">
+                    <div class="mc-px-slot" id="mc-px-slot"></div>
+                    <div class="mc-px-info">
+                        <div class="mc-px-title">ИНСТРУМЕНТ</div>
+                        <div id="mc-pickaxe-label" class="mc-px-label">Нет кирки</div>
                     </div>
-                    <div id="mc-pickaxe-label" class="mc-pickaxe-label">Нет кирки</div>
                 </div>
 
                 <!-- ШАХТА — 4 колонки блоков -->
@@ -266,14 +257,16 @@
                 <!-- WIN DISPLAY -->
                 <div id="mine-win-display" class="mine-win-display" style="display:none;"></div>
 
-                <!-- PAYTABLE -->
+                <!-- PAYTABLE 2-col -->
                 <div class="mine-paytable">
-                    <div class="mine-pay-row"><span class="mc-blk-mini stone-blk"></span><span>Камень — проигрыш</span></div>
-                    <div class="mine-pay-row"><span class="mc-blk-mini redstone-blk"></span><span>Редстоун — ×0.7</span></div>
-                    <div class="mine-pay-row"><span class="mc-blk-mini gold-blk"></span><span>Золото — ×1.5</span></div>
-                    <div class="mine-pay-row"><span class="mc-blk-mini diamond-blk"></span><span>Алмаз — ×3</span></div>
-                    <div class="mine-pay-row"><span class="mc-blk-mini obsidian-blk"></span><span>Обсидиан — ×6</span></div>
-                    <div class="mine-pay-row" style="font-size:10px; color:#888; margin-top:2px;">⛏️ Кирка (25%) умножает выигрыш</div>
+                    <div class="mine-pay-2col">
+                        <div class="mine-pay-row"><span class="mc-blk-mini stone-blk"></span><span>Камень — ×0</span></div>
+                        <div class="mine-pay-row"><span class="mc-blk-mini redstone-blk"></span><span>Редстоун — ×0.7</span></div>
+                        <div class="mine-pay-row"><span class="mc-blk-mini gold-blk"></span><span>Золото — ×1.5</span></div>
+                        <div class="mine-pay-row"><span class="mc-blk-mini diamond-blk"></span><span>Алмаз — ×3</span></div>
+                        <div class="mine-pay-row"><span class="mc-blk-mini obsidian-blk"></span><span>Обсидиан — ×6</span></div>
+                        <div class="mine-pay-row" style="color:#666; font-size:9px;">⛏️ кирка (25%) ×мульт</div>
+                    </div>
                 </div>
 
                 <div id="qb-mine" class="quick-bets" style="margin-top:10px;"></div>
