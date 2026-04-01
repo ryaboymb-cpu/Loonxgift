@@ -1,5 +1,5 @@
 # LoonxGift
-<!-- Last updated: Mine game overhaul v2 -->
+<!-- Last updated: Mine game overhaul v3 - blocks visible, random pickaxe types, no grid shift -->
 
 A Telegram Mini App (TMA) backend and frontend for a gambling platform integrated with the TON blockchain.
 
@@ -73,6 +73,22 @@ Server runs on port 5000, binding to `0.0.0.0`.
 - Adaptive RTP: loss streak → more X, win streak → fewer X. Effect ±15%
 - Server-side RTP control: roll vs rtpTarget to suppress wins
 - Animations: G=gift reveal, X=impact, HiddenG=glitch, freespins=badge
+
+## Mine Game Details
+
+- Grid: 5 columns × 3 rows = 15 blocks, Minecraft pixel-art aesthetic
+- Block types: stone, redstone, gold, diamond, obsidian, book, tnt
+- Blocks always visible from start with ore textures (never hidden)
+- N pickaxes (1-9), each randomly assigned a type: wooden, stone, iron, golden, diamond
+- Durability per pickaxe: wooden:3, stone:5, iron:7, golden:4, diamond:10
+- Pickaxe breaks visually (shake, redden, shatter) when durability runs out
+- Broken blocks stay in DOM (visibility:hidden) to prevent grid shift
+- Per-column chests open only when all 3 rows in that column are broken
+- Chest multiplier applied to column wins
+- Books and TNT go to inventory cells (not direct win)
+- Win scaled proportionally to blocks actually broken by pickaxes
+- Minimum 8% guaranteed win per round (server-side)
+- Block hit modifiers: wooden +1 extra hit, golden/diamond -1 hit
 
 ## Admin Panel
 
