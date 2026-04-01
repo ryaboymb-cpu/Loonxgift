@@ -1290,48 +1290,120 @@ function updateSpinUI() {
 const MINE_BLOCK_EMOJIS = { stone: '🪨', redstone: '🔴', gold: '🟨', diamond: '💎', obsidian: '🟣', unknown: '❓' };
 const MINE_BLOCK_CLASS = { stone: 'stone-blk', redstone: 'redstone-blk', gold: 'gold-blk', diamond: 'diamond-blk', obsidian: 'obsidian-blk', unknown: 'unknown-blk' };
 const MINE_PICKAXE_INFO = {
-    wooden:  { emoji: '⛏️', label: 'Деревянная кирка ×1.2', color: '#8B6914' },
-    stone:   { emoji: '⛏️', label: 'Каменная кирка ×1.5',  color: '#9a9a9a' },
-    iron:    { emoji: '⛏️', label: 'Железная кирка ×2.0',   color: '#c0c0c0' },
-    golden:  { emoji: '⛏️', label: 'Золотая кирка ×3.0',    color: '#ffd700' }
+    wooden:  { emoji: '⛏️', label: 'Деревянная кирка ×1.2', color: '#c8a040', cssClass: 'px-wooden' },
+    stone:   { emoji: '⛏️', label: 'Каменная кирка ×1.5',   color: '#9a9a9a', cssClass: 'px-stone'  },
+    iron:    { emoji: '⛏️', label: 'Железная кирка ×2.0',   color: '#c8d0d8', cssClass: 'px-iron'   },
+    golden:  { emoji: '⛏️', label: 'Золотая кирка ×3.0',    color: '#ffd700', cssClass: 'px-golden' }
 };
 let mineIsSpinning = false;
 
-function initMineGrid() {
-    const grid = $('mine-block-grid');
-    if (!grid) return;
-    grid.innerHTML = '';
-    for (let r = 0; r < 3; r++) {
-        for (let c = 0; c < 3; c++) {
-            const bl = document.createElement('div');
-            bl.className = 'mine-block unknown-blk';
-            bl.id = `mb-${r}-${c}`;
-            bl.innerText = '❓';
-            grid.appendChild(bl);
+// ==== MINE GAME — Minecraft shaft style ====
+const MC_ROWS = 4; // rows per column (top=stone, bottom=rarest)
+const MC_COLS = 4; // columns
+// Row layer → possible block types (weighted toward rare at bottom)
+const MC_ROW_POOL = [
+    ['stone','stone','stone','stone','redstone'],                     // row 0 — top
+    ['stone','redstone','redstone','redstone','gold'],                // row 1
+    ['redstone','gold','gold','gold','diamond'],                      // row 2
+    ['gold','diamond','diamond','obsidian','obsidian'],              // row 3 — bottom (result)
+];
+const MC_RESULT_COL = 1; // column 1 (second from left) shows the real result
+
+function initMineShaft() {
+    const shaft = $('mc-shaft');
+    if (!shaft) return;
+    shaft.innerHTML = '';
+    for (let c = 0; c < MC_COLS; c++) {
+        const col = document.createElement('div');
+        col.className = 'mc-col';
+        col.id = `mc-col-${c}`;
+        for (let r = 0; r < MC_ROWS; r++) {
+            const blk = document.createElement('div');
+            blk.className = 'mc-blk hidden-blk';
+            blk.id = `mc-blk-${c}-${r}`;
+            col.appendChild(blk);
         }
+        shaft.appendChild(col);
     }
+
+    // Reset inventory slot
+    const slot = $('mc-slot-4');
+    if (slot) { slot.innerHTML = ''; slot.className = 'mc-slot mc-slot-result'; }
+    const lbl = $('mc-pickaxe-label');
+    if (lbl) { lbl.innerText = 'Нет кирки'; lbl.style.color = ''; }
+
+    // Reset chests
+    document.querySelectorAll('.mc-chest').forEach(ch => { ch.innerText = '📦'; ch.classList.remove('open-anim'); });
+
+    const wd = $('mine-win-display');
+    if (wd) wd.style.display = 'none';
 }
 
-function revealMineGrid(serverGrid, mainBlock, pickaxe, win) {
-    const BLOCK_ORDER = [
-        [0,0],[0,1],[0,2],
-        [1,0],[1,1],[1,2],
-        [2,0],[2,1],[2,2]
-    ];
-    BLOCK_ORDER.forEach(([r,c], idx) => {
-        setTimeout(() => {
-            const bl = $(`mb-${r}-${c}`);
-            if (!bl) return;
-            const blockType = serverGrid[r][c];
-            const isMain = (r === 2 && c === 1);
-            bl.className = `mine-block ${MINE_BLOCK_CLASS[blockType] || 'stone-blk'}${isMain ? ' is-main' : ''} reveal-anim`;
-            bl.innerText = MINE_BLOCK_EMOJIS[blockType] || '🪨';
-            if (isMain && win > 0) {
-                setTimeout(() => { bl.classList.add('win-glow'); }, 300);
+function revealMineShaft(mainBlock, pickaxe, win) {
+    // Build grid: fill each row with random picks, result col bottom row = mainBlock
+    const grid = [];
+    for (let c = 0; c < MC_COLS; c++) {
+        const col = [];
+        for (let r = 0; r < MC_ROWS; r++) {
+            if (r === MC_ROWS - 1 && c === MC_RESULT_COL) {
+                col.push(mainBlock); // real result
+            } else {
+                const pool = MC_ROW_POOL[r];
+                col.push(pool[Math.floor(Math.random() * pool.length)]);
             }
-        }, idx * 90);
-    });
+        }
+        grid.push(col);
+    }
+
+    const totalBlocks = MC_COLS * MC_ROWS;
+    let delay = 0;
+    // Reveal row by row, top to bottom (all columns simultaneously per row)
+    for (let r = 0; r < MC_ROWS; r++) {
+        for (let c = 0; c < MC_COLS; c++) {
+            const blockType = grid[c][r];
+            const isResult = (r === MC_ROWS - 1 && c === MC_RESULT_COL);
+            setTimeout(() => {
+                const el = $(`mc-blk-${c}-${r}`);
+                if (!el) return;
+                const cls = MINE_BLOCK_CLASS[blockType] || 'stone-blk';
+                el.className = `mc-blk ${cls} reveal-drop${isResult ? ' is-result' : ''}`;
+                if (isResult && win > 0) {
+                    setTimeout(() => { el.classList.add('win-pulse'); }, 200);
+                }
+            }, delay);
+        }
+        delay += 160;
+    }
+
+    const afterReveal = delay + 200;
+
+    // Open chests + show win after reveal
+    setTimeout(() => {
+        document.querySelectorAll('.mc-chest').forEach((ch, i) => {
+            setTimeout(() => {
+                ch.classList.add('open-anim');
+                ch.innerText = win > 0 ? '🎁' : '📦';
+            }, i * 80);
+        });
+    }, afterReveal);
+
+    setTimeout(() => {
+        const wd = $('mine-win-display');
+        if (win > 0) {
+            if (wd) { wd.innerText = `+${win.toFixed(2)} TON`; wd.style.display = 'block'; }
+            flyToBalance(win);
+            showToast(`💰 +${win.toFixed(2)} TON!`);
+        } else {
+            if (wd) { wd.innerText = 'Не повезло...'; wd.style.color = '#ff4444'; wd.style.display = 'block'; }
+            showToast('⛏️ Не повезло, попробуй ещё!', 2000);
+        }
+        updateUI();
+    }, afterReveal + 400);
+
+    return afterReveal + 600;
 }
+
+function initMineGrid() { initMineShaft(); }
 
 async function playMine() {
     if (!user) return showToast('Загрузка...');
@@ -1340,9 +1412,6 @@ async function playMine() {
 
     const betInput = $('mn-bet');
     const btn = $('mn-btn');
-    const winDisp = $('mine-win-display');
-    const pickaxeIcon = $('mine-pickaxe-icon');
-    const pickaxeLabel = $('mine-pickaxe-label');
 
     let betVal = parseFloat(betInput ? betInput.value : 0);
     if (!betVal || betVal < 0.1) { showToast('Мин. ставка 0.1 TON'); return; }
@@ -1350,14 +1419,7 @@ async function playMine() {
 
     mineIsSpinning = true;
     if (btn) btn.disabled = true;
-    if (winDisp) winDisp.style.display = 'none';
-
-    // Reset pickaxe UI
-    if (pickaxeIcon) { pickaxeIcon.className = 'mine-pickaxe-icon'; pickaxeIcon.style.opacity = '0.3'; pickaxeIcon.style.color = ''; pickaxeIcon.innerText = '⛏️'; }
-    if (pickaxeLabel) { pickaxeLabel.className = 'mine-pickaxe-label'; pickaxeLabel.innerText = 'Нет кирки'; }
-
-    // Show mystery blocks
-    initMineGrid();
+    initMineShaft();
 
     try {
         const r = await fetch('/api/mine', {
@@ -1366,49 +1428,32 @@ async function playMine() {
             body: JSON.stringify({ id: user.id, bet: betVal, mode })
         });
         const data = await r.json();
-        if (!r.ok) { showToast(data.error || 'Ошибка'); return; }
+        if (!r.ok) { showToast(data.error || 'Ошибка'); mineIsSpinning = false; if(btn) btn.disabled = false; return; }
 
         user = data.user;
 
-        // Reveal pickaxe first (if any)
+        // Show pickaxe in inventory slot
         if (data.pickaxe) {
             const pi = MINE_PICKAXE_INFO[data.pickaxe];
-            if (pickaxeIcon) {
-                pickaxeIcon.className = 'mine-pickaxe-icon active';
-                pickaxeIcon.style.opacity = '1';
-                pickaxeIcon.style.color = pi.color;
-                pickaxeIcon.innerText = pi.emoji;
+            const slot = $('mc-slot-4');
+            if (slot) {
+                slot.className = 'mc-slot mc-slot-result has-item';
+                slot.innerHTML = `<span class="${pi.cssClass}" style="font-size:26px;">⛏️</span><span class="mc-qty">×1</span>`;
             }
-            if (pickaxeLabel) {
-                pickaxeLabel.className = 'mine-pickaxe-label has-pickaxe';
-                pickaxeLabel.innerText = pi.label;
-                pickaxeLabel.style.color = pi.color;
-            }
+            const lbl = $('mc-pickaxe-label');
+            if (lbl) { lbl.innerText = pi.label; lbl.style.color = pi.color; }
+            await new Promise(res => setTimeout(res, 450));
         }
 
-        // Reveal blocks with stagger
-        await new Promise(resolve => setTimeout(resolve, data.pickaxe ? 400 : 100));
-        revealMineGrid(data.grid, data.mainBlock, data.pickaxe, data.win);
+        // Reveal shaft
+        const totalTime = revealMineShaft(data.mainBlock, data.pickaxe, data.win);
 
-        // Show result after all blocks revealed
-        setTimeout(() => {
-            if (data.win > 0) {
-                if (winDisp) { winDisp.innerText = `+${data.win.toFixed(2)} TON`; winDisp.style.display = 'block'; }
-                flyToBalance(data.win);
-                showToast(`💰 +${data.win.toFixed(2)} TON!`);
-            } else {
-                showToast('⛏️ Не повезло, попробуй ещё!', 2000);
-            }
-            updateUI();
-        }, 9 * 90 + 200);
+        setTimeout(() => { mineIsSpinning = false; if (btn) btn.disabled = false; }, totalTime + 100);
 
     } catch(e) {
         showToast('Ошибка соединения');
-    } finally {
-        setTimeout(() => {
-            mineIsSpinning = false;
-            if (btn) btn.disabled = false;
-        }, 9 * 90 + 300);
+        mineIsSpinning = false;
+        if (btn) btn.disabled = false;
     }
 }
 

@@ -151,40 +151,57 @@ header { padding: 15px; display: flex; justify-content: space-between; align-ite
 @keyframes fsPopIn { 0% { transform: scale(0.3); opacity: 0; } 70% { transform: scale(1.1); } 100% { transform: scale(1); opacity: 1; } }
 @keyframes fsCountUp { 0% { transform: scale(0.5); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
 
-/* === MINE GAME === */
-.mine-card { padding: 16px; }
-.mine-pickaxe-area { display: flex; align-items: center; gap: 12px; background: #0a0a0a; border: 1px solid #222; border-radius: 12px; padding: 12px 16px; margin-bottom: 14px; }
-.mine-pickaxe-icon { font-size: 36px; transition: transform 0.4s cubic-bezier(0.34,1.56,0.64,1), opacity 0.3s; }
-.mine-pickaxe-icon.active { opacity: 1 !important; animation: pickaxeSwing 0.5s ease; }
-.mine-pickaxe-label { font-size: 13px; font-weight: 700; color: var(--sub); }
-.mine-pickaxe-label.has-pickaxe { color: #fff; }
-@keyframes pickaxeSwing { 0% { transform: rotate(-30deg) scale(1.3); } 50% { transform: rotate(15deg) scale(1.1); } 100% { transform: rotate(0deg) scale(1); } }
+/* === MINE GAME (Minecraft Style) === */
+.mine-card { padding: 12px; }
 
-.mine-block-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 14px; }
-.mine-block { aspect-ratio: 1; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 28px; position: relative; border: 3px solid; cursor: default; transition: transform 0.3s, box-shadow 0.3s; image-rendering: pixelated; overflow: hidden; }
-.mine-block::before { content: ''; position: absolute; inset: 0; background: linear-gradient(135deg, rgba(255,255,255,0.15) 0%, transparent 50%, rgba(0,0,0,0.2) 100%); border-radius: 4px; pointer-events: none; }
-.mine-block.is-main { transform: scale(1.08); z-index: 1; }
-.mine-block.reveal-anim { animation: blockReveal 0.5s cubic-bezier(0.34,1.56,0.64,1); }
-.mine-block.win-glow { animation: blockWinGlow 0.8s ease infinite alternate; }
-@keyframes blockReveal { 0% { transform: scale(0.3) rotate(-10deg); opacity: 0; } 60% { transform: scale(1.15) rotate(5deg); } 100% { transform: scale(1) rotate(0deg); opacity: 1; } }
-@keyframes blockRevealMain { 0% { transform: scale(0.3) rotate(-10deg); opacity: 0; } 60% { transform: scale(1.25) rotate(5deg); } 100% { transform: scale(1.08) rotate(0deg); opacity: 1; } }
-@keyframes blockWinGlow { 0% { box-shadow: 0 0 10px currentColor; } 100% { box-shadow: 0 0 30px currentColor, 0 0 60px currentColor; } }
-.mine-block.unknown-blk { background: #111; border-color: #2a2a2a; color: #333; }
-.mine-block.stone-blk { background: #5a5a5a; border-color: #888; color: #9a9a9a; box-shadow: inset 3px 3px 0 #7a7a7a, inset -3px -3px 0 #3a3a3a; }
-.mine-block.redstone-blk { background: #3d0808; border-color: #cc1111; color: #ff4444; box-shadow: inset 3px 3px 0 #6b1111, inset -3px -3px 0 #1a0202, 0 0 8px rgba(204,17,17,0.4); }
-.mine-block.gold-blk { background: #9a6e00; border-color: #ffd700; color: #ffe040; box-shadow: inset 3px 3px 0 #c89000, inset -3px -3px 0 #5a3e00, 0 0 10px rgba(255,215,0,0.4); }
-.mine-block.diamond-blk { background: #065a6a; border-color: #00c8d4; color: #00ffff; box-shadow: inset 3px 3px 0 #0a8a9a, inset -3px -3px 0 #022e38, 0 0 15px rgba(0,200,212,0.5); }
-.mine-block.obsidian-blk { background: #0e0620; border-color: #8b5cf6; color: #c4b5fd; box-shadow: inset 3px 3px 0 #3b1a6b, inset -3px -3px 0 #06030e, 0 0 20px rgba(139,92,246,0.6); }
+/* Инвентарь */
+.mc-inventory { background: #8b8b8b; border: 3px solid #373737; border-radius: 4px; padding: 8px; margin-bottom: 10px; }
+.mc-inv-label { font-size: 11px; color: #ddd; font-weight: 900; letter-spacing: 1px; margin-bottom: 6px; font-family: monospace; }
+.mc-inv-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 3px; }
+.mc-slot { aspect-ratio: 1; background: #8b8b8b; border: 2px solid; border-color: #373737 #fff #fff #373737; display: flex; align-items: center; justify-content: center; font-size: 24px; position: relative; border-radius: 1px; min-height: 52px; transition: all 0.3s; }
+.mc-slot-result { border-color: #ffd700 #ffe680 #ffe680 #ffd700; background: #7a7a7a; }
+.mc-slot.has-item { animation: slotPop 0.4s cubic-bezier(0.34,1.56,0.64,1); }
+.mc-slot .mc-qty { position: absolute; bottom: 1px; right: 3px; font-size: 9px; font-weight: 900; color: #fff; text-shadow: 1px 1px 0 #000; font-family: monospace; }
+.mc-pickaxe-label { text-align: center; font-size: 11px; color: #e0e0e0; font-weight: 700; margin-top: 6px; min-height: 16px; font-family: monospace; }
+@keyframes slotPop { 0% { transform: scale(0.4); } 70% { transform: scale(1.2); } 100% { transform: scale(1); } }
 
-.mine-block-mini { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 4px; font-size: 12px; border: 2px solid; flex-shrink: 0; }
-.mine-block-mini.stone-blk { background: #5a5a5a; border-color: #888; }
-.mine-block-mini.redstone-blk { background: #3d0808; border-color: #cc1111; }
-.mine-block-mini.gold-blk { background: #9a6e00; border-color: #ffd700; }
-.mine-block-mini.diamond-blk { background: #065a6a; border-color: #00c8d4; }
-.mine-block-mini.obsidian-blk { background: #0e0620; border-color: #8b5cf6; }
+/* Шахта */
+.mc-shaft { display: grid; grid-template-columns: repeat(4, 1fr); gap: 3px; background: #1a1004; border: 3px solid #2a1a08; border-radius: 4px; padding: 6px; margin-bottom: 3px; }
+.mc-col { display: flex; flex-direction: column; gap: 3px; }
+.mc-blk { aspect-ratio: 1; border-radius: 2px; border: 2px solid; display: flex; align-items: center; justify-content: center; font-size: 0px; position: relative; image-rendering: pixelated; transition: all 0.2s; }
+.mc-blk::after { content: ''; position: absolute; inset: 0; background: linear-gradient(135deg, rgba(255,255,255,0.2) 0%, transparent 45%, rgba(0,0,0,0.3) 100%); pointer-events: none; }
+.mc-blk.hidden-blk { background: #2a1a08; border-color: #3a2510; }
+.mc-blk.reveal-drop { animation: blockDrop 0.35s cubic-bezier(0.4,0,0.2,1); }
+.mc-blk.is-result { transform: scale(1.06); z-index: 2; }
+.mc-blk.win-pulse { animation: blockWinPulse 0.7s ease-in-out infinite alternate; }
+@keyframes blockDrop { 0% { transform: translateY(-20px) scale(0.7); opacity: 0; } 60% { transform: translateY(4px) scale(1.05); } 100% { transform: translateY(0) scale(1); opacity: 1; } }
+@keyframes blockWinPulse { 0% { filter: brightness(1) saturate(1); } 100% { filter: brightness(1.6) saturate(1.5); transform: scale(1.1); } }
 
-.mine-paytable { background: #080808; border: 1px solid #1a1a1a; border-radius: 10px; padding: 10px 12px; margin-bottom: 14px; display: flex; flex-direction: column; gap: 5px; }
-.mine-pay-row { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--sub); font-weight: 700; }
-.mine-win-display { text-align: center; font-size: 28px; font-weight: 900; color: var(--neon); text-shadow: 0 0 20px rgba(0,255,136,0.7); padding: 10px; margin-bottom: 8px; animation: blockReveal 0.4s ease; }
-.mine-btn { background: linear-gradient(90deg, #7a4920, #c07030); box-shadow: 0 0 20px rgba(160,100,30,0.4); color: #fff; }
-.mine-btn:disabled { background: #333 !important; box-shadow: none !important; }
+/* Minecraft block colors */
+.stone-blk   { background: #7a7a7a; border-color: #9a9a9a #555 #555 #9a9a9a; }
+.redstone-blk{ background: #6b1111; border-color: #cc2222 #3d0606 #3d0606 #cc2222; box-shadow: 0 0 6px rgba(204,34,34,0.5); }
+.gold-blk    { background: #b8890a; border-color: #ffd700 #6b4e00 #6b4e00 #ffd700; box-shadow: 0 0 8px rgba(255,215,0,0.4); }
+.diamond-blk { background: #0a5e6e; border-color: #00d4e0 #023a44 #023a44 #00d4e0; box-shadow: 0 0 12px rgba(0,212,224,0.5); }
+.obsidian-blk{ background: #120828; border-color: #6b3fa0 #06020f #06020f #6b3fa0; box-shadow: 0 0 16px rgba(107,63,160,0.7); }
+
+/* Мини блоки для таблицы выплат */
+.mc-blk-mini { display: inline-block; width: 18px; height: 18px; border-radius: 2px; border: 2px solid; flex-shrink: 0; }
+
+/* Сундуки */
+.mc-chests-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 3px; background: #5c3a1e; border: 3px solid #3d2510; border-radius: 4px; padding: 5px; margin-bottom: 8px; }
+.mc-chest { background: linear-gradient(180deg, #8b5c2a 0%, #5c3a1e 100%); border: 2px solid; border-color: #c8882a #3d2510 #3d2510 #c8882a; border-radius: 2px; font-size: 22px; display: flex; align-items: center; justify-content: center; aspect-ratio: 1; transition: all 0.3s; }
+.mc-chest.open-anim { animation: chestOpen 0.5s ease; }
+@keyframes chestOpen { 0% { transform: scale(1); } 30% { transform: scale(1.15) translateY(-4px); } 60% { transform: scale(0.95); } 100% { transform: scale(1); } }
+
+/* Таблица выплат */
+.mine-paytable { background: #0a0a0a; border: 1px solid #1a1a1a; border-radius: 8px; padding: 8px 10px; margin-bottom: 10px; display: flex; flex-direction: column; gap: 4px; }
+.mine-pay-row { display: flex; align-items: center; gap: 7px; font-size: 11px; color: var(--sub); font-weight: 700; }
+.mine-win-display { text-align: center; font-size: 26px; font-weight: 900; color: var(--neon); text-shadow: 0 0 20px rgba(0,255,136,0.8); padding: 8px; margin-bottom: 6px; animation: blockDrop 0.4s ease; }
+.mine-btn { background: linear-gradient(90deg, #5c3a1e, #8b5c2a); box-shadow: 0 0 20px rgba(140,90,40,0.5); color: #ffe0a0; font-weight: 900; letter-spacing: 1px; border: 2px solid #c8882a; }
+.mine-btn:disabled { background: #2a1a08 !important; border-color: #444 !important; box-shadow: none !important; color: #666 !important; }
+
+/* Пиксельные pickaxe-иконки (цветные emoji с цветовым оверлеем) */
+.px-wooden  { filter: sepia(1) saturate(3) hue-rotate(20deg); }
+.px-stone   { filter: grayscale(0.7) brightness(0.9); }
+.px-iron    { filter: grayscale(0.3) brightness(1.2); }
+.px-golden  { filter: sepia(1) saturate(5) hue-rotate(0deg) brightness(1.2); }
