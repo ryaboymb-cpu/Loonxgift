@@ -1457,41 +1457,42 @@ let mineRunningTotal  = 0;
 
 // ── Инвентарь: 5×3 пустых ячеек (заполняются во время раскрытия) ──
 // Draw a pixel-art pickaxe onto canvas — proper Minecraft style
-// Рисует пиксельную кирку как в Minecraft (item sprite, 16×16 → 32×32)
-// Голова вверху-слева, рукоять уходит по диагонали вправо-вниз
 function drawPickaxeCanvas(type) {
     const c = document.createElement('canvas');
-    c.width = 128; c.height = 128;
+    c.width = 16; c.height = 16;
     const ctx = c.getContext('2d');
     ctx.imageSmoothingEnabled = false;
     const cols = {
-        wooden:  { L:'#e8d080', H:'#c8a050', D:'#8a6828', DK:'#5a3a10', W:'#b07830', WD:'#7a4e18', WK:'#4a2e10' },
-        stone:   { L:'#d8d8d8', H:'#9c9c9c', D:'#6a6a6a', DK:'#3a3a3a', W:'#b07830', WD:'#7a4e18', WK:'#4a2e10' },
-        iron:    { L:'#ffffff', H:'#d8dce8', D:'#90a0b0', DK:'#607080', W:'#b07830', WD:'#7a4e18', WK:'#4a2e10' },
-        golden:  { L:'#fff870', H:'#ffd800', D:'#c09800', DK:'#806000', W:'#b07830', WD:'#7a4e18', WK:'#4a2e10' },
-        diamond: { L:'#b0ffff', H:'#5ae8f8', D:'#20b0d0', DK:'#007898', W:'#b07830', WD:'#7a4e18', WK:'#4a2e10' },
+        wooden:  { L:'#c69c6d', M:'#a17339', D:'#7a5a2b', W:'#7a5a2b', WD:'#5c3a18' },
+        stone:   { L:'#c8c8c8', M:'#9c9c9c', D:'#6a6a6a', W:'#7a5a2b', WD:'#5c3a18' },
+        iron:    { L:'#e8e8e8', M:'#d4d4d4', D:'#a0a0a0', W:'#7a5a2b', WD:'#5c3a18' },
+        golden:  { L:'#ffe868', M:'#e8c830', D:'#c8a000', W:'#7a5a2b', WD:'#5c3a18' },
+        diamond: { L:'#78e8e8', M:'#40c8d8', D:'#1898b0', W:'#7a5a2b', WD:'#5c3a18' },
     };
-    const { L, H, D, DK, W, WD, WK } = cols[type] || cols.wooden;
-    const S = 8;
-    const px = (x, y, col) => { ctx.fillStyle = col; ctx.fillRect(x*S, y*S, S, S); };
-    px(1,0,L); px(2,0,H);
-    px(1,1,H); px(2,1,D);
-    px(5,0,L); px(6,0,H);
-    px(5,1,H); px(6,1,D);
-    px(9,0,L); px(10,0,H);
-    px(9,1,H); px(10,1,D);
-    px(1,2,L); px(2,2,H); px(3,2,H); px(4,2,H); px(5,2,H); px(6,2,H); px(7,2,H); px(8,2,H); px(9,2,H); px(10,2,D);
-    px(2,3,D); px(3,3,DK); px(4,3,D); px(5,3,DK); px(6,3,D); px(7,3,DK); px(8,3,D); px(9,3,DK);
-    px(6,3,H); px(6,4,D);
-    px(7,4,W); px(7,5,WD);
-    px(8,5,W); px(8,6,WD);
-    px(9,6,W); px(9,7,WD);
-    px(10,7,W); px(10,8,WD);
-    px(11,8,W); px(11,9,WD);
-    px(12,9,W); px(12,10,WD);
-    px(13,10,W); px(13,11,WD);
-    px(14,11,W); px(14,12,WK);
-    return c.toDataURL('image/png');
+    const { L, M, D, W, WD } = cols[type] || cols.wooden;
+    const p = (x, y, cl) => { ctx.fillStyle = cl; ctx.fillRect(x, y, 1, 1); };
+    p(7,0,D); p(8,0,M); p(9,0,L);
+    p(6,1,D); p(7,1,M); p(8,1,L); p(9,1,M); p(10,1,L);
+    p(5,2,D); p(6,2,M); p(7,2,L); p(10,2,M); p(11,2,L);
+    p(5,3,M); p(6,3,D); p(11,3,D); p(12,3,M);
+    p(6,4,L); p(7,4,M); p(12,4,D);
+    p(7,5,L); p(8,5,M); p(11,5,D);
+    p(8,6,L); p(9,6,M); p(10,6,D);
+    p(7,7,W); p(8,7,WD); p(9,7,D); p(10,7,M);
+    p(6,8,W); p(7,8,WD); p(8,8,D);
+    p(5,9,W); p(6,9,WD);
+    p(4,10,W); p(5,10,WD);
+    p(3,11,W); p(4,11,WD);
+    p(2,12,W); p(3,12,WD);
+    p(1,13,W); p(2,13,WD);
+    p(0,14,WD);
+
+    const big = document.createElement('canvas');
+    big.width = 128; big.height = 128;
+    const bctx = big.getContext('2d');
+    bctx.imageSmoothingEnabled = false;
+    bctx.drawImage(c, 0, 0, 128, 128);
+    return big.toDataURL('image/png');
 }
 
 // Pixel art pickaxe URLs cached per type

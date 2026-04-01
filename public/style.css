@@ -222,7 +222,7 @@ header { padding: 15px; display: flex; justify-content: space-between; align-ite
 .mc-inventory {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
-  grid-template-rows: repeat(3, 1fr);
+  grid-template-rows: repeat(3, minmax(0, 32px));
   gap: 2px;
   background: #6e6e6e;
   border: 3px solid;
@@ -230,8 +230,6 @@ header { padding: 15px; display: flex; justify-content: space-between; align-ite
   border-radius: 3px 3px 0 0;
   padding: 3px;
   flex-shrink: 0;
-  aspect-ratio: 5 / 3;
-  height: auto;
 }
 .inv-cell {
   background: #8b8b8b;
@@ -272,11 +270,9 @@ header { padding: 15px; display: flex; justify-content: space-between; align-ite
 .mc-shaft {
   flex-shrink: 0;
   width: 100%;
-  aspect-ratio: 1;
-  height: auto;
   display: grid;
   grid-template-columns: repeat(5, 1fr);
-  grid-template-rows: repeat(5, 1fr);
+  grid-template-rows: repeat(5, minmax(0, 36px));
   gap: 2px;
   background: #080402;
   border: 3px solid;
@@ -554,7 +550,7 @@ header { padding: 15px; display: flex; justify-content: space-between; align-ite
   background-repeat: no-repeat !important;
   border: 2px solid;
   border-color: #a06428 #3a2008 #3a2008 #a06428;
-  height: 40px;
+  height: 28px;
   position: relative;
   image-rendering: pixelated;
   border-radius: 2px;
