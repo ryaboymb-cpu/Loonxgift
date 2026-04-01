@@ -151,114 +151,95 @@ header { padding: 15px; display: flex; justify-content: space-between; align-ite
 @keyframes fsPopIn { 0% { transform: scale(0.3); opacity: 0; } 70% { transform: scale(1.1); } 100% { transform: scale(1); opacity: 1; } }
 @keyframes fsCountUp { 0% { transform: scale(0.5); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
 
-/* === MINE GAME — Full-Screen Fixed Layout === */
+/* === MINE GAME === */
 
-/* Страница Mine */
-#page-mine.active {
-  height: 100%;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-}
 .content:has(#page-mine.active) {
   padding: 6px 8px 68px !important;
   overflow: hidden !important;
-}
-
-.mine-card {
-  height: 100% !important;
-  padding: 5px 6px 6px;
   display: flex !important;
   flex-direction: column;
-  gap: 4px;
+}
+#page-mine.active {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.mine-card {
+  flex: 1 !important;
+  min-height: 0 !important;
+  height: auto !important;
+  padding: 5px 6px 5px;
+  display: flex !important;
+  flex-direction: column;
+  gap: 3px;
   overflow-y: auto;
   overflow-x: hidden;
   border-radius: 12px !important;
   margin-bottom: 0 !important;
 }
 
-/* ─── ИНВЕНТАРЬ 5×3 (Minecraft стиль) ─── */
+/* ─── ИНВЕНТАРЬ 5×3 ─── */
 .mc-inventory {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
   grid-template-rows: repeat(3, 1fr);
   gap: 2px;
-  background: #8b8b8b;
+  background: #6e6e6e;
   border: 3px solid;
-  border-color: #ccc #444 #444 #ccc;
+  border-color: #c8c8c8 #3a3a3a #3a3a3a #c8c8c8;
   border-radius: 3px 3px 0 0;
   padding: 3px;
   flex-shrink: 0;
-  height: 82px;
+  height: 80px;
 }
 .inv-cell {
   background: #8b8b8b;
   border: 2px solid;
-  border-color: #555 #fff #fff #555;
-  border-radius: 2px;
+  border-color: #4a4a4a #d4d4d4 #d4d4d4 #4a4a4a;
+  border-radius: 1px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 18px;
+  font-size: 14px;
   position: relative;
   overflow: visible;
-  transition: background 0.15s;
+  transition: background 0.12s;
 }
 .inv-cell.filled {
   background: #7a7a7a;
-  animation: invPop 0.25s cubic-bezier(0.34,1.56,0.64,1);
+  animation: invPop 0.22s cubic-bezier(0.34,1.56,0.64,1);
 }
 .inv-cell.win-slot {
-  border-color: #ffd700 #997700 #997700 #ffd700 !important;
-  background: #6a6a3a !important;
-  box-shadow: 0 0 8px rgba(255,215,0,0.7);
+  border-color: #997700 #ffd700 #ffd700 #997700 !important;
+  background: #6a5a28 !important;
+  box-shadow: 0 0 6px rgba(255,215,0,0.8);
 }
-@keyframes invPop { 0%{transform:scale(0)} 70%{transform:scale(1.2)} 100%{transform:scale(1)} }
+@keyframes invPop { 0%{transform:scale(0)} 65%{transform:scale(1.25)} 100%{transform:scale(1)} }
 
-/* Иконки предметов в ячейках инвентаря */
-.inv-icon { font-size: 18px; line-height: 1; pointer-events: none; }
-.inv-icon.px-wooden  { filter: sepia(1) saturate(2) hue-rotate(10deg) brightness(0.9); }
-.inv-icon.px-stone   { filter: grayscale(1) brightness(0.85); }
-.inv-icon.px-iron    { filter: grayscale(0.5) brightness(1.1); }
-.inv-icon.px-golden  { filter: sepia(1) saturate(4) hue-rotate(0deg) brightness(1.1); }
-.inv-icon.px-diamond { filter: hue-rotate(190deg) saturate(4) brightness(1.4); }
-.inv-icon.inv-tnt    { font-size: 14px; }
-.inv-icon.inv-book   { font-size: 14px; }
-
-/* ─── ЗОНА ПОЛЁТА КИРКИ ─── */
+/* ─── ЗОНА ПОЛЁТА (пространство между инвентарём и шахтой) ─── */
 .mine-flight-zone {
   flex-shrink: 0;
-  height: 34px;
+  height: 28px;
   position: relative;
-  background: linear-gradient(180deg, #1a1208 0%, #0d0804 100%);
+  background: linear-gradient(180deg, #1c1008 0%, #080402 100%);
   border-left: 3px solid #2a1808;
-  border-right: 3px solid #0e0804;
+  border-right: 3px solid #0e0802;
   overflow: visible;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.mine-flight-zone::before {
-  content: '⛏ ⛏ ⛏';
-  font-size: 9px;
-  opacity: 0.08;
-  letter-spacing: 12px;
-  user-select: none;
-  pointer-events: none;
 }
 
 /* ─── ШАХТА 5×3 ─── */
 .mc-shaft {
   flex-shrink: 0;
-  height: 104px;
+  height: 98px;
   display: grid;
   grid-template-columns: repeat(5, 1fr);
   grid-template-rows: repeat(3, 1fr);
   gap: 2px;
-  background: #120c04;
+  background: #080402;
   border: 3px solid;
-  border-color: #3a2008 #1a0c04 #1a0c04 #3a2008;
-  border-radius: 0 0 5px 5px;
+  border-color: #3a2008 #0e0602 #0e0602 #3a2008;
+  border-radius: 0 0 4px 4px;
   padding: 3px;
   position: relative;
 }
@@ -266,23 +247,25 @@ header { padding: 15px; display: flex; justify-content: space-between; align-ite
   width: 100%;
   height: 100%;
   min-height: 0;
-  border-radius: 3px;
-  border: 3px solid;
+  border-radius: 2px;
+  border: 2px solid;
   position: relative;
   overflow: hidden;
   image-rendering: pixelated;
-  transition: transform 0.1s;
+  transition: transform 0.08s;
 }
-/* Minecraft грани освещения */
+/* Освещение: светлый верх-лево, тёмный низ-право */
 .mc-blk::before {
   content: '';
   position: absolute;
   inset: 0;
-  background: linear-gradient(135deg, rgba(255,255,255,0.22) 0%, transparent 38%, rgba(0,0,0,0.32) 100%);
+  background: linear-gradient(135deg,
+    rgba(255,255,255,0.28) 0%, rgba(255,255,255,0.10) 30%,
+    transparent 50%, rgba(0,0,0,0.30) 100%);
   z-index: 2;
   pointer-events: none;
+  border-radius: 1px;
 }
-/* Трещины при ударе */
 .mc-blk::after {
   content: '';
   position: absolute;
@@ -290,143 +273,120 @@ header { padding: 15px; display: flex; justify-content: space-between; align-ite
   z-index: 3;
   pointer-events: none;
   background: transparent;
-  border-radius: 2px;
+  border-radius: 1px;
 }
+/* Трещины */
 .mc-blk.cracking-1::after {
   background:
-    linear-gradient(142deg, transparent 45%, rgba(0,0,0,0.6) 45.5%, transparent 46%),
-    linear-gradient(38deg, transparent 35%, rgba(0,0,0,0.5) 35.5%, transparent 36%);
+    linear-gradient(140deg, transparent 44%, rgba(0,0,0,0.55) 44.5%, transparent 45%),
+    linear-gradient(40deg,  transparent 38%, rgba(0,0,0,0.45) 38.5%, transparent 39%);
 }
 .mc-blk.cracking-2::after {
   background:
-    linear-gradient(142deg, transparent 40%, rgba(0,0,0,0.7) 40.5%, transparent 41%),
-    linear-gradient(38deg, transparent 35%, rgba(0,0,0,0.6) 35.5%, transparent 36%),
-    linear-gradient(88deg, transparent 55%, rgba(0,0,0,0.5) 55.5%, transparent 56%),
-    linear-gradient(168deg, transparent 45%, rgba(0,0,0,0.5) 45.5%, transparent 46%);
+    linear-gradient(140deg, transparent 40%, rgba(0,0,0,0.65) 40.5%, transparent 41%),
+    linear-gradient(40deg,  transparent 34%, rgba(0,0,0,0.55) 34.5%, transparent 35%),
+    linear-gradient(90deg,  transparent 56%, rgba(0,0,0,0.45) 56.5%, transparent 57%),
+    linear-gradient(170deg, transparent 44%, rgba(0,0,0,0.45) 44.5%, transparent 45%);
 }
 .mc-blk.cracking-3::after {
   background:
-    linear-gradient(142deg, transparent 38%, rgba(0,0,0,0.8) 38.5%, transparent 39%),
-    linear-gradient(38deg, transparent 33%, rgba(0,0,0,0.7) 33.5%, transparent 34%),
-    linear-gradient(88deg, transparent 52%, rgba(0,0,0,0.7) 52.5%, transparent 53%),
-    linear-gradient(168deg, transparent 43%, rgba(0,0,0,0.6) 43.5%, transparent 44%),
-    linear-gradient(58deg, transparent 62%, rgba(0,0,0,0.6) 62.5%, transparent 63%),
-    linear-gradient(115deg, transparent 28%, rgba(0,0,0,0.5) 28.5%, transparent 29%);
-  filter: brightness(1.4);
+    linear-gradient(140deg, transparent 36%, rgba(0,0,0,0.8)  36.5%, transparent 37%),
+    linear-gradient(40deg,  transparent 30%, rgba(0,0,0,0.70) 30.5%, transparent 31%),
+    linear-gradient(90deg,  transparent 52%, rgba(0,0,0,0.65) 52.5%, transparent 53%),
+    linear-gradient(170deg, transparent 42%, rgba(0,0,0,0.55) 42.5%, transparent 43%),
+    linear-gradient(60deg,  transparent 60%, rgba(0,0,0,0.55) 60.5%, transparent 61%),
+    linear-gradient(110deg, transparent 26%, rgba(0,0,0,0.45) 26.5%, transparent 27%);
+  filter: brightness(1.5);
 }
+/* Анимации */
+.mc-blk.reveal-drop { animation: mcDrop 0.32s cubic-bezier(0.22,1,0.36,1); }
+.mc-blk.crack-hit   { animation: mcCrackHit 0.15s ease-out; }
+.mc-blk.win-pulse   { animation: mcWinPulse 0.55s ease-in-out infinite alternate; }
+@keyframes mcDrop     { 0%{transform:translateY(-20px)scale(0.6);opacity:0} 65%{transform:translateY(3px)scale(1.05)} 100%{transform:none;opacity:1} }
+@keyframes mcCrackHit { 0%{transform:scale(1)} 35%{transform:scale(0.9)rotate(-1deg);filter:brightness(2.5)} 70%{transform:scale(1.03)} 100%{transform:scale(1)} }
+@keyframes mcWinPulse { 0%{filter:brightness(1)saturate(1)} 100%{filter:brightness(1.9)saturate(1.8)} }
+@keyframes mcBreak    { 0%{transform:scale(1);opacity:1} 30%{transform:scale(1.1);filter:brightness(3)} 70%{transform:scale(0.8)rotate(8deg);opacity:0.5} 100%{transform:scale(0)rotate(15deg);opacity:0} }
 
+/* ══════════════ ТЕКСТУРЫ БЛОКОВ (Minecraft SVG pixel-art) ══════════════ */
 
-/* Анимации блоков */
-.mc-blk.reveal-drop  { animation: mcDrop 0.35s cubic-bezier(0.22,1,0.36,1); }
-.mc-blk.crack-hit    { animation: mcCrackHit 0.18s ease-out; }
-.mc-blk.break-anim   { animation: mcBreak 0.35s ease-in forwards; }
-.mc-blk.is-result    { transform: scale(1.08); z-index: 3; }
-.mc-blk.win-pulse    { animation: mcWinPulse 0.6s ease-in-out infinite alternate; }
-
-@keyframes mcDrop    { 0%{transform:translateY(-28px)scale(0.55);opacity:0} 65%{transform:translateY(4px)scale(1.06)} 100%{transform:translateY(0)scale(1);opacity:1} }
-@keyframes mcCrackHit{ 0%{transform:scale(1)} 30%{transform:scale(0.92)rotate(-1.5deg);filter:brightness(2.5)} 70%{transform:scale(1.04)rotate(0.5deg)} 100%{transform:scale(1)} }
-@keyframes mcBreak   { 0%{transform:scale(1);opacity:1;filter:brightness(1)} 30%{transform:scale(1.1);filter:brightness(3)} 70%{transform:scale(0.8)rotate(8deg);opacity:0.5} 100%{transform:scale(0)rotate(15deg);opacity:0} }
-@keyframes mcWinPulse{ 0%{filter:brightness(1)saturate(1);transform:scale(1.08)} 100%{filter:brightness(1.8)saturate(1.7);transform:scale(1.14)} }
-
-/* ─── ТЕКСТУРЫ БЛОКОВ — Minecraft пиксель-арт ─── */
-
-/* Скрытый блок (грязь/земля) */
+/* Скрытый блок — тёмная земля/камень (до удара кирки) */
 .mc-blk.hidden-blk {
-  background-color: #4a2c18;
-  background-image: repeating-conic-gradient(#3a1e0a 0% 25%, #5e3822 0% 50%) 0 0 / 4px 4px;
-  border-color: #6a4030 #1a0c04 #1a0c04 #6a4030;
-  image-rendering: pixelated;
+  background-color: #6a3c1c;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' shape-rendering='crispEdges'%3E%3Crect width='8' height='8' fill='%236a3c1c'/%3E%3Crect x='0' y='0' width='4' height='4' fill='%23401c08'/%3E%3Crect x='4' y='4' width='4' height='4' fill='%23401c08'/%3E%3Crect x='2' y='2' width='2' height='2' fill='%23864a28'/%3E%3Crect x='6' y='6' width='2' height='2' fill='%23864a28'/%3E%3Crect x='4' y='1' width='2' height='1' fill='%23904e2c'/%3E%3Crect x='0' y='5' width='2' height='1' fill='%23904e2c'/%3E%3C/svg%3E");
+  background-size: 8px 8px;
+  border-color: #8a5030 #1e0c04 #1e0c04 #8a5030;
 }
 
 /* Камень */
-.stone-blk {
+.mc-blk.stone-blk {
   background-color: #888;
-  background-image: repeating-conic-gradient(#7a7a7a 0% 25%, #969696 0% 50%) 0 0 / 4px 4px;
-  border-color: #b0b0b0 #484848 #484848 #b0b0b0;
-  image-rendering: pixelated;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' shape-rendering='crispEdges'%3E%3Crect width='8' height='8' fill='%23888'/%3E%3Crect x='0' y='0' width='4' height='4' fill='%236e6e6e'/%3E%3Crect x='4' y='4' width='4' height='4' fill='%236e6e6e'/%3E%3Crect x='4' y='0' width='4' height='4' fill='%23a0a0a0'/%3E%3Crect x='0' y='4' width='4' height='4' fill='%23a0a0a0'/%3E%3Crect x='2' y='2' width='2' height='2' fill='%23888'/%3E%3Crect x='6' y='6' width='2' height='2' fill='%23888'/%3E%3C/svg%3E");
+  background-size: 8px 8px;
+  border-color: #b8b8b8 #505050 #505050 #b8b8b8;
 }
 
-/* Редстоун руда: серый камень с яркими красными кристаллами */
-.redstone-blk {
+/* Редстоун руда — серый камень с красными прожилками */
+.mc-blk.redstone-blk {
   background-color: #787878;
-  background-image:
-    radial-gradient(circle 4px at 25% 30%, #ff2020 0%, #cc0000 70%, transparent 100%),
-    radial-gradient(circle 3px at 70% 25%, #ff2828 0%, #bb0000 70%, transparent 100%),
-    radial-gradient(circle 4px at 35% 72%, #ee1818 0%, #cc0000 70%, transparent 100%),
-    radial-gradient(circle 3px at 75% 68%, #ff1e1e 0%, #bb0000 70%, transparent 100%),
-    radial-gradient(circle 3px at 55% 50%, #dd1010 0%, #990000 70%, transparent 100%),
-    repeating-conic-gradient(#707070 0% 25%, #808080 0% 50%) 0 0 / 4px 4px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' shape-rendering='crispEdges'%3E%3Crect width='16' height='16' fill='%23787878'/%3E%3Crect x='0' y='0' width='4' height='4' fill='%23686868'/%3E%3Crect x='4' y='4' width='4' height='4' fill='%23686868'/%3E%3Crect x='8' y='8' width='4' height='4' fill='%23686868'/%3E%3Crect x='12' y='12' width='4' height='4' fill='%23686868'/%3E%3Crect x='4' y='0' width='4' height='4' fill='%23888'/%3E%3Crect x='0' y='4' width='4' height='4' fill='%23888'/%3E%3Crect x='3' y='2' width='3' height='2' fill='%23e82020'/%3E%3Crect x='10' y='1' width='3' height='2' fill='%23e82020'/%3E%3Crect x='1' y='10' width='3' height='2' fill='%23e82020'/%3E%3Crect x='11' y='9' width='2' height='3' fill='%23e82020'/%3E%3Crect x='6' y='13' width='3' height='2' fill='%23cc1818'/%3E%3C/svg%3E");
+  background-size: 16px 16px;
   border-color: #cc2020 #440000 #440000 #cc2020;
-  box-shadow: 0 0 8px rgba(220,20,20,0.6);
-  image-rendering: pixelated;
+  box-shadow: 0 0 8px rgba(220,20,20,0.65) inset;
 }
 
 /* Золото */
-.gold-blk {
-  background-color: #c89400;
-  background-image:
-    repeating-conic-gradient(#b88400 0% 25%, #dca800 0% 50%) 0 0 / 4px 4px;
+.mc-blk.gold-blk {
+  background-color: #c8a000;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' shape-rendering='crispEdges'%3E%3Crect width='8' height='8' fill='%23c8a000'/%3E%3Crect x='0' y='0' width='4' height='4' fill='%23b89000'/%3E%3Crect x='4' y='4' width='4' height='4' fill='%23b89000'/%3E%3Crect x='4' y='0' width='4' height='4' fill='%23deb800'/%3E%3Crect x='0' y='4' width='4' height='4' fill='%23deb800'/%3E%3Crect x='1' y='1' width='2' height='2' fill='%23ffd820'/%3E%3Crect x='5' y='5' width='2' height='2' fill='%23ffd820'/%3E%3C/svg%3E");
+  background-size: 8px 8px;
   border-color: #ffe060 #7a5000 #7a5000 #ffe060;
-  box-shadow: 0 0 10px rgba(255,200,0,0.5);
-  image-rendering: pixelated;
+  box-shadow: 0 0 10px rgba(255,200,0,0.55) inset;
 }
 
 /* Алмаз */
-.diamond-blk {
-  background-color: #0580a0;
-  background-image:
-    radial-gradient(circle 5px at 28% 50%, #00e8ff 0%, #0090b0 65%, transparent 100%),
-    radial-gradient(circle 5px at 72% 50%, #00ddf0 0%, #0088a8 65%, transparent 100%),
-    linear-gradient(90deg, transparent 49%, #00a8c0 49.5%, transparent 50%),
-    repeating-conic-gradient(#046880 0% 25%, #0690b4 0% 50%) 0 0 / 4px 4px;
+.mc-blk.diamond-blk {
+  background-color: #0578a0;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' shape-rendering='crispEdges'%3E%3Crect width='16' height='16' fill='%230578a0'/%3E%3Crect x='0' y='0' width='4' height='4' fill='%23046880'/%3E%3Crect x='8' y='8' width='4' height='4' fill='%23046880'/%3E%3Crect x='4' y='4' width='4' height='4' fill='%23046880'/%3E%3Crect x='12' y='12' width='4' height='4' fill='%23046880'/%3E%3Crect x='4' y='0' width='4' height='4' fill='%230690c0'/%3E%3Crect x='0' y='4' width='4' height='4' fill='%230690c0'/%3E%3Crect x='3' y='2' width='4' height='3' fill='%2300e4ff'/%3E%3Crect x='10' y='10' width='4' height='3' fill='%2300e4ff'/%3E%3Crect x='1' y='11' width='3' height='3' fill='%2300ccee'/%3E%3Crect x='11' y='1' width='3' height='3' fill='%2300ccee'/%3E%3C/svg%3E");
+  background-size: 16px 16px;
   border-color: #00d4e8 #023040 #023040 #00d4e8;
-  box-shadow: 0 0 14px rgba(0,210,240,0.7);
-  image-rendering: pixelated;
+  box-shadow: 0 0 14px rgba(0,210,240,0.7) inset;
 }
 
 /* Обсидиан */
-.obsidian-blk {
-  background-color: #0c0320;
-  background-image:
-    radial-gradient(ellipse 40% 35% at 30% 38%, #3a1870 0%, transparent 80%),
-    radial-gradient(ellipse 35% 30% at 72% 68%, #2c1060 0%, transparent 80%),
-    radial-gradient(ellipse 25% 22% at 58% 22%, #4a1880 0%, transparent 80%),
-    repeating-conic-gradient(#080218 0% 25%, #120428 0% 50%) 0 0 / 4px 4px;
+.mc-blk.obsidian-blk {
+  background-color: #0e0420;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' shape-rendering='crispEdges'%3E%3Crect width='8' height='8' fill='%230e0420'/%3E%3Crect x='0' y='0' width='4' height='4' fill='%23060214'/%3E%3Crect x='4' y='4' width='4' height='4' fill='%23060214'/%3E%3Crect x='4' y='0' width='4' height='4' fill='%23160828'/%3E%3Crect x='0' y='4' width='4' height='4' fill='%23160828'/%3E%3Crect x='1' y='1' width='2' height='2' fill='%23280a40'/%3E%3Crect x='5' y='5' width='2' height='2' fill='%23280a40'/%3E%3Crect x='3' y='3' width='2' height='2' fill='%23380c54'/%3E%3C/svg%3E");
+  background-size: 8px 8px;
   border-color: #5020a0 #040110 #040110 #5020a0;
-  box-shadow: 0 0 16px rgba(90,30,180,0.75);
-  image-rendering: pixelated;
+  box-shadow: 0 0 16px rgba(90,30,180,0.8) inset;
 }
 
-/* TNT блок: красный с белой полосой и надписью */
-.tnt-blk {
-  background-image:
-    linear-gradient(180deg,
-      #cc1010 0%, #cc1010 28%,
-      #e8e8e8 28%, #e8e8e8 72%,
-      #cc1010 72%, #cc1010 100%
-    );
+/* TNT */
+.mc-blk.tnt-blk {
   background-color: #cc1010;
-  border-color: #ff3030 #880000 #880000 #ff3030;
-  box-shadow: 0 0 10px rgba(255,50,50,0.6);
-  image-rendering: pixelated;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' shape-rendering='crispEdges'%3E%3Crect width='8' height='8' fill='%23cc1010'/%3E%3Crect x='0' y='2' width='8' height='4' fill='%23dcdcdc'/%3E%3Crect x='0' y='0' width='2' height='2' fill='%23880000'/%3E%3Crect x='6' y='0' width='2' height='2' fill='%23880000'/%3E%3Crect x='0' y='6' width='2' height='2' fill='%23880000'/%3E%3Crect x='6' y='6' width='2' height='2' fill='%23880000'/%3E%3C/svg%3E");
+  background-size: 8px 8px;
+  border-color: #ff4040 #880000 #880000 #ff4040;
+  box-shadow: 0 0 8px rgba(255,50,50,0.6) inset;
 }
 .tnt-blk::after {
   content: 'TNT';
   position: absolute;
   top: 50%; left: 50%;
   transform: translate(-50%,-50%);
-  font-size: 8px;
+  font-size: 7px;
   font-weight: 900;
   color: #cc0000;
   font-family: monospace;
-  letter-spacing: 1px;
+  letter-spacing: 0.5px;
   z-index: 4;
   pointer-events: none;
+  text-shadow: 0 0 2px rgba(255,255,255,0.5);
 }
 .mc-blk.tnt-explode { animation: tntBoom 0.45s ease-out; }
 @keyframes tntBoom {
   0%  { transform:scale(1);    filter:brightness(1); }
-  20% { transform:scale(1.35); filter:brightness(5) saturate(2); }
+  20% { transform:scale(1.4);  filter:brightness(6) saturate(2); }
   50% { transform:scale(1.5);  filter:brightness(3); }
   80% { transform:scale(0.8);  filter:brightness(1.5); opacity:0.6; }
   100%{ transform:scale(0);    opacity:0; }
@@ -438,30 +398,28 @@ header { padding: 15px; display: flex; justify-content: space-between; align-ite
   100%{ filter:brightness(0.5); opacity:0.7; }
 }
 
-/* Книжка зачарованная */
-.book-blk {
-  background-color: #5010a0;
-  background-image:
-    radial-gradient(ellipse 55% 65% at 50% 50%, #9040e0 0%, #5010a0 55%, #2a0060 100%),
-    repeating-conic-gradient(#440e8a 0% 25%, #5e14b4 0% 50%) 0 0 / 4px 4px;
+/* Книга */
+.mc-blk.book-blk {
+  background-color: #4c1090;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' shape-rendering='crispEdges'%3E%3Crect width='8' height='8' fill='%234c1090'/%3E%3Crect x='0' y='0' width='4' height='4' fill='%23380c70'/%3E%3Crect x='4' y='4' width='4' height='4' fill='%23380c70'/%3E%3Crect x='4' y='0' width='4' height='4' fill='%235e18a8'/%3E%3Crect x='0' y='4' width='4' height='4' fill='%235e18a8'/%3E%3Crect x='2' y='2' width='4' height='4' fill='%23500eb8'/%3E%3C/svg%3E");
+  background-size: 8px 8px;
   border-color: #ffd700 #8a6000 #8a6000 #ffd700;
-  box-shadow: 0 0 14px rgba(160,80,255,0.9);
-  image-rendering: pixelated;
+  box-shadow: 0 0 14px rgba(160,80,255,0.9) inset;
 }
 .book-blk::after {
   content: '✦';
   position: absolute;
   top: 50%; left: 50%;
   transform: translate(-50%,-50%);
-  font-size: 13px;
+  font-size: 12px;
   color: #ffe060;
   text-shadow: 0 0 8px rgba(255,220,0,1);
   z-index: 4;
   pointer-events: none;
-  animation: bookSparkle 1s ease-in-out infinite alternate;
+  animation: bookSparkle 0.9s ease-in-out infinite alternate;
 }
 @keyframes bookSparkle {
-  0%  { opacity:0.7; transform:translate(-50%,-50%) scale(0.9); }
+  0%  { opacity:0.6; transform:translate(-50%,-50%) scale(0.85); }
   100%{ opacity:1;   transform:translate(-50%,-50%) scale(1.2); }
 }
 .book-collect { animation: bookCollect 0.5s cubic-bezier(0.34,1.56,0.64,1); }
@@ -470,82 +428,55 @@ header { padding: 15px; display: flex; justify-content: space-between; align-ite
 /* ─── КИРКА-СНАРЯД ─── */
 .pickaxe-proj {
   position: fixed;
-  font-size: 20px;
+  font-size: 18px;
   z-index: 9999;
   pointer-events: none;
   line-height: 1;
   user-select: none;
 }
 
-/* ─── КНИГА СТАТУС-СТРОКА ─── */
+/* ─── КНИГА СТАТУС ─── */
 .mine-book-status {
   background: linear-gradient(90deg, #1a0840, #2a1060);
   border: 1px solid #6020c0;
-  border-radius: 6px;
-  padding: 3px 8px;
-  font-size: 11px;
+  border-radius: 5px;
+  padding: 2px 8px;
+  font-size: 10px;
   font-weight: 900;
   color: #c080ff;
   text-align: center;
   flex-shrink: 0;
-  animation: mcDrop 0.3s ease;
 }
-
-/* Алмазная кирка filter */
-.px-diamond { filter: hue-rotate(190deg) saturate(4) brightness(1.4); }
 
 /* ─── МИНИ БЛОКИ (паблица) ─── */
-.mc-blk-mini { display:inline-block; width:14px; height:14px; border-radius:2px; border:2px solid; flex-shrink:0; vertical-align:middle; }
-.mc-blk-mini.stone-blk    { background:#787878; border-color:#aaa #4a4a4a #4a4a4a #aaa; }
-.mc-blk-mini.redstone-blk { background:#6a1a1a; border-color:#cc2020 #440000 #440000 #cc2020; }
-.mc-blk-mini.gold-blk     { background:#c89400; border-color:#ffe060 #7a5000 #7a5000 #ffe060; }
-.mc-blk-mini.diamond-blk  { background:#055870; border-color:#00d4e8 #023040 #023040 #00d4e8; }
-.mc-blk-mini.obsidian-blk { background:#080318; border-color:#5020a0 #040110 #040110 #5020a0; }
-.mc-blk-mini.tnt-blk      { background:linear-gradient(180deg,#cc1010 0%,#cc1010 30%,#eee 30%,#eee 70%,#cc1010 70%,#cc1010 100%); border-color:#ff3030 #880000 #880000 #ff3030; }
-.mc-blk-mini.book-blk     { background:#5010a0; border-color:#ffd700 #8a6000 #8a6000 #ffd700; }
-
-/* ─── СУНДУКИ (standalone, под шахтой) ─── */
-.mc-chests-row { display:grid; grid-template-columns:repeat(5,1fr); gap:3px; background:#5c3010; border:3px solid; border-color:#8a5018 #2a1408 #2a1408 #8a5018; border-radius:4px; padding:3px; flex-shrink:0; }
-
-/* ─── СЧЁТЧИК НАКОПЛЕНИЯ ─── */
-.mine-running-total {
-  background: linear-gradient(180deg, #555 0%, #444 100%);
-  border: 2px solid #333;
-  border-top: 2px solid #666;
-  border-radius: 3px;
-  text-align: center;
-  font-size: 14px;
-  font-weight: 900;
-  color: #fff;
-  padding: 3px 8px;
-  font-family: monospace;
-  letter-spacing: 1px;
+.mc-blk-mini {
+  display: inline-block;
+  width: 12px; height: 12px;
+  border-radius: 1px;
+  border: 2px solid;
   flex-shrink: 0;
-  text-shadow: 0 1px 4px rgba(0,0,0,0.8);
+  vertical-align: middle;
+  image-rendering: pixelated;
 }
-.mine-running-total.has-win {
-  color: #ffe060;
-  text-shadow: 0 0 10px rgba(255,220,0,0.8), 0 1px 4px rgba(0,0,0,0.8);
-}
+.mc-blk-mini.stone-blk    { background:#888; border-color:#b0b0b0 #505050 #505050 #b0b0b0; }
+.mc-blk-mini.redstone-blk { background:#787878; border-color:#cc2020 #440000 #440000 #cc2020; box-shadow:0 0 3px rgba(220,20,20,0.6); }
+.mc-blk-mini.gold-blk     { background:#c8a000; border-color:#ffe060 #7a5000 #7a5000 #ffe060; box-shadow:0 0 3px rgba(255,200,0,0.5); }
+.mc-blk-mini.diamond-blk  { background:#0578a0; border-color:#00d4e8 #023040 #023040 #00d4e8; box-shadow:0 0 3px rgba(0,200,240,0.6); }
+.mc-blk-mini.obsidian-blk { background:#0e0420; border-color:#5020a0 #040110 #040110 #5020a0; box-shadow:0 0 3px rgba(80,20,160,0.7); }
+.mc-blk-mini.tnt-blk      { background:#cc1010; border-color:#ff4040 #880000 #880000 #ff4040; }
+.mc-blk-mini.book-blk     { background:#4c1090; border-color:#ffd700 #8a6000 #8a6000 #ffd700; }
 
-/* ─── ПОПАП ВЫИГРЫША НА БЛОКЕ ─── */
-.block-win-popup {
-  position: fixed;
-  transform: translateX(-50%);
-  font-size: 10px;
-  font-weight: 900;
-  color: #ffe060;
-  text-shadow: 0 1px 4px rgba(0,0,0,0.9), 0 0 8px rgba(255,220,0,0.8);
-  z-index: 9900;
-  pointer-events: none;
-  white-space: nowrap;
-  font-family: monospace;
-  animation: blockWinFloat 1.2s ease-out forwards;
-}
-@keyframes blockWinFloat {
-  0%   { opacity:1; transform:translateX(-50%) translateY(0) scale(1); }
-  40%  { opacity:1; transform:translateX(-50%) translateY(-12px) scale(1.1); }
-  100% { opacity:0; transform:translateX(-50%) translateY(-24px) scale(0.8); }
+/* ─── СУНДУКИ ─── */
+.mc-chests-row {
+  display: grid;
+  grid-template-columns: repeat(5,1fr);
+  gap: 3px;
+  background: #5c3010;
+  border: 3px solid;
+  border-color: #8a5018 #2a1408 #2a1408 #8a5018;
+  border-radius: 3px;
+  padding: 3px;
+  flex-shrink: 0;
 }
 .mc-chest {
   background: linear-gradient(175deg, #c07828 10%, #8a4c14 60%, #6a3810 100%);
@@ -555,84 +486,142 @@ header { padding: 15px; display: flex; justify-content: space-between; align-ite
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 42px;
+  height: 38px;
   font-size: 0;
   position: relative;
   overflow: hidden;
-  transition: all 0.3s;
+  transition: all 0.25s;
 }
-/* Крышка сундука (закрытый) */
 .mc-chest::before {
   content: '';
   position: absolute;
-  left: 15%;
-  right: 15%;
-  top: 20%;
-  height: 30%;
-  background: rgba(0,0,0,0.35);
+  left: 15%; right: 15%;
+  top: 20%; height: 28%;
+  background: rgba(0,0,0,0.3);
   border-radius: 1px;
-  border-top: 2px solid rgba(180,100,20,0.6);
+  border-top: 2px solid rgba(180,100,20,0.5);
 }
-/* Замок сундука */
 .mc-chest::after {
   content: '';
   position: absolute;
-  width: 28%;
-  height: 22%;
+  width: 26%; height: 20%;
   background: #888;
   border: 1px solid #aaa;
   border-radius: 1px;
-  top: 38%;
-  left: 36%;
+  top: 38%; left: 37%;
 }
-.mc-chest.open {
-  background: linear-gradient(175deg, #c07828 0%, #4a2808 50%, #1a0c04 100%);
-  border-color: #e09040 #1a0c04 #1a0c04 #e09040;
-  box-shadow: 0 0 10px rgba(255,180,50,0.5);
-}
-.mc-chest.open::before { top: 0; height: 22%; border-radius: 2px 2px 0 0; background: linear-gradient(180deg, #c07828 0%, #7a4010 100%); transform: rotateX(-60deg); transform-origin: bottom; }
-.mc-chest.open::after  { background: #bbb; top: 30%; }
-.mc-chest.open-anim { animation: chestOpen 0.5s cubic-bezier(0.34,1.56,0.64,1); }
-@keyframes chestOpen { 0%{transform:scale(1)} 30%{transform:scale(1.18)translateY(-5px)} 60%{transform:scale(0.94)} 100%{transform:scale(1)} }
+.mc-chest.open { background: linear-gradient(175deg, #c07828 0%, #4a2808 50%, #1a0c04 100%); border-color: #e09040 #1a0c04 #1a0c04 #e09040; box-shadow: 0 0 10px rgba(255,180,50,0.5); }
+.mc-chest.open::before { top: 0; height: 20%; border-radius: 2px 2px 0 0; background: linear-gradient(180deg, #c07828 0%, #7a4010 100%); }
+.mc-chest.open::after  { background: #ccc; top: 28%; }
+.mc-chest.open-anim { animation: chestOpen 0.4s cubic-bezier(0.34,1.56,0.64,1); }
+@keyframes chestOpen { 0%{transform:scale(1)} 30%{transform:scale(1.15)translateY(-4px)} 60%{transform:scale(0.95)} 100%{transform:scale(1)} }
 
-.mine-win-display {
-  flex: 1;
+/* ─── СЧЁТЧИК ─── */
+.mine-running-total {
+  background: linear-gradient(180deg, #505050 0%, #404040 100%);
+  border: 2px solid;
+  border-color: #686868 #303030 #303030 #686868;
+  border-radius: 3px;
   text-align: center;
-  font-size: 17px;
+  font-size: 13px;
+  font-weight: 900;
+  color: #e0e0e0;
+  padding: 3px 8px;
+  font-family: 'Courier New', monospace;
+  letter-spacing: 1px;
+  flex-shrink: 0;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+}
+.mine-running-total.has-win {
+  color: #ffe060;
+  border-color: #886600 #442000 #442000 #886600;
+  text-shadow: 0 0 10px rgba(255,220,0,0.9), 0 1px 3px rgba(0,0,0,0.8);
+}
+
+/* ─── ИТОГ РАУНДА (маленький, под счётчиком) ─── */
+.mine-win-display {
+  flex-shrink: 0;
+  min-height: 0;
+  height: 0;
+  text-align: center;
+  font-size: 16px;
   font-weight: 900;
   color: var(--neon);
-  text-shadow: 0 0 16px rgba(0,255,136,0.9);
-  line-height: 1.2;
+  text-shadow: 0 0 14px rgba(0,255,136,0.9);
+  overflow: hidden;
+  transition: height 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   visibility: hidden;
 }
-.mine-win-display.show { visibility: visible; animation: mcDrop 0.45s cubic-bezier(0.22,1,0.36,1); }
+.mine-win-display.show {
+  height: 24px;
+  visibility: visible;
+  animation: mcDrop 0.4s cubic-bezier(0.22,1,0.36,1);
+}
 
-/* ─── ПАБЛИЦА (одна строка) ─── */
+/* ─── ПОПАП ВЫИГРЫША НА БЛОКЕ ─── */
+.block-win-popup {
+  position: fixed;
+  transform: translateX(-50%);
+  font-size: 11px;
+  font-weight: 900;
+  color: #ffe060;
+  text-shadow: 0 1px 4px rgba(0,0,0,0.9), 0 0 8px rgba(255,220,0,0.9);
+  z-index: 9900;
+  pointer-events: none;
+  white-space: nowrap;
+  font-family: 'Courier New', monospace;
+  animation: blockWinFloat 1.1s ease-out forwards;
+}
+@keyframes blockWinFloat {
+  0%   { opacity:1; transform:translateX(-50%) translateY(0) scale(1.1); }
+  40%  { opacity:1; transform:translateX(-50%) translateY(-14px) scale(1.15); }
+  100% { opacity:0; transform:translateX(-50%) translateY(-28px) scale(0.8); }
+}
+
+/* ─── ПАБЛИЦА ─── */
 .mine-pay-line {
   display: flex;
   align-items: center;
   gap: 4px;
-  background: #080808;
-  border: 1px solid #181818;
-  border-radius: 6px;
-  padding: 4px 8px;
+  background: #0c0c0c;
+  border: 1px solid #1c1c1c;
+  border-radius: 5px;
+  padding: 3px 6px;
   font-size: 10px;
   color: #888;
   font-weight: 700;
   flex-shrink: 0;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  overflow-x: auto;
 }
 
-/* ─── БЕТ СТРОКА ─── */
+/* ─── БЕТ-СТРОКА ─── */
 .mine-bet-row { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
 .mine-bet-row .quick-bets { margin: 0 !important; }
-.mine-btn { background: linear-gradient(90deg, #5c3010, #9a5820); box-shadow: 0 0 15px rgba(150,90,30,0.5); color: #ffe0a0; font-weight:900; letter-spacing:1px; border: 2px solid #c8881a; height: 36px; padding: 0 10px; white-space: nowrap; font-size: 13px; }
+.mine-btn {
+  background: linear-gradient(180deg, #a05818 0%, #6a3810 100%);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,200,100,0.3);
+  color: #ffe0a0;
+  font-weight: 900;
+  letter-spacing: 1px;
+  border: 2px solid;
+  border-color: #c8881a #3a1a04 #3a1a04 #c8881a;
+  height: 36px;
+  padding: 0 10px;
+  white-space: nowrap;
+  font-size: 13px;
+  border-radius: 4px;
+}
+.mine-btn:active { transform: translateY(1px); box-shadow: 0 1px 4px rgba(0,0,0,0.5); }
 #page-mine .input-box { height: 36px; padding: 0 10px; font-size: 13px; margin: 0; }
-.mine-btn:disabled { background:#1e1008 !important; border-color:#333 !important; box-shadow:none !important; color:#555 !important; }
-
+.mine-btn:disabled { background: #1e1008 !important; border-color: #333 !important; box-shadow: none !important; color: #555 !important; }
 
 /* Pickaxe color filters */
 .px-wooden  { filter: sepia(1) saturate(2.5) hue-rotate(15deg) brightness(1.1); }
 .px-stone   { filter: grayscale(0.6) brightness(0.85); }
 .px-iron    { filter: grayscale(0.2) brightness(1.25) contrast(1.1); }
 .px-golden  { filter: sepia(1) saturate(6) hue-rotate(-5deg) brightness(1.3); }
+.px-diamond { filter: hue-rotate(190deg) saturate(4) brightness(1.4); }
