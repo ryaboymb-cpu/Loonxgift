@@ -1310,39 +1310,52 @@ let mineLastBet       = 1;
 let mineRunningTotal  = 0;
 
 // ── Инвентарь: 5×3 пустых ячеек (заполняются во время раскрытия) ──
-// Draw a pixel-art pickaxe onto canvas and return data URL
+// Draw a pixel-art pickaxe onto canvas — proper Minecraft style
 function drawPickaxeCanvas(type) {
     const c = document.createElement('canvas');
     c.width = 32; c.height = 32;
     const ctx = c.getContext('2d');
     ctx.imageSmoothingEnabled = false;
-    // Colors per pickaxe type
-    const colors = {
-        wooden:  { head:'#888070', h2:'#666050', wood:'#9a6420', wood2:'#7a4c18' },
-        stone:   { head:'#909090', h2:'#686868', wood:'#9a6420', wood2:'#7a4c18' },
-        iron:    { head:'#c8d0d4', h2:'#909898', wood:'#9a6420', wood2:'#7a4c18' },
-        golden:  { head:'#ffe040', h2:'#c8a020', wood:'#9a6420', wood2:'#7a4c18' },
-        diamond: { head:'#20d8f0', h2:'#00a8c0', wood:'#9a6420', wood2:'#7a4c18' },
+    const cols = {
+        wooden:  { H:'#a09060', D:'#706040', W:'#b07830', V:'#7a5018' },
+        stone:   { H:'#a0a0a0', D:'#606060', W:'#b07830', V:'#7a5018' },
+        iron:    { H:'#d4dce0', D:'#8898a0', W:'#b07830', V:'#7a5018' },
+        golden:  { H:'#ffe840', D:'#c09818', W:'#b07830', V:'#7a5018' },
+        diamond: { H:'#30e8f8', D:'#08b0c8', W:'#b07830', V:'#7a5018' },
     };
-    const col = colors[type] || colors.wooden;
-    const S = 2; // scale (2px per logical pixel)
-    // Pickaxe pixel art (16×16 logical, each pixel = 2×2)
-    // Head (row 0..4, cols 0..10) + handle (diagonal)
-    const HEAD = col.head, H2 = col.h2, W = col.wood, W2 = col.wood2;
-    // Draw pixel at logical coords
-    function px(lx, ly, color) {
-        ctx.fillStyle = color;
-        ctx.fillRect(lx*S, ly*S, S, S);
-    }
-    // Handle (diagonal line going bottom-right)
-    [[4,4,W2],[5,5,W],[6,6,W],[7,7,W2],[8,8,W],[9,9,W2],[10,10,W],[11,11,W2],[12,12,W],[13,13,W2],[14,14,W]].forEach(([x,y,c])=>px(x,y,c));
-    // Pickaxe head pixels
-    [[0,2,HEAD],[1,2,HEAD],[2,2,HEAD],[3,2,HEAD],[4,2,H2],
-     [0,3,H2], [1,3,HEAD],[2,3,HEAD],[3,3,HEAD],[4,3,HEAD],
-     [0,1,HEAD],[1,1,H2],
-     [0,4,H2],
-     [2,1,HEAD],[3,0,HEAD],[4,0,H2],[3,1,HEAD],
-    ].forEach(([x,y,c])=>px(x,y,c));
+    const { H, D, W, V } = cols[type] || cols.wooden;
+    // Draw 1 logical pixel = 2×2 canvas pixels
+    const px = (lx, ly, col) => { ctx.fillStyle = col; ctx.fillRect(lx*2, ly*2, 2, 2); };
+    //
+    // Minecraft pickaxe: head at top-LEFT, handle going diagonally to bottom-RIGHT
+    // Head shape (top-left corner area):
+    //  y=0: ..HHHH..  (upper horizontal bar of head, 4px wide)
+    //  y=1: .HHHHHH.  (wider middle of head)
+    //  y=2: HHHH.HHH  (prongs: left prong 2px + gap + right body 3px)
+    //  y=3: .H......  (lower left prong tip only)
+    //  y=4: ...W....  (handle starts)
+    //  y=5: ....W...
+    //  ...diagonally to y=14
+    //
+    // Upper teeth of head (pointing left = toward x=0):
+    px(0,2,H); px(1,2,H);          // left prong top
+    px(0,3,D);                       // left prong shadow
+    // Main horizontal bar of head:
+    px(1,1,H); px(2,1,H); px(3,1,H); px(4,1,H); px(5,1,H);
+    px(1,0,H); px(2,0,H); px(3,0,H); px(4,0,H);
+    px(2,2,H); px(3,2,H); px(4,2,H); px(5,2,H); px(6,2,H);
+    // Head shading (darker bottom/right):
+    px(1,2,D); px(5,0,D);
+    px(2,3,D); px(3,3,D); px(4,3,D); px(5,3,D);
+    px(5,1,D); px(6,2,D);
+    // Handle (diagonal: from head connecting point → bottom-right):
+    const handle = [
+        [4,4,W],[5,4,W],  [5,5,W],[6,5,W],  [6,6,W],[7,6,W],
+        [7,7,W],[8,7,W],  [8,8,V],[9,8,W],  [9,9,V],[10,9,W],
+        [10,10,V],[11,10,W], [11,11,V],[12,11,W], [12,12,V],[13,12,W],
+        [13,13,V],[14,13,W], [14,14,V],
+    ];
+    handle.forEach(([x,y,col]) => px(x,y,col));
     return c.toDataURL('image/png');
 }
 
@@ -1353,12 +1366,49 @@ function getPickaxeImg(type) {
     return _pxImgs[type];
 }
 
+// ── Прочность кирок (ударов до сломки одной кирки) ──
+// wooden: хрупкая, stone: средняя, iron: хорошая, golden: быстрая но слабая, diamond: топ
+const PICKAXE_DURABILITY = { wooden:8, stone:16, iron:28, golden:6, diamond:50 };
+
+// ── Инициализация и обновление полосы прочности ──
+let _durMax = 0;
+let _durLeft = 0;
+function initDurabilityBar(pickaxeType, pickaxeCount) {
+    const dur = (PICKAXE_DURABILITY[pickaxeType] || 10) * (pickaxeCount || 1);
+    _durMax  = dur;
+    _durLeft = dur;
+    const wrap  = $('mine-dur-wrap');
+    const bar   = $('mine-dur-bar');
+    const count = $('mine-dur-count');
+    if (wrap)  wrap.style.display  = 'flex';
+    if (bar)   { bar.style.width   = '100%'; bar.className = 'mine-dur-bar-inner'; }
+    if (count) count.textContent   = `${dur} / ${dur}`;
+}
+function consumeDurability(hits) {
+    if (_durMax <= 0) return;
+    _durLeft = Math.max(0, _durLeft - hits);
+    const pct    = _durLeft / _durMax;
+    const bar    = $('mine-dur-bar');
+    const count  = $('mine-dur-count');
+    if (bar) {
+        bar.style.width = (pct * 100).toFixed(1) + '%';
+        bar.className = 'mine-dur-bar-inner' + (pct < 0.25 ? ' dur-crit' : pct < 0.55 ? ' dur-low' : '');
+    }
+    if (count) count.textContent = `${_durLeft} / ${_durMax}`;
+}
+function hideDurabilityBar() {
+    const wrap = $('mine-dur-wrap');
+    if (wrap) wrap.style.display = 'none';
+}
+
 let mineLastPickaxeCount = 3;
 let mineLastPickaxeType  = 'wooden';
 
 function initMineInventory(pickaxeCount, pickaxeType) {
     if (pickaxeCount) mineLastPickaxeCount = Math.max(1, Math.min(9, pickaxeCount));
     if (pickaxeType)  mineLastPickaxeType  = pickaxeType;
+    // Show/reset durability bar
+    initDurabilityBar(mineLastPickaxeType, mineLastPickaxeCount);
     const inv = $('mc-inventory');
     if (!inv) return;
     inv.innerHTML = '';
@@ -1433,6 +1483,7 @@ function initMineShaft(keepPersist, idlePreview) {
     const wd = $('mine-win-display');
     if (wd) { wd.innerText = ''; wd.style.color = ''; wd.classList.remove('show'); }
     mineRunningTotal = 0;
+    hideDurabilityBar();
 }
 
 // Плавная анимация числа (считает от start до end)
@@ -1449,91 +1500,87 @@ function animateCounter(el, start, end, durationMs, prefix, suffix) {
     requestAnimationFrame(step);
 }
 
-// ──── Снаряд-кирка: полёт + физика (остаётся у блока, отскакивает при ударах) ────
-// totalHits: сколько раз ударить по блоку
-// onEachHit(hitIdx): вызывается после каждого удара
-// onAllDone: вызывается после последнего удара
+// ──── Снаряд-кирка: падает ВЕРТИКАЛЬНО сверху, отскакивает при ударах ────
+// Кирка падает строго вниз над блоком, отскакивает вверх между ударами
 function spawnPickaxeProj(fromEl, toEl, pickaxeType, totalHits, onEachHit, onAllDone) {
     if (!toEl) { if (onEachHit) onEachHit(0); if (onAllDone) onAllDone(); return; }
     totalHits = totalHits || 1;
 
     const pUrl = getPickaxeImg(pickaxeType || 'wooden');
     const dstRect = toEl.getBoundingClientRect();
-    const dx = dstRect.left + dstRect.width / 2;
-    const dy = dstRect.top  + dstRect.height / 2;
-    const sx = fromEl ? fromEl.getBoundingClientRect().left + fromEl.getBoundingClientRect().width / 2 : dx;
-    const sy = fromEl ? fromEl.getBoundingClientRect().top + fromEl.getBoundingClientRect().height / 2 : dy - 120;
+    const bx = dstRect.left + dstRect.width / 2;   // block center X
+    const by = dstRect.top;                          // block top Y (pickaxe lands here)
 
-    // Create canvas-drawn pickaxe element
+    // Pickaxe spawns directly above the block, falls straight down
+    const startY = by - 90;  // start 90px above block top
+
     const el = document.createElement('img');
     el.src = pUrl;
-    el.style.cssText = `position:fixed; width:26px; height:26px; z-index:9999; pointer-events:none; user-select:none; image-rendering:pixelated; left:${sx}px; top:${sy}px; transform:translate(-50%,-50%) rotate(-45deg);`;
+    // Rotated to look like a pickaxe falling: head pointing down-left
+    el.style.cssText = `position:fixed; width:28px; height:28px; z-index:9999; pointer-events:none; user-select:none; image-rendering:pixelated; left:${bx}px; top:${startY}px; transform:translate(-50%,-50%) rotate(135deg);`;
     document.body.appendChild(el);
 
-    const FLY_MS   = 260;  // flight to block
-    const SETTLE   = 100;  // pause at block after first hit
-    const BOUNCE_T = 140;  // bounce animation between hits
+    const DROP_MS   = 200;  // fall duration (ms) — faster = snappier
+    const RECOIL_MS = 130;  // bounce-up duration
+    const WAIT_MS   = 60;   // pause at top of bounce before next drop
 
-    // Phase 1: fly from inventory to block
-    function flyTo(x0, y0, x1, y1, durMs, startRot, endRot, callback) {
+    // Animate vertical drop from y0 to y1
+    function drop(y0, y1, dur, callback) {
         let t0 = null;
         function frame(ts) {
             if (!t0) t0 = ts;
-            const t = Math.min((ts - t0) / durMs, 1);
-            const ease = t < 0.5 ? 2*t*t : -1+(4-2*t)*t;  // ease-in-out
-            const cx = x0 + (x1 - x0) * ease;
-            const cy = y0 + (y1 - y0) * ease;
-            const rot = startRot + (endRot - startRot) * ease;
-            el.style.left = cx + 'px'; el.style.top = cy + 'px';
-            el.style.transform = `translate(-50%,-50%) rotate(${rot}deg)`;
+            const t = Math.min((ts - t0) / dur, 1);
+            const ease = t * t;  // ease-in (accelerate downward = gravity)
+            el.style.top = (y0 + (y1 - y0) * ease) + 'px';
             if (t < 1) requestAnimationFrame(frame);
             else callback();
         }
         requestAnimationFrame(frame);
     }
 
-    // Phase: bounce (small recoil, then come back)
-    function bounce(hitX, hitY, callback) {
-        const offX = (dx - sx) * 0.0 + 0, offY = -12; // recoil upward
-        flyTo(hitX, hitY, hitX + offX, hitY + offY, BOUNCE_T / 2, -40, -60, () => {
-            flyTo(hitX + offX, hitY + offY, hitX, hitY, BOUNCE_T / 2, -60, -40, callback);
-        });
+    // Animate vertical rise (recoil) from y0 to y1
+    function rise(y0, y1, dur, callback) {
+        let t0 = null;
+        function frame(ts) {
+            if (!t0) t0 = ts;
+            const t = Math.min((ts - t0) / dur, 1);
+            const ease = 1 - (1-t)*(1-t);  // ease-out (decelerate going up)
+            el.style.top = (y0 + (y1 - y0) * ease) + 'px';
+            if (t < 1) requestAnimationFrame(frame);
+            else callback();
+        }
+        requestAnimationFrame(frame);
     }
 
     let curHit = 0;
-    // Start by flying to block
-    flyTo(sx, sy, dx, dy - 8, FLY_MS, -60, -40, () => {
-        // First impact
-        if (onEachHit) onEachHit(curHit);
-        curHit++;
-        if (curHit >= totalHits) {
-            // Last hit — fly away and remove
-            flyTo(dx, dy - 8, dx + 30, dy - 60, 200, -40, -120, () => {
-                el.style.transition = 'opacity 0.1s'; el.style.opacity = '0';
-                setTimeout(() => el.remove(), 120);
-                if (onAllDone) onAllDone();
-            });
-        } else {
-            // Bounce and hit again
-            setTimeout(() => {
-                function doHit() {
-                    bounce(dx, dy - 8, () => {
-                        if (onEachHit) onEachHit(curHit);
-                        curHit++;
-                        if (curHit >= totalHits) {
-                            flyTo(dx, dy - 8, dx + 30, dy - 60, 200, -40, -120, () => {
-                                el.style.transition = 'opacity 0.1s'; el.style.opacity = '0';
-                                setTimeout(() => el.remove(), 120);
-                                if (onAllDone) onAllDone();
-                            });
-                        } else {
-                            setTimeout(doHit, SETTLE);
-                        }
-                    });
-                }
-                doHit();
-            }, SETTLE);
-        }
+    const bounceY = by - 50;  // how high the pickaxe bounces between hits
+
+    function doStrike() {
+        // Fall to block
+        drop(bounceY, by, DROP_MS, () => {
+            // IMPACT!
+            if (onEachHit) onEachHit(curHit);
+            curHit++;
+            if (curHit >= totalHits) {
+                // All hits done — fly up and fade out
+                rise(by, by - 100, 200, () => {
+                    el.style.transition = 'opacity 0.12s';
+                    el.style.opacity = '0';
+                    setTimeout(() => el.remove(), 130);
+                    if (onAllDone) onAllDone();
+                });
+            } else {
+                // Recoil upward, then strike again
+                rise(by, bounceY, RECOIL_MS, () => {
+                    setTimeout(doStrike, WAIT_MS);
+                });
+            }
+        });
+    }
+
+    // First fall from high above
+    drop(startY, bounceY, DROP_MS * 1.5, () => {
+        setTimeout(doStrike, WAIT_MS);
     });
 }
 
@@ -1729,6 +1776,8 @@ function revealMineShaft(grid, blockWins, pickaxe, win, balanceBefore, chestMult
                         // Called on each impact
                         blkEl.classList.add('crack-hit');
                         setTimeout(() => blkEl.classList.remove('crack-hit'), 80);
+                        // Consume durability
+                        consumeDurability(1);
                         // Progress crack visuals
                         blkEl.classList.remove('cracking-1','cracking-2','cracking-3');
                         if (captHits === 1 || hitIdx === captHits - 1) {
