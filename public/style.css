@@ -191,7 +191,9 @@ header { padding: 15px; display: flex; justify-content: space-between; align-ite
   border-radius: 3px 3px 0 0;
   padding: 3px;
   flex-shrink: 0;
-  height: 80px;
+  width: 100%;
+  aspect-ratio: 5 / 3;
+  height: auto;
 }
 .inv-cell {
   background: #8b8b8b;
@@ -231,7 +233,9 @@ header { padding: 15px; display: flex; justify-content: space-between; align-ite
 /* ─── ШАХТА 5×3 ─── */
 .mc-shaft {
   flex-shrink: 0;
-  height: 98px;
+  width: 100%;
+  aspect-ratio: 5 / 3;
+  height: auto;
   display: grid;
   grid-template-columns: repeat(5, 1fr);
   grid-template-rows: repeat(3, 1fr);

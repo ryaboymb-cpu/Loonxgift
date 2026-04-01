@@ -1384,7 +1384,7 @@ function spawnPickaxeProj(fromEl, toEl, pickaxeType, onImpact) {
     const midY = Math.min(sy, dy) - 22;
 
     const px = document.createElement('div');
-    px.className = 'pickaxe-proj';
+    px.className = `pickaxe-proj px-${pickaxeType || 'wooden'}`;
     px.textContent = '⛏️';
     px.style.cssText = `position:fixed; font-size:20px; z-index:9999; pointer-events:none; user-select:none; line-height:1; left:${sx}px; top:${sy}px; transform:translate(-50%,-50%)`;
     document.body.appendChild(px);
@@ -1487,9 +1487,45 @@ function fillInvCell(row, col, blockType, pickaxeType) {
     let extraCls = '';
     if (blockType === 'tnt')  { icon = '💣'; extraCls = 'inv-tnt'; }
     else if (blockType === 'book') { icon = '📗'; extraCls = 'inv-book'; }
-    else { extraCls = `inv-px-${pickaxeType || 'wooden'}`; }
+    else { extraCls = `px-${pickaxeType || 'wooden'}`; }
     cell.textContent = icon;
     cell.className = `inv-cell filled ${extraCls}`;
+}
+
+// ─── Частицы разбивки блока ───
+function spawnBreakParticles(blockEl, blockType) {
+    if (!blockEl) return;
+    const rect = blockEl.getBoundingClientRect();
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+    const clrs = {
+        stone:    ['#888','#aaa','#777'],
+        redstone: ['#880000','#cc2020','#ff4444'],
+        gold:     ['#c8a000','#ffe060','#deb800'],
+        diamond:  ['#006b9a','#00e4ff','#4acce0'],
+        obsidian: ['#0e0420','#6030a0','#3010a0'],
+        tnt:      ['#cc1010','#ff4040','#ff8888'],
+        book:     ['#4c1090','#ffd700','#c080ff'],
+    };
+    const c = clrs[blockType] || clrs.stone;
+    for (let i = 0; i < 12; i++) {
+        const p = document.createElement('div');
+        const angle = Math.random() * Math.PI * 2;
+        const speed = 30 + Math.random() * 55;
+        const vx = Math.cos(angle) * speed;
+        const vy = Math.sin(angle) * speed - 20;
+        const size = 2 + Math.random() * 4;
+        p.style.cssText = `position:fixed;width:${size}px;height:${size}px;background:${c[i % c.length]};left:${cx}px;top:${cy}px;border-radius:1px;z-index:9800;pointer-events:none;image-rendering:pixelated;`;
+        document.body.appendChild(p);
+        let elapsed = 0;
+        const id = setInterval(() => {
+            elapsed += 16;
+            const t = elapsed / 1000;
+            p.style.transform = `translate(${vx*t}px,${vy*t + 300*t*t}px) rotate(${elapsed*0.25}deg)`;
+            p.style.opacity = String(Math.max(0, 1 - elapsed / 480));
+            if (elapsed >= 480) { clearInterval(id); p.remove(); }
+        }, 16);
+    }
 }
 
 // ─── Основное раскрытие: grid[r][c] из сервера, blockWins[r][c] ───
@@ -1551,6 +1587,9 @@ function revealMineShaft(grid, blockWins, pickaxe, win, balanceBefore) {
                                 blkEl.className = `mc-blk ${cls} reveal-drop`;
                                 blkEl.dataset.revealed = '1';
                                 blkEl.dataset.blockType = blockType;
+
+                                // Частицы разбивки
+                                spawnBreakParticles(blkEl, blockType);
 
                                 // Инвентарь заполняется ПОСЛЕ разбивки блока
                                 fillInvCell(captR, captC, blockType, pickaxe);
