@@ -1311,11 +1311,13 @@ app.get('/ping', (req, res) => res.status(200).json({ ok: true, time: Date.now()
 const PORT = 5000;
 server.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 Server Running on port ${PORT}`);
-    // Self-ping every 10 minutes to prevent cold starts on free hosting
     const SELF_URL = process.env.REPLIT_DEV_DOMAIN
         ? `https://${process.env.REPLIT_DEV_DOMAIN}/ping`
         : `http://localhost:${PORT}/ping`;
     setInterval(() => {
         fetch(SELF_URL).catch(() => {});
-    }, 10 * 60 * 1000);
+    }, 4 * 60 * 1000);
+    setInterval(() => {
+        fetch(SELF_URL).catch(() => {});
+    }, 2 * 60 * 1000);
 });

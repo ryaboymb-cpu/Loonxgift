@@ -1456,36 +1456,49 @@ let mineLastBet       = 1;
 let mineRunningTotal  = 0;
 
 // ── Инвентарь: 5×3 пустых ячеек (заполняются во время раскрытия) ──
-// Draw a pixel-art pickaxe onto canvas — proper Minecraft style
 function drawPickaxeCanvas(type) {
     const c = document.createElement('canvas');
     c.width = 16; c.height = 16;
     const ctx = c.getContext('2d');
     ctx.imageSmoothingEnabled = false;
     const cols = {
-        wooden:  { L:'#c69c6d', M:'#a17339', D:'#7a5a2b', W:'#7a5a2b', WD:'#5c3a18' },
-        stone:   { L:'#c8c8c8', M:'#9c9c9c', D:'#6a6a6a', W:'#7a5a2b', WD:'#5c3a18' },
-        iron:    { L:'#e8e8e8', M:'#d4d4d4', D:'#a0a0a0', W:'#7a5a2b', WD:'#5c3a18' },
-        golden:  { L:'#ffe868', M:'#e8c830', D:'#c8a000', W:'#7a5a2b', WD:'#5c3a18' },
-        diamond: { L:'#78e8e8', M:'#40c8d8', D:'#1898b0', W:'#7a5a2b', WD:'#5c3a18' },
+        wooden:  { H1:'#c8a060', H2:'#a07838', H3:'#785020', HS:'#604018', S:'#b08040', SD:'#785020' },
+        stone:   { H1:'#d0d0d0', H2:'#a0a0a0', H3:'#707070', HS:'#505050', S:'#b08040', SD:'#785020' },
+        iron:    { H1:'#f0f0f0', H2:'#d0d0d0', H3:'#a8a8b0', HS:'#707880', S:'#b08040', SD:'#785020' },
+        golden:  { H1:'#fff070', H2:'#e8c020', H3:'#c89800', HS:'#906800', S:'#b08040', SD:'#785020' },
+        diamond: { H1:'#88f0f8', H2:'#40c8e0', H3:'#1898b8', HS:'#087088', S:'#b08040', SD:'#785020' },
     };
-    const { L, M, D, W, WD } = cols[type] || cols.wooden;
+    const { H1, H2, H3, HS, S, SD } = cols[type] || cols.wooden;
     const p = (x, y, cl) => { ctx.fillStyle = cl; ctx.fillRect(x, y, 1, 1); };
-    p(7,0,D); p(8,0,M); p(9,0,L);
-    p(6,1,D); p(7,1,M); p(8,1,L); p(9,1,M); p(10,1,L);
-    p(5,2,D); p(6,2,M); p(7,2,L); p(10,2,M); p(11,2,L);
-    p(5,3,M); p(6,3,D); p(11,3,D); p(12,3,M);
-    p(6,4,L); p(7,4,M); p(12,4,D);
-    p(7,5,L); p(8,5,M); p(11,5,D);
-    p(8,6,L); p(9,6,M); p(10,6,D);
-    p(7,7,W); p(8,7,WD); p(9,7,D); p(10,7,M);
-    p(6,8,W); p(7,8,WD); p(8,8,D);
-    p(5,9,W); p(6,9,WD);
-    p(4,10,W); p(5,10,WD);
-    p(3,11,W); p(4,11,WD);
-    p(2,12,W); p(3,12,WD);
-    p(1,13,W); p(2,13,WD);
-    p(0,14,WD);
+
+    // Левый зубец (вверху-слева, направлен вверх-влево)
+    p(3,0,H2); p(4,0,H1);
+    p(4,1,H2); p(5,1,H3);
+    p(5,2,H1); p(6,2,H2);
+
+    // Горизонтальная перекладина (соединяет зубцы)
+    p(6,3,H1); p(7,3,H2); p(8,3,H3);
+
+    // Правый зубец (вверху-справа, направлен вверх-вправо)
+    p(9,2,H2); p(10,2,H1);
+    p(10,1,H3); p(11,1,H2);
+    p(11,0,H1); p(12,0,H2);
+
+    // Тени под головой
+    p(5,3,HS); p(9,3,HS);
+    p(6,4,HS); p(7,4,H3); p(8,4,HS);
+
+    // Стык голова-ручка
+    p(7,5,H3); p(8,5,HS);
+
+    // Ручка — диагональ вниз-влево, шахматный коричневый узор
+    p(6,6,S);  p(7,6,SD);
+    p(5,7,SD); p(6,7,S);
+    p(4,8,S);  p(5,8,SD);
+    p(3,9,SD); p(4,9,S);
+    p(2,10,S); p(3,10,SD);
+    p(1,11,SD); p(2,11,S);
+    p(0,12,S);  p(1,12,SD);
 
     const big = document.createElement('canvas');
     big.width = 128; big.height = 128;
@@ -1753,15 +1766,15 @@ function spawnPickaxeWorker(blockQueue, pickaxeType, workerIdx, onWorkerDone, on
 
         const rect = blkEl.getBoundingClientRect();
         const bx     = rect.left + rect.width / 2;
-        const bCenter = rect.top + rect.height / 2;
-        const startY = rect.top - 30;
-        const hover  = rect.top;
-        const hitY   = bCenter - 4;
+        const blockTop = rect.top;
+        const startY = blockTop - 40;
+        const hoverY = blockTop - 22;
+        const hitY   = blockTop - 2;
 
         const pUrl = getPickaxeImg(pickaxeType);
         const el = document.createElement('img');
         el.src = pUrl;
-        el.style.cssText = `position:fixed;width:32px;height:32px;z-index:9999;pointer-events:none;image-rendering:pixelated;transform:translate(-50%,-50%) rotate(135deg);left:${bx}px;top:${startY}px;`;
+        el.style.cssText = `position:fixed;width:28px;height:28px;z-index:9999;pointer-events:none;image-rendering:pixelated;left:${bx}px;top:${startY}px;transform:translate(-50%,-100%);`;
         document.body.appendChild(el);
         _pickaxeEls.add(el);
 
@@ -1770,7 +1783,7 @@ function spawnPickaxeWorker(blockQueue, pickaxeType, workerIdx, onWorkerDone, on
             if (el.parentNode) el.parentNode.removeChild(el);
         }
 
-        _animProp(el, 'top', startY, hover, 200, t => t*t, () => {
+        _animProp(el, 'top', startY, hoverY, 180, t => t*t, () => {
             if (!mineIsActive) { removeEl(); return; }
             blkEl.classList.add('cracking-1');
             doHits(hitsCanDo, 0);
@@ -1778,8 +1791,12 @@ function spawnPickaxeWorker(blockQueue, pickaxeType, workerIdx, onWorkerDone, on
 
         function doHits(hitsLeft, hitNum) {
             if (!mineIsActive) { removeEl(); return; }
-            _animProp(el, 'top', hover, hitY, 160, t => t*t, () => {
+            const swingAngle = hitNum % 2 === 0 ? -25 : 25;
+            el.style.transform = `translate(-50%,-100%) rotate(${swingAngle}deg)`;
+
+            _animProp(el, 'top', hoverY, hitY, 120, t => t*t, () => {
                 if (!mineIsActive) { removeEl(); return; }
+                el.style.transform = `translate(-50%,-100%) rotate(0deg)`;
                 playSound('hit');
                 blkEl.classList.add('crack-hit');
                 setTimeout(() => blkEl.classList.remove('crack-hit'), 80);
@@ -1796,21 +1813,24 @@ function spawnPickaxeWorker(blockQueue, pickaxeType, workerIdx, onWorkerDone, on
                         doBreakBlock(blkEl, blk, null, () => {
                             if (onBlockBroken) onBlockBroken(blk.r, blk.c);
                         });
-                        _animProp(el, 'top', hitY, startY - 20, 220, t => 1-(1-t)*(1-t), () => {
+                        _animProp(el, 'top', hitY, startY, 200, t => 1-(1-t)*(1-t), () => {
                             removeEl();
-                            setTimeout(processNext, 120);
+                            setTimeout(processNext, 100);
                         });
                     } else {
                         blkEl.classList.add('cracking-2');
-                        _animProp(el, 'top', hitY, hover, 100, t => 1-(1-t)*(1-t), () => {
+                        _animProp(el, 'top', hitY, hoverY, 100, t => 1-(1-t)*(1-t), () => {
                             if (!mineIsActive) { removeEl(); return; }
-                            doPickaxeBreak(null, () => { removeEl(); if (onWorkerDone) onWorkerDone(); }, true, el, bx, hover);
+                            doPickaxeBreak(null, () => { removeEl(); if (onWorkerDone) onWorkerDone(); }, true, el, bx, hoverY);
                         });
                     }
                 } else {
-                    _animProp(el, 'top', hitY, hover, 120, t => 1-(1-t)*(1-t), () => {
+                    _animProp(el, 'top', hitY, hoverY, 140, t => {
+                        const bounce = 1 - Math.pow(1-t, 2);
+                        return bounce;
+                    }, () => {
                         if (!mineIsActive) { removeEl(); return; }
-                        setTimeout(() => doHits(hitsLeft - 1, hitNum + 1), 60);
+                        setTimeout(() => doHits(hitsLeft - 1, hitNum + 1), 50);
                     });
                 }
             });
