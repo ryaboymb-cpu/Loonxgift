@@ -200,9 +200,9 @@ header { padding: 15px; display: flex; justify-content: space-between; align-ite
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   width: 100%;
-  padding: 6px 0;
+  padding: 4px 0 0;
 }
 .mine-card {
   flex: 0 0 auto !important;
@@ -545,27 +545,52 @@ header { padding: 15px; display: flex; justify-content: space-between; align-ite
   border-radius: 3px;
   padding: 3px;
   flex-shrink: 0;
+  overflow: visible;
+  position: relative;
 }
 .mc-chest {
-  background: url('/blk-chest-closed.png') center/contain no-repeat;
-  background-color: transparent;
-  border: none;
+  background-color: #7a4a1a;
+  background-size: 100% 100% !important;
+  background-repeat: no-repeat !important;
+  border: 2px solid;
+  border-color: #a06428 #3a2008 #3a2008 #a06428;
   height: 40px;
   position: relative;
-  transition: background-image 0.1s;
-  image-rendering: auto;
+  image-rendering: pixelated;
+  border-radius: 2px;
 }
 .mc-chest::before, .mc-chest::after { display: none; }
 .mc-chest.open {
-  background-image: url('/blk-chest-open.png');
   filter: drop-shadow(0 0 6px rgba(255,190,50,0.85));
 }
-.mc-chest.open-anim { animation: chestOpen 0.4s cubic-bezier(0.34,1.56,0.64,1); }
+.mc-chest.open-anim { animation: chestOpen 0.45s cubic-bezier(0.34,1.56,0.64,1); }
 @keyframes chestOpen {
-  0%  { transform:scale(1); }
-  25% { transform:scale(1.18) translateY(-5px); }
-  60% { transform:scale(0.94); }
-  100%{ transform:scale(1); }
+  0%  { transform:scale(1) translateY(0); }
+  30% { transform:scale(1.20) translateY(-6px); }
+  65% { transform:scale(0.92) translateY(1px); }
+  100%{ transform:scale(1) translateY(0); }
+}
+/* ×N тег над каждым сундуком */
+.chest-mult-tag {
+  position: absolute;
+  top: -22px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 13px;
+  font-weight: 900;
+  color: #FFD700;
+  text-shadow: 0 0 8px rgba(255,200,0,0.9), 0 1px 0 rgba(0,0,0,0.8);
+  white-space: nowrap;
+  pointer-events: none;
+  animation: chestTagPop 2.6s ease-out forwards;
+  z-index: 10;
+}
+@keyframes chestTagPop {
+  0%   { opacity:0; transform:translateX(-50%) translateY(4px) scale(0.6); }
+  15%  { opacity:1; transform:translateX(-50%) translateY(-4px) scale(1.25); }
+  30%  { transform:translateX(-50%) translateY(0) scale(1); }
+  70%  { opacity:1; }
+  100% { opacity:0; transform:translateX(-50%) translateY(-14px) scale(0.8); }
 }
 
 /* ─── СЧЁТЧИК ─── */

@@ -1310,17 +1310,86 @@ let mineLastBet       = 1;
 let mineRunningTotal  = 0;
 
 // ── Инвентарь: 5×3 пустых ячеек (заполняются во время раскрытия) ──
-function initMineInventory() {
+// Draw a pixel-art pickaxe onto canvas and return data URL
+function drawPickaxeCanvas(type) {
+    const c = document.createElement('canvas');
+    c.width = 32; c.height = 32;
+    const ctx = c.getContext('2d');
+    ctx.imageSmoothingEnabled = false;
+    // Colors per pickaxe type
+    const colors = {
+        wooden:  { head:'#888070', h2:'#666050', wood:'#9a6420', wood2:'#7a4c18' },
+        stone:   { head:'#909090', h2:'#686868', wood:'#9a6420', wood2:'#7a4c18' },
+        iron:    { head:'#c8d0d4', h2:'#909898', wood:'#9a6420', wood2:'#7a4c18' },
+        golden:  { head:'#ffe040', h2:'#c8a020', wood:'#9a6420', wood2:'#7a4c18' },
+        diamond: { head:'#20d8f0', h2:'#00a8c0', wood:'#9a6420', wood2:'#7a4c18' },
+    };
+    const col = colors[type] || colors.wooden;
+    const S = 2; // scale (2px per logical pixel)
+    // Pickaxe pixel art (16×16 logical, each pixel = 2×2)
+    // Head (row 0..4, cols 0..10) + handle (diagonal)
+    const HEAD = col.head, H2 = col.h2, W = col.wood, W2 = col.wood2;
+    // Draw pixel at logical coords
+    function px(lx, ly, color) {
+        ctx.fillStyle = color;
+        ctx.fillRect(lx*S, ly*S, S, S);
+    }
+    // Handle (diagonal line going bottom-right)
+    [[4,4,W2],[5,5,W],[6,6,W],[7,7,W2],[8,8,W],[9,9,W2],[10,10,W],[11,11,W2],[12,12,W],[13,13,W2],[14,14,W]].forEach(([x,y,c])=>px(x,y,c));
+    // Pickaxe head pixels
+    [[0,2,HEAD],[1,2,HEAD],[2,2,HEAD],[3,2,HEAD],[4,2,H2],
+     [0,3,H2], [1,3,HEAD],[2,3,HEAD],[3,3,HEAD],[4,3,HEAD],
+     [0,1,HEAD],[1,1,H2],
+     [0,4,H2],
+     [2,1,HEAD],[3,0,HEAD],[4,0,H2],[3,1,HEAD],
+    ].forEach(([x,y,c])=>px(x,y,c));
+    return c.toDataURL('image/png');
+}
+
+// Pixel art pickaxe URLs cached per type
+const _pxImgs = {};
+function getPickaxeImg(type) {
+    if (!_pxImgs[type]) _pxImgs[type] = drawPickaxeCanvas(type);
+    return _pxImgs[type];
+}
+
+let mineLastPickaxeCount = 3;
+let mineLastPickaxeType  = 'wooden';
+
+function initMineInventory(pickaxeCount, pickaxeType) {
+    if (pickaxeCount) mineLastPickaxeCount = Math.max(1, Math.min(9, pickaxeCount));
+    if (pickaxeType)  mineLastPickaxeType  = pickaxeType;
     const inv = $('mc-inventory');
     if (!inv) return;
     inv.innerHTML = '';
+    // Create all 15 cells
+    const cells = [];
     for (let r = 0; r < MC_ROWS; r++) {
         for (let c = 0; c < MC_COLS; c++) {
             const cell = document.createElement('div');
             cell.className = 'inv-cell';
             cell.id = `inv-${r}-${c}`;
             inv.appendChild(cell);
+            cells.push(cell);
         }
+    }
+    // Place pickaxes in random cells
+    const count = mineLastPickaxeCount;
+    const pType = mineLastPickaxeType;
+    const pUrl  = getPickaxeImg(pType);
+    // Shuffle cell indices, pick first N
+    const indices = cells.map((_,i) => i);
+    for (let i = indices.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i+1));
+        [indices[i], indices[j]] = [indices[j], indices[i]];
+    }
+    for (let k = 0; k < count && k < cells.length; k++) {
+        const cell = cells[indices[k]];
+        cell.dataset.hasPick = '1';
+        const img = document.createElement('img');
+        img.src = pUrl;
+        img.style.cssText = 'width:80%;height:80%;object-fit:contain;image-rendering:pixelated;filter:drop-shadow(0 1px 2px rgba(0,0,0,0.6));';
+        cell.appendChild(img);
     }
 }
 
@@ -1380,50 +1449,92 @@ function animateCounter(el, start, end, durationMs, prefix, suffix) {
     requestAnimationFrame(step);
 }
 
-// ──── Снаряд-кирка: плавный параболический полёт из случайной ячейки к блоку ────
-function spawnPickaxeProj(fromEl, toEl, pickaxeType, onImpact) {
-    if (!toEl) { if (onImpact) onImpact(); return; }
+// ──── Снаряд-кирка: полёт + физика (остаётся у блока, отскакивает при ударах) ────
+// totalHits: сколько раз ударить по блоку
+// onEachHit(hitIdx): вызывается после каждого удара
+// onAllDone: вызывается после последнего удара
+function spawnPickaxeProj(fromEl, toEl, pickaxeType, totalHits, onEachHit, onAllDone) {
+    if (!toEl) { if (onEachHit) onEachHit(0); if (onAllDone) onAllDone(); return; }
+    totalHits = totalHits || 1;
 
+    const pUrl = getPickaxeImg(pickaxeType || 'wooden');
     const dstRect = toEl.getBoundingClientRect();
     const dx = dstRect.left + dstRect.width / 2;
     const dy = dstRect.top  + dstRect.height / 2;
+    const sx = fromEl ? fromEl.getBoundingClientRect().left + fromEl.getBoundingClientRect().width / 2 : dx;
+    const sy = fromEl ? fromEl.getBoundingClientRect().top + fromEl.getBoundingClientRect().height / 2 : dy - 120;
 
-    // Кирка всегда падает строго сверху вниз в центр блока
-    const sx = dx;
-    const sy = fromEl ? fromEl.getBoundingClientRect().bottom : dy - 110;
+    // Create canvas-drawn pickaxe element
+    const el = document.createElement('img');
+    el.src = pUrl;
+    el.style.cssText = `position:fixed; width:26px; height:26px; z-index:9999; pointer-events:none; user-select:none; image-rendering:pixelated; left:${sx}px; top:${sy}px; transform:translate(-50%,-50%) rotate(-45deg);`;
+    document.body.appendChild(el);
 
-    const px = document.createElement('div');
-    px.className = `pickaxe-proj px-${pickaxeType || 'wooden'}`;
-    px.textContent = '⛏️';
-    px.style.cssText = `position:fixed; font-size:18px; z-index:9999; pointer-events:none; user-select:none; line-height:1; left:${dx}px; top:${sy}px; transform:translate(-50%,-50%) rotate(-60deg)`;
-    document.body.appendChild(px);
+    const FLY_MS   = 260;  // flight to block
+    const SETTLE   = 100;  // pause at block after first hit
+    const BOUNCE_T = 140;  // bounce animation between hits
 
-    const DURATION = 280;
-    let t0 = null;
-
-    function frame(ts) {
-        if (!t0) t0 = ts;
-        const t = Math.min((ts - t0) / DURATION, 1);
-        // Ускорение вниз (гравитация: ease-in)
-        const ease = t * t;
-        const cy = sy + (dy - sy) * ease;
-        // Поворот: -60° → 0° при подлёте, потом резкий удар
-        const rot = t < 0.82
-            ? -60 + t * (60 / 0.82)
-            : 0 + (t - 0.82) * (-40 / 0.18);
-        const sc  = t > 0.88 ? Math.max(0, 1 - (t - 0.88) / 0.12) : 1;
-        px.style.top       = cy + 'px';
-        px.style.transform = `translate(-50%,-50%) rotate(${rot}deg) scale(${sc})`;
-        px.style.opacity   = t > 0.88 ? String(Math.max(0, 1 - (t - 0.88) / 0.12)) : '1';
-
-        if (t < 1) {
-            requestAnimationFrame(frame);
-        } else {
-            px.remove();
-            if (onImpact) onImpact();
+    // Phase 1: fly from inventory to block
+    function flyTo(x0, y0, x1, y1, durMs, startRot, endRot, callback) {
+        let t0 = null;
+        function frame(ts) {
+            if (!t0) t0 = ts;
+            const t = Math.min((ts - t0) / durMs, 1);
+            const ease = t < 0.5 ? 2*t*t : -1+(4-2*t)*t;  // ease-in-out
+            const cx = x0 + (x1 - x0) * ease;
+            const cy = y0 + (y1 - y0) * ease;
+            const rot = startRot + (endRot - startRot) * ease;
+            el.style.left = cx + 'px'; el.style.top = cy + 'px';
+            el.style.transform = `translate(-50%,-50%) rotate(${rot}deg)`;
+            if (t < 1) requestAnimationFrame(frame);
+            else callback();
         }
+        requestAnimationFrame(frame);
     }
-    requestAnimationFrame(frame);
+
+    // Phase: bounce (small recoil, then come back)
+    function bounce(hitX, hitY, callback) {
+        const offX = (dx - sx) * 0.0 + 0, offY = -12; // recoil upward
+        flyTo(hitX, hitY, hitX + offX, hitY + offY, BOUNCE_T / 2, -40, -60, () => {
+            flyTo(hitX + offX, hitY + offY, hitX, hitY, BOUNCE_T / 2, -60, -40, callback);
+        });
+    }
+
+    let curHit = 0;
+    // Start by flying to block
+    flyTo(sx, sy, dx, dy - 8, FLY_MS, -60, -40, () => {
+        // First impact
+        if (onEachHit) onEachHit(curHit);
+        curHit++;
+        if (curHit >= totalHits) {
+            // Last hit — fly away and remove
+            flyTo(dx, dy - 8, dx + 30, dy - 60, 200, -40, -120, () => {
+                el.style.transition = 'opacity 0.1s'; el.style.opacity = '0';
+                setTimeout(() => el.remove(), 120);
+                if (onAllDone) onAllDone();
+            });
+        } else {
+            // Bounce and hit again
+            setTimeout(() => {
+                function doHit() {
+                    bounce(dx, dy - 8, () => {
+                        if (onEachHit) onEachHit(curHit);
+                        curHit++;
+                        if (curHit >= totalHits) {
+                            flyTo(dx, dy - 8, dx + 30, dy - 60, 200, -40, -120, () => {
+                                el.style.transition = 'opacity 0.1s'; el.style.opacity = '0';
+                                setTimeout(() => el.remove(), 120);
+                                if (onAllDone) onAllDone();
+                            });
+                        } else {
+                            setTimeout(doHit, SETTLE);
+                        }
+                    });
+                }
+                doHit();
+            }, SETTLE);
+        }
+    });
 }
 
 // ──── TNT взрыв: подсвечивает соседей ────
@@ -1489,17 +1600,27 @@ function spawnBlockWinPopup(blockEl, amount) {
     pop.addEventListener('animationend', () => pop.remove());
 }
 
-// ─── Заполнить ячейку инвентаря иконкой ───
+// ─── Заполнить ячейку инвентаря найденным блоком ───
 function fillInvCell(row, col, blockType, pickaxeType) {
     const cell = $(`inv-${row}-${col}`);
     if (!cell) return;
-    let icon = '⛏️';
-    let extraCls = '';
-    if (blockType === 'tnt')  { icon = '💣'; extraCls = 'inv-tnt'; }
-    else if (blockType === 'book') { icon = '📗'; extraCls = 'inv-book'; }
-    else { extraCls = `px-${pickaxeType || 'wooden'}`; }
-    cell.textContent = icon;
-    cell.className = `inv-cell filled ${extraCls}`;
+    cell.innerHTML = '';
+    delete cell.dataset.hasPick;
+    if (blockType === 'book') {
+        cell.textContent = '📗';
+        cell.className = 'inv-cell filled inv-book';
+    } else if (blockType === 'tnt') {
+        cell.textContent = '💣';
+        cell.className = 'inv-cell filled inv-tnt';
+    } else {
+        cell.className = 'inv-cell filled inv-block';
+        // Mini block with correct texture
+        const mini = document.createElement('div');
+        const cls = MINE_BLOCK_CLASS[blockType] || 'stone-blk';
+        mini.className = `mc-blk ${cls}`;
+        mini.style.cssText = 'width:78%;height:78%;border-radius:2px;box-shadow:inset 1px 1px 0 rgba(255,255,255,0.4),inset -1px -1px 0 rgba(0,0,0,0.3);pointer-events:none;';
+        cell.appendChild(mini);
+    }
 }
 
 // ─── Частицы разбивки блока ───
@@ -1541,25 +1662,42 @@ function spawnBreakParticles(blockEl, blockType) {
 // ─── Основное раскрытие: grid[r][c] из сервера, blockWins[r][c] ───
 function revealMineShaft(grid, blockWins, pickaxe, win, balanceBefore, chestMult) {
     // ── Timing ──
-    const FLIGHT_MS = 400;  // время полёта кирки (мс)
-    const PAUSE_MS  = 260;  // пауза между ударами (вибрация блока)
-    const BLK_GAP   = 350;  // сдвиг старта следующего блока
-    const BREAK_MS  = 220;  // время анимации разлома блока
+    const HIT_MS    = 260;  // flight time per hit
+    const BOUNCE_MS = 140;  // bounce between hits
+    const SETTLE_MS = 100;  // settle between hits
+    const BLK_GAP   = 320;  // gap between blocks starting
 
     // Прочность блоков (ударов кирки)
     const BLOCK_HITS_MAP = { stone:2, redstone:2, gold:3, diamond:3, obsidian:4, book:2 };
-    // Бонус/штраф скорости по типу кирки
+    // Бонус/штраф по типу кирки: diamond/golden быстрее, wooden медленнее
     const PICKAXE_MOD_MAP = { wooden:+1, stone:0, iron:0, golden:-1, diamond:-1 };
     const pMod = PICKAXE_MOD_MAP[pickaxe] || 0;
 
-    // Случайная ячейка инвентаря (НЕ совпадает с текущим блоком)
-    function randInvEl(skipR, skipC) {
-        let attempts = 0, idx;
-        do {
-            idx = Math.floor(Math.random() * (MC_ROWS * MC_COLS));
-            attempts++;
-        } while (attempts < 12 && Math.floor(idx / MC_COLS) === skipR && (idx % MC_COLS) === skipC);
-        return $(`inv-${Math.floor(idx / MC_COLS)}-${idx % MC_COLS}`);
+    // Ячейка инвентаря с киркой (старается взять ту, что с иконкой)
+    function pickInvEl() {
+        // Find a cell that has a pickaxe icon
+        const inv = $('mc-inventory');
+        if (!inv) return null;
+        const cells = Array.from(inv.querySelectorAll('.inv-cell[data-has-pick="1"]'));
+        if (cells.length === 0) {
+            const all = Array.from(inv.querySelectorAll('.inv-cell'));
+            return all[Math.floor(Math.random() * all.length)] || null;
+        }
+        return cells[Math.floor(Math.random() * cells.length)];
+    }
+
+    // ── Update all shaft blocks to real server types immediately ──
+    for (let r = 0; r < MC_ROWS; r++) {
+        for (let c = 0; c < MC_COLS; c++) {
+            const blkEl = $(`mc-blk-${r}-${c}`);
+            if (!blkEl) continue;
+            const cls = MINE_BLOCK_CLASS[grid[r][c]] || 'stone-blk';
+            blkEl.className = `mc-blk ${cls}`;
+            blkEl.dataset.revealed = '0';
+            blkEl.style.transition = '';
+            blkEl.style.transform  = '';
+            blkEl.style.opacity    = '';
+        }
     }
 
     let blkStart = 0;
@@ -1572,77 +1710,70 @@ function revealMineShaft(grid, blockWins, pickaxe, win, balanceBefore, chestMult
             const blkHits   = Math.max(1, (BLOCK_HITS_MAP[blockType] || 2) + pMod);
             const captR = r, captC = c, captStart = blkStart, captHits = blkHits;
 
-            // Рассчитываем время полного раскрытия этого блока
-            const thisReveal = captStart + (blkHits - 1) * (FLIGHT_MS + PAUSE_MS) + FLIGHT_MS + PAUSE_MS + 115 + BREAK_MS + 50;
-            if (thisReveal > computedLastReveal) computedLastReveal = thisReveal;
+            // Time for this block to fully finish
+            // totalHits * (HIT_MS + BOUNCE_MS + SETTLE_MS) + BREAK_MS
+            const totalBlockTime = captStart + captHits * (HIT_MS + BOUNCE_MS + SETTLE_MS) + 300;
+            if (totalBlockTime > computedLastReveal) computedLastReveal = totalBlockTime;
 
-            for (let hit = 0; hit < blkHits; hit++) {
-                const captHit = hit;
-                const hitTime = captStart + captHit * (FLIGHT_MS + PAUSE_MS);
+            setTimeout(() => {
+                const blkEl = $(`mc-blk-${captR}-${captC}`);
+                if (!blkEl) return;
+                const invEl = pickInvEl();
 
-                setTimeout(() => {
-                    const blkEl = $(`mc-blk-${captR}-${captC}`);
-                    if (!blkEl || blkEl.dataset.revealed === '1') return;
+                // Add initial crack stage
+                blkEl.classList.add('cracking-1');
 
-                    // Стадия трещин (1 → 2 → 3)
-                    blkEl.classList.remove('cracking-1','cracking-2','cracking-3');
-                    if (captHits === 1) {
-                        blkEl.classList.add('cracking-3');
-                    } else if (captHit === 0) {
-                        blkEl.classList.add('cracking-1');
-                    } else if (captHit === captHits - 1) {
-                        blkEl.classList.add('cracking-3');
-                    } else {
-                        blkEl.classList.add('cracking-2');
-                    }
-
-                    // Кирка летит из случайной ячейки
-                    const invEl = randInvEl(captR, captC);
-                    spawnPickaxeProj(invEl, blkEl, pickaxe, () => {
-                        // Удар!
+                // Use new physics-based pickaxe projectile
+                spawnPickaxeProj(invEl, blkEl, pickaxe, captHits,
+                    (hitIdx) => {
+                        // Called on each impact
                         blkEl.classList.add('crack-hit');
-                        setTimeout(() => blkEl.classList.remove('crack-hit'), 90);
-
-                        if (captHit === captHits - 1) {
-                            // Финальный удар → анимация разлома → раскрытие
-                            setTimeout(() => {
-                                blkEl.classList.add('breaking');
-
-                                setTimeout(() => {
-                                    blkEl.classList.remove('cracking-1','cracking-2','cracking-3','crack-hit','breaking');
-                                    const cls = MINE_BLOCK_CLASS[blockType] || 'stone-blk';
-                                    blkEl.className = `mc-blk ${cls} reveal-drop`;
-                                    blkEl.dataset.revealed = '1';
-                                    blkEl.dataset.blockType = blockType;
-
-                                    // Частицы разбивки
-                                    spawnBreakParticles(blkEl, blockType);
-
-                                    // Инвентарь заполняется ПОСЛЕ разбивки блока
-                                    fillInvCell(captR, captC, blockType, pickaxe);
-
-                                    // Спец-эффекты
-                                    if (blockType === 'book') collectBook(blkEl);
-
-                                    // Попап выигрыша и счётчик
-                                    if (blockWin > 0) {
-                                        spawnBlockWinPopup(blkEl, blockWin);
-                                        blkEl.classList.add('win-pulse');
-                                        mineRunningTotal += blockWin;
-                                        const rt = $('mine-running-total');
-                                        if (rt) {
-                                            rt.classList.add('has-win');
-                                            animateCounter(rt, mineRunningTotal - blockWin, mineRunningTotal, 380, '', ' TON');
-                                        }
-                                        const invCell = $(`inv-${captR}-${captC}`);
-                                        if (invCell) invCell.classList.add('win-slot');
-                                    }
-                                }, BREAK_MS);
-                            }, 115);
+                        setTimeout(() => blkEl.classList.remove('crack-hit'), 80);
+                        // Progress crack visuals
+                        blkEl.classList.remove('cracking-1','cracking-2','cracking-3');
+                        if (captHits === 1 || hitIdx === captHits - 1) {
+                            blkEl.classList.add('cracking-3');
+                        } else if (hitIdx === 0) {
+                            blkEl.classList.add('cracking-1');
+                        } else {
+                            blkEl.classList.add('cracking-2');
                         }
-                    });
-                }, hitTime);
-            }
+                    },
+                    () => {
+                        // All hits done — block SHATTERS and DISAPPEARS
+                        blkEl.classList.remove('cracking-1','cracking-2','cracking-3','crack-hit');
+
+                        // Show money popup BEFORE block disappears
+                        if (blockWin > 0) {
+                            spawnBlockWinPopup(blkEl, blockWin);
+                            mineRunningTotal += blockWin;
+                            const rt = $('mine-running-total');
+                            if (rt) {
+                                rt.classList.add('has-win');
+                                animateCounter(rt, mineRunningTotal - blockWin, mineRunningTotal, 380, '', ' TON');
+                            }
+                        }
+
+                        // Particles
+                        spawnBreakParticles(blkEl, blockType);
+
+                        // BLOCK DISAPPEARS (scale to 0 + fade)
+                        blkEl.style.transition = 'transform 0.22s cubic-bezier(0.5,0,1,1), opacity 0.18s';
+                        blkEl.style.transform  = 'scale(0.05)';
+                        blkEl.style.opacity    = '0';
+                        blkEl.dataset.revealed = '1';
+
+                        setTimeout(() => {
+                            if (blkEl.parentNode) blkEl.parentNode.removeChild(blkEl);
+                        }, 220);
+
+                        // Fill inventory cell with what was found
+                        fillInvCell(captR, captC, blockType, pickaxe);
+
+                        if (blockType === 'book') collectBook(blkEl);
+                    }
+                );
+            }, blkStart);
 
             blkStart += BLK_GAP;
         }
@@ -1650,8 +1781,9 @@ function revealMineShaft(grid, blockWins, pickaxe, win, balanceBefore, chestMult
 
     // Время после последнего блока
     const lastBlkReveal = computedLastReveal;
+    const effectiveChestMult = chestMult || 2;
 
-    // Сундуки открываются волной
+    // Сундуки открываются волной — и КАЖДЫЙ показывает ×N ВЫШЕ себя
     setTimeout(() => {
         for (let i = 0; i < MC_COLS; i++) {
             setTimeout(() => {
@@ -1659,22 +1791,15 @@ function revealMineShaft(grid, blockWins, pickaxe, win, balanceBefore, chestMult
                 if (!ch) return;
                 ch.classList.add('open', 'open-anim');
                 setTimeout(() => ch.classList.remove('open-anim'), 600);
-            }, i * 90);
+                // Показать ×N над каждым сундуком
+                const pop = document.createElement('div');
+                pop.className = 'chest-mult-tag';
+                pop.textContent = `×${effectiveChestMult}`;
+                ch.appendChild(pop);
+                setTimeout(() => { if (pop.parentNode) pop.parentNode.removeChild(pop); }, 2800);
+            }, i * 110);
         }
-    }, lastBlkReveal + 100);
-
-    // Попап мультипликатора сундука после открытия всех сундуков
-    const chestPopupDelay = lastBlkReveal + 100 + MC_COLS * 90 + 550;
-    const effectiveChestMult = chestMult || 2;
-    setTimeout(() => {
-        const shaft = document.querySelector('.mc-shaft');
-        if (!shaft) return;
-        const pop = document.createElement('div');
-        pop.className = 'mine-chest-mult-popup';
-        pop.innerHTML = `<div class="cmp-label">СУНДУК ОТКРЫТ!</div><div class="cmp-mult">×${effectiveChestMult}</div>`;
-        shaft.appendChild(pop);
-        setTimeout(() => { if (pop.parentNode) pop.parentNode.removeChild(pop); }, 2600);
-    }, chestPopupDelay);
+    }, lastBlkReveal + 150);
 
     // Итоговый результат и баланс
     const afterReveal = lastBlkReveal + 500;
@@ -1724,77 +1849,182 @@ function setupMineTextures() {
         fn(c.getContext('2d'));
         return c.toDataURL('image/png');
     }
-    function stoneBase(ctx, seed, dark) {
+
+    // ── Булыжник (cobblestone) — classic Minecraft crack pattern ──
+    function cobblestone(ctx, seed) {
+        // Crack pixel positions (dark grout between stones)
+        const CRACKS = new Set([
+            // Horizontal line y=5 (full width)
+            '0,5','1,5','2,5','3,5','4,5','5,5','6,5','7,5','8,5','9,5','10,5','11,5','12,5','13,5','14,5','15,5',
+            // Horizontal line y=11 (full width)
+            '0,11','1,11','2,11','3,11','4,11','5,11','6,11','7,11','8,11','9,11','10,11','11,11','12,11','13,11','14,11','15,11',
+            // Vertical x=8 (y=0..4 top, y=6..10 mid)
+            '8,0','8,1','8,2','8,3','8,4',
+            '8,6','8,7','8,8','8,9','8,10',
+            // Vertical x=4 (y=0..4 top, y=12..15 bottom)
+            '4,0','4,1','4,2','4,3','4,4',
+            '4,12','4,13','4,14','4,15',
+            // Vertical x=12 (y=0..4 top, y=12..15 bottom)
+            '12,0','12,1','12,2','12,3','12,4',
+            '12,12','12,13','12,14','12,15',
+            // Small vertical x=3 (y=6..10)
+            '3,6','3,7','3,8','3,9','3,10',
+            // Small vertical x=11 (y=6..10)
+            '11,6','11,7','11,8','11,9','11,10',
+        ]);
         for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
-            const n = rnd(x, y, seed) % 32;
-            // Bright stone: light grey with noisy darker/lighter pixels
-            const lo = dark ? 28 : 118, hi = dark ? 52 : 192, mid = dark ? 38 : 162;
-            const v = n < 3 ? lo : n < 7 ? hi : mid;
-            ctx.fillStyle = `rgb(${v},${v},${v})`;
+            if (CRACKS.has(`${x},${y}`)) {
+                // Dark grout with slight variation
+                const n = rnd(x, y, seed+1) % 12;
+                const v = 36 + n * 2;
+                ctx.fillStyle = `rgb(${v},${v},${v})`;
+            } else {
+                // Stone sections — noise-based grey
+                const n = rnd(x, y, seed) % 48;
+                const v = n < 4 ? 88 : n < 10 ? 168 : n < 20 ? 148 : 130;
+                ctx.fillStyle = `rgb(${v},${v},${v})`;
+            }
             ctx.fillRect(x, y, 1, 1);
         }
     }
-    function addOre(ctx, x, y, c1, c2) {
-        ctx.fillStyle = c1; ctx.fillRect(x,   y,   2, 1);
-        ctx.fillStyle = c2; ctx.fillRect(x,   y+1, 1, 1);
-        ctx.fillStyle = c1; ctx.fillRect(x+1, y+1, 1, 1);
+
+    // ── Скрытый блок (тёмный, не раскрытый) ──
+    function hiddenBlock(ctx) {
+        for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+            const n = rnd(x, y, 42) % 20;
+            const v = n < 3 ? 24 : n < 8 ? 48 : 36;
+            ctx.fillStyle = `rgb(${v},${v},${v})`;
+            ctx.fillRect(x, y, 1, 1);
+        }
+        // Dark border lines
+        ctx.fillStyle = '#1a1a1a';
+        for (let i = 0; i < S; i++) { ctx.fillRect(i, 0, 1, 1); ctx.fillRect(i, S-1, 1, 1); ctx.fillRect(0, i, 1, 1); ctx.fillRect(S-1, i, 1, 1); }
     }
-    function oreTex(seed, c1, c2) {
+
+    // ── Руда: кобблестоун-база + яркие пиксельные кластеры ──
+    function addOrePx(ctx, x, y, bright, dark) {
+        // 3×3 pixel ore cluster (cross pattern)
+        const p = (dx, dy, c) => { if (x+dx < S && y+dy < S && x+dx >= 0 && y+dy >= 0) { ctx.fillStyle = c; ctx.fillRect(x+dx, y+dy, 1, 1); } };
+        p(1,0,bright); p(0,1,bright); p(1,1,bright); p(2,1,bright); p(1,2,bright);
+        p(0,0,dark);   p(2,0,dark);   p(0,2,dark);   p(2,2,dark);
+    }
+    function oreTex(seed, bright, mid, dark) {
         return makeTex(ctx => {
-            stoneBase(ctx, seed, false);
-            [[2,2],[8,1],[12,4],[3,8],[9,8],[13,12],[5,12],[1,13],[7,5],[11,10]].forEach(([x,y]) => addOre(ctx,x,y,c1,c2));
+            cobblestone(ctx, seed);
+            // 8 ore clusters scattered across the 16×16 texture
+            [[1,1],[6,2],[11,1],[13,7],[2,8],[7,7],[10,9],[4,12],[13,13],[1,13]].forEach(([x,y]) => addOrePx(ctx,x,y,bright,dark));
         });
     }
-    const T = {
-        'hidden-blk':   makeTex(ctx => stoneBase(ctx, 42, true)),
-        'stone-blk':    makeTex(ctx => stoneBase(ctx, 13, false)),
-        'redstone-blk': oreTex(7,  '#FF2424', '#880000'),
-        'gold-blk':     oreTex(23, '#FFCC00', '#886600'),
-        'diamond-blk':  oreTex(31, '#00E0E0', '#006666'),
-        'obsidian-blk': makeTex(ctx => {
-            for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
-                const n = rnd(x, y, 55) % 24;
-                const r = n<3?32:n<7?18:10, b = n<3?68:n<7?48:24;
-                ctx.fillStyle = `rgb(${r},${Math.round(r*0.12)},${b})`;
+
+    // ── Обсидиан — тёмно-фиолетовый с текстурой ──
+    function obsidianTex(ctx) {
+        for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+            const n = rnd(x, y, 55) % 32;
+            const r = n<3?44:n<9?20:12, g = n<3?8:4, b = n<3?88:n<9?52:32;
+            ctx.fillStyle = `rgb(${r},${g},${b})`;
+            ctx.fillRect(x, y, 1, 1);
+        }
+        // Purple shimmer clusters
+        [[3,2],[9,1],[13,5],[5,9],[11,12],[2,13],[7,6],[14,10]].forEach(([x,y]) => {
+            ctx.fillStyle = 'rgba(120,40,200,0.7)'; ctx.fillRect(x, y, 2, 2);
+            ctx.fillStyle = 'rgba(160,80,255,0.5)'; ctx.fillRect(x+1, y+1, 1, 1);
+        });
+    }
+
+    // ── Книга — тёмно-фиолетовая обложка с золотой рамкой ──
+    function bookTex(ctx) {
+        for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+            const n = rnd(x, y, 77) % 16;
+            ctx.fillStyle = n<3 ? `#4a0b90` : `#35076a`;
+            ctx.fillRect(x, y, 1, 1);
+        }
+        ctx.fillStyle = '#C89000';
+        for (let i=0;i<S;i++) { ctx.fillRect(i,0,1,1); ctx.fillRect(i,S-1,1,1); ctx.fillRect(0,i,1,1); ctx.fillRect(S-1,i,1,1); }
+        ctx.fillStyle = '#FFD700';
+        [[7,5],[8,5],[6,6],[9,6],[5,7],[10,7],[6,8],[9,8],[7,9],[8,9],[7,7],[8,7],[7,8],[8,8]].forEach(([x,y])=>ctx.fillRect(x,y,1,1));
+    }
+
+    // ── Сундук — рисуем через canvas (Minecraft-стиль) ──
+    function chestTex(ctx, open) {
+        const W = '#7a4a1a', LW = '#9a6228', DW = '#3a2008', PL = '#c08040';
+        const GT = '#c89000', GL = '#ffe060', GD = '#886000';
+        // Body planks
+        for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+            const n = rnd(x, y, 100) % 24;
+            // Plank grain lines
+            const grain = (y % 4 === 0 || y % 4 === 3) ? DW : (n < 3 ? DW : n < 8 ? LW : W);
+            ctx.fillStyle = grain;
+            ctx.fillRect(x, y, 1, 1);
+        }
+        if (open) {
+            // Top part: dark interior opening
+            for (let y = 0; y < 7; y++) for (let x = 1; x < S-1; x++) {
+                ctx.fillStyle = y < 4 ? '#0e0704' : '#1c0e06';
                 ctx.fillRect(x, y, 1, 1);
             }
-        }),
+            // Interior hint pixels (items inside)
+            ctx.fillStyle = '#2a1a08'; ctx.fillRect(2, 5, 2, 1); ctx.fillRect(8, 4, 3, 1); ctx.fillRect(13, 5, 1, 1);
+        } else {
+            // Latch: gold square in center
+            [[5,6,GT],[6,6,GL],[7,6,GL],[8,6,GL],[9,6,GL],[10,6,GT],
+             [5,7,GT],[6,7,GT],[7,7,GT],[8,7,GT],[9,7,GT],[10,7,GT],
+             [5,8,GD],[6,8,GD],[7,8,GD],[8,8,GD],[9,8,GD],[10,8,GD]].forEach(([x,y,c]) => {
+                ctx.fillStyle = c; ctx.fillRect(x, y, 1, 1);
+            });
+            // Center latch button
+            ctx.fillStyle = '#ffe060'; ctx.fillRect(7, 6, 2, 1);
+            ctx.fillStyle = '#c89000'; ctx.fillRect(7, 8, 2, 1);
+        }
+        // Lid-body separator line
+        ctx.fillStyle = DW;
+        for (let x = 0; x < S; x++) ctx.fillRect(x, open ? 6 : 5, 1, 1);
+        // Corner highlights
+        ctx.fillStyle = PL;
+        ctx.fillRect(0, 0, 1, S); ctx.fillRect(S-1, 0, 1, S);
+        ctx.fillStyle = DW;
+        ctx.fillRect(1, 0, 1, S); ctx.fillRect(S-2, 0, 1, S);
+    }
+
+    const T = {
+        'hidden-blk':   makeTex(hiddenBlock),
+        'stone-blk':    makeTex(ctx => cobblestone(ctx, 13)),
+        'redstone-blk': oreTex(7,  '#FF3030', '#BB0000', '#660000'),
+        'gold-blk':     oreTex(23, '#FFD700', '#CC9900', '#886600'),
+        'diamond-blk':  oreTex(31, '#00EEFF', '#00AABB', '#004466'),
+        'obsidian-blk': makeTex(obsidianTex),
         'tnt-blk': makeTex(ctx => {
             for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
                 const st = Math.floor(y/4) % 2;
                 const n  = rnd(x, y, 88) % 8;
-                ctx.fillStyle = st
-                    ? (n<2 ? '#DD0000' : '#CC1010')
-                    : (n<2 ? '#DDDDDD' : '#C8C8C8');
+                ctx.fillStyle = st ? (n<2 ? '#DD0000' : '#CC1010') : (n<2 ? '#DDDDDD' : '#C8C8C8');
                 ctx.fillRect(x, y, 1, 1);
             }
         }),
-        'book-blk': makeTex(ctx => {
-            for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
-                const n = rnd(x, y, 77) % 16;
-                ctx.fillStyle = n<3 ? `rgb(80,0,155)` : `rgb(55,0,110)`;
-                ctx.fillRect(x, y, 1, 1);
-            }
-            // Золотая рамка
-            ctx.fillStyle = '#C89000';
-            for (let i=0;i<S;i++) { ctx.fillRect(i,0,1,1); ctx.fillRect(i,S-1,1,1); ctx.fillRect(0,i,1,1); ctx.fillRect(S-1,i,1,1); }
-            // Золотая звезда по центру
-            ctx.fillStyle = '#FFD700';
-            [[7,5],[8,5],[6,6],[9,6],[5,7],[10,7],[6,8],[9,8],[7,9],[8,9],[7,7],[8,7],[7,8],[8,8]].forEach(([x,y])=>ctx.fillRect(x,y,1,1));
-        }),
+        'book-blk': makeTex(bookTex),
     };
+
+    // ── Сундуки — генерируем canvas-текстуры и вставляем в img ──
+    const chestClosed = makeTex(ctx => chestTex(ctx, false));
+    const chestOpen   = makeTex(ctx => chestTex(ctx, true));
+
     const st = document.createElement('style');
     st.id = 'mine-tex-style';
     st.textContent = Object.entries(T).map(([cls, url]) =>
         `.mc-blk.${cls} { background-image: url("${url}") !important; background-size: 100% 100% !important; background-color: transparent !important; }`
-    ).join('\n');
+    ).join('\n')
+    + `\n.mc-chest { background-image: url("${chestClosed}") !important; }`
+    + `\n.mc-chest.open { background-image: url("${chestOpen}") !important; }`;
     document.head.appendChild(st);
+
+    // Store chest URLs for JS use
+    window._chestClosedUrl = chestClosed;
+    window._chestOpenUrl   = chestOpen;
 }
 
 function initMineGrid() {
     setupMineTextures();
-    initMineInventory();
-    initMineShaft(false, true); // idle preview: показать случайные руды
+    initMineInventory();          // uses last known count (default 3)
+    initMineShaft(false, true);   // idle preview: показать случайные руды
 }
 
 // Авто-спин
@@ -1807,7 +2037,7 @@ async function autoSpinMine() {
     }
     const btn = $('mn-btn');
     initMineInventory();
-    initMineShaft(false);
+    initMineShaft(false, true);   // keep blocks visible (colored) during API call
     mineIsSpinning = true;
     if (btn) btn.disabled = true;
     const balanceBefore = user ? (user.balance || 0) : 0;
@@ -1821,6 +2051,8 @@ async function autoSpinMine() {
         const data = await resp.json();
         if (!resp.ok) { mineIsSpinning = false; if (btn) btn.disabled = false; return; }
         user = data.user;
+        // Update inventory with real pickaxe count from server
+        initMineInventory(data.pickaxeCount, data.pickaxe);
         const totalTime = revealMineShaft(data.grid, data.blockWins, data.pickaxe, data.win, balanceBefore, data.chestMult);
         setTimeout(() => { mineIsSpinning = false; if (btn) btn.disabled = false; }, totalTime + 100);
     } catch(e) {
@@ -1849,8 +2081,9 @@ async function playMine() {
     mineIsSpinning = true;
     if (btn) btn.disabled = true;
     const balanceBefore = user ? (user.balance || 0) : 0;
+    // Keep blocks visible (colored) during API loading — just reset chests/counter
     initMineInventory();
-    initMineShaft(false);
+    initMineShaft(false, true);   // show colored ores while waiting for server
 
     try {
         const resp = await fetch('/api/mine', {
@@ -1862,6 +2095,8 @@ async function playMine() {
         if (!resp.ok) { showToast(data.error || 'Ошибка'); mineIsSpinning = false; if (btn) btn.disabled = false; return; }
         user = data.user;
 
+        // Update inventory with real pickaxe count from server
+        initMineInventory(data.pickaxeCount, data.pickaxe);
         const totalTime = revealMineShaft(data.grid, data.blockWins, data.pickaxe, data.win, balanceBefore, data.chestMult);
         setTimeout(() => { mineIsSpinning = false; if (btn) btn.disabled = false; }, totalTime + 100);
 

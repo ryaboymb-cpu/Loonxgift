@@ -818,10 +818,14 @@ app.post('/api/mine', async (req, res) => {
         const mainBlock = grid[2][2]; // row 2, col 2 = centre result block
         const baseMult  = MINE_BLOCK_MULTS[mainBlock] || 0;
 
-        // Pickaxe — always pick one
+        // Pickaxe type — always pick one
         const pr = Math.random(); let cum2 = 0; let pickaxe = 'wooden';
         for (let i = 0; i < MINE_PICKAXES.length; i++) { cum2 += MINE_PICKAXE_WEIGHTS[i]; if (pr < cum2) { pickaxe = MINE_PICKAXES[i]; break; } }
         const pickaxeMult = MINE_PICKAXE_MULTS[pickaxe] || 1;
+        // Pickaxe count: 1–9, weighted heavily to low (1–3 most common)
+        const PICK_COUNT_W = [0, 0.32, 0.24, 0.17, 0.11, 0.07, 0.04, 0.03, 0.015, 0.005];
+        const pcr = Math.random(); let pcum = 0; let pickaxeCount = 1;
+        for (let i = 1; i <= 9; i++) { pcum += PICK_COUNT_W[i]; if (pcr < pcum) { pickaxeCount = i; break; } }
 
         // Chest multiplier — shown after all chests open
         const chestMult = pickChestMult();
@@ -872,7 +876,7 @@ app.post('/api/mine', async (req, res) => {
             pushToGlobalHistory(betEntry);
         }
 
-        res.json({ grid, blockWins, mainBlock, pickaxe, pickaxeMult, baseMult, chestMult, win: actualWin, user });
+        res.json({ grid, blockWins, mainBlock, pickaxe, pickaxeCount, pickaxeMult, baseMult, chestMult, win: actualWin, user });
     } catch (err) {
         console.error('Mine error:', err);
         res.status(500).json({ error: 'Ошибка сервера' });
