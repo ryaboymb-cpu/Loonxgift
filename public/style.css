@@ -280,6 +280,7 @@ header { padding: 15px; display: flex; justify-content: space-between; align-ite
   border-radius: 0 0 4px 4px;
   padding: 3px;
   position: relative;
+  overflow: visible;
 }
 .mc-blk {
   width: 100%;
@@ -543,6 +544,7 @@ header { padding: 15px; display: flex; justify-content: space-between; align-ite
   flex-shrink: 0;
   overflow: visible;
   position: relative;
+  z-index: 20;
 }
 .mc-chest {
   background-color: #7a4a1a;
@@ -554,6 +556,7 @@ header { padding: 15px; display: flex; justify-content: space-between; align-ite
   position: relative;
   image-rendering: pixelated;
   border-radius: 2px;
+  overflow: visible;
 }
 .mc-chest::before, .mc-chest::after { display: none; }
 .mc-chest.open {

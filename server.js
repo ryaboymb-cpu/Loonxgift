@@ -1316,8 +1316,12 @@ server.listen(PORT, '0.0.0.0', () => {
         : `http://localhost:${PORT}/ping`;
     setInterval(() => {
         fetch(SELF_URL).catch(() => {});
-    }, 4 * 60 * 1000);
-    setInterval(() => {
-        fetch(SELF_URL).catch(() => {});
-    }, 2 * 60 * 1000);
+    }, 60 * 1000);
+});
+
+process.on('uncaughtException', (err) => {
+    console.error('Uncaught:', err.message);
+});
+process.on('unhandledRejection', (err) => {
+    console.error('Unhandled:', err);
 });

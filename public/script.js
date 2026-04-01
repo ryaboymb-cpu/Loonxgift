@@ -1462,43 +1462,31 @@ function drawPickaxeCanvas(type) {
     const ctx = c.getContext('2d');
     ctx.imageSmoothingEnabled = false;
     const cols = {
-        wooden:  { H1:'#c8a060', H2:'#a07838', H3:'#785020', HS:'#604018', S:'#b08040', SD:'#785020' },
-        stone:   { H1:'#d0d0d0', H2:'#a0a0a0', H3:'#707070', HS:'#505050', S:'#b08040', SD:'#785020' },
-        iron:    { H1:'#f0f0f0', H2:'#d0d0d0', H3:'#a8a8b0', HS:'#707880', S:'#b08040', SD:'#785020' },
-        golden:  { H1:'#fff070', H2:'#e8c020', H3:'#c89800', HS:'#906800', S:'#b08040', SD:'#785020' },
-        diamond: { H1:'#88f0f8', H2:'#40c8e0', H3:'#1898b8', HS:'#087088', S:'#b08040', SD:'#785020' },
+        wooden:  { L:'#C29C54', M:'#9C7A3C', D:'#7A5A28', S:'#865E30', SD:'#6B4520' },
+        stone:   { L:'#BCBCBC', M:'#8C8C8C', D:'#6C6C6C', S:'#865E30', SD:'#6B4520' },
+        iron:    { L:'#ECECEC', M:'#CBCBCB', D:'#9C9C9C', S:'#865E30', SD:'#6B4520' },
+        golden:  { L:'#FCEE4B', M:'#DCA817', D:'#A87D12', S:'#865E30', SD:'#6B4520' },
+        diamond: { L:'#79F5DE', M:'#29C5B5', D:'#169D97', S:'#865E30', SD:'#6B4520' },
     };
-    const { H1, H2, H3, HS, S, SD } = cols[type] || cols.wooden;
+    const { L, M, D, S, SD } = cols[type] || cols.wooden;
     const p = (x, y, cl) => { ctx.fillStyle = cl; ctx.fillRect(x, y, 1, 1); };
 
-    // Левый зубец (вверху-слева, направлен вверх-влево)
-    p(3,0,H2); p(4,0,H1);
-    p(4,1,H2); p(5,1,H3);
-    p(5,2,H1); p(6,2,H2);
+    p(5,1,L); p(6,1,M);
+    p(6,2,D); p(7,2,M);
+    p(7,3,L); p(8,3,M); p(9,3,D);
+    p(9,2,M); p(10,2,D);
+    p(10,1,M); p(11,1,L);
 
-    // Горизонтальная перекладина (соединяет зубцы)
-    p(6,3,H1); p(7,3,H2); p(8,3,H3);
+    p(8,4,D); p(9,4,M);
+    p(7,5,D); p(8,5,M);
 
-    // Правый зубец (вверху-справа, направлен вверх-вправо)
-    p(9,2,H2); p(10,2,H1);
-    p(10,1,H3); p(11,1,H2);
-    p(11,0,H1); p(12,0,H2);
-
-    // Тени под головой
-    p(5,3,HS); p(9,3,HS);
-    p(6,4,HS); p(7,4,H3); p(8,4,HS);
-
-    // Стык голова-ручка
-    p(7,5,H3); p(8,5,HS);
-
-    // Ручка — диагональ вниз-влево, шахматный коричневый узор
     p(6,6,S);  p(7,6,SD);
     p(5,7,SD); p(6,7,S);
     p(4,8,S);  p(5,8,SD);
     p(3,9,SD); p(4,9,S);
     p(2,10,S); p(3,10,SD);
     p(1,11,SD); p(2,11,S);
-    p(0,12,S);  p(1,12,SD);
+    p(1,12,S);
 
     const big = document.createElement('canvas');
     big.width = 128; big.height = 128;
@@ -1764,18 +1752,20 @@ function spawnPickaxeWorker(blockQueue, pickaxeType, workerIdx, onWorkerDone, on
         qi++;
         remainDur -= hitsCanDo;
 
-        const rect = blkEl.getBoundingClientRect();
-        const bx     = rect.left + rect.width / 2;
-        const blockTop = rect.top;
-        const startY = blockTop - 40;
-        const hoverY = blockTop - 22;
-        const hitY   = blockTop - 2;
+        const shaft = $('mc-shaft');
+        const shaftRect = shaft.getBoundingClientRect();
+        const blkRect = blkEl.getBoundingClientRect();
+        const bx = (blkRect.left + blkRect.width / 2) - shaftRect.left;
+        const blockTop = blkRect.top - shaftRect.top;
+        const startY = blockTop - 36;
+        const hoverY = blockTop - 18;
+        const hitY   = blockTop;
 
         const pUrl = getPickaxeImg(pickaxeType);
         const el = document.createElement('img');
         el.src = pUrl;
-        el.style.cssText = `position:fixed;width:28px;height:28px;z-index:9999;pointer-events:none;image-rendering:pixelated;left:${bx}px;top:${startY}px;transform:translate(-50%,-100%);`;
-        document.body.appendChild(el);
+        el.style.cssText = `position:absolute;width:28px;height:28px;z-index:9999;pointer-events:none;image-rendering:pixelated;left:${bx}px;top:${startY}px;transform:translate(-50%,-100%);`;
+        shaft.appendChild(el);
         _pickaxeEls.add(el);
 
         function removeEl() {
@@ -2158,12 +2148,16 @@ function revealMineShaft(grid, blockWins, pickaxe, win, balanceBefore, chestMult
     const estimatedReveal = longestQ + N * 120 + 400;
 
     mineIsActive = true;
-    queues.forEach((queue, wi) => {
-        const pType = workerTypes[wi];
-        const pDur  = PICKAXE_DURABILITY[pType] || 3;
-        setTimeout(() => {
-            spawnPickaxeWorker(queue, pType, wi, null, onBlockBroken, pDur);
-        }, wi * 150);
+    requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+            queues.forEach((queue, wi) => {
+                const pType = workerTypes[wi];
+                const pDur  = PICKAXE_DURABILITY[pType] || 3;
+                setTimeout(() => {
+                    spawnPickaxeWorker(queue, pType, wi, null, onBlockBroken, pDur);
+                }, wi * 150);
+            });
+        });
     });
 
     // Итоговый результат после всех анимаций
