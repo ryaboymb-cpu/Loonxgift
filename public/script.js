@@ -1520,19 +1520,22 @@ function spawnBreakParticles(blockEl, blockType) {
 }
 
 // ─── Основное раскрытие: grid[r][c] из сервера, blockWins[r][c] ───
-function revealMineShaft(grid, blockWins, pickaxe, win, balanceBefore) {
+function revealMineShaft(grid, blockWins, pickaxe, win, balanceBefore, chestMult) {
     // ── Timing ──
-    const HITS      = 3;    // удара кирки на один блок
     const FLIGHT_MS = 400;  // время полёта кирки (мс)
     const PAUSE_MS  = 260;  // пауза между ударами (вибрация блока)
-    const BLK_GAP   = 350;  // сдвиг старта следующего блока (перекрытие анимаций)
-    // Полная длительность одного блока: HITS*(FLIGHT_MS+PAUSE_MS)+120 ≈ 1360ms
-    // Всего: 14*BLK_GAP + 1360 ≈ 4.2s
+    const BLK_GAP   = 350;  // сдвиг старта следующего блока
+    const BREAK_MS  = 220;  // время анимации разлома блока
+
+    // Прочность блоков (ударов кирки)
+    const BLOCK_HITS_MAP = { stone:2, redstone:2, gold:3, diamond:3, obsidian:4, book:2 };
+    // Бонус/штраф скорости по типу кирки
+    const PICKAXE_MOD_MAP = { wooden:+1, stone:0, iron:0, golden:-1, diamond:-1 };
+    const pMod = PICKAXE_MOD_MAP[pickaxe] || 0;
 
     // Случайная ячейка инвентаря (НЕ совпадает с текущим блоком)
     function randInvEl(skipR, skipC) {
-        let attempts = 0;
-        let idx;
+        let attempts = 0, idx;
         do {
             idx = Math.floor(Math.random() * (MC_ROWS * MC_COLS));
             attempts++;
@@ -1541,15 +1544,20 @@ function revealMineShaft(grid, blockWins, pickaxe, win, balanceBefore) {
     }
 
     let blkStart = 0;
+    let computedLastReveal = 0;
 
     for (let r = 0; r < MC_ROWS; r++) {
         for (let c = 0; c < MC_COLS; c++) {
             const blockType = grid[r][c];
             const blockWin  = blockWins[r][c] || 0;
-            const captR = r, captC = c, captStart = blkStart;
+            const blkHits   = Math.max(1, (BLOCK_HITS_MAP[blockType] || 2) + pMod);
+            const captR = r, captC = c, captStart = blkStart, captHits = blkHits;
 
-            // Три удара: hit=0,1,2
-            for (let hit = 0; hit < HITS; hit++) {
+            // Рассчитываем время полного раскрытия этого блока
+            const thisReveal = captStart + (blkHits - 1) * (FLIGHT_MS + PAUSE_MS) + FLIGHT_MS + PAUSE_MS + 115 + BREAK_MS + 50;
+            if (thisReveal > computedLastReveal) computedLastReveal = thisReveal;
+
+            for (let hit = 0; hit < blkHits; hit++) {
                 const captHit = hit;
                 const hitTime = captStart + captHit * (FLIGHT_MS + PAUSE_MS);
 
@@ -1557,11 +1565,17 @@ function revealMineShaft(grid, blockWins, pickaxe, win, balanceBefore) {
                     const blkEl = $(`mc-blk-${captR}-${captC}`);
                     if (!blkEl || blkEl.dataset.revealed === '1') return;
 
-                    // Стадия трещин перед ударом
+                    // Стадия трещин (1 → 2 → 3)
                     blkEl.classList.remove('cracking-1','cracking-2','cracking-3');
-                    if (captHit === 0) blkEl.classList.add('cracking-1');
-                    else if (captHit === 1) blkEl.classList.add('cracking-2');
-                    else blkEl.classList.add('cracking-3');
+                    if (captHits === 1) {
+                        blkEl.classList.add('cracking-3');
+                    } else if (captHit === 0) {
+                        blkEl.classList.add('cracking-1');
+                    } else if (captHit === captHits - 1) {
+                        blkEl.classList.add('cracking-3');
+                    } else {
+                        blkEl.classList.add('cracking-2');
+                    }
 
                     // Кирка летит из случайной ячейки
                     const invEl = randInvEl(captR, captC);
@@ -1570,38 +1584,41 @@ function revealMineShaft(grid, blockWins, pickaxe, win, balanceBefore) {
                         blkEl.classList.add('crack-hit');
                         setTimeout(() => blkEl.classList.remove('crack-hit'), 90);
 
-                        if (captHit === HITS - 1) {
-                            // Финальный удар → разлом → раскрытие
+                        if (captHit === captHits - 1) {
+                            // Финальный удар → анимация разлома → раскрытие
                             setTimeout(() => {
-                                blkEl.classList.remove('cracking-1','cracking-2','cracking-3','crack-hit');
-                                const cls = MINE_BLOCK_CLASS[blockType] || 'stone-blk';
-                                blkEl.className = `mc-blk ${cls} reveal-drop`;
-                                blkEl.dataset.revealed = '1';
-                                blkEl.dataset.blockType = blockType;
+                                blkEl.classList.add('breaking');
 
-                                // Частицы разбивки
-                                spawnBreakParticles(blkEl, blockType);
+                                setTimeout(() => {
+                                    blkEl.classList.remove('cracking-1','cracking-2','cracking-3','crack-hit','breaking');
+                                    const cls = MINE_BLOCK_CLASS[blockType] || 'stone-blk';
+                                    blkEl.className = `mc-blk ${cls} reveal-drop`;
+                                    blkEl.dataset.revealed = '1';
+                                    blkEl.dataset.blockType = blockType;
 
-                                // Инвентарь заполняется ПОСЛЕ разбивки блока
-                                fillInvCell(captR, captC, blockType, pickaxe);
+                                    // Частицы разбивки
+                                    spawnBreakParticles(blkEl, blockType);
 
-                                // Спец-эффекты
-                                if (blockType === 'tnt')  triggerTNTEffect(captR, captC);
-                                if (blockType === 'book') collectBook(blkEl);
+                                    // Инвентарь заполняется ПОСЛЕ разбивки блока
+                                    fillInvCell(captR, captC, blockType, pickaxe);
 
-                                // Попап выигрыша и счётчик
-                                if (blockWin > 0) {
-                                    spawnBlockWinPopup(blkEl, blockWin);
-                                    blkEl.classList.add('win-pulse');
-                                    mineRunningTotal += blockWin;
-                                    const rt = $('mine-running-total');
-                                    if (rt) {
-                                        rt.classList.add('has-win');
-                                        animateCounter(rt, mineRunningTotal - blockWin, mineRunningTotal, 380, '', ' TON');
+                                    // Спец-эффекты
+                                    if (blockType === 'book') collectBook(blkEl);
+
+                                    // Попап выигрыша и счётчик
+                                    if (blockWin > 0) {
+                                        spawnBlockWinPopup(blkEl, blockWin);
+                                        blkEl.classList.add('win-pulse');
+                                        mineRunningTotal += blockWin;
+                                        const rt = $('mine-running-total');
+                                        if (rt) {
+                                            rt.classList.add('has-win');
+                                            animateCounter(rt, mineRunningTotal - blockWin, mineRunningTotal, 380, '', ' TON');
+                                        }
+                                        const invCell = $(`inv-${captR}-${captC}`);
+                                        if (invCell) invCell.classList.add('win-slot');
                                     }
-                                    const invCell = $(`inv-${captR}-${captC}`);
-                                    if (invCell) invCell.classList.add('win-slot');
-                                }
+                                }, BREAK_MS);
                             }, 115);
                         }
                     });
@@ -1613,7 +1630,7 @@ function revealMineShaft(grid, blockWins, pickaxe, win, balanceBefore) {
     }
 
     // Время после последнего блока
-    const lastBlkReveal = blkStart - BLK_GAP + HITS * (FLIGHT_MS + PAUSE_MS) + 200;
+    const lastBlkReveal = computedLastReveal;
 
     // Сундуки открываются волной
     setTimeout(() => {
@@ -1626,6 +1643,19 @@ function revealMineShaft(grid, blockWins, pickaxe, win, balanceBefore) {
             }, i * 90);
         }
     }, lastBlkReveal + 100);
+
+    // Попап мультипликатора сундука после открытия всех сундуков
+    const chestPopupDelay = lastBlkReveal + 100 + MC_COLS * 90 + 550;
+    const effectiveChestMult = chestMult || 2;
+    setTimeout(() => {
+        const shaft = document.querySelector('.mc-shaft');
+        if (!shaft) return;
+        const pop = document.createElement('div');
+        pop.className = 'mine-chest-mult-popup';
+        pop.innerHTML = `<div class="cmp-label">СУНДУК ОТКРЫТ!</div><div class="cmp-mult">×${effectiveChestMult}</div>`;
+        shaft.appendChild(pop);
+        setTimeout(() => { if (pop.parentNode) pop.parentNode.removeChild(pop); }, 2600);
+    }, chestPopupDelay);
 
     // Итоговый результат и баланс
     const afterReveal = lastBlkReveal + 500;
@@ -1771,7 +1801,7 @@ async function autoSpinMine() {
         const data = await resp.json();
         if (!resp.ok) { mineIsSpinning = false; if (btn) btn.disabled = false; return; }
         user = data.user;
-        const totalTime = revealMineShaft(data.grid, data.blockWins, data.pickaxe, data.win, balanceBefore);
+        const totalTime = revealMineShaft(data.grid, data.blockWins, data.pickaxe, data.win, balanceBefore, data.chestMult);
         setTimeout(() => { mineIsSpinning = false; if (btn) btn.disabled = false; }, totalTime + 100);
     } catch(e) {
         mineIsSpinning = false; if (btn) btn.disabled = false;
@@ -1812,7 +1842,7 @@ async function playMine() {
         if (!resp.ok) { showToast(data.error || 'Ошибка'); mineIsSpinning = false; if (btn) btn.disabled = false; return; }
         user = data.user;
 
-        const totalTime = revealMineShaft(data.grid, data.blockWins, data.pickaxe, data.win, balanceBefore);
+        const totalTime = revealMineShaft(data.grid, data.blockWins, data.pickaxe, data.win, balanceBefore, data.chestMult);
         setTimeout(() => { mineIsSpinning = false; if (btn) btn.disabled = false; }, totalTime + 100);
 
     } catch(e) {
