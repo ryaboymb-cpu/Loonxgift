@@ -1520,9 +1520,9 @@ function spawnPickaxeProj(fromEl, toEl, pickaxeType, totalHits, onEachHit, onAll
     el.style.cssText = `position:fixed; width:28px; height:28px; z-index:9999; pointer-events:none; user-select:none; image-rendering:pixelated; left:${bx}px; top:${startY}px; transform:translate(-50%,-50%) rotate(135deg);`;
     document.body.appendChild(el);
 
-    const DROP_MS   = 200;  // fall duration (ms) — faster = snappier
-    const RECOIL_MS = 130;  // bounce-up duration
-    const WAIT_MS   = 60;   // pause at top of bounce before next drop
+    const DROP_MS   = 160;  // fall duration — snappy
+    const RECOIL_MS = 90;   // recoil-up duration
+    const WAIT_MS   = 40;   // pause before next drop
 
     // Animate vertical drop from y0 to y1
     function drop(y0, y1, dur, callback) {
@@ -1709,10 +1709,10 @@ function spawnBreakParticles(blockEl, blockType) {
 // ─── Основное раскрытие: grid[r][c] из сервера, blockWins[r][c] ───
 function revealMineShaft(grid, blockWins, pickaxe, win, balanceBefore, chestMult) {
     // ── Timing ──
-    const HIT_MS    = 260;  // flight time per hit
-    const BOUNCE_MS = 140;  // bounce between hits
-    const SETTLE_MS = 100;  // settle between hits
-    const BLK_GAP   = 320;  // gap between blocks starting
+    const HIT_MS    = 200;  // fall time
+    const BOUNCE_MS = 100;  // recoil time
+    const SETTLE_MS = 60;   // pause between hits
+    const BLK_GAP   = 220;  // gap between blocks starting (all 15 blocks in ~3s)
 
     // Прочность блоков (ударов кирки)
     const BLOCK_HITS_MAP = { stone:2, redstone:2, gold:3, diamond:3, obsidian:4, book:2 };
@@ -1733,13 +1733,13 @@ function revealMineShaft(grid, blockWins, pickaxe, win, balanceBefore, chestMult
         return cells[Math.floor(Math.random() * cells.length)];
     }
 
-    // ── Update all shaft blocks to real server types immediately ──
+    // ── Blocks stay HIDDEN until each one is physically broken ──
+    // Reset all shaft blocks to hidden state (dark stone, no type revealed yet)
     for (let r = 0; r < MC_ROWS; r++) {
         for (let c = 0; c < MC_COLS; c++) {
             const blkEl = $(`mc-blk-${r}-${c}`);
             if (!blkEl) continue;
-            const cls = MINE_BLOCK_CLASS[grid[r][c]] || 'stone-blk';
-            blkEl.className = `mc-blk ${cls}`;
+            blkEl.className    = 'mc-blk hidden-blk';
             blkEl.dataset.revealed = '0';
             blkEl.style.transition = '';
             blkEl.style.transform  = '';
@@ -1753,32 +1753,28 @@ function revealMineShaft(grid, blockWins, pickaxe, win, balanceBefore, chestMult
     for (let r = 0; r < MC_ROWS; r++) {
         for (let c = 0; c < MC_COLS; c++) {
             const blockType = grid[r][c];
-            const blockWin  = blockWins[r][c] || 0;
+            const blockWin  = (blockWins && blockWins[r] && blockWins[r][c]) ? blockWins[r][c] : 0;
             const blkHits   = Math.max(1, (BLOCK_HITS_MAP[blockType] || 2) + pMod);
-            const captR = r, captC = c, captStart = blkStart, captHits = blkHits;
+            const captR = r, captC = c, captStart = blkStart, captHits = blkHits,
+                  captType = blockType, captWin = blockWin;
 
-            // Time for this block to fully finish
-            // totalHits * (HIT_MS + BOUNCE_MS + SETTLE_MS) + BREAK_MS
             const totalBlockTime = captStart + captHits * (HIT_MS + BOUNCE_MS + SETTLE_MS) + 300;
             if (totalBlockTime > computedLastReveal) computedLastReveal = totalBlockTime;
 
             setTimeout(() => {
                 const blkEl = $(`mc-blk-${captR}-${captC}`);
                 if (!blkEl) return;
-                const invEl = pickInvEl();
 
-                // Add initial crack stage
+                // Block starts cracking (still hidden)
                 blkEl.classList.add('cracking-1');
 
-                // Use new physics-based pickaxe projectile
-                spawnPickaxeProj(invEl, blkEl, pickaxe, captHits,
+                // Pickaxe falls straight down from above this block
+                spawnPickaxeProj(null, blkEl, pickaxe, captHits,
                     (hitIdx) => {
-                        // Called on each impact
+                        // Each impact: crack stage + shake + consume durability
                         blkEl.classList.add('crack-hit');
                         setTimeout(() => blkEl.classList.remove('crack-hit'), 80);
-                        // Consume durability
                         consumeDurability(1);
-                        // Progress crack visuals
                         blkEl.classList.remove('cracking-1','cracking-2','cracking-3');
                         if (captHits === 1 || hitIdx === captHits - 1) {
                             blkEl.classList.add('cracking-3');
@@ -1789,37 +1785,41 @@ function revealMineShaft(grid, blockWins, pickaxe, win, balanceBefore, chestMult
                         }
                     },
                     () => {
-                        // All hits done — block SHATTERS and DISAPPEARS
+                        // FINAL HIT — reveal the block type first, THEN shatter & disappear
                         blkEl.classList.remove('cracking-1','cracking-2','cracking-3','crack-hit');
 
-                        // Show money popup BEFORE block disappears
-                        if (blockWin > 0) {
-                            spawnBlockWinPopup(blkEl, blockWin);
-                            mineRunningTotal += blockWin;
+                        // Briefly flash the real block type (ore/gem) before it breaks
+                        const oreClass = MINE_BLOCK_CLASS[captType] || 'stone-blk';
+                        blkEl.className = `mc-blk ${oreClass}`;
+
+                        // Win popup + running total update
+                        if (captWin > 0) {
+                            spawnBlockWinPopup(blkEl, captWin);
+                            mineRunningTotal += captWin;
                             const rt = $('mine-running-total');
                             if (rt) {
                                 rt.classList.add('has-win');
-                                animateCounter(rt, mineRunningTotal - blockWin, mineRunningTotal, 380, '', ' TON');
+                                animateCounter(rt, mineRunningTotal - captWin, mineRunningTotal, 380, '', ' TON');
                             }
                         }
 
-                        // Particles
-                        spawnBreakParticles(blkEl, blockType);
+                        // Particles with correct block color
+                        spawnBreakParticles(blkEl, captType);
 
-                        // BLOCK DISAPPEARS (scale to 0 + fade)
-                        blkEl.style.transition = 'transform 0.22s cubic-bezier(0.5,0,1,1), opacity 0.18s';
-                        blkEl.style.transform  = 'scale(0.05)';
-                        blkEl.style.opacity    = '0';
-                        blkEl.dataset.revealed = '1';
-
+                        // After brief reveal (200ms), block SHATTERS and disappears
                         setTimeout(() => {
-                            if (blkEl.parentNode) blkEl.parentNode.removeChild(blkEl);
-                        }, 220);
+                            blkEl.style.transition = 'transform 0.20s cubic-bezier(0.5,0,1,1), opacity 0.16s';
+                            blkEl.style.transform  = 'scale(0.04)';
+                            blkEl.style.opacity    = '0';
+                            blkEl.dataset.revealed = '1';
+                            setTimeout(() => {
+                                if (blkEl.parentNode) blkEl.parentNode.removeChild(blkEl);
+                            }, 220);
+                        }, 180);
 
-                        // Fill inventory cell with what was found
-                        fillInvCell(captR, captC, blockType, pickaxe);
-
-                        if (blockType === 'book') collectBook(blkEl);
+                        // Fill inventory cell with found ore icon
+                        fillInvCell(captR, captC, captType, pickaxe);
+                        if (captType === 'book') collectBook(blkEl);
                     }
                 );
             }, blkStart);
