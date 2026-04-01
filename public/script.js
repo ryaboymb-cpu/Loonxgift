@@ -1523,9 +1523,9 @@ function spawnBreakParticles(blockEl, blockType) {
 function revealMineShaft(grid, blockWins, pickaxe, win, balanceBefore) {
     // ── Timing ──
     const HITS      = 3;    // удара кирки на один блок
-    const FLIGHT_MS = 260;  // время полёта кирки (мс)
-    const PAUSE_MS  = 160;  // пауза между ударами (вибрация блока)
-    const BLK_GAP   = 200;  // сдвиг старта следующего блока (перекрытие анимаций)
+    const FLIGHT_MS = 400;  // время полёта кирки (мс)
+    const PAUSE_MS  = 260;  // пауза между ударами (вибрация блока)
+    const BLK_GAP   = 350;  // сдвиг старта следующего блока (перекрытие анимаций)
     // Полная длительность одного блока: HITS*(FLIGHT_MS+PAUSE_MS)+120 ≈ 1360ms
     // Всего: 14*BLK_GAP + 1360 ≈ 4.2s
 
@@ -1664,7 +1664,85 @@ function revealMineShaft(grid, blockWins, pickaxe, win, balanceBefore) {
     return afterReveal + 400;
 }
 
+// ══════ Генерация Minecraft pixel-art текстур через Canvas ══════
+function setupMineTextures() {
+    if (document.getElementById('mine-tex-style')) return;
+    const S = 16;
+    function rnd(x, y, s) { return (((x*73 + y*151 + s*257) * 2654435761) >>> 0) % 256; }
+    function makeTex(fn) {
+        const c = document.createElement('canvas');
+        c.width = c.height = S;
+        fn(c.getContext('2d'));
+        return c.toDataURL('image/png');
+    }
+    function stoneBase(ctx, seed, dark) {
+        for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+            const n = rnd(x, y, seed) % 32;
+            const lo = dark ? 14 : 96, hi = dark ? 27 : 148, mid = dark ? 20 : 128;
+            const v = n < 4 ? lo : n < 9 ? hi : mid;
+            ctx.fillStyle = `rgb(${v},${v},${v})`;
+            ctx.fillRect(x, y, 1, 1);
+        }
+    }
+    function addOre(ctx, x, y, c1, c2) {
+        ctx.fillStyle = c1; ctx.fillRect(x,   y,   2, 1);
+        ctx.fillStyle = c2; ctx.fillRect(x,   y+1, 1, 1);
+        ctx.fillStyle = c1; ctx.fillRect(x+1, y+1, 1, 1);
+    }
+    function oreTex(seed, c1, c2) {
+        return makeTex(ctx => {
+            stoneBase(ctx, seed, false);
+            [[2,2],[8,1],[12,4],[3,8],[9,8],[13,12],[5,12],[1,13],[7,5],[11,10]].forEach(([x,y]) => addOre(ctx,x,y,c1,c2));
+        });
+    }
+    const T = {
+        'hidden-blk':   makeTex(ctx => stoneBase(ctx, 42, true)),
+        'stone-blk':    makeTex(ctx => stoneBase(ctx, 13, false)),
+        'redstone-blk': oreTex(7,  '#FF2424', '#880000'),
+        'gold-blk':     oreTex(23, '#FFCC00', '#886600'),
+        'diamond-blk':  oreTex(31, '#00E0E0', '#006666'),
+        'obsidian-blk': makeTex(ctx => {
+            for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+                const n = rnd(x, y, 55) % 24;
+                const r = n<3?32:n<7?18:10, b = n<3?68:n<7?48:24;
+                ctx.fillStyle = `rgb(${r},${Math.round(r*0.12)},${b})`;
+                ctx.fillRect(x, y, 1, 1);
+            }
+        }),
+        'tnt-blk': makeTex(ctx => {
+            for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+                const st = Math.floor(y/4) % 2;
+                const n  = rnd(x, y, 88) % 8;
+                ctx.fillStyle = st
+                    ? (n<2 ? '#DD0000' : '#CC1010')
+                    : (n<2 ? '#DDDDDD' : '#C8C8C8');
+                ctx.fillRect(x, y, 1, 1);
+            }
+        }),
+        'book-blk': makeTex(ctx => {
+            for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+                const n = rnd(x, y, 77) % 16;
+                ctx.fillStyle = n<3 ? `rgb(80,0,155)` : `rgb(55,0,110)`;
+                ctx.fillRect(x, y, 1, 1);
+            }
+            // Золотая рамка
+            ctx.fillStyle = '#C89000';
+            for (let i=0;i<S;i++) { ctx.fillRect(i,0,1,1); ctx.fillRect(i,S-1,1,1); ctx.fillRect(0,i,1,1); ctx.fillRect(S-1,i,1,1); }
+            // Золотая звезда по центру
+            ctx.fillStyle = '#FFD700';
+            [[7,5],[8,5],[6,6],[9,6],[5,7],[10,7],[6,8],[9,8],[7,9],[8,9],[7,7],[8,7],[7,8],[8,8]].forEach(([x,y])=>ctx.fillRect(x,y,1,1));
+        }),
+    };
+    const st = document.createElement('style');
+    st.id = 'mine-tex-style';
+    st.textContent = Object.entries(T).map(([cls, url]) =>
+        `.mc-blk.${cls} { background-image: url("${url}") !important; background-size: 100% 100% !important; background-color: transparent !important; }`
+    ).join('\n');
+    document.head.appendChild(st);
+}
+
 function initMineGrid() {
+    setupMineTextures();
     initMineInventory();
     initMineShaft(false);
 }

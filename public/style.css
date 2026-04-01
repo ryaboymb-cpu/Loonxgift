@@ -277,28 +277,30 @@ header { padding: 15px; display: flex; justify-content: space-between; align-ite
   background: transparent;
   border-radius: 1px;
 }
-/* Трещины */
+/* Трещины — широкие, хорошо видимые */
 .mc-blk.cracking-1::after {
   background:
-    linear-gradient(140deg, transparent 44%, rgba(0,0,0,0.55) 44.5%, transparent 45%),
-    linear-gradient(40deg,  transparent 38%, rgba(0,0,0,0.45) 38.5%, transparent 39%);
+    linear-gradient(148deg, transparent 44%, rgba(0,0,0,0.85) 44%, rgba(0,0,0,0.85) 48%, transparent 48%),
+    linear-gradient(58deg,  transparent 56%, rgba(0,0,0,0.55) 56%, rgba(0,0,0,0.55) 59%, transparent 59%);
+  filter: brightness(0.92);
 }
 .mc-blk.cracking-2::after {
   background:
-    linear-gradient(140deg, transparent 40%, rgba(0,0,0,0.65) 40.5%, transparent 41%),
-    linear-gradient(40deg,  transparent 34%, rgba(0,0,0,0.55) 34.5%, transparent 35%),
-    linear-gradient(90deg,  transparent 56%, rgba(0,0,0,0.45) 56.5%, transparent 57%),
-    linear-gradient(170deg, transparent 44%, rgba(0,0,0,0.45) 44.5%, transparent 45%);
+    linear-gradient(148deg, transparent 37%, rgba(0,0,0,0.90) 37%, rgba(0,0,0,0.90) 42%, transparent 42%),
+    linear-gradient(58deg,  transparent 44%, rgba(0,0,0,0.80) 44%, rgba(0,0,0,0.80) 48%, transparent 48%),
+    linear-gradient(15deg,  transparent 62%, rgba(0,0,0,0.65) 62%, rgba(0,0,0,0.65) 66%, transparent 66%),
+    rgba(0,0,0,0.08);
+  filter: brightness(0.80);
 }
 .mc-blk.cracking-3::after {
   background:
-    linear-gradient(140deg, transparent 36%, rgba(0,0,0,0.8)  36.5%, transparent 37%),
-    linear-gradient(40deg,  transparent 30%, rgba(0,0,0,0.70) 30.5%, transparent 31%),
-    linear-gradient(90deg,  transparent 52%, rgba(0,0,0,0.65) 52.5%, transparent 53%),
-    linear-gradient(170deg, transparent 42%, rgba(0,0,0,0.55) 42.5%, transparent 43%),
-    linear-gradient(60deg,  transparent 60%, rgba(0,0,0,0.55) 60.5%, transparent 61%),
-    linear-gradient(110deg, transparent 26%, rgba(0,0,0,0.45) 26.5%, transparent 27%);
-  filter: brightness(1.5);
+    linear-gradient(148deg, transparent 28%, rgba(0,0,0,0.95) 28%, rgba(0,0,0,0.95) 34%, transparent 34%),
+    linear-gradient(58deg,  transparent 36%, rgba(0,0,0,0.90) 36%, rgba(0,0,0,0.90) 41%, transparent 41%),
+    linear-gradient(15deg,  transparent 54%, rgba(0,0,0,0.85) 54%, rgba(0,0,0,0.85) 59%, transparent 59%),
+    linear-gradient(112deg, transparent 18%, rgba(0,0,0,0.75) 18%, rgba(0,0,0,0.75) 23%, transparent 23%),
+    linear-gradient(74deg,  transparent 68%, rgba(0,0,0,0.70) 68%, rgba(0,0,0,0.70) 72%, transparent 72%),
+    rgba(0,0,0,0.22);
+  filter: brightness(0.62);
 }
 /* Анимации */
 .mc-blk.reveal-drop { animation: mcDrop 0.32s cubic-bezier(0.22,1,0.36,1); }
