@@ -1369,42 +1369,33 @@ function spawnPickaxeProj(fromEl, toEl, pickaxeType, onImpact) {
     const dx = dstRect.left + dstRect.width / 2;
     const dy = dstRect.top  + dstRect.height / 2;
 
-    let sx, sy;
-    if (fromEl) {
-        const r = fromEl.getBoundingClientRect();
-        sx = r.left + r.width / 2;
-        sy = r.top  + r.height / 2;
-    } else {
-        sx = dx;
-        sy = dy - 80;
-    }
-
-    // Контрольная точка для параболы (дуга в сторону)
-    const midX = (sx + dx) / 2 + (dy - sy) * 0.18;
-    const midY = Math.min(sy, dy) - 22;
+    // Кирка всегда падает строго сверху вниз в центр блока
+    const sx = dx;
+    const sy = fromEl ? fromEl.getBoundingClientRect().bottom : dy - 110;
 
     const px = document.createElement('div');
     px.className = `pickaxe-proj px-${pickaxeType || 'wooden'}`;
     px.textContent = '⛏️';
-    px.style.cssText = `position:fixed; font-size:20px; z-index:9999; pointer-events:none; user-select:none; line-height:1; left:${sx}px; top:${sy}px; transform:translate(-50%,-50%)`;
+    px.style.cssText = `position:fixed; font-size:18px; z-index:9999; pointer-events:none; user-select:none; line-height:1; left:${dx}px; top:${sy}px; transform:translate(-50%,-50%) rotate(-60deg)`;
     document.body.appendChild(px);
 
-    const DURATION = 260;
+    const DURATION = 280;
     let t0 = null;
 
     function frame(ts) {
         if (!t0) t0 = ts;
         const t = Math.min((ts - t0) / DURATION, 1);
-        const u = 1 - t;
-        // Квадратичная безье
-        const cx = u*u*sx + 2*u*t*midX + t*t*dx;
-        const cy = u*u*sy + 2*u*t*midY + t*t*dy;
-        const angle = (t < 0.5 ? -35 + t * 80 : 5 + (t - 0.5) * 50);
-        const scale = t < 0.6 ? 1 + t * 0.35 : 1.21 - (t - 0.6) * 1.5;
-        px.style.left = cx + 'px';
-        px.style.top  = cy + 'px';
-        px.style.transform = `translate(-50%,-50%) rotate(${angle}deg) scale(${Math.max(scale, 0.1)})`;
-        px.style.opacity = t > 0.85 ? String(1 - (t - 0.85) / 0.15) : '1';
+        // Ускорение вниз (гравитация: ease-in)
+        const ease = t * t;
+        const cy = sy + (dy - sy) * ease;
+        // Поворот: -60° → 0° при подлёте, потом резкий удар
+        const rot = t < 0.82
+            ? -60 + t * (60 / 0.82)
+            : 0 + (t - 0.82) * (-40 / 0.18);
+        const sc  = t > 0.88 ? Math.max(0, 1 - (t - 0.88) / 0.12) : 1;
+        px.style.top       = cy + 'px';
+        px.style.transform = `translate(-50%,-50%) rotate(${rot}deg) scale(${sc})`;
+        px.style.opacity   = t > 0.88 ? String(Math.max(0, 1 - (t - 0.88) / 0.12)) : '1';
 
         if (t < 1) {
             requestAnimationFrame(frame);
