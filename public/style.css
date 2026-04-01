@@ -42,14 +42,34 @@ header { padding: 15px; display: flex; justify-content: space-between; align-ite
 .co { background: linear-gradient(135deg, #ffcc00, #ff9900); box-shadow: 0 0 15px rgba(255,204,0,0.3); }
 
 /* --- ОБНОВЛЕННЫЕ КНОПКИ --- */
-.btn { width: 100%; padding: 16px; border-radius: 14px; border: none; background: var(--neon); color: #000; font-weight: 800; font-size: 16px; cursor: pointer; transition: 0.2s; margin-top: 10px; box-shadow: 0 0 15px rgba(0,255,136,0.2); }
-.btn:active { transform: scale(0.95); }
-.btn:disabled { background: #555 !important; box-shadow: none !important; color: #888 !important; cursor: not-allowed; }
+.btn {
+  width: 100%; padding: 16px; border-radius: 14px;
+  border: 1px solid rgba(0,255,136,0.5);
+  background: linear-gradient(135deg, rgba(0,255,136,0.92) 0%, rgba(0,200,100,0.88) 100%);
+  color: #000; font-weight: 800; font-size: 16px; cursor: pointer;
+  transition: 0.18s; margin-top: 10px;
+  box-shadow: 0 0 20px rgba(0,255,136,0.22), 0 4px 14px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.28);
+  backdrop-filter: blur(4px);
+  letter-spacing: 0.5px;
+}
+.btn:active { transform: scale(0.96); box-shadow: 0 0 28px rgba(0,255,136,0.4); }
+.btn:disabled { background: #333 !important; border-color: #444 !important; box-shadow: none !important; color: #666 !important; cursor: not-allowed; }
 .btn-withdraw { background: linear-gradient(90deg, #ff0055, #ff007f); box-shadow: 0 0 15px rgba(255,0,85,0.3); color: #fff; }
 .btn-connect { background: linear-gradient(90deg, #0098EA, #00d2ff); box-shadow: 0 0 15px rgba(0,210,255,0.3); color: #fff; }
 
-.input-box { width: 100%; padding: 16px; background: #080808; border: 1px solid #333; border-radius: 14px; color: #fff; text-align: center; font-size: 18px; font-weight: 700; margin-bottom: 10px; outline: none; }
-.input-box:focus { border-color: var(--neon); box-shadow: 0 0 10px rgba(0,255,136,0.1); }
+.input-box {
+  width: 100%; padding: 14px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 12px;
+  color: #fff; text-align: center;
+  font-size: 16px; font-weight: 700;
+  margin-bottom: 10px; outline: none;
+  backdrop-filter: blur(6px);
+  box-shadow: 0 2px 10px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.06);
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.input-box:focus { border-color: var(--neon); box-shadow: 0 0 0 2px rgba(0,255,136,0.15), 0 2px 10px rgba(0,0,0,0.4); }
 
 /* --- ПРОФИЛЬ --- */
 .profile-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
@@ -71,10 +91,24 @@ header { padding: 15px; display: flex; justify-content: space-between; align-ite
 .cr-history::-webkit-scrollbar { display: none; }
 .cr-badge { padding: 4px 8px; border-radius: 6px; font-size: 11px; font-weight: bold; background: #1a1a1a; }
 
-.quick-bets { display: flex; gap: 6px; margin-bottom: 15px; overflow-x: auto; padding-bottom: 5px; justify-content: space-between; }
+.quick-bets { display: flex; gap: 5px; margin-bottom: 10px; overflow-x: auto; padding-bottom: 2px; justify-content: space-between; }
 .quick-bets::-webkit-scrollbar { display: none; }
-.qb-btn { flex: 1; min-width: 45px; padding: 12px 0; background: #1a1a1a; border: 1px solid #333; border-radius: 10px; font-size: 14px; font-weight: 900; color: #fff; text-align: center; transition: 0.2s; }
-.qb-btn:active { background: var(--neon); color: #000; border-color: var(--neon); transform: scale(0.95); }
+.qb-btn {
+  flex: 1; min-width: 38px;
+  padding: 9px 0;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.14);
+  border-radius: 10px;
+  font-size: 13px; font-weight: 900;
+  color: rgba(255,255,255,0.88);
+  text-align: center; cursor: pointer;
+  transition: 0.15s;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.1);
+  backdrop-filter: blur(6px);
+  letter-spacing: 0.3px;
+}
+.qb-btn:active { background: var(--neon); color: #000; border-color: var(--neon); box-shadow: 0 0 14px rgba(0,255,136,0.5); transform: scale(0.93); }
+.qb-btn.qb-sel { background: rgba(0,255,136,0.14); border-color: rgba(0,255,136,0.45); color: var(--neon); box-shadow: 0 0 8px rgba(0,255,136,0.2); }
 
 .live-bets-container { margin-top: 15px; background: #0a0a0a; border-radius: 14px; border: 1px solid #222; padding: 10px; max-height: 150px; overflow-y: auto; }
 .live-bet-item { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #1a1a1a; font-size: 13px; }
@@ -155,25 +189,30 @@ header { padding: 15px; display: flex; justify-content: space-between; align-ite
 
 .content:has(#page-mine.active) {
   padding: 6px 8px 68px !important;
-  overflow: hidden !important;
+  overflow: auto !important;
   display: flex !important;
   flex-direction: column;
+  align-items: center;
 }
 #page-mine.active {
   flex: 1;
   min-height: 0;
   display: flex;
   flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  padding: 6px 0;
 }
 .mine-card {
-  flex: 1 !important;
-  min-height: 0 !important;
-  height: auto !important;
+  flex: 0 0 auto !important;
+  width: 100%;
+  max-width: 290px;
   padding: 5px 6px 5px;
   display: flex !important;
   flex-direction: column;
   gap: 3px;
-  overflow-y: auto;
+  overflow-y: visible;
   overflow-x: hidden;
   border-radius: 12px !important;
   margin-bottom: 0 !important;

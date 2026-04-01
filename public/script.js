@@ -84,21 +84,22 @@ function getMskTime() {
 
 function renderQuickBets() {
     const vals = [0.1, 0.5, 1, 5, 10, 25];
-    const map = { cr: 'crash', mi: 'mines', co: 'coinflip' };
-    ['cr', 'mi', 'co'].forEach(prefix => {
-        const el = $(`qb-${map[prefix]}`);
-        if(el) {
-            el.innerHTML = vals.map(v => `<button type="button" onclick="setQuickBet('${prefix}-bet', ${v})" style="padding:6px 12px; background:#222; border:1px solid var(--neon); color:var(--neon); border-radius:6px; font-weight:bold; cursor:pointer; font-size:11px;">${v}</button>`).join('');
-        }
+    function makeButtons(targetId) {
+        return vals.map(v =>
+            `<button type="button" class="qb-btn" onclick="setQuickBet('${targetId}',${v},this)">${v}</button>`
+        ).join('');
+    }
+    const targets = {
+        'qb-crash':    'cr-bet',
+        'qb-mines':    'mi-bet',
+        'qb-coinflip': 'co-bet',
+        'qb-spin':     'sp-bet',
+        'qb-mine':     'mn-bet',
+    };
+    Object.entries(targets).forEach(([elId, betId]) => {
+        const el = $(elId);
+        if (el) el.innerHTML = makeButtons(betId);
     });
-    const spinQb = $('qb-spin');
-    if(spinQb) {
-        spinQb.innerHTML = vals.map(v => `<button type="button" onclick="setQuickBet('sp-bet', ${v})" style="padding:6px 12px; background:#222; border:1px solid #ff6b00; color:#ff6b00; border-radius:6px; font-weight:bold; cursor:pointer; font-size:11px;">${v}</button>`).join('');
-    }
-    const mineQb = $('qb-mine');
-    if(mineQb) {
-        mineQb.innerHTML = vals.map(v => `<button type="button" onclick="setQuickBet('mn-bet', ${v})" style="padding:3px 8px; background:#1a0d05; border:1px solid #c07030; color:#c07030; border-radius:5px; font-weight:bold; cursor:pointer; font-size:11px; height:28px; white-space:nowrap; flex-shrink:0;">${v}</button>`).join('');
-    }
 }
 
 window.onload = async () => {
@@ -210,7 +211,14 @@ function navGame(game) {
     if(game === 'mine') initMineGrid();
 }
 
-function setQuickBet(inputId, amount) { if($(inputId)) $(inputId).value = amount; }
+function setQuickBet(inputId, amount, btn) {
+    if ($(inputId)) $(inputId).value = amount;
+    if (btn) {
+        const parent = btn.closest('.quick-bets');
+        if (parent) parent.querySelectorAll('.qb-btn').forEach(b => b.classList.remove('qb-sel'));
+        btn.classList.add('qb-sel');
+    }
+}
 
 function switchDepTab(type, el) {
     document.querySelectorAll('.w-tab').forEach(b => { b.classList.remove('active'); b.style.background='#222'; b.style.color='#fff'; });
@@ -1316,11 +1324,18 @@ function initMineInventory() {
     }
 }
 
-// ── Шахта: 5×3 плоская сетка скрытых блоков ──
-function initMineShaft(keepPersist) {
+// ── Шахта: 5×3 плоская сетка блоков ──
+// keepPersist: сохранить minePersistGrid; idlePreview: показать случайные руды вместо скрытых
+function initMineShaft(keepPersist, idlePreview) {
     const shaft = $('mc-shaft');
     if (!shaft) return;
     shaft.innerHTML = '';
+    // Блоки для idle-превью (чаще всего камень, реже руды, ценные снизу)
+    const IDLE_BY_ROW = [
+        ['stone','stone','stone','stone','redstone','redstone'],
+        ['stone','stone','redstone','redstone','gold','gold'],
+        ['redstone','gold','gold','diamond','diamond','obsidian'],
+    ];
     for (let r = 0; r < MC_ROWS; r++) {
         for (let c = 0; c < MC_COLS; c++) {
             const blk = document.createElement('div');
@@ -1329,6 +1344,10 @@ function initMineShaft(keepPersist) {
             if (persistType) {
                 blk.className = `mc-blk ${MINE_BLOCK_CLASS[persistType] || 'stone-blk'}`;
                 blk.dataset.revealed = '1';
+            } else if (idlePreview) {
+                const pool = IDLE_BY_ROW[r];
+                const t = pool[Math.floor(Math.random() * pool.length)];
+                blk.className = `mc-blk ${MINE_BLOCK_CLASS[t] || 'stone-blk'}`;
             } else {
                 blk.className = 'mc-blk hidden-blk';
             }
@@ -1774,7 +1793,7 @@ function setupMineTextures() {
 function initMineGrid() {
     setupMineTextures();
     initMineInventory();
-    initMineShaft(false);
+    initMineShaft(false, true); // idle preview: показать случайные руды
 }
 
 // Авто-спин
