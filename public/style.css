@@ -153,26 +153,26 @@ header { padding: 15px; display: flex; justify-content: space-between; align-ite
 
 /* === MINE GAME — Full-Screen Fixed Layout === */
 
-/* Страница Mine — фиксированная высота, не скроллится */
+/* Страница Mine */
 #page-mine.active {
   height: 100%;
   overflow: hidden;
   display: flex;
   flex-direction: column;
 }
-/* На Mine-странице убираем лишний padding, оставляем только под нав */
 .content:has(#page-mine.active) {
-  padding: 8px 8px 68px !important;
+  padding: 6px 8px 68px !important;
   overflow: hidden !important;
 }
 
 .mine-card {
   height: 100% !important;
-  padding: 5px 6px;
+  padding: 5px 6px 6px;
   display: flex !important;
   flex-direction: column;
-  gap: 3px;
-  overflow: hidden;
+  gap: 4px;
+  overflow-y: auto;
+  overflow-x: hidden;
   border-radius: 12px !important;
   margin-bottom: 0 !important;
 }
@@ -182,14 +182,14 @@ header { padding: 15px; display: flex; justify-content: space-between; align-ite
   display: grid;
   grid-template-columns: repeat(5, 1fr);
   grid-template-rows: repeat(3, 1fr);
-  gap: 3px;
+  gap: 2px;
   background: #8b8b8b;
   border: 3px solid;
-  border-color: #fff #555 #555 #fff;
-  border-radius: 4px;
+  border-color: #ccc #444 #444 #ccc;
+  border-radius: 3px 3px 0 0;
   padding: 3px;
   flex-shrink: 0;
-  aspect-ratio: 5/3;
+  height: 82px;
 }
 .inv-cell {
   background: #8b8b8b;
@@ -225,19 +225,41 @@ header { padding: 15px; display: flex; justify-content: space-between; align-ite
 .inv-icon.inv-tnt    { font-size: 14px; }
 .inv-icon.inv-book   { font-size: 14px; }
 
+/* ─── ЗОНА ПОЛЁТА КИРКИ ─── */
+.mine-flight-zone {
+  flex-shrink: 0;
+  height: 34px;
+  position: relative;
+  background: linear-gradient(180deg, #1a1208 0%, #0d0804 100%);
+  border-left: 3px solid #2a1808;
+  border-right: 3px solid #0e0804;
+  overflow: visible;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.mine-flight-zone::before {
+  content: '⛏ ⛏ ⛏';
+  font-size: 9px;
+  opacity: 0.08;
+  letter-spacing: 12px;
+  user-select: none;
+  pointer-events: none;
+}
+
 /* ─── ШАХТА 5×3 ─── */
 .mc-shaft {
   flex-shrink: 0;
-  aspect-ratio: 5/3;
+  height: 104px;
   display: grid;
   grid-template-columns: repeat(5, 1fr);
   grid-template-rows: repeat(3, 1fr);
-  gap: 3px;
+  gap: 2px;
   background: #120c04;
   border: 3px solid;
   border-color: #3a2008 #1a0c04 #1a0c04 #3a2008;
-  border-radius: 5px;
-  padding: 4px;
+  border-radius: 0 0 5px 5px;
+  padding: 3px;
   position: relative;
 }
 .mc-blk {
@@ -293,13 +315,6 @@ header { padding: 15px; display: flex; justify-content: space-between; align-ite
   filter: brightness(1.4);
 }
 
-/* Скрытый блок */
-.mc-blk.hidden-blk {
-  background:
-    radial-gradient(ellipse 60% 50% at 40% 45%, #3a2010 0%, transparent 100%),
-    #1e1206;
-  border-color: #3a2010 #0e0804 #0e0804 #3a2010;
-}
 
 /* Анимации блоков */
 .mc-blk.reveal-drop  { animation: mcDrop 0.35s cubic-bezier(0.22,1,0.36,1); }
@@ -313,138 +328,141 @@ header { padding: 15px; display: flex; justify-content: space-between; align-ite
 @keyframes mcBreak   { 0%{transform:scale(1);opacity:1;filter:brightness(1)} 30%{transform:scale(1.1);filter:brightness(3)} 70%{transform:scale(0.8)rotate(8deg);opacity:0.5} 100%{transform:scale(0)rotate(15deg);opacity:0} }
 @keyframes mcWinPulse{ 0%{filter:brightness(1)saturate(1);transform:scale(1.08)} 100%{filter:brightness(1.8)saturate(1.7);transform:scale(1.14)} }
 
-/* ─── ТЕКСТУРЫ БЛОКОВ — по образцу фото ─── */
+/* ─── ТЕКСТУРЫ БЛОКОВ — Minecraft пиксель-арт ─── */
 
-/* Камень: серый с трещинами */
+/* Скрытый блок (грязь/земля) */
+.mc-blk.hidden-blk {
+  background-color: #4a2c18;
+  background-image: repeating-conic-gradient(#3a1e0a 0% 25%, #5e3822 0% 50%) 0 0 / 4px 4px;
+  border-color: #6a4030 #1a0c04 #1a0c04 #6a4030;
+  image-rendering: pixelated;
+}
+
+/* Камень */
 .stone-blk {
-  background:
-    linear-gradient(145deg, transparent 38%, #5a5a5a 38.5%, transparent 39%),
-    linear-gradient(52deg, transparent 55%, #666 55.5%, transparent 56%),
-    linear-gradient(120deg, transparent 62%, #5a5a5a 62.5%, transparent 63%),
-    radial-gradient(ellipse 55% 45% at 30% 38%, #8e8e8e 0%, transparent 100%),
-    radial-gradient(ellipse 40% 35% at 72% 65%, #6a6a6a 0%, transparent 100%),
-    radial-gradient(ellipse 30% 40% at 60% 25%, #848484 0%, transparent 100%),
-    #787878;
-  border-color: #aaa #4a4a4a #4a4a4a #aaa;
+  background-color: #888;
+  background-image: repeating-conic-gradient(#7a7a7a 0% 25%, #969696 0% 50%) 0 0 / 4px 4px;
+  border-color: #b0b0b0 #484848 #484848 #b0b0b0;
+  image-rendering: pixelated;
 }
 
-/* Редстоун ОРА: серый камень с яркими красными прямоугольниками */
+/* Редстоун руда: серый камень с яркими красными кристаллами */
 .redstone-blk {
-  background:
-    radial-gradient(rect 14% 10% at 22% 32%, #ff1a1a 0%, #cc0000 80%, transparent 100%),
-    radial-gradient(rect 12% 8% at 65% 28%, #ff2222 0%, #bb0000 80%, transparent 100%),
-    radial-gradient(rect 10% 12% at 38% 68%, #ee1111 0%, #cc0000 80%, transparent 100%),
-    radial-gradient(rect 13% 9% at 74% 65%, #ff1111 0%, #bb0000 80%, transparent 100%),
-    radial-gradient(rect 8% 10% at 50% 48%, #dd0000 0%, #990000 80%, transparent 100%),
-    linear-gradient(145deg, transparent 38%, #5a5a5a 38.5%, transparent 39%),
-    #787878;
+  background-color: #787878;
+  background-image:
+    radial-gradient(circle 4px at 25% 30%, #ff2020 0%, #cc0000 70%, transparent 100%),
+    radial-gradient(circle 3px at 70% 25%, #ff2828 0%, #bb0000 70%, transparent 100%),
+    radial-gradient(circle 4px at 35% 72%, #ee1818 0%, #cc0000 70%, transparent 100%),
+    radial-gradient(circle 3px at 75% 68%, #ff1e1e 0%, #bb0000 70%, transparent 100%),
+    radial-gradient(circle 3px at 55% 50%, #dd1010 0%, #990000 70%, transparent 100%),
+    repeating-conic-gradient(#707070 0% 25%, #808080 0% 50%) 0 0 / 4px 4px;
   border-color: #cc2020 #440000 #440000 #cc2020;
-  box-shadow: 0 0 9px rgba(220,20,20,0.55);
+  box-shadow: 0 0 8px rgba(220,20,20,0.6);
+  image-rendering: pixelated;
 }
 
-/* Золото: жёлтый блок с тёмными краями */
+/* Золото */
 .gold-blk {
-  background:
-    radial-gradient(ellipse 70% 60% at 35% 38%, #ffe560 0%, #f0c000 50%, transparent 100%),
-    radial-gradient(ellipse 50% 45% at 70% 70%, #f4d020 0%, #d4a800 60%, transparent 100%),
-    linear-gradient(160deg, #ffd700 0%, #c89400 40%, #b87800 100%);
+  background-color: #c89400;
+  background-image:
+    repeating-conic-gradient(#b88400 0% 25%, #dca800 0% 50%) 0 0 / 4px 4px;
   border-color: #ffe060 #7a5000 #7a5000 #ffe060;
-  box-shadow: 0 0 10px rgba(255,210,0,0.5);
+  box-shadow: 0 0 10px rgba(255,200,0,0.5);
+  image-rendering: pixelated;
 }
 
-/* Алмаз: голубые двойные кристаллы */
+/* Алмаз */
 .diamond-blk {
-  background:
+  background-color: #0580a0;
+  background-image:
+    radial-gradient(circle 5px at 28% 50%, #00e8ff 0%, #0090b0 65%, transparent 100%),
+    radial-gradient(circle 5px at 72% 50%, #00ddf0 0%, #0088a8 65%, transparent 100%),
     linear-gradient(90deg, transparent 49%, #00a8c0 49.5%, transparent 50%),
-    radial-gradient(ellipse 42% 70% at 25% 50%, #00e8ff 0%, #0090b0 60%, transparent 100%),
-    radial-gradient(ellipse 42% 70% at 75% 50%, #00ddf0 0%, #0088a8 60%, transparent 100%),
-    #055870;
+    repeating-conic-gradient(#046880 0% 25%, #0690b4 0% 50%) 0 0 / 4px 4px;
   border-color: #00d4e8 #023040 #023040 #00d4e8;
-  box-shadow: 0 0 14px rgba(0,210,240,0.65);
+  box-shadow: 0 0 14px rgba(0,210,240,0.7);
+  image-rendering: pixelated;
 }
 
-/* Обсидиан: очень тёмный с фиолетовыми блоками */
+/* Обсидиан */
 .obsidian-blk {
-  background:
-    radial-gradient(ellipse 35% 30% at 28% 35%, #3a1870 0%, #18083a 80%, transparent 100%),
-    radial-gradient(ellipse 30% 25% at 72% 70%, #301468 0%, #150630 80%, transparent 100%),
-    radial-gradient(ellipse 20% 20% at 55% 22%, #4a1880 0%, #1a0840 80%, transparent 100%),
-    #080318;
+  background-color: #0c0320;
+  background-image:
+    radial-gradient(ellipse 40% 35% at 30% 38%, #3a1870 0%, transparent 80%),
+    radial-gradient(ellipse 35% 30% at 72% 68%, #2c1060 0%, transparent 80%),
+    radial-gradient(ellipse 25% 22% at 58% 22%, #4a1880 0%, transparent 80%),
+    repeating-conic-gradient(#080218 0% 25%, #120428 0% 50%) 0 0 / 4px 4px;
   border-color: #5020a0 #040110 #040110 #5020a0;
-  box-shadow: 0 0 18px rgba(90,30,180,0.7);
+  box-shadow: 0 0 16px rgba(90,30,180,0.75);
+  image-rendering: pixelated;
 }
 
 /* TNT блок: красный с белой полосой и надписью */
 .tnt-blk {
-  background:
+  background-image:
     linear-gradient(180deg,
       #cc1010 0%, #cc1010 28%,
       #e8e8e8 28%, #e8e8e8 72%,
       #cc1010 72%, #cc1010 100%
     );
+  background-color: #cc1010;
   border-color: #ff3030 #880000 #880000 #ff3030;
   box-shadow: 0 0 10px rgba(255,50,50,0.6);
+  image-rendering: pixelated;
 }
-/* "TNT" текст через after */
 .tnt-blk::after {
   content: 'TNT';
   position: absolute;
   top: 50%; left: 50%;
   transform: translate(-50%,-50%);
-  font-size: 9px;
+  font-size: 8px;
   font-weight: 900;
   color: #cc0000;
   font-family: monospace;
   letter-spacing: 1px;
   z-index: 4;
   pointer-events: none;
-  background: transparent !important;
 }
-/* Взрыв TNT анимация */
-.mc-blk.tnt-explode {
-  animation: tntBoom 0.45s ease-out;
-}
+.mc-blk.tnt-explode { animation: tntBoom 0.45s ease-out; }
 @keyframes tntBoom {
-  0%  { transform: scale(1);    filter: brightness(1); }
-  20% { transform: scale(1.35); filter: brightness(5) saturate(2); background: #ff6600 !important; }
-  50% { transform: scale(1.5);  filter: brightness(3); }
-  80% { transform: scale(0.8);  filter: brightness(1.5); opacity: 0.6; }
-  100%{ transform: scale(0);    opacity: 0; }
+  0%  { transform:scale(1);    filter:brightness(1); }
+  20% { transform:scale(1.35); filter:brightness(5) saturate(2); }
+  50% { transform:scale(1.5);  filter:brightness(3); }
+  80% { transform:scale(0.8);  filter:brightness(1.5); opacity:0.6; }
+  100%{ transform:scale(0);    opacity:0; }
 }
-/* Зона взрыва (смежные блоки) */
-.mc-blk.blast-zone {
-  animation: blastDamage 0.4s ease-out forwards;
-}
+.mc-blk.blast-zone { animation: blastDamage 0.4s ease-out forwards; }
 @keyframes blastDamage {
-  0%  { filter: brightness(3) saturate(2); border-color: #ff6600 !important; }
-  40% { filter: brightness(2); }
-  100%{ filter: brightness(0.5); opacity: 0.7; }
+  0%  { filter:brightness(3) saturate(2); border-color:#ff6600 !important; }
+  40% { filter:brightness(2); }
+  100%{ filter:brightness(0.5); opacity:0.7; }
 }
 
-/* Книжка (Enchanted Book): фиолетово-золотая */
+/* Книжка зачарованная */
 .book-blk {
-  background:
-    radial-gradient(ellipse 50% 60% at 50% 50%, #9040e0 0%, #5010a0 60%, #2a0060 100%);
+  background-color: #5010a0;
+  background-image:
+    radial-gradient(ellipse 55% 65% at 50% 50%, #9040e0 0%, #5010a0 55%, #2a0060 100%),
+    repeating-conic-gradient(#440e8a 0% 25%, #5e14b4 0% 50%) 0 0 / 4px 4px;
   border-color: #ffd700 #8a6000 #8a6000 #ffd700;
   box-shadow: 0 0 14px rgba(160,80,255,0.9);
+  image-rendering: pixelated;
 }
-/* Золотая искра на книжке */
 .book-blk::after {
   content: '✦';
   position: absolute;
   top: 50%; left: 50%;
   transform: translate(-50%,-50%);
-  font-size: 14px;
+  font-size: 13px;
   color: #ffe060;
   text-shadow: 0 0 8px rgba(255,220,0,1);
   z-index: 4;
   pointer-events: none;
-  background: transparent !important;
   animation: bookSparkle 1s ease-in-out infinite alternate;
 }
 @keyframes bookSparkle {
-  0%  { opacity: 0.7; transform: translate(-50%,-50%) scale(0.9); }
-  100%{ opacity: 1;   transform: translate(-50%,-50%) scale(1.2); }
+  0%  { opacity:0.7; transform:translate(-50%,-50%) scale(0.9); }
+  100%{ opacity:1;   transform:translate(-50%,-50%) scale(1.2); }
 }
 .book-collect { animation: bookCollect 0.5s cubic-bezier(0.34,1.56,0.64,1); }
 @keyframes bookCollect { 0%{transform:scale(1)} 40%{transform:scale(1.4)rotate(15deg);filter:brightness(3)} 100%{transform:scale(1)rotate(0)} }
@@ -512,15 +530,13 @@ header { padding: 15px; display: flex; justify-content: space-between; align-ite
 
 /* ─── ПОПАП ВЫИГРЫША НА БЛОКЕ ─── */
 .block-win-popup {
-  position: absolute;
-  left: 50%;
-  top: 20%;
+  position: fixed;
   transform: translateX(-50%);
   font-size: 10px;
   font-weight: 900;
   color: #ffe060;
   text-shadow: 0 1px 4px rgba(0,0,0,0.9), 0 0 8px rgba(255,220,0,0.8);
-  z-index: 20;
+  z-index: 9900;
   pointer-events: none;
   white-space: nowrap;
   font-family: monospace;
