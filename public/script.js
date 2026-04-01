@@ -9,8 +9,8 @@ let user = null;
 let mode = 'real';
 let adminPass = '';
 let globalRtp = 90;
-let rtpObj = { crash: 90, mines: 90, coinflip: 90, spin: 94 };
-let maintenance = { crash: false, mines: false, coinflip: false, battle: false, spin: false };
+let rtpObj = { crash: 90, mines: 90, coinflip: 90, spin: 94, mine: 40 };
+let maintenance = { crash: false, mines: false, coinflip: false, battle: false, spin: false, mine: false };
 let adminWalletAddress = '';
 let isShowDemo = false;
 
@@ -94,6 +94,10 @@ function renderQuickBets() {
     const spinQb = $('qb-spin');
     if(spinQb) {
         spinQb.innerHTML = vals.map(v => `<button type="button" onclick="setQuickBet('sp-bet', ${v})" style="padding:6px 12px; background:#222; border:1px solid #ff6b00; color:#ff6b00; border-radius:6px; font-weight:bold; cursor:pointer; font-size:11px;">${v}</button>`).join('');
+    }
+    const mineQb = $('qb-mine');
+    if(mineQb) {
+        mineQb.innerHTML = vals.map(v => `<button type="button" onclick="setQuickBet('mn-bet', ${v})" style="padding:6px 12px; background:#222; border:1px solid #c07030; color:#c07030; border-radius:6px; font-weight:bold; cursor:pointer; font-size:11px;">${v}</button>`).join('');
     }
 }
 
@@ -203,6 +207,7 @@ function navGame(game) {
     nav(game); 
     if(game === 'battle') renderBattleLobbies();
     if(game === 'spin') initSpinPage();
+    if(game === 'mine') initMineGrid();
 }
 
 function setQuickBet(inputId, amount) { if($(inputId)) $(inputId).value = amount; }
@@ -1039,7 +1044,8 @@ function renderAdminContent(tab) {
             <div><b>Crash RTP (%):</b> <input type="number" id="rtp-crash" value="${adData.rtp.crash||90}" class="input-box" style="padding:5px; width:70px; display:inline-block;"> <button class="btn" style="padding:5px; width:auto; display:inline-block;" onclick="adminRTP('crash')">OK</button></div>
             <div><b>Mines RTP (%):</b> <input type="number" id="rtp-mines" value="${adData.rtp.mines||90}" class="input-box" style="padding:5px; width:70px; display:inline-block;"> <button class="btn" style="padding:5px; width:auto; display:inline-block;" onclick="adminRTP('mines')">OK</button></div>
             <div><b>Coinflip RTP (%):</b> <input type="number" id="rtp-coinflip" value="${adData.rtp.coinflip||90}" class="input-box" style="padding:5px; width:70px; display:inline-block;"> <button class="btn" style="padding:5px; width:auto; display:inline-block;" onclick="adminRTP('coinflip')">OK</button></div>
-            <div><b>🎰 Spin RTP (%):</b> <input type="number" id="rtp-spin" value="${adData.rtp.spin||94}" class="input-box" style="padding:5px; width:70px; display:inline-block;"> <button class="btn" style="padding:5px; width:auto; display:inline-block; background:linear-gradient(90deg,#ff6b00,#ff0055);" onclick="adminRTP('spin')">OK</button></div>
+            <div><b>🎰 Spin RTP (%):</b> <input type="number" id="rtp-spin" value="${adData.rtp.spin||40}" class="input-box" style="padding:5px; width:70px; display:inline-block;"> <button class="btn" style="padding:5px; width:auto; display:inline-block; background:linear-gradient(90deg,#ff6b00,#ff0055);" onclick="adminRTP('spin')">OK</button></div>
+            <div><b>⛏️ Mine RTP (%):</b> <input type="number" id="rtp-mine" value="${adData.rtp.mine||40}" class="input-box" style="padding:5px; width:70px; display:inline-block;"> <button class="btn" style="padding:5px; width:auto; display:inline-block; background:linear-gradient(90deg,#7a4920,#c07030);" onclick="adminRTP('mine')">OK</button></div>
             <hr>
             <h4 style="color:var(--neon); margin-bottom:10px;">ОТКЛЮЧЕНИЕ ИГР (ТЕХ. РАБОТЫ)</h4>
             <label><input type="checkbox" ${adData.maintenance.crash ? 'checked' : ''} onchange="adminMaint('crash', this.checked)"> Crash</label><br>
@@ -1047,6 +1053,7 @@ function renderAdminContent(tab) {
             <label><input type="checkbox" ${adData.maintenance.coinflip ? 'checked' : ''} onchange="adminMaint('coinflip', this.checked)"> Coinflip</label><br>
             <label><input type="checkbox" ${adData.maintenance.battle ? 'checked' : ''} onchange="adminMaint('battle', this.checked)"> Battle Roulette</label><br>
             <label><input type="checkbox" ${adData.maintenance.spin ? 'checked' : ''} onchange="adminMaint('spin', this.checked)"> 🎰 Spin</label><br>
+            <label><input type="checkbox" ${adData.maintenance.mine ? 'checked' : ''} onchange="adminMaint('mine', this.checked)"> ⛏️ Mine</label><br>
             <hr>
             <h4 style="color:var(--neon); margin-bottom:10px;">ОТОБРАЖЕНИЕ В ИСТОРИИ</h4>
             <label><input type="checkbox" ${isShowDemo ? 'checked' : ''} onchange="adminDemoToggle(this.checked)"> Показывать Demo ставки</label><br>
@@ -1276,6 +1283,132 @@ function updateSpinUI() {
         if (betInput) { betInput.disabled = false; betInput.style.opacity = '1'; }
         if (betLock) betLock.style.display = 'none';
         spinFreeSpinsMult = 1;
+    }
+}
+
+// ========= MINE GAME =========
+const MINE_BLOCK_EMOJIS = { stone: '🪨', redstone: '🔴', gold: '🟨', diamond: '💎', obsidian: '🟣', unknown: '❓' };
+const MINE_BLOCK_CLASS = { stone: 'stone-blk', redstone: 'redstone-blk', gold: 'gold-blk', diamond: 'diamond-blk', obsidian: 'obsidian-blk', unknown: 'unknown-blk' };
+const MINE_PICKAXE_INFO = {
+    wooden:  { emoji: '⛏️', label: 'Деревянная кирка ×1.2', color: '#8B6914' },
+    stone:   { emoji: '⛏️', label: 'Каменная кирка ×1.5',  color: '#9a9a9a' },
+    iron:    { emoji: '⛏️', label: 'Железная кирка ×2.0',   color: '#c0c0c0' },
+    golden:  { emoji: '⛏️', label: 'Золотая кирка ×3.0',    color: '#ffd700' }
+};
+let mineIsSpinning = false;
+
+function initMineGrid() {
+    const grid = $('mine-block-grid');
+    if (!grid) return;
+    grid.innerHTML = '';
+    for (let r = 0; r < 3; r++) {
+        for (let c = 0; c < 3; c++) {
+            const bl = document.createElement('div');
+            bl.className = 'mine-block unknown-blk';
+            bl.id = `mb-${r}-${c}`;
+            bl.innerText = '❓';
+            grid.appendChild(bl);
+        }
+    }
+}
+
+function revealMineGrid(serverGrid, mainBlock, pickaxe, win) {
+    const BLOCK_ORDER = [
+        [0,0],[0,1],[0,2],
+        [1,0],[1,1],[1,2],
+        [2,0],[2,1],[2,2]
+    ];
+    BLOCK_ORDER.forEach(([r,c], idx) => {
+        setTimeout(() => {
+            const bl = $(`mb-${r}-${c}`);
+            if (!bl) return;
+            const blockType = serverGrid[r][c];
+            const isMain = (r === 2 && c === 1);
+            bl.className = `mine-block ${MINE_BLOCK_CLASS[blockType] || 'stone-blk'}${isMain ? ' is-main' : ''} reveal-anim`;
+            bl.innerText = MINE_BLOCK_EMOJIS[blockType] || '🪨';
+            if (isMain && win > 0) {
+                setTimeout(() => { bl.classList.add('win-glow'); }, 300);
+            }
+        }, idx * 90);
+    });
+}
+
+async function playMine() {
+    if (!user) return showToast('Загрузка...');
+    if (mineIsSpinning) return;
+    if (maintenance.mine) return showToast('⚙️ Игра на техническом обслуживании');
+
+    const betInput = $('mn-bet');
+    const btn = $('mn-btn');
+    const winDisp = $('mine-win-display');
+    const pickaxeIcon = $('mine-pickaxe-icon');
+    const pickaxeLabel = $('mine-pickaxe-label');
+
+    let betVal = parseFloat(betInput ? betInput.value : 0);
+    if (!betVal || betVal < 0.1) { showToast('Мин. ставка 0.1 TON'); return; }
+    if (betVal > 25) { betVal = 25; if (betInput) betInput.value = 25; }
+
+    mineIsSpinning = true;
+    if (btn) btn.disabled = true;
+    if (winDisp) winDisp.style.display = 'none';
+
+    // Reset pickaxe UI
+    if (pickaxeIcon) { pickaxeIcon.className = 'mine-pickaxe-icon'; pickaxeIcon.style.opacity = '0.3'; pickaxeIcon.style.color = ''; pickaxeIcon.innerText = '⛏️'; }
+    if (pickaxeLabel) { pickaxeLabel.className = 'mine-pickaxe-label'; pickaxeLabel.innerText = 'Нет кирки'; }
+
+    // Show mystery blocks
+    initMineGrid();
+
+    try {
+        const r = await fetch('/api/mine', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: user.id, bet: betVal, mode })
+        });
+        const data = await r.json();
+        if (!r.ok) { showToast(data.error || 'Ошибка'); return; }
+
+        user = data.user;
+
+        // Reveal pickaxe first (if any)
+        if (data.pickaxe) {
+            const pi = MINE_PICKAXE_INFO[data.pickaxe];
+            if (pickaxeIcon) {
+                pickaxeIcon.className = 'mine-pickaxe-icon active';
+                pickaxeIcon.style.opacity = '1';
+                pickaxeIcon.style.color = pi.color;
+                pickaxeIcon.innerText = pi.emoji;
+            }
+            if (pickaxeLabel) {
+                pickaxeLabel.className = 'mine-pickaxe-label has-pickaxe';
+                pickaxeLabel.innerText = pi.label;
+                pickaxeLabel.style.color = pi.color;
+            }
+        }
+
+        // Reveal blocks with stagger
+        await new Promise(resolve => setTimeout(resolve, data.pickaxe ? 400 : 100));
+        revealMineGrid(data.grid, data.mainBlock, data.pickaxe, data.win);
+
+        // Show result after all blocks revealed
+        setTimeout(() => {
+            if (data.win > 0) {
+                if (winDisp) { winDisp.innerText = `+${data.win.toFixed(2)} TON`; winDisp.style.display = 'block'; }
+                flyToBalance(data.win);
+                showToast(`💰 +${data.win.toFixed(2)} TON!`);
+            } else {
+                showToast('⛏️ Не повезло, попробуй ещё!', 2000);
+            }
+            updateUI();
+        }, 9 * 90 + 200);
+
+    } catch(e) {
+        showToast('Ошибка соединения');
+    } finally {
+        setTimeout(() => {
+            mineIsSpinning = false;
+            if (btn) btn.disabled = false;
+        }, 9 * 90 + 300);
     }
 }
 

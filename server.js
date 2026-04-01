@@ -661,7 +661,7 @@ app.post('/api/spin', async (req, res) => {
         const isDemo = mode === 'demo';
         const field = isDemo ? 'demo_balance' : 'balance';
         const betAmount = parseFloat(bet) || 0;
-        if (betAmount <= 0) return res.status(400).json({ error: 'Неверная ставка' });
+        if (betAmount < 0.1 || betAmount > 25) return res.status(400).json({ error: 'Ставка от 0.1 до 25 TON' });
         if (!freeSpinsMode && user[field] < betAmount) return res.status(400).json({ error: 'Недостаточно средств' });
 
         const rtpSetting = await Settings.findOne({ key: 'rtp_spin' });
