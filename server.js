@@ -131,7 +131,9 @@ async function initSettings() {
         { key: 'maintenance_mines', value: false },
         { key: 'maintenance_coinflip', value: false },
         { key: 'maintenance_battle', value: false },
-        { key: 'rtp_spin', value: 40 }
+        { key: 'rtp_spin', value: 40 },
+        { key: 'rtp_mine', value: 40 },
+        { key: 'maintenance_mine', value: false }
     ];
     for (let setting of defaultSettings) {
         const exists = await Settings.findOne({ key: setting.key });
@@ -739,6 +741,102 @@ app.post('/api/spin', async (req, res) => {
         res.json({ grid, win: actualWin, winLines, freeSpinsWon, hiddenGs, progressGain, progressValue: streak.progress, bonusTriggered, bonusSpins, xCountInGrid: xCount, gForExtraSpins: 0, user });
     } catch (err) {
         console.error('Spin error:', err);
+        res.status(500).json({ error: 'Ошибка сервера' });
+    } finally {
+        actionLocks.delete(id);
+    }
+});
+
+// === MINE GAME (Minecraft-style) ===
+const MINE_BLOCKS = ['stone', 'redstone', 'gold', 'diamond', 'obsidian'];
+const MINE_BLOCK_MULTS = { stone: 0, redstone: 0.7, gold: 1.5, diamond: 3, obsidian: 6 };
+const MINE_ROW_WEIGHTS = [
+    [0.68, 0.25, 0.06, 0.01, 0.00], // row 0 — top (common)
+    [0.42, 0.30, 0.18, 0.08, 0.02], // row 1 — middle
+    [0.20, 0.25, 0.30, 0.18, 0.07]  // row 2 — bottom (rare)
+];
+const MINE_PICKAXES = ['wooden', 'stone', 'iron', 'golden'];
+const MINE_PICKAXE_WEIGHTS = [0.50, 0.30, 0.15, 0.05];
+const MINE_PICKAXE_MULTS = { wooden: 1.2, stone: 1.5, iron: 2.0, golden: 3.0 };
+
+function generateMineGrid() {
+    const grid = [];
+    for (let r = 0; r < 3; r++) {
+        const row = [];
+        for (let c = 0; c < 3; c++) {
+            const weights = MINE_ROW_WEIGHTS[r];
+            const rand = Math.random(); let cum = 0; let block = 'stone';
+            for (let b = 0; b < MINE_BLOCKS.length; b++) { cum += weights[b]; if (rand < cum) { block = MINE_BLOCKS[b]; break; } }
+            row.push(block);
+        }
+        grid.push(row);
+    }
+    return grid;
+}
+
+app.post('/api/mine', async (req, res) => {
+    const { id, bet, mode } = req.body;
+    if (actionLocks.has(id)) return res.status(429).json({ error: 'Подождите...' });
+    actionLocks.add(id);
+    try {
+        const user = await User.findOne({ id });
+        if (!user || user.isBlocked) return res.status(403).send();
+        const isDemo = mode === 'demo';
+        const field = isDemo ? 'demo_balance' : 'balance';
+        const betAmount = parseFloat(bet) || 0;
+        if (betAmount < 0.1 || betAmount > 25) return res.status(400).json({ error: 'Ставка от 0.1 до 25 TON' });
+        if (user[field] < betAmount) return res.status(400).json({ error: 'Недостаточно средств' });
+
+        const maintSetting = await Settings.findOne({ key: 'maintenance_mine' });
+        if (maintSetting && maintSetting.value === true) return res.status(400).json({ error: 'Игра на техническом обслуживании' });
+
+        const rtpSetting = await Settings.findOne({ key: 'rtp_mine' });
+        const rtpTarget = rtpSetting ? Number(rtpSetting.value) : 40;
+
+        user[field] = Number((user[field] - betAmount).toFixed(2));
+        if (!isDemo) { user.stats.bets++; user.stats.minus += betAmount; }
+
+        const grid = generateMineGrid();
+        const mainBlock = grid[2][1]; // bottom-center is the result
+        const baseMult = MINE_BLOCK_MULTS[mainBlock] || 0;
+
+        // Pickaxe — 25% chance
+        let pickaxe = null; let pickaxeMult = 1;
+        if (Math.random() < 0.25) {
+            const r = Math.random(); let cum = 0;
+            for (let i = 0; i < MINE_PICKAXES.length; i++) { cum += MINE_PICKAXE_WEIGHTS[i]; if (r < cum) { pickaxe = MINE_PICKAXES[i]; break; } }
+            pickaxeMult = MINE_PICKAXE_MULTS[pickaxe] || 1;
+        }
+
+        let actualWin = 0;
+        if (baseMult > 0) {
+            actualWin = Number((betAmount * baseMult * pickaxeMult).toFixed(2));
+            const winChance = (rtpTarget / 100) * 0.22;
+            if (Math.random() > winChance) { actualWin = 0; }
+            else { actualWin = Math.min(actualWin, betAmount * 18); }
+        }
+
+        if (actualWin > 0) {
+            user[field] = Number((user[field] + actualWin).toFixed(2));
+            if (!isDemo) { user.stats.wins++; user.stats.plus += actualWin; }
+        }
+        await user.save();
+
+        if (!isDemo) {
+            const betEntry = new Bet({
+                userId: user.id, username: user.username,
+                avatar: user.photo || 'https://cdn-icons-png.flaticon.com/512/149/149071.png',
+                game: 'Mine', amount: betAmount,
+                multiplier: betAmount > 0 ? (actualWin / betAmount) : 0,
+                result: actualWin - betAmount, mode: 'Real', balanceAfter: user[field], balance: user[field]
+            });
+            await betEntry.save();
+            pushToGlobalHistory(betEntry);
+        }
+
+        res.json({ grid, mainBlock, pickaxe, pickaxeMult, baseMult, win: actualWin, user });
+    } catch (err) {
+        console.error('Mine error:', err);
         res.status(500).json({ error: 'Ошибка сервера' });
     } finally {
         actionLocks.delete(id);
