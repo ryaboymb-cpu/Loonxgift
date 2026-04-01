@@ -1,5 +1,5 @@
 # LoonxGift
-<!-- Last updated: Mine 5x5 grid, sound system, green buttons, bet limits -->
+<!-- Last updated: Mine game fixes - sprites, positioning, TNT, books, free spins, TON Connect -->
 
 A Telegram Mini App (TMA) backend and frontend for a gambling platform integrated with the TON blockchain.
 
@@ -30,6 +30,12 @@ public/
   style.css        # Neon dark theme styles
   toncoin-ton-logo.png
   tonconnect-manifest.json
+  sprites/         # Minecraft-style pickaxe PNGs (64x64, transparent bg)
+    pick_wooden.png
+    pick_stone.png
+    pick_iron.png
+    pick_golden.png
+    pick_diamond.png
 package.json
 ```
 
@@ -81,14 +87,18 @@ Server runs on port 5000, binding to `0.0.0.0`.
 - Block durability by rarity: stone:2, redstone:3, gold:4, diamond:5, obsidian:6 hits
 - Blocks always visible from start with ore textures (never hidden)
 - N pickaxes (1-5), each randomly assigned a type: wooden, stone, iron, golden, diamond
-- Durability per pickaxe: wooden:3, stone:5, iron:7, golden:4, diamond:10
+- Durability per pickaxe: wooden:2, stone:3, iron:4, golden:2, diamond:6
+- Pickaxe sprites: PNG files at /sprites/pick_*.png (64x64, transparent bg, Minecraft pixel-art)
 - Column-order mining: each pickaxe mines its assigned columns top-to-bottom
 - Pickaxe breaks visually (shake, redden, shatter) when durability runs out
 - Broken blocks stay in DOM (visibility:hidden) to prevent grid shift
 - Per-column chests open only when all 5 rows in that column are broken
 - Chest multiplier applied to column wins
 - Inventory: 3×5 grid (separate from shaft grid)
-- Books and TNT go to inventory cells (not direct win)
+- Books drop to inventory hotbar; collecting 3 books grants 3 FREE auto-spins (server-tracked via `user.mineFreeSpins`)
+- TNT blocks: when mined, explode and deal 3 hits of damage to all 8 adjacent blocks (visual flash + particles)
+- Free auto-spins: server validates `mineFreeSpins > 0` before allowing; uses effectiveBet=0.5 for win calc
+- TNT generation: 4% chance per non-center block in server-side grid generation
 - Win scaled proportionally to blocks actually broken by pickaxes
 - Minimum 8% guaranteed win per round (server-side)
 - Block hit modifiers: wooden +1 extra hit, golden/diamond -1 hit

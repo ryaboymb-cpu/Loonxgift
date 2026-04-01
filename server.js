@@ -36,7 +36,9 @@ app.get('/tonconnect-manifest.json', (req, res) => {
     res.json({
         url: process.env.WEB_APP_URL || `https://${process.env.REPLIT_DEV_DOMAIN || 'localhost'}`,
         name: "LoonxGift", 
-        iconUrl: "https://cdn-icons-png.flaticon.com/512/149/149071.png"
+        iconUrl: "https://cdn-icons-png.flaticon.com/512/149/149071.png",
+        termsOfUseUrl: "",
+        privacyPolicyUrl: ""
     });
 });
 
@@ -79,7 +81,8 @@ const UserSchema = new mongoose.Schema({
         status: String,
         time: String
     }],
-    betHistory: { type: Array, default: [] }
+    betHistory: { type: Array, default: [] },
+    mineFreeSpins: { type: Number, default: 0 }
 });
 
 const BetSchema = new mongoose.Schema({
@@ -778,6 +781,7 @@ function pickChestMult() {
 function generateMineGrid() {
     const grid = [];
     const BOOK_CHANCE = 0.05;
+    const TNT_CHANCE = 0.04;
     for (let r = 0; r < 5; r++) {
         const row = [];
         for (let c = 0; c < 5; c++) {
@@ -785,7 +789,9 @@ function generateMineGrid() {
             const rand = Math.random(); let cum = 0; let block = 'stone';
             for (let b = 0; b < MINE_BLOCKS.length; b++) { cum += weights[b]; if (rand < cum) { block = MINE_BLOCKS[b]; break; } }
             if (!(r === 4 && c === 2)) {
-                if (Math.random() < BOOK_CHANCE) block = 'book';
+                const specRoll = Math.random();
+                if (specRoll < BOOK_CHANCE) block = 'book';
+                else if (specRoll < BOOK_CHANCE + TNT_CHANCE) block = 'tnt';
             }
             row.push(block);
         }
@@ -795,7 +801,7 @@ function generateMineGrid() {
 }
 
 app.post('/api/mine', async (req, res) => {
-    const { id, bet, mode } = req.body;
+    const { id, bet, mode, autoSpin } = req.body;
     if (actionLocks.has(id)) return res.status(429).json({ error: 'Подождите...' });
     actionLocks.add(id);
     try {
@@ -803,9 +809,15 @@ app.post('/api/mine', async (req, res) => {
         if (!user || user.isBlocked) return res.status(403).send();
         const isDemo = mode === 'demo';
         const field = isDemo ? 'demo_balance' : 'balance';
-        const betAmount = parseFloat(bet) || 0;
-        if (betAmount < 0.1 || betAmount > 25) return res.status(400).json({ error: 'Ставка от 0.1 до 25 TON' });
-        if (user[field] < betAmount) return res.status(400).json({ error: 'Недостаточно средств' });
+        const isFreeAutoSpin = autoSpin === true;
+        if (isFreeAutoSpin) {
+            const freeSpins = user.mineFreeSpins || 0;
+            if (freeSpins <= 0) return res.status(400).json({ error: 'Нет бесплатных спинов' });
+            user.mineFreeSpins = freeSpins - 1;
+        }
+        const betAmount = isFreeAutoSpin ? 0 : (parseFloat(bet) || 0);
+        if (!isFreeAutoSpin && (betAmount < 0.1 || betAmount > 25)) return res.status(400).json({ error: 'Ставка от 0.1 до 25 TON' });
+        if (!isFreeAutoSpin && user[field] < betAmount) return res.status(400).json({ error: 'Недостаточно средств' });
 
         const maintSetting = await Settings.findOne({ key: 'maintenance_mine' });
         if (maintSetting && maintSetting.value === true) return res.status(400).json({ error: 'Игра на техническом обслуживании' });
@@ -813,8 +825,10 @@ app.post('/api/mine', async (req, res) => {
         const rtpSetting = await Settings.findOne({ key: 'rtp_mine' });
         const rtpTarget = rtpSetting ? Number(rtpSetting.value) : 40;
 
-        user[field] = Number((user[field] - betAmount).toFixed(2));
-        if (!isDemo) { user.stats.bets++; user.stats.minus += betAmount; }
+        if (!isFreeAutoSpin) {
+            user[field] = Number((user[field] - betAmount).toFixed(2));
+            if (!isDemo) { user.stats.bets++; user.stats.minus += betAmount; }
+        }
 
         const grid = generateMineGrid();
         const mainBlock = grid[4][2]; // bottom centre = main result block
@@ -831,14 +845,14 @@ app.post('/api/mine', async (req, res) => {
         // Chest multiplier — shown after all chests open
         const chestMult = pickChestMult();
 
-        // Win decision — guaranteed minimum 8% of bet always returned; rare bonus on top
+        const effectiveBet = isFreeAutoSpin ? 0.5 : betAmount;
         const MIN_WIN_RATIO = 0.08;
-        let baseWin = betAmount * MIN_WIN_RATIO; // every round returns minimum
+        let baseWin = effectiveBet * MIN_WIN_RATIO;
         if (baseMult > 0) {
-            const bonusBase = betAmount * baseMult * pickaxeMult / CHEST_MULT_EXPECTED;
+            const bonusBase = effectiveBet * baseMult * pickaxeMult / CHEST_MULT_EXPECTED;
             const winChance = (rtpTarget / 100) * 0.16;
             if (Math.random() < winChance) {
-                baseWin = Math.max(baseWin, Math.min(bonusBase, betAmount * 5));
+                baseWin = Math.max(baseWin, Math.min(bonusBase, effectiveBet * 5));
             }
         }
         const actualWin = Number((baseWin * chestMult).toFixed(2));
@@ -861,6 +875,14 @@ app.post('/api/mine', async (req, res) => {
             blockWins.push(row);
         }
 
+        let bookCount = 0;
+        for (let r = 0; r < 5; r++)
+            for (let c = 0; c < 5; c++)
+                if (grid[r][c] === 'book') bookCount++;
+        if (bookCount >= 3) {
+            user.mineFreeSpins = (user.mineFreeSpins || 0) + 3;
+        }
+
         user[field] = Number((user[field] + actualWin).toFixed(2));
         if (!isDemo && actualWin > 0) { user.stats.wins++; user.stats.plus += actualWin; }
         await user.save();
@@ -877,7 +899,7 @@ app.post('/api/mine', async (req, res) => {
             pushToGlobalHistory(betEntry);
         }
 
-        res.json({ grid, blockWins, mainBlock, pickaxe, pickaxeCount, pickaxeMult, baseMult, chestMult, win: actualWin, user });
+        res.json({ grid, blockWins, mainBlock, pickaxe, pickaxeCount, pickaxeMult, baseMult, chestMult, win: actualWin, user, freeSpinsLeft: user.mineFreeSpins || 0 });
     } catch (err) {
         console.error('Mine error:', err);
         res.status(500).json({ error: 'Ошибка сервера' });
