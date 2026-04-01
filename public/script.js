@@ -97,7 +97,7 @@ function renderQuickBets() {
     }
     const mineQb = $('qb-mine');
     if(mineQb) {
-        mineQb.innerHTML = vals.map(v => `<button type="button" onclick="setQuickBet('mn-bet', ${v})" style="padding:6px 12px; background:#222; border:1px solid #c07030; color:#c07030; border-radius:6px; font-weight:bold; cursor:pointer; font-size:11px;">${v}</button>`).join('');
+        mineQb.innerHTML = vals.map(v => `<button type="button" onclick="setQuickBet('mn-bet', ${v})" style="padding:3px 8px; background:#1a0d05; border:1px solid #c07030; color:#c07030; border-radius:5px; font-weight:bold; cursor:pointer; font-size:11px; height:28px; white-space:nowrap; flex-shrink:0;">${v}</button>`).join('');
     }
 }
 

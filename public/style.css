@@ -160,9 +160,9 @@ header { padding: 15px; display: flex; justify-content: space-between; align-ite
   display: flex;
   flex-direction: column;
 }
-/* Убираем нижний padding контента когда активна Mine страница */
+/* На Mine-странице убираем лишний padding, оставляем только под нав */
 .content:has(#page-mine.active) {
-  padding-bottom: 0 !important;
+  padding: 8px 8px 68px !important;
   overflow: hidden !important;
 }
 
@@ -171,7 +171,7 @@ header { padding: 15px; display: flex; justify-content: space-between; align-ite
   padding: 5px 6px;
   display: flex !important;
   flex-direction: column;
-  gap: 4px;
+  gap: 3px;
   overflow: hidden;
   border-radius: 12px !important;
   margin-bottom: 0 !important;
@@ -198,11 +198,11 @@ header { padding: 15px; display: flex; justify-content: space-between; align-ite
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 3px 2px 2px;
-  font-size: 22px;
+  padding: 2px 1px;
+  font-size: 18px;
   cursor: default;
   transition: all 0.2s;
-  min-height: 50px;
+  min-height: 40px;
   opacity: 0.5;
 }
 .mc-hb-slot.active {
@@ -216,10 +216,11 @@ header { padding: 15px; display: flex; justify-content: space-between; align-ite
 .hb-label { font-size: 9px; font-weight: 900; font-family: monospace; margin-top: 1px; }
 @keyframes hbPop { 0%{transform:translateY(0)scale(0.7)} 60%{transform:translateY(-4px)scale(1.1)} 100%{transform:translateY(-2px)scale(1)} }
 
-/* ─── ШАХТА — занимает оставшееся место ─── */
+/* ─── ШАХТА — занимает оставшееся место, но не бесконечно ─── */
 .mc-shaft {
   flex: 1;
   min-height: 0;
+  max-height: 240px;
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 3px;
@@ -227,7 +228,7 @@ header { padding: 15px; display: flex; justify-content: space-between; align-ite
   border: 3px solid;
   border-color: #3a2008 #1a0c04 #1a0c04 #3a2008;
   border-radius: 5px;
-  padding: 5px;
+  padding: 4px;
 }
 .mc-col { display: flex; flex-direction: column; gap: 3px; min-height: 0; height: 100%; }
 .mc-blk {
@@ -373,7 +374,7 @@ header { padding: 15px; display: flex; justify-content: space-between; align-ite
 
 /* ─── СУНДУКИ + WIN ROW ─── */
 .mc-bottom-row { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
-.mc-chests-row { display:grid; grid-template-columns:repeat(4,1fr); gap:3px; background:#5c3010; border:3px solid; border-color:#8a5018 #2a1408 #2a1408 #8a5018; border-radius:4px; padding:4px; flex: 1; }
+.mc-chests-row { display:grid; grid-template-columns:repeat(4,1fr); gap:3px; background:#5c3010; border:3px solid; border-color:#8a5018 #2a1408 #2a1408 #8a5018; border-radius:4px; padding:3px; flex: 1; }
 .mc-chest {
   background: linear-gradient(175deg, #c07828 10%, #8a4c14 60%, #6a3810 100%);
   border: 2px solid;
@@ -382,7 +383,7 @@ header { padding: 15px; display: flex; justify-content: space-between; align-ite
   display: flex;
   align-items: center;
   justify-content: center;
-  aspect-ratio: 1;
+  height: 42px;
   font-size: 0;
   position: relative;
   overflow: hidden;
@@ -453,16 +454,10 @@ header { padding: 15px; display: flex; justify-content: space-between; align-ite
 /* ─── БЕТ СТРОКА ─── */
 .mine-bet-row { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
 .mine-bet-row .quick-bets { margin: 0 !important; }
-.mine-btn { background: linear-gradient(90deg, #5c3010, #9a5820); box-shadow: 0 0 15px rgba(150,90,30,0.5); color: #ffe0a0; font-weight:900; letter-spacing:1px; border: 2px solid #c8881a; height: 42px; padding: 0 10px; white-space: nowrap; }
+.mine-btn { background: linear-gradient(90deg, #5c3010, #9a5820); box-shadow: 0 0 15px rgba(150,90,30,0.5); color: #ffe0a0; font-weight:900; letter-spacing:1px; border: 2px solid #c8881a; height: 36px; padding: 0 10px; white-space: nowrap; font-size: 13px; }
+#page-mine .input-box { height: 36px; padding: 0 10px; font-size: 13px; margin: 0; }
 .mine-btn:disabled { background:#1e1008 !important; border-color:#333 !important; box-shadow:none !important; color:#555 !important; }
 
-/* Таблица выплат */
-.mine-paytable { background:#080808; border:1px solid #181818; border-radius:7px; padding:6px 8px; margin-bottom:8px; }
-.mine-pay-2col { display:grid; grid-template-columns:1fr 1fr; gap:3px 10px; }
-.mine-pay-row { display:flex; align-items:center; gap:5px; font-size:10px; color:var(--sub); font-weight:700; }
-.mine-win-display { text-align:center; font-size:24px; font-weight:900; color:var(--neon); text-shadow:0 0 20px rgba(0,255,136,0.8); padding:4px; margin-bottom:4px; animation:mcDrop 0.4s ease; }
-.mine-btn { background:linear-gradient(90deg,#5c3010,#9a5820); box-shadow:0 0 18px rgba(150,90,30,0.5); color:#ffe0a0; font-weight:900; letter-spacing:1px; border:2px solid #c8881a; }
-.mine-btn:disabled { background:#1e1008 !important; border-color:#333 !important; box-shadow:none !important; color:#555 !important; }
 
 /* Pickaxe color filters */
 .px-wooden  { filter: sepia(1) saturate(2.5) hue-rotate(15deg) brightness(1.1); }
