@@ -1608,7 +1608,7 @@ function renderMineHotbar(hotbar) {
             if (slot && slot.type === 'pickaxe') {
                 const img = document.createElement('img');
                 img.src = getPickaxeImg(slot.pickaxeType || 'wooden');
-                img.style.cssText = 'width:60%;height:60%;object-fit:contain;image-rendering:pixelated;filter:drop-shadow(0 1px 2px rgba(0,0,0,0.6));';
+                img.style.cssText = 'width:82%;height:82%;object-fit:contain;image-rendering:pixelated;filter:drop-shadow(0 1px 2px rgba(0,0,0,0.6));';
                 cell.appendChild(img);
                 cell.dataset.slotType = 'pickaxe';
                 cell.dataset.pickType = slot.pickaxeType;
@@ -1821,8 +1821,8 @@ function spawnPickaxeWorker(blockQueue, pickaxeType, workerIdx, onWorkerDone, on
         const shaft = $('mc-shaft');
         const bx = blkEl.offsetLeft + blkEl.offsetWidth / 2;
         const blockTop = blkEl.offsetTop;
-        const startY = blockTop - 34;
-        const hoverY = blockTop - 16;
+        const startY = blockTop - 26;
+        const hoverY = blockTop - 12;
         const hitY   = blockTop + 2;
 
         const pUrl = getPickaxeImg(pickaxeType);
@@ -1928,8 +1928,8 @@ function spawnPickaxeWorker(blockQueue, pickaxeType, workerIdx, onWorkerDone, on
         const shaft = $('mc-shaft');
         const bxx   = blkEl.offsetLeft + blkEl.offsetWidth / 2;
         const byy   = blkEl.offsetTop;
-        const sY    = byy - 40;
-        const hov   = byy - 16;
+        const sY    = byy - 30;
+        const hov   = byy - 12;
 
         const pUrl = getPickaxeImg(pickaxeType);
         el = document.createElement('img');

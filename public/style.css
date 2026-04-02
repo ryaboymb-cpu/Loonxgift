@@ -188,7 +188,7 @@ header { padding: 15px; display: flex; justify-content: space-between; align-ite
 /* === MINE GAME === */
 
 .content:has(#page-mine.active) {
-  padding: 6px 8px 68px !important;
+  padding: 2px 6px 68px !important;
   overflow: auto !important;
   display: flex !important;
   flex-direction: column;
@@ -202,19 +202,19 @@ header { padding: 15px; display: flex; justify-content: space-between; align-ite
   align-items: center;
   justify-content: flex-start;
   width: 100%;
-  padding: 4px 0 0;
+  padding: 0;
 }
 .mine-card {
   flex: 0 0 auto !important;
   width: 100%;
-  max-width: 252px;
-  padding: 4px 5px;
+  max-width: 280px;
+  padding: 3px 4px;
   display: flex !important;
   flex-direction: column;
-  gap: 2px;
+  gap: 1px;
   overflow-y: visible;
   overflow-x: hidden;
-  border-radius: 10px !important;
+  border-radius: 8px !important;
   margin-bottom: 0 !important;
 }
 
@@ -222,12 +222,12 @@ header { padding: 15px; display: flex; justify-content: space-between; align-ite
 .mc-inventory {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
-  gap: 2px;
+  gap: 1px;
   background: #6e6e6e;
-  border: 3px solid;
+  border: 2px solid;
   border-color: #c8c8c8 #3a3a3a #3a3a3a #c8c8c8;
   border-radius: 3px 3px 0 0;
-  padding: 3px;
+  padding: 2px;
   flex-shrink: 0;
 }
 .inv-cell {
@@ -238,11 +238,12 @@ header { padding: 15px; display: flex; justify-content: space-between; align-ite
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 14px;
+  font-size: 12px;
   position: relative;
   overflow: visible;
   transition: background 0.12s;
   aspect-ratio: 1;
+  max-height: 36px;
 }
 .inv-cell.inv-book { background: #5a3a80; }
 .inv-cell.inv-tnt { background: #aa2020; }
@@ -260,27 +261,27 @@ header { padding: 15px; display: flex; justify-content: space-between; align-ite
 /* ─── ЗОНА ПОЛЁТА (пространство между инвентарём и шахтой) ─── */
 .mine-flight-zone {
   flex-shrink: 0;
-  height: 14px;
+  height: 8px;
   position: relative;
   background: linear-gradient(180deg, #1c1008 0%, #080402 100%);
-  border-left: 3px solid #2a1808;
-  border-right: 3px solid #0e0802;
+  border-left: 2px solid #2a1808;
+  border-right: 2px solid #0e0802;
   overflow: visible;
 }
 
-/* ─── ШАХТА 5×5 ─── */
+/* ─── ШАХТА 6×5 ─── */
 .mc-shaft {
   flex-shrink: 0;
   width: 100%;
   display: grid;
   grid-template-columns: repeat(5, 1fr);
-  grid-template-rows: repeat(6, minmax(0, 32px));
-  gap: 2px;
+  grid-template-rows: repeat(6, minmax(0, 28px));
+  gap: 1px;
   background: #080402;
-  border: 3px solid;
+  border: 2px solid;
   border-color: #3a2008 #0e0602 #0e0602 #3a2008;
-  border-radius: 0 0 4px 4px;
-  padding: 3px;
+  border-radius: 0 0 3px 3px;
+  padding: 2px;
   position: relative;
   overflow: visible;
 }
@@ -289,7 +290,7 @@ header { padding: 15px; display: flex; justify-content: space-between; align-ite
   height: 100%;
   min-height: 0;
   border-radius: 2px;
-  border: 3px solid;
+  border: 2px solid;
   position: relative;
   overflow: hidden;
   image-rendering: pixelated;
@@ -448,9 +449,9 @@ header { padding: 15px; display: flex; justify-content: space-between; align-ite
 .mine-book-status {
   background: linear-gradient(90deg, #1a0840, #2a1060);
   border: 1px solid #6020c0;
-  border-radius: 5px;
-  padding: 2px 8px;
-  font-size: 10px;
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-size: 9px;
   font-weight: 900;
   color: #c080ff;
   text-align: center;
@@ -481,12 +482,12 @@ header { padding: 15px; display: flex; justify-content: space-between; align-ite
 .mc-chests-row {
   display: grid;
   grid-template-columns: repeat(5,1fr);
-  gap: 3px;
+  gap: 1px;
   background: #5c3010;
-  border: 3px solid;
+  border: 2px solid;
   border-color: #8a5018 #2a1408 #2a1408 #8a5018;
-  border-radius: 3px;
-  padding: 3px;
+  border-radius: 2px;
+  padding: 2px;
   flex-shrink: 0;
   overflow: visible;
   position: relative;
@@ -494,9 +495,9 @@ header { padding: 15px; display: flex; justify-content: space-between; align-ite
 }
 .mc-chest {
   background: url('/sprites/chest_closed.png') center/100% 100% no-repeat;
-  border: 2px solid;
+  border: 1px solid;
   border-color: #a06428 #3a2008 #3a2008 #a06428;
-  height: 28px;
+  height: 22px;
   position: relative;
   image-rendering: pixelated;
   border-radius: 2px;
@@ -540,14 +541,14 @@ header { padding: 15px; display: flex; justify-content: space-between; align-ite
 /* ─── СЧЁТЧИК ─── */
 .mine-running-total {
   background: linear-gradient(180deg, #505050 0%, #404040 100%);
-  border: 2px solid;
+  border: 1px solid;
   border-color: #686868 #303030 #303030 #686868;
   border-radius: 3px;
   text-align: center;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 900;
   color: #e0e0e0;
-  padding: 2px 6px;
+  padding: 1px 4px;
   font-family: 'Courier New', monospace;
   letter-spacing: 1px;
   flex-shrink: 0;
@@ -565,7 +566,7 @@ header { padding: 15px; display: flex; justify-content: space-between; align-ite
   min-height: 0;
   height: 0;
   text-align: center;
-  font-size: 16px;
+  font-size: 13px;
   font-weight: 900;
   color: var(--neon);
   text-shadow: 0 0 14px rgba(0,255,136,0.9);
@@ -577,7 +578,7 @@ header { padding: 15px; display: flex; justify-content: space-between; align-ite
   visibility: hidden;
 }
 .mine-win-display.show {
-  height: 24px;
+  height: 18px;
   visibility: visible;
   animation: mcDrop 0.4s cubic-bezier(0.22,1,0.36,1);
 }
@@ -620,8 +621,9 @@ header { padding: 15px; display: flex; justify-content: space-between; align-ite
 }
 
 /* ─── БЕТ-СТРОКА ─── */
-.mine-bet-row { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
-.mine-card .quick-bets { margin: 0 !important; }
+.mine-bet-row { display: flex; align-items: center; gap: 3px; flex-shrink: 0; }
+.mine-card .quick-bets { margin: 0 !important; gap: 3px !important; }
+.mine-card .quick-bets .qb-btn { padding: 5px 0; font-size: 11px; min-width: 30px; }
 .mine-btn {
   background: linear-gradient(180deg, #00cc55 0%, #008833 100%);
   box-shadow: 0 2px 8px rgba(0,0,0,0.5), inset 0 1px 0 rgba(150,255,150,0.3);
@@ -630,15 +632,15 @@ header { padding: 15px; display: flex; justify-content: space-between; align-ite
   letter-spacing: 1px;
   border: 2px solid;
   border-color: #00ee66 #005522 #005522 #00ee66;
-  height: 40px;
-  padding: 0 14px;
+  height: 34px;
+  padding: 0 10px;
   white-space: nowrap;
-  font-size: 14px;
-  border-radius: 6px;
+  font-size: 13px;
+  border-radius: 5px;
   text-shadow: 0 1px 2px rgba(0,0,0,0.4);
 }
 .mine-btn:active { transform: translateY(1px); box-shadow: 0 1px 4px rgba(0,0,0,0.5); }
-#page-mine .input-box { height: 40px; padding: 0 10px; font-size: 13px; margin: 0; }
+#page-mine .input-box { height: 34px; padding: 0 8px; font-size: 12px; margin: 0; }
 .mine-btn:disabled { background: #1a2a1a !important; border-color: #333 !important; box-shadow: none !important; color: #555 !important; }
 
 /* Pickaxe color filters */
@@ -653,18 +655,15 @@ header { padding: 15px; display: flex; justify-content: space-between; align-ite
 .mc-blk.cracking-1,
 .mc-blk.cracking-2,
 .mc-blk.cracking-3 {
-  transform: translate(-3px, -3px);
-  /* Правая + нижняя "грань" куба через box-shadow */
+  transform: translate(-2px, -2px);
   box-shadow:
-    3px 0   0 0 rgba(0,0,0,0.70),
-    3px 1px 0 0 rgba(0,0,0,0.60),
-    3px 2px 0 0 rgba(0,0,0,0.55),
-    3px 3px 0 0 rgba(0,0,0,0.50),
-    0 3px   0 0 rgba(0,0,0,0.55),
-    1px 3px 0 0 rgba(0,0,0,0.50),
-    2px 3px 0 0 rgba(0,0,0,0.45),
-    inset 2px 2px 0 rgba(255,255,255,0.40),
-    inset -2px -2px 0 rgba(0,0,0,0.28) !important;
+    2px 0   0 0 rgba(0,0,0,0.70),
+    2px 1px 0 0 rgba(0,0,0,0.60),
+    2px 2px 0 0 rgba(0,0,0,0.50),
+    0 2px   0 0 rgba(0,0,0,0.55),
+    1px 2px 0 0 rgba(0,0,0,0.50),
+    inset 1px 1px 0 rgba(255,255,255,0.40),
+    inset -1px -1px 0 rgba(0,0,0,0.28) !important;
   z-index: 5;
 }
 
@@ -672,11 +671,11 @@ header { padding: 15px; display: flex; justify-content: space-between; align-ite
 .mine-durability-wrap {
   display: flex;
   align-items: center;
-  gap: 5px;
-  padding: 3px 6px;
+  gap: 4px;
+  padding: 1px 4px;
   background: #0e0e0e;
   border: 1px solid #222;
-  border-radius: 4px;
+  border-radius: 3px;
   flex-shrink: 0;
 }
 .mine-dur-label {
