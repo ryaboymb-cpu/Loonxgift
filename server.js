@@ -1380,7 +1380,7 @@ app.post('/api/user/history', async (req, res) => {
 // Keep-alive endpoint (for uptime monitors like UptimeRobot)
 app.get('/ping', (req, res) => res.status(200).json({ ok: true, time: Date.now() }));
 
-const PORT = 5000;
+const PORT = process.env.PORT || 3000;
 server.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 Server Running on port ${PORT}`);
     const SELF_URL = process.env.REPLIT_DEV_DOMAIN
