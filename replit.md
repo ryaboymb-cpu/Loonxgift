@@ -95,10 +95,12 @@ Server runs on port 5000, binding to `0.0.0.0`.
 - Per-column chests open only when all 5 rows in that column are broken
 - Chest multiplier applied to column wins
 - Inventory: 3×5 grid (separate from shaft grid)
-- Books drop to inventory hotbar; collecting 3 books grants 3 FREE auto-spins (server-tracked via `user.mineFreeSpins`)
+- Books and TNT fly from grid to hotbar with smooth animation (flyItemToHotbar)
+- Collecting 3 books grants 3 FREE auto-spins (server-tracked via `user.mineFreeSpins`, client syncs from `freeSpinsLeft`)
 - TNT blocks: when mined, explode and deal 3 hits of damage to all 8 adjacent blocks (visual flash + particles)
 - Free auto-spins: server validates `mineFreeSpins > 0` before allowing; uses effectiveBet=0.5 for win calc
 - TNT generation: 4% chance per non-center block in server-side grid generation
+- Menu card border: brown/orange (#c87020) to match Minecraft theme, distinct from Mines green
 - Win scaled proportionally to blocks actually broken by pickaxes
 - Minimum 8% guaranteed win per round (server-side)
 - Block hit modifiers: wooden +1 extra hit, golden/diamond -1 hit

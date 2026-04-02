@@ -1680,9 +1680,12 @@ function doBreakBlock(blkEl, blk, onDone, onBlockFullyGone) {
     }
     spawnBreakParticles(blkEl, blk.type);
 
-    if (blk.type === 'book') { collectBook(blkEl); fillInvCell(blk.r, blk.c, 'book', null); }
-    if (blk.type === 'tnt')  {
-        fillInvCell(blk.r, blk.c, 'tnt', null);
+    if (blk.type === 'book') {
+        collectBook(blkEl);
+        flyItemToHotbar(blkEl, 'book', blk.r, blk.c);
+    }
+    if (blk.type === 'tnt') {
+        flyItemToHotbar(blkEl, 'tnt', blk.r, blk.c);
         tntExplode(blk.r, blk.c);
     }
 
@@ -1879,7 +1882,6 @@ function collectBook(blockEl) {
     }
     if (mineBookCount >= 3) {
         mineBookCount = 0;
-        mineAutoRemaining = 3;
         showToast('📚 3 КНИЖКИ! 3 АВТО-СПИНА!', 3000);
     }
 }
@@ -1911,8 +1913,68 @@ function spawnBlockWinPopup(blockEl, amount) {
     pop.addEventListener('animationend', () => pop.remove());
 }
 
+// ─── Анимация полёта предмета из сетки в хотбар ───
+function flyItemToHotbar(blkEl, blockType, gridRow, gridCol) {
+    const inv = $('mc-inventory');
+    if (!blkEl || !inv) { fillInvCell(gridRow, gridCol, blockType, null); return; }
+
+    let targetCell = null;
+    for (let c = 0; c < MC_COLS; c++) {
+        const candidate = $(`inv-2-${c}`);
+        if (candidate && !candidate.dataset.hasPick && !candidate.classList.contains('filled')) {
+            targetCell = candidate;
+            break;
+        }
+    }
+    if (!targetCell) { fillInvCell(gridRow, gridCol, blockType, null); return; }
+
+    const srcRect = blkEl.getBoundingClientRect();
+    const dstRect = targetCell.getBoundingClientRect();
+
+    const flyer = document.createElement('div');
+    flyer.style.cssText = `
+        position:fixed; z-index:99999; pointer-events:none;
+        width:${blkEl.offsetWidth}px; height:${blkEl.offsetHeight}px;
+        left:${srcRect.left}px; top:${srcRect.top}px;
+        transition: all 0.45s cubic-bezier(0.25,0.1,0.25,1);
+        image-rendering:pixelated; border-radius:3px;
+    `;
+
+    const cvs = document.createElement('canvas');
+    cvs.width = 32; cvs.height = 32;
+    const ctx = cvs.getContext('2d');
+    if (blockType === 'book') {
+        ctx.fillStyle = '#3a0868'; ctx.fillRect(0,0,32,32);
+        ctx.fillStyle = '#ffd700';
+        ctx.fillRect(6,8,20,2); ctx.fillRect(6,14,20,2); ctx.fillRect(6,20,20,2);
+        ctx.fillRect(6,8,2,14); ctx.fillRect(24,8,2,14);
+        ctx.fillStyle = '#c080ff'; ctx.fillRect(8,10,16,4); ctx.fillRect(8,16,16,4);
+    } else if (blockType === 'tnt') {
+        for (let i = 0; i < 4; i++) {
+            ctx.fillStyle = i%2===0 ? '#cc1010' : '#eeeeee';
+            ctx.fillRect(0, i*8, 32, 8);
+        }
+        ctx.fillStyle = '#000'; ctx.font = 'bold 9px monospace';
+        ctx.textAlign = 'center'; ctx.fillText('TNT', 16, 20);
+    }
+    cvs.style.cssText = 'width:100%;height:100%;image-rendering:pixelated;';
+    flyer.appendChild(cvs);
+    document.body.appendChild(flyer);
+
+    requestAnimationFrame(() => {
+        flyer.style.left = (dstRect.left + dstRect.width/2 - blkEl.offsetWidth/2) + 'px';
+        flyer.style.top = (dstRect.top + dstRect.height/2 - blkEl.offsetHeight/2) + 'px';
+        flyer.style.transform = 'scale(0.5)';
+        flyer.style.opacity = '0.7';
+    });
+
+    setTimeout(() => {
+        flyer.remove();
+        fillInvCell(2, targetCell.id.split('-')[2], blockType, null);
+    }, 480);
+}
+
 // ─── Заполнить ячейку инвентаря найденным блоком ───
-// Книга и ТНТ → в хот-бар (нижняя строка row=2, ищем свободную ячейку)
 function fillInvCell(row, col, blockType, pickaxeType) {
     let targetRow = row, targetCol = col;
 
@@ -2313,6 +2375,12 @@ function setupMineTextures() {
                 ctx.fillStyle = st ? (n<2 ? '#DD0000' : '#CC1010') : (n<2 ? '#DDDDDD' : '#C8C8C8');
                 ctx.fillRect(x, y, 1, 1);
             }
+            ctx.fillStyle = '#fff';
+            ctx.fillRect(3,5,2,1); ctx.fillRect(4,6,1,2); ctx.fillRect(4,5,1,1);
+            ctx.fillRect(6,5,3,1); ctx.fillRect(7,6,1,2);
+            ctx.fillRect(10,5,2,1); ctx.fillRect(10,6,1,2); ctx.fillRect(12,5,1,1); ctx.fillRect(12,6,1,2);
+            ctx.fillStyle = '#3a0000';
+            ctx.fillRect(3,10,10,1);
         }),
         'book-blk': makeTex(bookTex),
     };
