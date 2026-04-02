@@ -168,10 +168,15 @@ let adminWalletAddress = '';
 let isShowDemo = false;
 
 // TON CONNECT
-const tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
-    manifestUrl: window.location.origin + '/tonconnect-manifest.json',
-    buttonRootId: 'ton-connect-btn'
-});
+let tonConnectUI = null;
+try {
+    tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
+        manifestUrl: window.location.origin + '/tonconnect-manifest.json',
+        buttonRootId: 'ton-connect-btn'
+    });
+} catch(e) {
+    console.error('TON Connect init error:', e);
+}
 
 const $ = id => document.getElementById(id);
 
@@ -385,35 +390,59 @@ function switchDepTab(type, el) {
 }
 
 async function payWithTonConnect() {
+    if (!tonConnectUI) return showToast('TON Connect не загружен. Перезагрузите страницу.');
     if (!tonConnectUI.connected) return showToast('Сначала подключите кошелек!');
     const amount = parseFloat($('tc-amount').value);
-    if(isNaN(amount) || amount <= 0) return showToast('Введите сумму');
-    
+    if(isNaN(amount) || amount < 0.5) return showToast('Минимум 0.5 TON');
+    if(!adminWalletAddress) return showToast('Кошелек получателя не настроен');
+
+    // Build comment payload with user ID
     let payloadBase64 = "";
     try {
-        if (window.TonWeb) {
-            const tonweb = new TonWeb();
-            const cell = new tonweb.boc.Cell();
-            cell.bits.writeUint(0, 32); 
-            cell.bits.writeString(user.id);
-            const bocBytes = await cell.toBoc();
-            payloadBase64 = TonWeb.utils.bytesToBase64(bocBytes);
+        // Wait for TonWeb if it's still loading
+        if (!window.TonWeb) {
+            showToast('Загрузка TonWeb...');
+            await new Promise((resolve, reject) => {
+                let tries = 0;
+                const check = setInterval(() => {
+                    tries++;
+                    if (window.TonWeb) { clearInterval(check); resolve(); }
+                    else if (tries > 30) { clearInterval(check); reject(new Error('TonWeb not loaded')); }
+                }, 200);
+            });
         }
-    } catch(e) { console.error('Ошибка создания комментария:', e); }
+        const tonweb = new TonWeb();
+        const cell = new tonweb.boc.Cell();
+        cell.bits.writeUint(0, 32);
+        cell.bits.writeString(String(user.id));
+        const bocBytes = await cell.toBoc();
+        payloadBase64 = TonWeb.utils.bytesToBase64(bocBytes);
+    } catch(e) {
+        console.error('Comment payload error:', e);
+        // Fallback: try to send without comment payload - manual check will still work
+    }
 
     const transaction = {
         validUntil: Math.floor(Date.now() / 1000) + 600,
         messages: [{
             address: adminWalletAddress,
-            amount: (amount * 1000000000).toString(),
-            ...(payloadBase64 && { payload: payloadBase64 }) 
+            amount: (amount * 1e9).toString(),
+            ...(payloadBase64 ? { payload: payloadBase64 } : {})
         }]
     };
 
     try {
         await tonConnectUI.sendTransaction(transaction);
-        showToast('Транзакция отправлена! Ожидайте зачисления и нажмите "ПРОВЕРИТЬ ОПЛАТУ" через 10 сек.');
-    } catch (e) { showToast('Транзакция отменена'); }
+        showToast('Транзакция отправлена! Нажмите "ПРОВЕРИТЬ ОПЛАТУ" через 15-30 сек.');
+        // Auto-switch to manual tab to show check button
+        setTimeout(() => {
+            if($('dep-manual')) $('dep-manual').style.display = 'block';
+            if($('dep-connect')) $('dep-connect').style.display = 'none';
+        }, 3000);
+    } catch (e) {
+        console.error('TON Connect error:', e);
+        showToast('Транзакция отменена или ошибка кошелька');
+    }
 }
 
 function renderWithdrawHistory() {
@@ -1514,7 +1543,7 @@ const MINE_BLOCK_CLASS = {
 };
 const MC_ROWS = 6;
 const MC_COLS = 5;
-const INV_ROWS = 2;
+const INV_ROWS = 3;
 const INV_COLS = 5;
 let mineIsSpinning    = false;
 let mineBookCount     = 0;
@@ -1564,7 +1593,7 @@ function hideDurabilityBar() {
 let currentHotbar = null;
 
 function renderMineHotbar(hotbar) {
-    const defaultSlots = Array(10).fill(null).map(() => ({type:'empty'}));
+    const defaultSlots = Array(INV_ROWS * INV_COLS).fill(null).map(() => ({type:'empty'}));
     currentHotbar = hotbar || defaultSlots;
     const inv = $('mc-inventory');
     if (!inv) return;
@@ -1579,7 +1608,7 @@ function renderMineHotbar(hotbar) {
             if (slot && slot.type === 'pickaxe') {
                 const img = document.createElement('img');
                 img.src = getPickaxeImg(slot.pickaxeType || 'wooden');
-                img.style.cssText = 'width:80%;height:80%;object-fit:contain;image-rendering:pixelated;filter:drop-shadow(0 1px 2px rgba(0,0,0,0.6));';
+                img.style.cssText = 'width:60%;height:60%;object-fit:contain;image-rendering:pixelated;filter:drop-shadow(0 1px 2px rgba(0,0,0,0.6));';
                 cell.appendChild(img);
                 cell.dataset.slotType = 'pickaxe';
                 cell.dataset.pickType = slot.pickaxeType;
@@ -1799,7 +1828,7 @@ function spawnPickaxeWorker(blockQueue, pickaxeType, workerIdx, onWorkerDone, on
         const pUrl = getPickaxeImg(pickaxeType);
         const el = document.createElement('img');
         el.src = pUrl;
-        el.style.cssText = `position:absolute;width:30px;height:30px;z-index:9999;pointer-events:none;image-rendering:pixelated;left:${bx}px;top:${startY}px;transform:translate(-50%,-100%);`;
+        el.style.cssText = `position:absolute;width:22px;height:22px;z-index:9999;pointer-events:none;image-rendering:pixelated;left:${bx}px;top:${startY}px;transform:translate(-50%,-100%);`;
         shaft.appendChild(el);
         _pickaxeEls.add(el);
 
@@ -1905,7 +1934,7 @@ function spawnPickaxeWorker(blockQueue, pickaxeType, workerIdx, onWorkerDone, on
         const pUrl = getPickaxeImg(pickaxeType);
         el = document.createElement('img');
         el.src = pUrl;
-        el.style.cssText = `position:absolute;width:30px;height:30px;z-index:9999;pointer-events:none;image-rendering:pixelated;transform:translate(-50%,-100%);left:${bxx}px;top:${sY}px;`;
+        el.style.cssText = `position:absolute;width:22px;height:22px;z-index:9999;pointer-events:none;image-rendering:pixelated;transform:translate(-50%,-100%);left:${bxx}px;top:${sY}px;`;
         shaft.appendChild(el);
         _pickaxeEls.add(el);
 
@@ -1970,12 +1999,15 @@ function flyItemToHotbar(blkEl, blockType, gridRow, gridCol) {
     if (!blkEl || !inv) { fillInvCell(gridRow, gridCol, blockType, null); return; }
 
     let targetCell = null;
-    for (let c = 0; c < MC_COLS; c++) {
-        const candidate = $(`inv-1-${c}`);
-        if (candidate && !candidate.dataset.hasPick && !candidate.classList.contains('filled')) {
-            targetCell = candidate;
-            break;
+    for (let r = 0; r < INV_ROWS; r++) {
+        for (let c = 0; c < MC_COLS; c++) {
+            const candidate = $(`inv-${r}-${c}`);
+            if (candidate && !candidate.dataset.hasPick && !candidate.dataset.slotType && !candidate.classList.contains('filled')) {
+                targetCell = candidate;
+                break;
+            }
         }
+        if (targetCell) break;
     }
     if (!targetCell) { fillInvCell(gridRow, gridCol, blockType, null); return; }
 
@@ -2015,16 +2047,19 @@ function flyItemToHotbar(blkEl, blockType, gridRow, gridCol) {
 function fillInvCell(row, col, blockType, pickaxeType) {
     let targetRow = row, targetCol = col;
 
-    // Книга и ТНТ — специальные предметы, идут в хот-бар (нижняя строка)
+    // Книга и ТНТ — специальные предметы, идут в свободную ячейку
     if (blockType === 'book' || blockType === 'tnt') {
         const inv = $('mc-inventory');
         if (inv) {
-            // Найти свободную ячейку в строке 2 (нижней)
-            for (let c = 0; c < MC_COLS; c++) {
-                const candidate = $(`inv-1-${c}`);
-                if (candidate && !candidate.dataset.hasPick && !candidate.classList.contains('filled')) {
-                    targetRow = 1; targetCol = c;
-                    break;
+            let found = false;
+            for (let r = 0; r < INV_ROWS && !found; r++) {
+                for (let c = 0; c < MC_COLS; c++) {
+                    const candidate = $(`inv-${r}-${c}`);
+                    if (candidate && !candidate.dataset.hasPick && !candidate.dataset.slotType && !candidate.classList.contains('filled')) {
+                        targetRow = r; targetCol = c;
+                        found = true;
+                        break;
+                    }
                 }
             }
         }
@@ -2094,7 +2129,7 @@ function spawnBreakParticles(blockEl, blockType) {
 }
 
 // ─── Основное раскрытие: grid[r][c] из сервера, blockWins[r][c] ───
-function revealMineShaft(grid, blockWins, win, balanceBefore, chestMult, isAutoSpin) {
+function revealMineShaft(grid, blockWins, win, balanceBefore, chestMults, isAutoSpin) {
     const BLOCK_HITS_MAP = { grass:1, dirt:1, stone:1, redstone:2, gold:2, diamond:3, obsidian:4 };
     const PICKAXE_MOD_MAP = { wooden:0, stone:0, iron:0, golden:0, diamond:0 };
     const hotbar = currentHotbar || [];
@@ -2103,8 +2138,14 @@ function revealMineShaft(grid, blockWins, win, balanceBefore, chestMult, isAutoS
         for (let c = 0; c < MC_COLS; c++) {
             const blkEl = $(`mc-blk-${r}-${c}`);
             if (!blkEl) continue;
-            if (isAutoSpin && blkEl.dataset.revealed === '1') continue;
             const type = grid[r][c];
+            // Skip null blocks (already broken in auto-spin)
+            if (!type) {
+                blkEl.dataset.revealed = '1';
+                blkEl.style.visibility = 'hidden';
+                continue;
+            }
+            if (isAutoSpin && blkEl.dataset.revealed === '1') continue;
             blkEl.className = `mc-blk ${MINE_BLOCK_CLASS[type] || 'stone-blk'}`;
             blkEl.dataset.revealed = '0';
             blkEl.dataset.blockType = type;
@@ -2195,7 +2236,7 @@ function revealMineShaft(grid, blockWins, win, balanceBefore, chestMult, isAutoS
 
     const liveColBroken = Array(MC_COLS).fill(0);
     const openedChests = new Set();
-    const effectiveChestMult = chestMult || 2;
+    const colChestMults = chestMults || [2, 2, 2, 2, 2];
 
     for (let c = 0; c < MC_COLS; c++) {
         for (let r = 0; r < MC_ROWS; r++) {
@@ -2208,6 +2249,7 @@ function revealMineShaft(grid, blockWins, win, balanceBefore, chestMult, isAutoS
         liveColBroken[c]++;
         if (liveColBroken[c] >= MC_ROWS && !openedChests.has(c)) {
             openedChests.add(c);
+            const thisChestMult = colChestMults[c] || 2;
             setTimeout(() => {
                 playSound('chest');
                 const ch = $(`mc-chest-${c}`);
@@ -2216,7 +2258,7 @@ function revealMineShaft(grid, blockWins, win, balanceBefore, chestMult, isAutoS
                 setTimeout(() => ch.classList.remove('open-anim'), 600);
                 const pop = document.createElement('div');
                 pop.className = 'chest-mult-tag';
-                pop.textContent = `×${effectiveChestMult}`;
+                pop.textContent = `×${thisChestMult}`;
                 ch.appendChild(pop);
                 setTimeout(() => { if (pop.parentNode) pop.parentNode.removeChild(pop); }, 3000);
             }, 250);
@@ -2232,11 +2274,14 @@ function revealMineShaft(grid, blockWins, win, balanceBefore, chestMult, isAutoS
             const target = colQ[0];
             const blkEl = $(`mc-blk-${target.r}-${target.c}`);
             if (!blkEl || blkEl.dataset.revealed === '1') return;
-            // Find the TNT cell in either row of the inventory
+            // Find the TNT cell in any row of the inventory
             let hotbarCell = null;
             for (let ir = 0; ir < INV_ROWS; ir++) {
-                const c = $(`inv-${ir}-${col}`);
-                if (c && c.dataset.slotType === 'tnt') { hotbarCell = c; break; }
+                for (let ic = 0; ic < INV_COLS; ic++) {
+                    const c = $(`inv-${ir}-${ic}`);
+                    if (c && c.dataset.slotType === 'tnt') { hotbarCell = c; break; }
+                }
+                if (hotbarCell) break;
             }
             const shaft = $('mc-shaft');
             if (!shaft) return;
@@ -2305,14 +2350,28 @@ function revealMineShaft(grid, blockWins, win, balanceBefore, chestMult, isAutoS
         }
         updateUI();
 
+        // Check if books collected >= 3 — trigger auto-spin
+        const shouldAutoSpin = mineBookCount >= 3 || mineAutoRemaining > 0;
+        if (mineBookCount >= 3) {
+            mineBookCount -= 3;
+            mineAutoRemaining = Math.max(mineAutoRemaining, 1);
+        }
+
         if (mineAutoRemaining > 0) {
             mineAutoRemaining--;
             const statusEl = $('mine-book-status');
-            if (statusEl) statusEl.innerHTML = `🎁 АВТО-СПИН: осталось ${mineAutoRemaining}...`;
-            setTimeout(() => autoSpinMine(), 1300);
-        } else if (mineAutoRemaining === 0) {
+            if (statusEl) {
+                statusEl.style.display = 'block';
+                statusEl.innerHTML = `🎁 АВТО-СПИН! Блоки сохранены...`;
+            }
+            showToast('📚 БОНУС! Бесплатный спин!', 2500);
+            setTimeout(() => autoSpinMine(), 1500);
+        } else {
             const statusEl = $('mine-book-status');
-            if (statusEl) { statusEl.innerHTML = '✅ Серия завершена!'; setTimeout(() => statusEl.style.display='none', 2000); }
+            if (statusEl && statusEl.style.display !== 'none') {
+                statusEl.innerHTML = '✅ Серия завершена!';
+                setTimeout(() => statusEl.style.display = 'none', 2000);
+            }
         }
     }, afterReveal);
 
@@ -2346,18 +2405,35 @@ async function autoSpinMine() {
     if (btn) btn.disabled = true;
     const balanceBefore = user ? (user.balance || 0) : 0;
 
+    // Build current grid state: broken blocks = null, intact = type
+    const currentGrid = [];
+    for (let r = 0; r < MC_ROWS; r++) {
+        const row = [];
+        for (let c = 0; c < MC_COLS; c++) {
+            const el = $(`mc-blk-${r}-${c}`);
+            if (el && el.dataset.revealed === '1') {
+                row.push(null); // broken block stays broken
+            } else if (el && el.dataset.blockType) {
+                row.push(el.dataset.blockType);
+            } else {
+                row.push(null);
+            }
+        }
+        currentGrid.push(row);
+    }
+
     try {
         const resp = await fetch('/api/mine', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ id: user.id, bet: 0, mode, autoSpin: true })
+            body: JSON.stringify({ id: user.id, bet: 0, mode, autoSpin: true, persistGrid: currentGrid })
         });
         const data = await resp.json();
         if (!resp.ok) { mineIsSpinning = false; if (btn) btn.disabled = false; return; }
         user = data.user;
         if (typeof data.freeSpinsLeft === 'number') mineAutoRemaining = data.freeSpinsLeft;
         renderMineHotbar(data.hotbar);
-        const totalTime = revealMineShaft(data.grid, data.blockWins, data.win, balanceBefore, data.chestMult, true);
+        const totalTime = revealMineShaft(data.grid, data.blockWins, data.win, balanceBefore, data.chestMults, true);
         setTimeout(() => { mineIsSpinning = false; if (btn) btn.disabled = false; }, totalTime + 100);
     } catch(e) {
         mineIsSpinning = false; if (btn) btn.disabled = false;
@@ -2401,7 +2477,7 @@ async function playMine() {
         if (typeof data.freeSpinsLeft === 'number') mineAutoRemaining = data.freeSpinsLeft;
 
         renderMineHotbar(data.hotbar);
-        const totalTime = revealMineShaft(data.grid, data.blockWins, data.win, balanceBefore, data.chestMult, false);
+        const totalTime = revealMineShaft(data.grid, data.blockWins, data.win, balanceBefore, data.chestMults, false);
         setTimeout(() => { mineIsSpinning = false; if (btn) btn.disabled = false; }, totalTime + 100);
 
     } catch(e) {

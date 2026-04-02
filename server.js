@@ -43,6 +43,28 @@ app.get('/tonconnect-manifest.json', (req, res) => {
     });
 });
 
+// Синхронизация текстур: textures/ -> sprites/ (для удобной замены текстур)
+const fs = require('fs');
+function syncTextures() {
+    const textureDir = path.join(__dirname, 'public', 'textures');
+    const spriteDir = path.join(__dirname, 'public', 'sprites');
+    const folders = ['blocks', 'pickaxes', 'chests', 'effects'];
+    if (!fs.existsSync(spriteDir)) fs.mkdirSync(spriteDir, { recursive: true });
+    for (const folder of folders) {
+        const src = path.join(textureDir, folder);
+        if (!fs.existsSync(src)) continue;
+        for (const file of fs.readdirSync(src)) {
+            if (!file.endsWith('.png')) continue;
+            const srcFile = path.join(src, file);
+            // Map texture filenames to sprite filenames (same name)
+            const dstFile = path.join(spriteDir, file);
+            try { fs.copyFileSync(srcFile, dstFile); } catch(e) {}
+        }
+    }
+    console.log('Текстуры синхронизированы: textures/ -> sprites/');
+}
+syncTextures();
+
 // Статические файлы (после манифеста, чтобы роут имел приоритет)
 app.use(express.static(path.join(__dirname, 'public')));
 
@@ -754,7 +776,7 @@ app.post('/api/spin', async (req, res) => {
 
 // === MINE GAME (Minecraft-style) ===
 const MINE_BLOCKS = ['dirt', 'stone', 'redstone', 'gold', 'diamond', 'obsidian'];
-const MINE_BLOCK_MULTS = { grass: 0, dirt: 0, stone: 0, redstone: 0.7, gold: 1.5, diamond: 3, obsidian: 6 };
+const MINE_BLOCK_MULTS = { grass: 0.05, dirt: 0.05, stone: 0.1, redstone: 0.2, gold: 0.3, diamond: 0.4, obsidian: 0.5 };
 // 6 rows: row 0 = grass top layer (dirt + rare stone), rows 1-5 = underground
 const MINE_ROW_WEIGHTS = [
     // grass/dirt top: dirt=85%, stone=15%  (no ores)
@@ -808,10 +830,10 @@ function generateMineGrid() {
 }
 
 function generateMineHotbar() {
-    // 2 rows x 5 cols = 10 slots
+    // 3 rows x 5 cols = 15 slots
     const slots = [];
     let pickCount = 0;
-    for (let i = 0; i < 10; i++) {
+    for (let i = 0; i < 15; i++) {
         const r = Math.random();
         if (r < 0.42) {
             slots.push({ type: 'empty' });
@@ -830,14 +852,14 @@ function generateMineHotbar() {
         }
     }
     if (pickCount === 0) {
-        const idx = Math.floor(Math.random() * 10);
+        const idx = Math.floor(Math.random() * 15);
         slots[idx] = { type: 'pickaxe', pickaxeType: 'wooden' };
     }
     return slots;
 }
 
 app.post('/api/mine', async (req, res) => {
-    const { id, bet, mode, autoSpin } = req.body;
+    const { id, bet, mode, autoSpin, persistGrid: clientGrid } = req.body;
     if (actionLocks.has(id)) return res.status(429).json({ error: 'Подождите...' });
     actionLocks.add(id);
     try {
@@ -866,45 +888,56 @@ app.post('/api/mine', async (req, res) => {
             if (!isDemo) { user.stats.bets++; user.stats.minus += betAmount; }
         }
 
-        const grid = generateMineGrid();
+        // For auto-spin: reuse existing grid (broken blocks stay null), only re-roll hotbar
+        const grid = (isFreeAutoSpin && clientGrid) ? clientGrid : generateMineGrid();
         const hotbar = generateMineHotbar();
-        const mainBlock = grid[5][2]; // bottom row (row 5 now, 6 rows total)
-        const baseMult = MINE_BLOCK_MULTS[mainBlock] || 0;
-
-        let pickaxeMult = 1;
-        hotbar.forEach(slot => {
-            if (slot.type === 'pickaxe') pickaxeMult = Math.max(pickaxeMult, MINE_PICKAXE_MULTS[slot.pickaxeType] || 1);
-        });
-
-        const chestMult = pickChestMult();
-
+        // Per-column chest multipliers
+        const chestMults = [];
+        for (let c = 0; c < 5; c++) chestMults.push(pickChestMult());
         const effectiveBet = isFreeAutoSpin ? 0.5 : betAmount;
-        const MIN_WIN_RATIO = 0.08;
-        let baseWin = effectiveBet * MIN_WIN_RATIO;
-        if (baseMult > 0) {
-            const bonusBase = effectiveBet * baseMult * pickaxeMult / CHEST_MULT_EXPECTED;
-            const winChance = (rtpTarget / 100) * 0.16;
-            if (Math.random() < winChance) {
-                baseWin = Math.max(baseWin, Math.min(bonusBase, effectiveBet * 5));
-            }
-        }
-        const actualWin = Number((baseWin * chestMult).toFixed(2));
 
-        const BLOCK_PAY_MULTS = { grass:0.05, dirt:0.1, stone:0.25, redstone:1.0, gold:2.2, diamond:5.0, obsidian:10.0 };
-        let totalBlockMult = 0;
-        for (let r = 0; r < 6; r++)
-            for (let c = 0; c < 5; c++)
-                totalBlockMult += (BLOCK_PAY_MULTS[grid[r][c]] || 0);
-
+        // Each block has fixed mult: block win = bet * blockMult
+        // null blocks (broken in auto-spin) give 0 win
         const blockWins = [];
+        let rawSum = 0;
         for (let r = 0; r < 6; r++) {
             const row = [];
             for (let c = 0; c < 5; c++) {
-                const bm = BLOCK_PAY_MULTS[grid[r][c]] || 0;
-                row.push(totalBlockMult > 0 && baseWin > 0 ? parseFloat((baseWin * bm / totalBlockMult).toFixed(4)) : 0);
+                if (!grid[r][c]) { row.push(0); continue; }
+                const bm = MINE_BLOCK_MULTS[grid[r][c]] || 0;
+                const bw = parseFloat((effectiveBet * bm).toFixed(4));
+                row.push(bw);
+                rawSum += bw;
             }
             blockWins.push(row);
         }
+
+        // RTP control: scale wins so total matches RTP target
+        const winChance = (rtpTarget / 100) * 0.22;
+        let scaleFactor = 1;
+        if (Math.random() >= winChance) {
+            scaleFactor = 0.15;
+        }
+        let baseWin = Math.min(rawSum * scaleFactor, effectiveBet * 5);
+
+        // Recalculate blockWins with scale factor
+        const adjustedBlockWins = [];
+        for (let r = 0; r < 6; r++) {
+            const row = [];
+            for (let c = 0; c < 5; c++) {
+                row.push(rawSum > 0 ? parseFloat((blockWins[r][c] * scaleFactor * (baseWin / (rawSum * scaleFactor || 1))).toFixed(4)) : 0);
+            }
+            adjustedBlockWins.push(row);
+        }
+
+        // Total win = sum of (column_win * column_chest_mult) for each column
+        let actualWin = 0;
+        for (let c = 0; c < 5; c++) {
+            let colWin = 0;
+            for (let r = 0; r < 6; r++) colWin += adjustedBlockWins[r][c];
+            actualWin += colWin * chestMults[c];
+        }
+        actualWin = Number(actualWin.toFixed(2));
 
         let bookCount = hotbar.filter(s => s.type === 'book').length;
         if (bookCount >= 3) {
@@ -927,7 +960,7 @@ app.post('/api/mine', async (req, res) => {
             pushToGlobalHistory(betEntry);
         }
 
-        res.json({ grid, blockWins, hotbar, chestMult, win: actualWin, user, freeSpinsLeft: user.mineFreeSpins || 0 });
+        res.json({ grid, blockWins: adjustedBlockWins, hotbar, chestMults, win: actualWin, user, freeSpinsLeft: user.mineFreeSpins || 0 });
     } catch (err) {
         console.error('Mine error:', err);
         res.status(500).json({ error: 'Ошибка сервера' });
@@ -940,53 +973,68 @@ app.post('/api/check_deposit', async (req, res) => {
     const { id } = req.body;
     const adminWallet = process.env.ADMIN_WALLET;
     const apiKey = process.env.TON_API_KEY;
-    
-    if (!adminWallet) return res.status(500).json({error: 'Адрес кошелька не настроен'});
-    if (!apiKey) return res.status(500).json({error: 'TON_API_KEY не установлен'});
+
+    if (!adminWallet) return res.status(500).json({error: 'Адрес кошелька не настроен. Установите ADMIN_WALLET в .env'});
+    if (!apiKey) return res.status(500).json({error: 'TON_API_KEY не установлен в .env'});
 
     try {
-        // TonCenter v2 с API ключом (прямое обращение)
         const tcUrl = `https://toncenter.com/api/v2/getTransactions?address=${adminWallet}&limit=50&api_key=${apiKey}`;
         const tcRes = await fetch(tcUrl);
+        if (!tcRes.ok) {
+            return res.status(400).json({ error: `TonCenter HTTP ${tcRes.status}` });
+        }
         const data = await tcRes.json();
         if (!data.ok) {
             console.error('TonCenter error:', data.error);
-            return res.status(400).json({ error: `Ошибка проверки: ${data.error || 'нет ответа от TonCenter'}` });
+            return res.status(400).json({ error: `Ошибка TonCenter: ${data.error || 'нет ответа'}` });
         }
-        
+
         let foundNew = false;
         let totalAdded = 0;
-        
-        for (let tx of data.result) {
-            if (tx.in_msg && tx.in_msg.message && String(tx.in_msg.message).trim() === String(id).trim() && tx.in_msg.value > 0) {
-                const txHash = tx.transaction_id.hash;
-                const amountTON = tx.in_msg.value / 1e9; 
-                const exists = await Deposit.findOne({ hash: txHash });
-                if(!exists) {
-                    await Deposit.create({ hash: txHash, userId: id, amount: amountTON, time: getMskTime() });
-                    const user = await User.findOne({ id });
-                    user.balance = Number((user.balance + amountTON).toFixed(2));
-                    user.depositHistory.unshift({ hash: txHash, amount: amountTON, status: 'Успешно', time: getMskTime() });
-                    await user.save();
-                    foundNew = true;
-                    totalAdded += amountTON;
+        const userId = String(id).trim();
 
-                    if(bot) {
-                        bot.sendMessage(id, `📥 ✅ Ваш баланс успешно пополнен на **${amountTON} TON**!`, {parse_mode: 'Markdown'}).catch(()=>{});
-                    }
+        for (const tx of (data.result || [])) {
+            if (!tx.in_msg || !tx.in_msg.value || Number(tx.in_msg.value) <= 0) continue;
 
-                    if (user.referredBy) {
-                        const referrer = await User.findOne({ id: user.referredBy });
-                        if (referrer) {
-                            const refBonus = Number((amountTON * 0.10).toFixed(2));
-                            referrer.balance = Number((referrer.balance + refBonus).toFixed(2));
-                            referrer.referralEarnings = Number((referrer.referralEarnings + refBonus).toFixed(2));
-                            await referrer.save();
-                            
-                            if (bot) {
-                                bot.sendMessage(referrer.id, `🎉 Ваш реферал пополнил баланс! Вам начислено **${refBonus} TON** (10%).`, {parse_mode: 'Markdown'}).catch(()=>{});
-                            }
-                        }
+            // Check comment in multiple possible fields
+            let comment = '';
+            if (tx.in_msg.message) comment = String(tx.in_msg.message).trim();
+            if (!comment && tx.in_msg.msg_data && tx.in_msg.msg_data.text) {
+                try { comment = Buffer.from(tx.in_msg.msg_data.text, 'base64').toString('utf-8').trim(); } catch(e) {}
+            }
+
+            if (comment !== userId) continue;
+
+            const txHash = tx.transaction_id ? tx.transaction_id.hash : tx.hash;
+            if (!txHash) continue;
+            const amountTON = Number(tx.in_msg.value) / 1e9;
+            if (amountTON < 0.01) continue;
+
+            const exists = await Deposit.findOne({ hash: txHash });
+            if (exists) continue;
+
+            await Deposit.create({ hash: txHash, userId: id, amount: amountTON, time: getMskTime() });
+            const user = await User.findOne({ id });
+            user.balance = Number((user.balance + amountTON).toFixed(2));
+            user.depositHistory.unshift({ hash: txHash, amount: amountTON, status: 'Успешно', time: getMskTime() });
+            await user.save();
+            foundNew = true;
+            totalAdded += amountTON;
+
+            if(bot) {
+                bot.sendMessage(id, `📥 ✅ Ваш баланс успешно пополнен на **${amountTON} TON**!`, {parse_mode: 'Markdown'}).catch(()=>{});
+            }
+
+            if (user.referredBy) {
+                const referrer = await User.findOne({ id: user.referredBy });
+                if (referrer) {
+                    const refBonus = Number((amountTON * 0.10).toFixed(2));
+                    referrer.balance = Number((referrer.balance + refBonus).toFixed(2));
+                    referrer.referralEarnings = Number((referrer.referralEarnings + refBonus).toFixed(2));
+                    await referrer.save();
+
+                    if (bot) {
+                        bot.sendMessage(referrer.id, `🎉 Ваш реферал пополнил баланс! Вам начислено **${refBonus} TON** (10%).`, {parse_mode: 'Markdown'}).catch(()=>{});
                     }
                 }
             }
@@ -994,9 +1042,10 @@ app.post('/api/check_deposit', async (req, res) => {
         if(foundNew) {
             const updUser = await User.findOne({id});
             res.json({ success: true, added: totalAdded, user: updUser });
-        } else res.status(400).json({ error: 'Новых оплат не найдено' });
-    } catch (e) { 
-        res.status(500).json({error: 'Network error'}); 
+        } else res.status(400).json({ error: 'Новых оплат не найдено. Убедитесь что в комментарии указан ваш ID и прошло достаточно времени.' });
+    } catch (e) {
+        console.error('Deposit check error:', e);
+        res.status(500).json({error: 'Ошибка сети при проверке. Попробуйте позже.'});
     }
 });
 
