@@ -1507,13 +1507,14 @@ function updateSpinUI() {
 
 // ========= MINE GAME =========
 const MINE_BLOCK_CLASS = {
+    grass:'grass-blk', dirt:'dirt-blk',
     stone:'stone-blk', redstone:'redstone-blk', gold:'gold-blk',
     diamond:'diamond-blk', obsidian:'obsidian-blk',
     tnt:'tnt-blk', book:'book-blk', unknown:'unknown-blk'
 };
-const MC_ROWS = 5;
+const MC_ROWS = 6;
 const MC_COLS = 5;
-const INV_ROWS = 3;
+const INV_ROWS = 2;
 const INV_COLS = 5;
 let mineIsSpinning    = false;
 let mineBookCount     = 0;
@@ -1527,7 +1528,7 @@ function getPickaxeImg(type) {
     return `/sprites/pick_${type || 'wooden'}.png`;
 }
 
-const PICKAXE_DURABILITY = { wooden:2, stone:3, iron:4, golden:2, diamond:6 };
+const PICKAXE_DURABILITY = { wooden:1, stone:2, iron:3, golden:4, diamond:5 };
 
 // ── Инициализация и обновление полосы прочности ──
 let _durMax = 0;
@@ -1563,49 +1564,53 @@ function hideDurabilityBar() {
 let currentHotbar = null;
 
 function renderMineHotbar(hotbar) {
-    currentHotbar = hotbar || [{type:'empty'},{type:'empty'},{type:'empty'},{type:'empty'},{type:'empty'}];
+    const defaultSlots = Array(10).fill(null).map(() => ({type:'empty'}));
+    currentHotbar = hotbar || defaultSlots;
     const inv = $('mc-inventory');
     if (!inv) return;
     inv.innerHTML = '';
-    for (let c = 0; c < 5; c++) {
-        const cell = document.createElement('div');
-        cell.className = 'inv-cell';
-        cell.id = `inv-0-${c}`;
-        const slot = currentHotbar[c];
-        if (slot && slot.type === 'pickaxe') {
-            const img = document.createElement('img');
-            img.src = getPickaxeImg(slot.pickaxeType || 'wooden');
-            img.style.cssText = 'width:80%;height:80%;object-fit:contain;image-rendering:pixelated;filter:drop-shadow(0 1px 2px rgba(0,0,0,0.6));';
-            cell.appendChild(img);
-            cell.dataset.slotType = 'pickaxe';
-            cell.dataset.pickType = slot.pickaxeType;
-        } else if (slot && slot.type === 'book') {
-            const img = document.createElement('img');
-            img.src = '/sprites/block_book.png';
-            img.style.cssText = 'width:80%;height:80%;object-fit:contain;image-rendering:pixelated;';
-            cell.appendChild(img);
-            cell.dataset.slotType = 'book';
-            cell.className += ' inv-book';
-        } else if (slot && slot.type === 'tnt') {
-            const img = document.createElement('img');
-            img.src = '/sprites/block_tnt.png';
-            img.style.cssText = 'width:80%;height:80%;object-fit:contain;image-rendering:pixelated;';
-            cell.appendChild(img);
-            cell.dataset.slotType = 'tnt';
-            cell.className += ' inv-tnt';
+    for (let r = 0; r < INV_ROWS; r++) {
+        for (let c = 0; c < INV_COLS; c++) {
+            const idx = r * INV_COLS + c;
+            const cell = document.createElement('div');
+            cell.className = 'inv-cell';
+            cell.id = `inv-${r}-${c}`;
+            const slot = currentHotbar[idx];
+            if (slot && slot.type === 'pickaxe') {
+                const img = document.createElement('img');
+                img.src = getPickaxeImg(slot.pickaxeType || 'wooden');
+                img.style.cssText = 'width:80%;height:80%;object-fit:contain;image-rendering:pixelated;filter:drop-shadow(0 1px 2px rgba(0,0,0,0.6));';
+                cell.appendChild(img);
+                cell.dataset.slotType = 'pickaxe';
+                cell.dataset.pickType = slot.pickaxeType;
+            } else if (slot && slot.type === 'book') {
+                const img = document.createElement('img');
+                img.src = '/sprites/block_book.png';
+                img.style.cssText = 'width:80%;height:80%;object-fit:contain;image-rendering:pixelated;';
+                cell.appendChild(img);
+                cell.dataset.slotType = 'book';
+                cell.className += ' inv-book';
+            } else if (slot && slot.type === 'tnt') {
+                const img = document.createElement('img');
+                img.src = '/sprites/block_tnt.png';
+                img.style.cssText = 'width:80%;height:80%;object-fit:contain;image-rendering:pixelated;';
+                cell.appendChild(img);
+                cell.dataset.slotType = 'tnt';
+                cell.className += ' inv-tnt';
+            }
+            inv.appendChild(cell);
         }
-        inv.appendChild(cell);
     }
 }
 
-// ── Шахта: 5×3 плоская сетка блоков ──
-// keepPersist: сохранить minePersistGrid; idlePreview: показать случайные руды вместо скрытых
+// ── Шахта: 6×5 блоков (верхний ряд — трава) ──
 function initMineShaft(keepPersist, idlePreview) {
     const shaft = $('mc-shaft');
     if (!shaft) return;
     shaft.innerHTML = '';
     const IDLE_BY_ROW = [
-        ['stone','stone','stone','stone','stone','redstone'],
+        ['grass','grass','grass','grass','grass'],
+        ['dirt','stone','stone','stone','stone','redstone'],
         ['stone','stone','stone','redstone','redstone','redstone'],
         ['stone','redstone','redstone','gold','gold','gold'],
         ['redstone','gold','gold','gold','diamond','diamond'],
@@ -1966,7 +1971,7 @@ function flyItemToHotbar(blkEl, blockType, gridRow, gridCol) {
 
     let targetCell = null;
     for (let c = 0; c < MC_COLS; c++) {
-        const candidate = $(`inv-2-${c}`);
+        const candidate = $(`inv-1-${c}`);
         if (candidate && !candidate.dataset.hasPick && !candidate.classList.contains('filled')) {
             targetCell = candidate;
             break;
@@ -2002,7 +2007,7 @@ function flyItemToHotbar(blkEl, blockType, gridRow, gridCol) {
 
     setTimeout(() => {
         flyer.remove();
-        fillInvCell(2, targetCell.id.split('-')[2], blockType, null);
+        fillInvCell(1, targetCell.id.split('-')[2], blockType, null);
     }, 480);
 }
 
@@ -2016,9 +2021,9 @@ function fillInvCell(row, col, blockType, pickaxeType) {
         if (inv) {
             // Найти свободную ячейку в строке 2 (нижней)
             for (let c = 0; c < MC_COLS; c++) {
-                const candidate = $(`inv-2-${c}`);
+                const candidate = $(`inv-1-${c}`);
                 if (candidate && !candidate.dataset.hasPick && !candidate.classList.contains('filled')) {
-                    targetRow = 2; targetCol = c;
+                    targetRow = 1; targetCol = c;
                     break;
                 }
             }
@@ -2032,6 +2037,7 @@ function fillInvCell(row, col, blockType, pickaxeType) {
 
     const spriteUrls = {
         book: '/sprites/block_book.png', tnt: '/sprites/block_tnt.png',
+        grass: '/sprites/block_grass.png', dirt: '/sprites/block_dirt.png',
         stone: '/sprites/block_stone.png', redstone: '/sprites/block_redstone.png',
         gold: '/sprites/block_gold.png', diamond: '/sprites/block_diamond.png',
         obsidian: '/sprites/block_obsidian.png'
@@ -2056,6 +2062,8 @@ function spawnBreakParticles(blockEl, blockType) {
     const cx = rect.left + rect.width / 2;
     const cy = rect.top + rect.height / 2;
     const clrs = {
+        grass:    ['#4a8c2a','#6cb040','#3a7020'],
+        dirt:     ['#8b6040','#a07050','#6b4a30'],
         stone:    ['#888','#aaa','#777'],
         redstone: ['#880000','#cc2020','#ff4444'],
         gold:     ['#c8a000','#ffe060','#deb800'],
@@ -2087,8 +2095,8 @@ function spawnBreakParticles(blockEl, blockType) {
 
 // ─── Основное раскрытие: grid[r][c] из сервера, blockWins[r][c] ───
 function revealMineShaft(grid, blockWins, win, balanceBefore, chestMult, isAutoSpin) {
-    const BLOCK_HITS_MAP = { stone:2, redstone:3, gold:4, diamond:5, obsidian:6 };
-    const PICKAXE_MOD_MAP = { wooden:+1, stone:0, iron:0, golden:-1, diamond:-1 };
+    const BLOCK_HITS_MAP = { grass:1, dirt:1, stone:1, redstone:2, gold:2, diamond:3, obsidian:4 };
+    const PICKAXE_MOD_MAP = { wooden:0, stone:0, iron:0, golden:0, diamond:0 };
     const hotbar = currentHotbar || [];
 
     for (let r = 0; r < MC_ROWS; r++) {
@@ -2109,16 +2117,29 @@ function revealMineShaft(grid, blockWins, win, balanceBefore, chestMult, isAutoS
     const pickSlots = [];
     const tntCols = [];
     let bookCount = 0;
-    hotbar.forEach((slot, col) => {
-        if (slot.type === 'pickaxe') pickSlots.push({ col, pType: slot.pickaxeType || 'wooden' });
+    hotbar.forEach((slot, idx) => {
+        const col = idx % MC_COLS; // map flat index to column
+        if (slot.type === 'pickaxe') pickSlots.push({ col, idx, pType: slot.pickaxeType || 'wooden' });
         else if (slot.type === 'tnt') tntCols.push(col);
         else if (slot.type === 'book') bookCount++;
     });
 
+    // Deduplicate: if two pickaxes target same column, keep stronger one
+    const colPickMap = {};
+    const PICK_RANK = { wooden:0, stone:1, iron:2, golden:3, diamond:4 };
     pickSlots.forEach(ps => {
+        if (!colPickMap[ps.col] || PICK_RANK[ps.pType] > PICK_RANK[colPickMap[ps.col].pType]) {
+            colPickMap[ps.col] = ps;
+        }
+    });
+    const uniquePickSlots = Object.values(colPickMap);
+
+    uniquePickSlots.forEach(ps => {
         let mult = 1;
-        if (hotbar[ps.col - 1] && hotbar[ps.col - 1].type === 'book') mult *= 1.5;
-        if (hotbar[ps.col + 1] && hotbar[ps.col + 1].type === 'book') mult *= 1.5;
+        const leftIdx = ps.idx - 1;
+        const rightIdx = ps.idx + 1;
+        if (leftIdx >= 0 && hotbar[leftIdx] && hotbar[leftIdx].type === 'book') mult *= 1.5;
+        if (rightIdx < hotbar.length && hotbar[rightIdx] && hotbar[rightIdx].type === 'book') mult *= 1.5;
         ps.durMult = mult;
     });
 
@@ -2146,7 +2167,7 @@ function revealMineShaft(grid, blockWins, win, balanceBefore, chestMult, isAutoS
         allBlocks.filter(b => b.c === c).sort((a, b) => a.r - b.r)
     );
 
-    pickSlots.forEach(ps => {
+    uniquePickSlots.forEach(ps => {
         const pMod = PICKAXE_MOD_MAP[ps.pType] || 0;
         (colBlocks[ps.col] || []).forEach(b => { b.hits = Math.max(1, b.hits + pMod); });
     });
@@ -2156,7 +2177,7 @@ function revealMineShaft(grid, blockWins, win, balanceBefore, chestMult, isAutoS
         const q = colBlocks[col] || [];
         if (q.length > 0) brokenSet.add(`${q[0].r},${q[0].c}`);
     });
-    pickSlots.forEach(ps => {
+    uniquePickSlots.forEach(ps => {
         const dur = Math.floor((PICKAXE_DURABILITY[ps.pType] || 2) * (ps.durMult || 1));
         let rem = dur;
         for (const blk of (colBlocks[ps.col] || [])) {
@@ -2211,7 +2232,12 @@ function revealMineShaft(grid, blockWins, win, balanceBefore, chestMult, isAutoS
             const target = colQ[0];
             const blkEl = $(`mc-blk-${target.r}-${target.c}`);
             if (!blkEl || blkEl.dataset.revealed === '1') return;
-            const hotbarCell = $(`inv-0-${col}`);
+            // Find the TNT cell in either row of the inventory
+            let hotbarCell = null;
+            for (let ir = 0; ir < INV_ROWS; ir++) {
+                const c = $(`inv-${ir}-${col}`);
+                if (c && c.dataset.slotType === 'tnt') { hotbarCell = c; break; }
+            }
             const shaft = $('mc-shaft');
             if (!shaft) return;
 
@@ -2239,10 +2265,10 @@ function revealMineShaft(grid, blockWins, win, balanceBefore, chestMult, isAutoS
         }, idx * 500);
     });
 
-    const N = pickSlots.length;
+    const N = uniquePickSlots.length;
     let longestQ = 0;
-    pickSlots.forEach((ps, wi) => {
-        const dur = Math.floor((PICKAXE_DURABILITY[ps.pType] || 2) * (ps.durMult || 1));
+    uniquePickSlots.forEach((ps, wi) => {
+        const dur = Math.floor((PICKAXE_DURABILITY[ps.pType] || 1) * (ps.durMult || 1));
         let d = dur, t = 0;
         for (const b of (colBlocks[ps.col] || [])) {
             if (brokenSet.has(`${b.r},${b.c}`) && tntCols.includes(ps.col)) continue;
@@ -2259,8 +2285,8 @@ function revealMineShaft(grid, blockWins, win, balanceBefore, chestMult, isAutoS
 
     mineIsActive = true;
     setTimeout(() => {
-        pickSlots.forEach((ps, wi) => {
-            const dur = Math.floor((PICKAXE_DURABILITY[ps.pType] || 2) * (ps.durMult || 1));
+        uniquePickSlots.forEach((ps, wi) => {
+            const dur = Math.floor((PICKAXE_DURABILITY[ps.pType] || 1) * (ps.durMult || 1));
             setTimeout(() => {
                 spawnPickaxeWorker(colBlocks[ps.col] || [], ps.pType, wi, null, onBlockBroken, dur);
             }, wi * 150);
@@ -2295,6 +2321,7 @@ function revealMineShaft(grid, blockWins, win, balanceBefore, chestMult, isAutoS
 
 function setupMineTextures() {
     const imgs = [
+        '/sprites/block_grass.png', '/sprites/block_dirt.png',
         '/sprites/block_stone.png', '/sprites/block_redstone.png',
         '/sprites/block_gold.png', '/sprites/block_diamond.png',
         '/sprites/block_obsidian.png', '/sprites/block_tnt.png',

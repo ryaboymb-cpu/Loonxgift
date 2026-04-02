@@ -21,10 +21,11 @@ process.on('unhandledRejection', (reason, promise) => console.error('Необр�
 // Защита от мультикликов (глобальная блокировка активных запросов юзера)
 const actionLocks = new Set();
 
-// Анти-сон (пинг себя, если задан WEB_APP_URL)
-if (process.env.WEB_APP_URL) {
+// Анти-сон (пинг себя)
+const SELF_BASE_URL = process.env.WEB_APP_URL || process.env.RENDER_EXTERNAL_URL;
+if (SELF_BASE_URL) {
     setInterval(() => {
-        fetch(process.env.WEB_APP_URL).then(() => console.log('🔄 Анти-сон: Сервер пинганул сам себя')).catch(() => {});
+        fetch(`${SELF_BASE_URL}/ping`).then(() => console.log('🔄 Анти-сон: Сервер пинганул сам себя')).catch(() => {});
     }, 10 * 60 * 1000);
 }
 
@@ -34,7 +35,7 @@ mongoose.connect(process.env.MONGO_URI).then(() => console.log('✅ DB Connected
 // --- 1. TON CONNECT MANIFEST ---
 app.get('/tonconnect-manifest.json', (req, res) => {
     res.json({
-        url: process.env.WEB_APP_URL || `https://${process.env.REPLIT_DEV_DOMAIN || 'localhost'}`,
+        url: process.env.WEB_APP_URL || process.env.RENDER_EXTERNAL_URL || 'https://localhost',
         name: "LoonxGift", 
         iconUrl: "https://cdn-icons-png.flaticon.com/512/149/149071.png",
         termsOfUseUrl: "",
@@ -176,7 +177,7 @@ if (process.env.BOT_TOKEN) {
         const refParam = match[2] || '';
         const text = `🚀 Привет, ${msg.from.first_name}!\nДобро пожаловать в LoonxGift.\n\nТут ты можешь играть и выигрывать TON! Твой баланс и все игры находятся внутри Mini App.\n\nВыбирай действие в меню ниже:`;
         
-        const baseUrl = process.env.WEB_APP_URL || `https://${process.env.REPLIT_DEV_DOMAIN}`;
+        const baseUrl = process.env.WEB_APP_URL || process.env.RENDER_EXTERNAL_URL || 'https://localhost';
         const appUrl = `${baseUrl}?start_param=${refParam}`;
 
         bot.sendMessage(msg.chat.id, text, {
@@ -752,14 +753,22 @@ app.post('/api/spin', async (req, res) => {
 });
 
 // === MINE GAME (Minecraft-style) ===
-const MINE_BLOCKS = ['stone', 'redstone', 'gold', 'diamond', 'obsidian'];
-const MINE_BLOCK_MULTS = { stone: 0, redstone: 0.7, gold: 1.5, diamond: 3, obsidian: 6 };
+const MINE_BLOCKS = ['dirt', 'stone', 'redstone', 'gold', 'diamond', 'obsidian'];
+const MINE_BLOCK_MULTS = { grass: 0, dirt: 0, stone: 0, redstone: 0.7, gold: 1.5, diamond: 3, obsidian: 6 };
+// 6 rows: row 0 = grass top layer (dirt + rare stone), rows 1-5 = underground
 const MINE_ROW_WEIGHTS = [
-    [0.70, 0.22, 0.06, 0.015, 0.005], // row 0 — top (mostly stone)
-    [0.55, 0.28, 0.12, 0.04, 0.01],   // row 1
-    [0.38, 0.30, 0.20, 0.09, 0.03],   // row 2 — middle
-    [0.22, 0.28, 0.28, 0.15, 0.07],   // row 3
-    [0.12, 0.22, 0.30, 0.22, 0.14]    // row 4 — bottom (rare ores)
+    // grass/dirt top: dirt=85%, stone=15%  (no ores)
+    [0.85, 0.15, 0.00, 0.00, 0.00, 0.00],
+    // row 1 — mostly stone
+    [0.10, 0.62, 0.20, 0.06, 0.015, 0.005],
+    // row 2
+    [0.05, 0.45, 0.28, 0.15, 0.05, 0.02],
+    // row 3 — middle
+    [0.00, 0.30, 0.30, 0.24, 0.11, 0.05],
+    // row 4
+    [0.00, 0.18, 0.26, 0.28, 0.18, 0.10],
+    // row 5 — bottom (rare ores)
+    [0.00, 0.10, 0.20, 0.30, 0.24, 0.16]
 ];
 const MINE_PICKAXES = ['wooden', 'stone', 'iron', 'golden', 'diamond'];
 const MINE_PICKAXE_WEIGHTS = [0.46, 0.28, 0.14, 0.08, 0.04];
@@ -780,13 +789,18 @@ function pickChestMult() {
 
 function generateMineGrid() {
     const grid = [];
-    for (let r = 0; r < 5; r++) {
+    for (let r = 0; r < 6; r++) {
         const row = [];
         for (let c = 0; c < 5; c++) {
-            const weights = MINE_ROW_WEIGHTS[r];
-            const rand = Math.random(); let cum = 0; let block = 'stone';
-            for (let b = 0; b < MINE_BLOCKS.length; b++) { cum += weights[b]; if (rand < cum) { block = MINE_BLOCKS[b]; break; } }
-            row.push(block);
+            if (r === 0) {
+                // Top layer: grass blocks (visual), underlying type is dirt or rare stone
+                row.push('grass');
+            } else {
+                const weights = MINE_ROW_WEIGHTS[r];
+                const rand = Math.random(); let cum = 0; let block = 'stone';
+                for (let b = 0; b < MINE_BLOCKS.length; b++) { cum += weights[b]; if (rand < cum) { block = MINE_BLOCKS[b]; break; } }
+                row.push(block);
+            }
         }
         grid.push(row);
     }
@@ -794,13 +808,14 @@ function generateMineGrid() {
 }
 
 function generateMineHotbar() {
+    // 2 rows x 5 cols = 10 slots
     const slots = [];
     let pickCount = 0;
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < 10; i++) {
         const r = Math.random();
-        if (r < 0.48) {
+        if (r < 0.42) {
             slots.push({ type: 'empty' });
-        } else if (r < 0.80) {
+        } else if (r < 0.76) {
             const pr = Math.random(); let cum = 0; let pType = 'wooden';
             for (let j = 0; j < MINE_PICKAXES.length; j++) {
                 cum += MINE_PICKAXE_WEIGHTS[j];
@@ -808,14 +823,14 @@ function generateMineHotbar() {
             }
             slots.push({ type: 'pickaxe', pickaxeType: pType });
             pickCount++;
-        } else if (r < 0.90) {
+        } else if (r < 0.88) {
             slots.push({ type: 'book' });
         } else {
             slots.push({ type: 'tnt' });
         }
     }
     if (pickCount === 0) {
-        const idx = Math.floor(Math.random() * 5);
+        const idx = Math.floor(Math.random() * 10);
         slots[idx] = { type: 'pickaxe', pickaxeType: 'wooden' };
     }
     return slots;
@@ -853,7 +868,7 @@ app.post('/api/mine', async (req, res) => {
 
         const grid = generateMineGrid();
         const hotbar = generateMineHotbar();
-        const mainBlock = grid[4][2];
+        const mainBlock = grid[5][2]; // bottom row (row 5 now, 6 rows total)
         const baseMult = MINE_BLOCK_MULTS[mainBlock] || 0;
 
         let pickaxeMult = 1;
@@ -875,14 +890,14 @@ app.post('/api/mine', async (req, res) => {
         }
         const actualWin = Number((baseWin * chestMult).toFixed(2));
 
-        const BLOCK_PAY_MULTS = { stone:0.25, redstone:1.0, gold:2.2, diamond:5.0, obsidian:10.0 };
+        const BLOCK_PAY_MULTS = { grass:0.05, dirt:0.1, stone:0.25, redstone:1.0, gold:2.2, diamond:5.0, obsidian:10.0 };
         let totalBlockMult = 0;
-        for (let r = 0; r < 5; r++)
+        for (let r = 0; r < 6; r++)
             for (let c = 0; c < 5; c++)
                 totalBlockMult += (BLOCK_PAY_MULTS[grid[r][c]] || 0);
 
         const blockWins = [];
-        for (let r = 0; r < 5; r++) {
+        for (let r = 0; r < 6; r++) {
             const row = [];
             for (let c = 0; c < 5; c++) {
                 const bm = BLOCK_PAY_MULTS[grid[r][c]] || 0;
@@ -1383,12 +1398,6 @@ app.get('/ping', (req, res) => res.status(200).json({ ok: true, time: Date.now()
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 Server Running on port ${PORT}`);
-    const SELF_URL = process.env.REPLIT_DEV_DOMAIN
-        ? `https://${process.env.REPLIT_DEV_DOMAIN}/ping`
-        : `http://localhost:${PORT}/ping`;
-    setInterval(() => {
-        fetch(SELF_URL).catch(() => {});
-    }, 60 * 1000);
 });
 
 process.on('uncaughtException', (err) => {
