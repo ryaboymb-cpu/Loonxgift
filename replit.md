@@ -83,24 +83,22 @@ Server runs on port 5000, binding to `0.0.0.0`.
 ## Mine Game Details
 
 - Grid: 5 columns × 5 rows = 25 blocks, Minecraft pixel-art aesthetic
-- Block types: stone, redstone, gold, diamond, obsidian, book, tnt
+- Block types: stone, redstone, gold, diamond, obsidian (no book/tnt in grid)
 - Block durability by rarity: stone:2, redstone:3, gold:4, diamond:5, obsidian:6 hits
-- Blocks always visible from start with ore textures (never hidden)
-- N pickaxes (1-5), each randomly assigned a type: wooden, stone, iron, golden, diamond
-- Durability per pickaxe: wooden:2, stone:3, iron:4, golden:2, diamond:6
+- Blocks always visible from start with PNG ore textures (never hidden)
+- Hotbar: 1×5 row of slots. Each slot: pickaxe, book, tnt, or empty (server-generated)
+- Slot distribution: 48% empty, 32% pickaxe, 10% book, 10% tnt (at least 1 pickaxe guaranteed)
+- Pickaxe types: wooden, stone, iron, golden, diamond. Durability: wooden:2, stone:3, iron:4, golden:2, diamond:6
 - Pickaxe sprites: PNG files at /sprites/pick_*.png (64x64, transparent bg, Minecraft pixel-art)
-- Column-order mining: each pickaxe mines its assigned columns top-to-bottom
+- Column-based mining: each pickaxe mines ONLY the column directly below its hotbar slot
+- Books in hotbar: upgrade adjacent pickaxes' durability ×1.5 each; 3 books = 1 free auto-spin
+- TNT in hotbar: drops from hotbar column down to first unbroken block, explodes on impact (damage adjacent blocks)
 - Pickaxe breaks visually (shake, redden, shatter) when durability runs out
 - Broken blocks stay in DOM (visibility:hidden) to prevent grid shift
 - Per-column chests open only when all 5 rows in that column are broken
-- Chest multiplier applied to column wins
-- Inventory: 3×5 grid (separate from shaft grid)
-- Books and TNT fly from grid to hotbar with smooth animation (flyItemToHotbar)
-- Collecting 3 books grants 3 FREE auto-spins (server-tracked via `user.mineFreeSpins`, client syncs from `freeSpinsLeft`)
-- TNT blocks: when mined, explode and deal 3 hits of damage to all 8 adjacent blocks (visual flash + particles)
-- Free auto-spins: server validates `mineFreeSpins > 0` before allowing; uses effectiveBet=0.5 for win calc
-- TNT generation: 4% chance per non-center block in server-side grid generation
-- Menu card border: brown/orange (#c87020) to match Minecraft theme, distinct from Mines green
+- Auto-spin: preserves broken blocks, only regenerates hotbar with new items
+- Free auto-spins: server validates `mineFreeSpins > 0` before allowing; uses effectiveBet=0.5
+- Menu card border: brown/orange (#c87020) to match Minecraft theme
 - Win scaled proportionally to blocks actually broken by pickaxes
 - Minimum 8% guaranteed win per round (server-side)
 - Block hit modifiers: wooden +1 extra hit, golden/diamond -1 hit

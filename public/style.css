@@ -222,7 +222,6 @@ header { padding: 15px; display: flex; justify-content: space-between; align-ite
 .mc-inventory {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
-  grid-template-rows: repeat(3, minmax(0, 32px));
   gap: 2px;
   background: #6e6e6e;
   border: 3px solid;
@@ -243,7 +242,10 @@ header { padding: 15px; display: flex; justify-content: space-between; align-ite
   position: relative;
   overflow: visible;
   transition: background 0.12s;
+  aspect-ratio: 1;
 }
+.inv-cell.inv-book { background: #5a3a80; }
+.inv-cell.inv-tnt { background: #aa2020; }
 .inv-cell.filled {
   background: #7a7a7a;
   animation: invPop 0.22s cubic-bezier(0.34,1.56,0.64,1);
@@ -292,7 +294,7 @@ header { padding: 15px; display: flex; justify-content: space-between; align-ite
   overflow: hidden;
   image-rendering: pixelated;
   transition: transform 0.08s;
-  box-shadow: inset 2px 2px 0 rgba(255,255,255,0.40), inset -2px -2px 0 rgba(0,0,0,0.28);
+  box-shadow: inset 1px 1px 0 rgba(255,255,255,0.18), inset -1px -1px 0 rgba(0,0,0,0.15);
 }
 /* Освещение: светлый верх-лево, тёмный низ-право */
 .mc-blk::before {
@@ -301,11 +303,9 @@ header { padding: 15px; display: flex; justify-content: space-between; align-ite
   inset: 0;
   background:
     linear-gradient(135deg,
-      rgba(255,255,255,0.15) 0%,
-      rgba(255,255,255,0.04) 30%,
-      transparent 50%,
-      rgba(0,0,0,0.08) 75%,
-      rgba(0,0,0,0.15) 100%);
+      rgba(255,255,255,0.06) 0%,
+      transparent 40%,
+      rgba(0,0,0,0.04) 100%);
   z-index: 2;
   pointer-events: none;
   border-radius: 1px;

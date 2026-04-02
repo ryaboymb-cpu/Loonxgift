@@ -780,24 +780,45 @@ function pickChestMult() {
 
 function generateMineGrid() {
     const grid = [];
-    const BOOK_CHANCE = 0.05;
-    const TNT_CHANCE = 0.04;
     for (let r = 0; r < 5; r++) {
         const row = [];
         for (let c = 0; c < 5; c++) {
             const weights = MINE_ROW_WEIGHTS[r];
             const rand = Math.random(); let cum = 0; let block = 'stone';
             for (let b = 0; b < MINE_BLOCKS.length; b++) { cum += weights[b]; if (rand < cum) { block = MINE_BLOCKS[b]; break; } }
-            if (!(r === 4 && c === 2)) {
-                const specRoll = Math.random();
-                if (specRoll < BOOK_CHANCE) block = 'book';
-                else if (specRoll < BOOK_CHANCE + TNT_CHANCE) block = 'tnt';
-            }
             row.push(block);
         }
         grid.push(row);
     }
     return grid;
+}
+
+function generateMineHotbar() {
+    const slots = [];
+    let pickCount = 0;
+    for (let i = 0; i < 5; i++) {
+        const r = Math.random();
+        if (r < 0.48) {
+            slots.push({ type: 'empty' });
+        } else if (r < 0.80) {
+            const pr = Math.random(); let cum = 0; let pType = 'wooden';
+            for (let j = 0; j < MINE_PICKAXES.length; j++) {
+                cum += MINE_PICKAXE_WEIGHTS[j];
+                if (pr < cum) { pType = MINE_PICKAXES[j]; break; }
+            }
+            slots.push({ type: 'pickaxe', pickaxeType: pType });
+            pickCount++;
+        } else if (r < 0.90) {
+            slots.push({ type: 'book' });
+        } else {
+            slots.push({ type: 'tnt' });
+        }
+    }
+    if (pickCount === 0) {
+        const idx = Math.floor(Math.random() * 5);
+        slots[idx] = { type: 'pickaxe', pickaxeType: 'wooden' };
+    }
+    return slots;
 }
 
 app.post('/api/mine', async (req, res) => {
@@ -831,18 +852,15 @@ app.post('/api/mine', async (req, res) => {
         }
 
         const grid = generateMineGrid();
-        const mainBlock = grid[4][2]; // bottom centre = main result block
-        const baseMult  = MINE_BLOCK_MULTS[mainBlock] || 0;
+        const hotbar = generateMineHotbar();
+        const mainBlock = grid[4][2];
+        const baseMult = MINE_BLOCK_MULTS[mainBlock] || 0;
 
-        // Pickaxe type — always pick one
-        const pr = Math.random(); let cum2 = 0; let pickaxe = 'wooden';
-        for (let i = 0; i < MINE_PICKAXES.length; i++) { cum2 += MINE_PICKAXE_WEIGHTS[i]; if (pr < cum2) { pickaxe = MINE_PICKAXES[i]; break; } }
-        const pickaxeMult = MINE_PICKAXE_MULTS[pickaxe] || 1;
-        const PICK_COUNT_W = [0, 0.35, 0.28, 0.20, 0.12, 0.05];
-        const pcr = Math.random(); let pcum = 0; let pickaxeCount = 1;
-        for (let i = 1; i <= 5; i++) { pcum += PICK_COUNT_W[i]; if (pcr < pcum) { pickaxeCount = i; break; } }
+        let pickaxeMult = 1;
+        hotbar.forEach(slot => {
+            if (slot.type === 'pickaxe') pickaxeMult = Math.max(pickaxeMult, MINE_PICKAXE_MULTS[slot.pickaxeType] || 1);
+        });
 
-        // Chest multiplier — shown after all chests open
         const chestMult = pickChestMult();
 
         const effectiveBet = isFreeAutoSpin ? 0.5 : betAmount;
@@ -857,9 +875,7 @@ app.post('/api/mine', async (req, res) => {
         }
         const actualWin = Number((baseWin * chestMult).toFixed(2));
 
-        // Distribute baseWin across blocks proportionally by their base multiplier
-        // book blocks get no direct win (they're bonuses)
-        const BLOCK_PAY_MULTS = { stone:0.25, redstone:1.0, gold:2.2, diamond:5.0, obsidian:10.0, book:0.5, tnt:0 };
+        const BLOCK_PAY_MULTS = { stone:0.25, redstone:1.0, gold:2.2, diamond:5.0, obsidian:10.0 };
         let totalBlockMult = 0;
         for (let r = 0; r < 5; r++)
             for (let c = 0; c < 5; c++)
@@ -875,12 +891,9 @@ app.post('/api/mine', async (req, res) => {
             blockWins.push(row);
         }
 
-        let bookCount = 0;
-        for (let r = 0; r < 5; r++)
-            for (let c = 0; c < 5; c++)
-                if (grid[r][c] === 'book') bookCount++;
+        let bookCount = hotbar.filter(s => s.type === 'book').length;
         if (bookCount >= 3) {
-            user.mineFreeSpins = (user.mineFreeSpins || 0) + 3;
+            user.mineFreeSpins = (user.mineFreeSpins || 0) + 1;
         }
 
         user[field] = Number((user[field] + actualWin).toFixed(2));
@@ -899,7 +912,7 @@ app.post('/api/mine', async (req, res) => {
             pushToGlobalHistory(betEntry);
         }
 
-        res.json({ grid, blockWins, mainBlock, pickaxe, pickaxeCount, pickaxeMult, baseMult, chestMult, win: actualWin, user, freeSpinsLeft: user.mineFreeSpins || 0 });
+        res.json({ grid, blockWins, hotbar, chestMult, win: actualWin, user, freeSpinsLeft: user.mineFreeSpins || 0 });
     } catch (err) {
         console.error('Mine error:', err);
         res.status(500).json({ error: 'Ошибка сервера' });
