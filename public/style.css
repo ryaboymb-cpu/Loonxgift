@@ -274,7 +274,7 @@ header { padding: 15px; display: flex; justify-content: space-between; align-ite
   width: 100%;
   display: grid;
   grid-template-columns: repeat(5, 1fr);
-  grid-template-rows: repeat(5, minmax(0, 36px));
+  grid-template-rows: repeat(6, minmax(0, 32px));
   gap: 2px;
   background: #080402;
   border: 3px solid;
@@ -393,6 +393,14 @@ header { padding: 15px; display: flex; justify-content: space-between; align-ite
   background: url('/sprites/block_obsidian.png') center/100% 100% no-repeat;
   border-color: #6030b0 #0a0120 #0a0120 #6030b0;
 }
+.mc-blk.grass-blk {
+  background: url('/sprites/block_grass.png') center/100% 100% no-repeat;
+  border-color: #5a9030 #2a4818 #2a4818 #5a9030;
+}
+.mc-blk.dirt-blk {
+  background: url('/sprites/block_dirt.png') center/100% 100% no-repeat;
+  border-color: #a07050 #4a3020 #4a3020 #a07050;
+}
 .mc-blk.tnt-blk {
   background: url('/sprites/block_tnt.png') center/100% 100% no-repeat;
   border-color: #ff4040 #880000 #880000 #ff4040;
@@ -459,6 +467,8 @@ header { padding: 15px; display: flex; justify-content: space-between; align-ite
   vertical-align: middle;
   image-rendering: pixelated;
 }
+.mc-blk-mini.grass-blk    { background:url('/sprites/block_grass.png') center/100% 100% no-repeat; border-color:#5a9030 #2a4818 #2a4818 #5a9030; }
+.mc-blk-mini.dirt-blk     { background:url('/sprites/block_dirt.png') center/100% 100% no-repeat; border-color:#a07050 #4a3020 #4a3020 #a07050; }
 .mc-blk-mini.stone-blk    { background:url('/sprites/block_stone.png') center/100% 100% no-repeat; border-color:#b0b0b0 #505050 #505050 #b0b0b0; }
 .mc-blk-mini.redstone-blk { background:url('/sprites/block_redstone.png') center/100% 100% no-repeat; border-color:#cc2020 #440000 #440000 #cc2020; }
 .mc-blk-mini.gold-blk     { background:url('/sprites/block_gold.png') center/100% 100% no-repeat; border-color:#ffe060 #7a5000 #7a5000 #ffe060; }
