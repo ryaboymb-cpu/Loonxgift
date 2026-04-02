@@ -80,6 +80,22 @@ function playSound(name) {
             o.type = 'sine';
             o.frequency.setValueAtTime(1200, now);
             o.connect(g); o.start(now); o.stop(now + 0.04);
+        } else if (name === 'explode') {
+            g.gain.setValueAtTime(0.25, now);
+            g.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
+            const n = ctx.createBufferSource();
+            const nb = ctx.createBuffer(1, ctx.sampleRate * 0.45, ctx.sampleRate);
+            const nd = nb.getChannelData(0);
+            for (let i = 0; i < nd.length; i++) nd[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / nd.length, 0.5);
+            n.buffer = nb; n.connect(g); n.start(now); n.stop(now + 0.5);
+            const o = ctx.createOscillator();
+            o.type = 'sawtooth';
+            o.frequency.setValueAtTime(120, now);
+            o.frequency.exponentialRampToValueAtTime(30, now + 0.4);
+            const og = ctx.createGain();
+            og.gain.setValueAtTime(0.15, now);
+            og.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+            o.connect(og); og.connect(ctx.destination); o.start(now); o.stop(now + 0.4);
         } else if (name === 'spin') {
             g.gain.setValueAtTime(0.06, now);
             g.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
@@ -1020,6 +1036,8 @@ function switchAdminTab(tab) {
         const c = $('admin-content');
         c.innerHTML = '<div style="text-align:center; padding:20px; color:var(--neon);">Загрузка логов...</div>';
         loadAdminLogs(1, '');
+    } else if (tab === 'stats') {
+        loadAdminGameStats();
     } else {
         renderAdminContent(tab); 
     }
@@ -1354,6 +1372,55 @@ async function adminDemoToggle(state) {
     showToast('Отображение демо обновлено!'); isShowDemo = state;
 }
 
+async function loadAdminGameStats() {
+    const c = $('admin-content');
+    c.innerHTML = '<div style="text-align:center; padding:20px; color:var(--neon);">Загрузка статистики...</div>';
+    try {
+        const r = await fetch('/api/admin/game_stats', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({pass: adminPass}) });
+        if (!r.ok) { c.innerHTML = '<div style="color:red;">Ошибка загрузки</div>'; return; }
+        const data = await r.json();
+        const stats = data.stats;
+        const gameNames = { Crash:'🚀 Crash', Mines:'💣 Mines', Coinflip:'🪙 Coinflip', Battle:'⚔️ Battle', Spin:'🎰 Spin', Mine:'⛏️ Mine' };
+        const colors = { Crash:'#ff0055', Mines:'#00ff88', Coinflip:'#ffcc00', Battle:'#8a2be2', Spin:'#ff6b00', Mine:'#c87020' };
+        let totalBet = 0, totalPayout = 0, totalPlays = 0;
+        Object.values(stats).forEach(s => { totalBet += s.totalBet; totalPayout += s.totalPayout; totalPlays += s.playCount; });
+        const totalProfit = totalBet - totalPayout;
+        let html = `
+            <div style="background:#1a1a1a; padding:15px; border-radius:8px; margin-bottom:15px; text-align:center; border:1px solid ${totalProfit >= 0 ? 'var(--neon)' : 'var(--neon-red)'};">
+                <div style="font-size:10px; color:#888; margin-bottom:5px;">ОБЩИЙ ИТОГ</div>
+                <div style="font-size:22px; font-weight:900; color:${totalProfit >= 0 ? 'var(--neon)' : 'var(--neon-red)'};">${totalProfit >= 0 ? '+' : ''}${totalProfit.toFixed(2)} TON</div>
+                <div style="font-size:11px; color:#666; margin-top:5px;">Ставок: ${totalPlays} | Ввод: ${totalBet.toFixed(2)} | Выплаты: ${totalPayout.toFixed(2)}</div>
+            </div>`;
+        for (const [game, s] of Object.entries(stats)) {
+            const profit = s.totalBet - s.totalPayout;
+            html += `
+            <div style="background:#111; padding:12px; border-radius:8px; margin-bottom:8px; border-left:3px solid ${colors[game] || '#888'};">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <div>
+                        <div style="font-weight:900; color:${colors[game] || '#fff'}; font-size:14px;">${gameNames[game] || game}</div>
+                        <div style="font-size:11px; color:#666; margin-top:3px;">Игр: ${s.playCount} | Ввод: ${s.totalBet.toFixed(2)} | Вывод: ${s.totalPayout.toFixed(2)}</div>
+                    </div>
+                    <div style="text-align:right;">
+                        <div style="font-size:16px; font-weight:900; color:${profit >= 0 ? 'var(--neon)' : 'var(--neon-red)'};">${profit >= 0 ? '+' : ''}${profit.toFixed(2)}</div>
+                        <button style="background:#333; color:#ff4444; border:none; padding:3px 8px; border-radius:4px; font-size:10px; margin-top:4px;" onclick="adminResetGameStats('${game}')">СБРОС</button>
+                    </div>
+                </div>
+            </div>`;
+        }
+        html += `<button class="btn" style="background:red; margin-top:15px; padding:10px;" onclick="adminResetGameStats('')">СБРОСИТЬ ВСЮ СТАТИСТИКУ</button>`;
+        c.innerHTML = html;
+    } catch (e) {
+        c.innerHTML = '<div style="color:red;">Сбой сети</div>';
+    }
+}
+
+async function adminResetGameStats(game) {
+    if (!confirm(game ? `Сбросить статистику ${game}?` : 'Сбросить ВСЮ статистику?')) return;
+    await fetch('/api/admin/reset_game_stats', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({pass: adminPass, game}) });
+    showToast('Статистика сброшена');
+    loadAdminGameStats();
+}
+
 // ===================== SPIN GAME =====================
 let spinBet = 0.5;
 let spinFreeSpins = 0;
@@ -1641,7 +1708,7 @@ function killAllPickaxes() {
 }
 
 function tntExplode(r, c) {
-    playSound('break');
+    playSound('explode');
     const shaft = $('mc-shaft');
     if (shaft) {
         const flash = document.createElement('div');
@@ -1940,25 +2007,11 @@ function flyItemToHotbar(blkEl, blockType, gridRow, gridCol) {
         image-rendering:pixelated; border-radius:3px;
     `;
 
-    const cvs = document.createElement('canvas');
-    cvs.width = 32; cvs.height = 32;
-    const ctx = cvs.getContext('2d');
-    if (blockType === 'book') {
-        ctx.fillStyle = '#3a0868'; ctx.fillRect(0,0,32,32);
-        ctx.fillStyle = '#ffd700';
-        ctx.fillRect(6,8,20,2); ctx.fillRect(6,14,20,2); ctx.fillRect(6,20,20,2);
-        ctx.fillRect(6,8,2,14); ctx.fillRect(24,8,2,14);
-        ctx.fillStyle = '#c080ff'; ctx.fillRect(8,10,16,4); ctx.fillRect(8,16,16,4);
-    } else if (blockType === 'tnt') {
-        for (let i = 0; i < 4; i++) {
-            ctx.fillStyle = i%2===0 ? '#cc1010' : '#eeeeee';
-            ctx.fillRect(0, i*8, 32, 8);
-        }
-        ctx.fillStyle = '#000'; ctx.font = 'bold 9px monospace';
-        ctx.textAlign = 'center'; ctx.fillText('TNT', 16, 20);
-    }
-    cvs.style.cssText = 'width:100%;height:100%;image-rendering:pixelated;';
-    flyer.appendChild(cvs);
+    const spriteMap = { book: '/sprites/block_book.png', tnt: '/sprites/block_tnt.png' };
+    const img = document.createElement('img');
+    img.src = spriteMap[blockType] || '/sprites/block_stone.png';
+    img.style.cssText = 'width:100%;height:100%;image-rendering:pixelated;';
+    flyer.appendChild(img);
     document.body.appendChild(flyer);
 
     requestAnimationFrame(() => {
@@ -1998,41 +2051,23 @@ function fillInvCell(row, col, blockType, pickaxeType) {
     cell.innerHTML = '';
     delete cell.dataset.hasPick;
 
+    const spriteUrls = {
+        book: '/sprites/block_book.png', tnt: '/sprites/block_tnt.png',
+        stone: '/sprites/block_stone.png', redstone: '/sprites/block_redstone.png',
+        gold: '/sprites/block_gold.png', diamond: '/sprites/block_diamond.png',
+        obsidian: '/sprites/block_obsidian.png'
+    };
     if (blockType === 'book') {
-        // Книга — фиолетовая с золотом
         cell.className = 'inv-cell filled inv-book';
-        const cvs = document.createElement('canvas');
-        cvs.width = 32; cvs.height = 32;
-        const ctx = cvs.getContext('2d');
-        ctx.fillStyle = '#3a0868'; ctx.fillRect(0,0,32,32);
-        ctx.fillStyle = '#ffd700';
-        ctx.fillRect(6,8,20,2); ctx.fillRect(6,14,20,2); ctx.fillRect(6,20,20,2);
-        ctx.fillRect(6,8,2,14); ctx.fillRect(24,8,2,14);
-        ctx.fillStyle = '#c080ff'; ctx.fillRect(8,10,16,4); ctx.fillRect(8,16,16,4);
-        cvs.style.cssText = 'width:78%;height:78%;image-rendering:pixelated;';
-        cell.appendChild(cvs);
     } else if (blockType === 'tnt') {
-        // ТНТ — красные и белые полосы с буквами
         cell.className = 'inv-cell filled inv-tnt';
-        const cvs = document.createElement('canvas');
-        cvs.width = 32; cvs.height = 32;
-        const ctx = cvs.getContext('2d');
-        for (let i = 0; i < 4; i++) {
-            ctx.fillStyle = i%2===0 ? '#cc1010' : '#eeeeee';
-            ctx.fillRect(0, i*8, 32, 8);
-        }
-        ctx.fillStyle = '#000'; ctx.font = 'bold 9px monospace';
-        ctx.textAlign = 'center'; ctx.fillText('TNT', 16, 20);
-        cvs.style.cssText = 'width:78%;height:78%;image-rendering:pixelated;';
-        cell.appendChild(cvs);
     } else {
         cell.className = 'inv-cell filled inv-block';
-        const mini = document.createElement('div');
-        const cls = MINE_BLOCK_CLASS[blockType] || 'stone-blk';
-        mini.className = `mc-blk ${cls}`;
-        mini.style.cssText = 'width:78%;height:78%;border-radius:2px;box-shadow:inset 1px 1px 0 rgba(255,255,255,0.4),inset -1px -1px 0 rgba(0,0,0,0.3);pointer-events:none;';
-        cell.appendChild(mini);
     }
+    const img = document.createElement('img');
+    img.src = spriteUrls[blockType] || '/sprites/block_stone.png';
+    img.style.cssText = 'width:78%;height:78%;image-rendering:pixelated;object-fit:contain;';
+    cell.appendChild(img);
 }
 
 // ─── Частицы разбивки блока ───
@@ -2214,193 +2249,16 @@ function revealMineShaft(grid, blockWins, pickaxe, win, balanceBefore, chestMult
     return afterReveal + 400;
 }
 
-// ══════ Генерация Minecraft pixel-art текстур через Canvas ══════
 function setupMineTextures() {
-    if (document.getElementById('mine-tex-style')) return;
-    const S = 16;
-    function rnd(x, y, s) { return (((x*73 + y*151 + s*257) * 2654435761) >>> 0) % 256; }
-    function makeTex(fn) {
-        const c = document.createElement('canvas');
-        c.width = c.height = S;
-        fn(c.getContext('2d'));
-        return c.toDataURL('image/png');
-    }
-
-    // ── Булыжник (cobblestone) — classic Minecraft crack pattern ──
-    function cobblestone(ctx, seed) {
-        // Crack pixel positions (dark grout between stones)
-        const CRACKS = new Set([
-            // Horizontal line y=5 (full width)
-            '0,5','1,5','2,5','3,5','4,5','5,5','6,5','7,5','8,5','9,5','10,5','11,5','12,5','13,5','14,5','15,5',
-            // Horizontal line y=11 (full width)
-            '0,11','1,11','2,11','3,11','4,11','5,11','6,11','7,11','8,11','9,11','10,11','11,11','12,11','13,11','14,11','15,11',
-            // Vertical x=8 (y=0..4 top, y=6..10 mid)
-            '8,0','8,1','8,2','8,3','8,4',
-            '8,6','8,7','8,8','8,9','8,10',
-            // Vertical x=4 (y=0..4 top, y=12..15 bottom)
-            '4,0','4,1','4,2','4,3','4,4',
-            '4,12','4,13','4,14','4,15',
-            // Vertical x=12 (y=0..4 top, y=12..15 bottom)
-            '12,0','12,1','12,2','12,3','12,4',
-            '12,12','12,13','12,14','12,15',
-            // Small vertical x=3 (y=6..10)
-            '3,6','3,7','3,8','3,9','3,10',
-            // Small vertical x=11 (y=6..10)
-            '11,6','11,7','11,8','11,9','11,10',
-        ]);
-        for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
-            if (CRACKS.has(`${x},${y}`)) {
-                // Dark grout with slight variation
-                const n = rnd(x, y, seed+1) % 12;
-                const v = 36 + n * 2;
-                ctx.fillStyle = `rgb(${v},${v},${v})`;
-            } else {
-                // Stone sections — noise-based grey
-                const n = rnd(x, y, seed) % 48;
-                const v = n < 4 ? 88 : n < 10 ? 168 : n < 20 ? 148 : 130;
-                ctx.fillStyle = `rgb(${v},${v},${v})`;
-            }
-            ctx.fillRect(x, y, 1, 1);
-        }
-    }
-
-    // ── Скрытый блок (тёмный, не раскрытый) ──
-    function hiddenBlock(ctx) {
-        for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
-            const n = rnd(x, y, 42) % 20;
-            const v = n < 3 ? 24 : n < 8 ? 48 : 36;
-            ctx.fillStyle = `rgb(${v},${v},${v})`;
-            ctx.fillRect(x, y, 1, 1);
-        }
-        // Dark border lines
-        ctx.fillStyle = '#1a1a1a';
-        for (let i = 0; i < S; i++) { ctx.fillRect(i, 0, 1, 1); ctx.fillRect(i, S-1, 1, 1); ctx.fillRect(0, i, 1, 1); ctx.fillRect(S-1, i, 1, 1); }
-    }
-
-    // ── Руда: кобблестоун-база + яркие пиксельные кластеры ──
-    function addOrePx(ctx, x, y, bright, dark) {
-        // 3×3 pixel ore cluster (cross pattern)
-        const p = (dx, dy, c) => { if (x+dx < S && y+dy < S && x+dx >= 0 && y+dy >= 0) { ctx.fillStyle = c; ctx.fillRect(x+dx, y+dy, 1, 1); } };
-        p(1,0,bright); p(0,1,bright); p(1,1,bright); p(2,1,bright); p(1,2,bright);
-        p(0,0,dark);   p(2,0,dark);   p(0,2,dark);   p(2,2,dark);
-    }
-    function oreTex(seed, bright, mid, dark) {
-        return makeTex(ctx => {
-            cobblestone(ctx, seed);
-            // 8 ore clusters scattered across the 16×16 texture
-            [[1,1],[6,2],[11,1],[13,7],[2,8],[7,7],[10,9],[4,12],[13,13],[1,13]].forEach(([x,y]) => addOrePx(ctx,x,y,bright,dark));
-        });
-    }
-
-    // ── Обсидиан — тёмно-фиолетовый с текстурой ──
-    function obsidianTex(ctx) {
-        for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
-            const n = rnd(x, y, 55) % 32;
-            const r = n<3?44:n<9?20:12, g = n<3?8:4, b = n<3?88:n<9?52:32;
-            ctx.fillStyle = `rgb(${r},${g},${b})`;
-            ctx.fillRect(x, y, 1, 1);
-        }
-        // Purple shimmer clusters
-        [[3,2],[9,1],[13,5],[5,9],[11,12],[2,13],[7,6],[14,10]].forEach(([x,y]) => {
-            ctx.fillStyle = 'rgba(120,40,200,0.7)'; ctx.fillRect(x, y, 2, 2);
-            ctx.fillStyle = 'rgba(160,80,255,0.5)'; ctx.fillRect(x+1, y+1, 1, 1);
-        });
-    }
-
-    // ── Книга — тёмно-фиолетовая обложка с золотой рамкой ──
-    function bookTex(ctx) {
-        for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
-            const n = rnd(x, y, 77) % 16;
-            ctx.fillStyle = n<3 ? `#4a0b90` : `#35076a`;
-            ctx.fillRect(x, y, 1, 1);
-        }
-        ctx.fillStyle = '#C89000';
-        for (let i=0;i<S;i++) { ctx.fillRect(i,0,1,1); ctx.fillRect(i,S-1,1,1); ctx.fillRect(0,i,1,1); ctx.fillRect(S-1,i,1,1); }
-        ctx.fillStyle = '#FFD700';
-        [[7,5],[8,5],[6,6],[9,6],[5,7],[10,7],[6,8],[9,8],[7,9],[8,9],[7,7],[8,7],[7,8],[8,8]].forEach(([x,y])=>ctx.fillRect(x,y,1,1));
-    }
-
-    // ── Сундук — рисуем через canvas (Minecraft-стиль) ──
-    function chestTex(ctx, open) {
-        const W = '#7a4a1a', LW = '#9a6228', DW = '#3a2008', PL = '#c08040';
-        const GT = '#c89000', GL = '#ffe060', GD = '#886000';
-        // Body planks
-        for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
-            const n = rnd(x, y, 100) % 24;
-            // Plank grain lines
-            const grain = (y % 4 === 0 || y % 4 === 3) ? DW : (n < 3 ? DW : n < 8 ? LW : W);
-            ctx.fillStyle = grain;
-            ctx.fillRect(x, y, 1, 1);
-        }
-        if (open) {
-            // Top part: dark interior opening
-            for (let y = 0; y < 7; y++) for (let x = 1; x < S-1; x++) {
-                ctx.fillStyle = y < 4 ? '#0e0704' : '#1c0e06';
-                ctx.fillRect(x, y, 1, 1);
-            }
-            // Interior hint pixels (items inside)
-            ctx.fillStyle = '#2a1a08'; ctx.fillRect(2, 5, 2, 1); ctx.fillRect(8, 4, 3, 1); ctx.fillRect(13, 5, 1, 1);
-        } else {
-            // Latch: gold square in center
-            [[5,6,GT],[6,6,GL],[7,6,GL],[8,6,GL],[9,6,GL],[10,6,GT],
-             [5,7,GT],[6,7,GT],[7,7,GT],[8,7,GT],[9,7,GT],[10,7,GT],
-             [5,8,GD],[6,8,GD],[7,8,GD],[8,8,GD],[9,8,GD],[10,8,GD]].forEach(([x,y,c]) => {
-                ctx.fillStyle = c; ctx.fillRect(x, y, 1, 1);
-            });
-            // Center latch button
-            ctx.fillStyle = '#ffe060'; ctx.fillRect(7, 6, 2, 1);
-            ctx.fillStyle = '#c89000'; ctx.fillRect(7, 8, 2, 1);
-        }
-        // Lid-body separator line
-        ctx.fillStyle = DW;
-        for (let x = 0; x < S; x++) ctx.fillRect(x, open ? 6 : 5, 1, 1);
-        // Corner highlights
-        ctx.fillStyle = PL;
-        ctx.fillRect(0, 0, 1, S); ctx.fillRect(S-1, 0, 1, S);
-        ctx.fillStyle = DW;
-        ctx.fillRect(1, 0, 1, S); ctx.fillRect(S-2, 0, 1, S);
-    }
-
-    const T = {
-        'hidden-blk':   makeTex(hiddenBlock),
-        'stone-blk':    makeTex(ctx => cobblestone(ctx, 13)),
-        'redstone-blk': oreTex(7,  '#FF3030', '#BB0000', '#660000'),
-        'gold-blk':     oreTex(23, '#FFD700', '#CC9900', '#886600'),
-        'diamond-blk':  oreTex(31, '#00EEFF', '#00AABB', '#004466'),
-        'obsidian-blk': makeTex(obsidianTex),
-        'tnt-blk': makeTex(ctx => {
-            for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
-                const st = Math.floor(y/4) % 2;
-                const n  = rnd(x, y, 88) % 8;
-                ctx.fillStyle = st ? (n<2 ? '#DD0000' : '#CC1010') : (n<2 ? '#DDDDDD' : '#C8C8C8');
-                ctx.fillRect(x, y, 1, 1);
-            }
-            ctx.fillStyle = '#fff';
-            ctx.fillRect(3,5,2,1); ctx.fillRect(4,6,1,2); ctx.fillRect(4,5,1,1);
-            ctx.fillRect(6,5,3,1); ctx.fillRect(7,6,1,2);
-            ctx.fillRect(10,5,2,1); ctx.fillRect(10,6,1,2); ctx.fillRect(12,5,1,1); ctx.fillRect(12,6,1,2);
-            ctx.fillStyle = '#3a0000';
-            ctx.fillRect(3,10,10,1);
-        }),
-        'book-blk': makeTex(bookTex),
-    };
-
-    // ── Сундуки — генерируем canvas-текстуры и вставляем в img ──
-    const chestClosed = makeTex(ctx => chestTex(ctx, false));
-    const chestOpen   = makeTex(ctx => chestTex(ctx, true));
-
-    const st = document.createElement('style');
-    st.id = 'mine-tex-style';
-    st.textContent = Object.entries(T).map(([cls, url]) =>
-        `.mc-blk.${cls} { background-image: url("${url}") !important; background-size: 100% 100% !important; background-color: transparent !important; }`
-    ).join('\n')
-    + `\n.mc-chest { background-image: url("${chestClosed}") !important; }`
-    + `\n.mc-chest.open { background-image: url("${chestOpen}") !important; }`;
-    document.head.appendChild(st);
-
-    // Store chest URLs for JS use
-    window._chestClosedUrl = chestClosed;
-    window._chestOpenUrl   = chestOpen;
+    const imgs = [
+        '/sprites/block_stone.png', '/sprites/block_redstone.png',
+        '/sprites/block_gold.png', '/sprites/block_diamond.png',
+        '/sprites/block_obsidian.png', '/sprites/block_tnt.png',
+        '/sprites/block_book.png', '/sprites/chest_closed.png',
+        '/sprites/chest_open.png', '/sprites/crack_1.png',
+        '/sprites/crack_2.png', '/sprites/crack_3.png'
+    ];
+    imgs.forEach(src => { const i = new Image(); i.src = src; });
 }
 
 function initMineGrid() {

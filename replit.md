@@ -30,12 +30,12 @@ public/
   style.css        # Neon dark theme styles
   toncoin-ton-logo.png
   tonconnect-manifest.json
-  sprites/         # Minecraft-style pickaxe PNGs (64x64, transparent bg)
-    pick_wooden.png
-    pick_stone.png
-    pick_iron.png
-    pick_golden.png
-    pick_diamond.png
+  sprites/         # Minecraft-style PNG sprites
+    pick_wooden/stone/iron/golden/diamond.png  # Pickaxe sprites (64x64)
+    block_stone/redstone/gold/diamond/obsidian.png  # Block textures (48x48)
+    block_tnt.png, block_book.png  # Special block textures
+    chest_closed.png, chest_open.png  # Chest sprites
+    crack_1/2/3.png  # Crack overlay stages
 package.json
 ```
 
@@ -109,7 +109,7 @@ Server runs on port 5000, binding to `0.0.0.0`.
 ## Sound System
 
 - Web Audio API synthesized sounds (no external audio files)
-- Sound effects: hit (square wave), break (noise burst), chest (ascending sine), win (arpeggio), click (short ping), spin (triangle sweep)
+- Sound effects: hit (square wave), break (noise burst), chest (ascending sine), win (arpeggio), click (short ping), spin (triangle sweep), explode (noise + bass sawtooth)
 - Ambient background music: slow bass notes with harmonic overtones, auto-starts on first user interaction
 - All sounds use gain envelopes for natural decay
 
@@ -127,7 +127,8 @@ Tabs:
 - **Выводы/Депы**: approve/reject withdrawals, view deposits
 - **Юзеры**: search users, view stats, add/subtract balance, ban/unban
 - **Промо**: create/delete promo codes
-- **Настройки**: RTP controls (Crash, Mines, Coinflip, Spin), maintenance toggles, bot broadcast
+- **Настройки**: RTP controls (Crash, Mines, Coinflip, Spin, Mine), maintenance toggles, bot broadcast
+- **Статистика**: Per-game stats (play count, total bet, total payout, profit), individual/bulk reset
 - **Логи**: admin action log with date search
 
 ## Admin Balance Fix

@@ -1296,6 +1296,43 @@ app.post('/api/admin/user_action', checkAdmin, async (req, res) => {
     res.json({ success: true });
 });
 
+app.post('/api/admin/game_stats', checkAdmin, async (req, res) => {
+    try {
+        const games = ['Crash', 'Mines', 'Coinflip', 'Battle', 'Spin', 'Mine'];
+        const stats = {};
+        for (const game of games) {
+            const agg = await Bet.aggregate([
+                { $match: { game, mode: 'Real' } },
+                { $group: {
+                    _id: null,
+                    playCount: { $sum: 1 },
+                    totalBet: { $sum: '$amount' },
+                    totalPayout: { $sum: { $cond: [{ $gt: ['$result', 0] }, { $add: ['$amount', '$result'] }, 0] } }
+                }}
+            ]);
+            const d = agg[0] || { playCount: 0, totalBet: 0, totalPayout: 0 };
+            stats[game] = { playCount: d.playCount, totalBet: d.totalBet, totalPayout: d.totalPayout, profit: d.totalBet - d.totalPayout };
+        }
+        res.json({ stats });
+    } catch (err) {
+        res.status(500).json({ error: 'Ошибка сервера' });
+    }
+});
+
+app.post('/api/admin/reset_game_stats', checkAdmin, async (req, res) => {
+    try {
+        const { game } = req.body;
+        if (game) {
+            await Bet.deleteMany({ game, mode: 'Real' });
+        } else {
+            await Bet.deleteMany({ mode: 'Real' });
+        }
+        res.json({ ok: true });
+    } catch (err) {
+        res.status(500).json({ error: 'Ошибка сервера' });
+    }
+});
+
 app.post('/api/admin/logs', checkAdmin, async (req, res) => {
     try {
         const page = Math.max(1, parseInt(req.body.page) || 1);
