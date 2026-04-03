@@ -105,7 +105,11 @@ const UserSchema = new mongoose.Schema({
         time: String
     }],
     betHistory: { type: Array, default: [] },
-    mineFreeSpins: { type: Number, default: 0 }
+    mineFreeSpins: { type: Number, default: 0 },
+    wagerRequired: { type: Number, default: 0 },
+    wagerCompleted: { type: Number, default: 0 },
+    totalDeposited: { type: Number, default: 0 },
+    totalWagered: { type: Number, default: 0 }
 });
 
 const BetSchema = new mongoose.Schema({
@@ -157,20 +161,17 @@ async function initSettings() {
         { key: 'maintenance_mines', value: false },
         { key: 'maintenance_coinflip', value: false },
         { key: 'maintenance_battle', value: false },
-        { key: 'rtp_spin', value: 40 },
-        { key: 'rtp_mine', value: 40 },
-        { key: 'maintenance_mine', value: false }
+        { key: 'rtp_spin', value: 90 },
+        { key: 'rtp_mine', value: 90 },
+        { key: 'maintenance_mine', value: false },
+        { key: 'wager_multiplier', value: 2 }
     ];
     for (let setting of defaultSettings) {
         const exists = await Settings.findOne({ key: setting.key });
         if (!exists) await Settings.create(setting);
     }
     
-    // Принудительное снижение RTP spin если стоит старое значение 94
-    const oldSpinRtp = await Settings.findOne({key: 'rtp_spin'});
-    if (oldSpinRtp && oldSpinRtp.value >= 94) {
-        await Settings.updateOne({key: 'rtp_spin'}, {$set: {value: 40}});
-    }
+    // Note: RTP values are now admin-configurable, no forced override
     
     const lastBets = await Bet.find().sort({createdAt: -1}).limit(10);
     globalBetHistory = lastBets.map(b => {
@@ -195,12 +196,30 @@ if (process.env.BOT_TOKEN) {
         }
     });
 
-    bot.onText(/\/(start|help)(?: (.+))?/, (msg, match) => {
+    bot.onText(/\/(start|help)(?: (.+))?/, async (msg, match) => {
         const refParam = match[2] || '';
         const text = `🚀 Привет, ${msg.from.first_name}!\nДобро пожаловать в LoonxGift.\n\nТут ты можешь играть и выигрывать TON! Твой баланс и все игры находятся внутри Mini App.\n\nВыбирай действие в меню ниже:`;
-        
+
         const baseUrl = process.env.WEB_APP_URL || process.env.RENDER_EXTERNAL_URL || 'https://localhost';
-        const appUrl = `${baseUrl}?start_param=${refParam}`;
+        const appUrl = refParam ? `${baseUrl}?start_param=${refParam}` : baseUrl;
+
+        // Auto-register user on /start so referral works even before opening mini app
+        const tgUser = msg.from;
+        let existingUser = await User.findOne({ id: String(tgUser.id) });
+        if (!existingUser && refParam && refParam !== String(tgUser.id)) {
+            existingUser = await User.create({
+                id: String(tgUser.id),
+                username: tgUser.username || tgUser.first_name,
+                photo: ''
+            });
+            const referrer = await User.findOne({ id: String(refParam) });
+            if (referrer) {
+                existingUser.referredBy = String(refParam);
+                referrer.referrals.push(String(tgUser.id));
+                await referrer.save();
+                await existingUser.save();
+            }
+        }
 
         bot.sendMessage(msg.chat.id, text, {
             reply_markup: {
@@ -421,7 +440,9 @@ app.post('/api/auth', async (req, res) => {
         timeMsk: new Date(b.createdAt).toLocaleString("ru-RU", { timeZone: "Europe/Moscow" })
     }));
 
-    res.json({ user: userObj, adminWallet: process.env.ADMIN_WALLET, rtp: rtpData, maintenance: maintenanceData });
+    const wagerSett = await Settings.findOne({ key: 'wager_multiplier' });
+    const wagerMult = wagerSett ? wagerSett.value : 2;
+    res.json({ user: userObj, adminWallet: process.env.ADMIN_WALLET, rtp: rtpData, maintenance: maintenanceData, wagerMultiplier: wagerMult });
 });
 
 app.post('/api/bet', async (req, res) => {
@@ -497,12 +518,12 @@ app.post('/api/bet', async (req, res) => {
         pushToGlobalHistory(newBetEntry);
 
         if (actualMode === 'real') {
-            if (bet > 0) user.stats.bets++; 
-            if (win > 0) { user.stats.wins++; user.stats.plus += win; } 
+            if (bet > 0) { user.stats.bets++; user.totalWagered = Number(((user.totalWagered || 0) + bet).toFixed(2)); user.wagerCompleted = Number(((user.wagerCompleted || 0) + bet).toFixed(2)); }
+            if (win > 0) { user.stats.wins++; user.stats.plus += win; }
             else if (bet > 0) { user.stats.minus += bet; }
         }
         await user.save();
-        
+
         res.json(user);
     } finally {
         actionLocks.delete(id);
@@ -699,7 +720,7 @@ app.post('/api/spin', async (req, res) => {
 
         if (!freeSpinsMode) {
             user[field] = Number((user[field] - betAmount).toFixed(2));
-            if (!isDemo) { user.stats.bets++; user.stats.minus += betAmount; }
+            if (!isDemo) { user.stats.bets++; user.stats.minus += betAmount; user.totalWagered = Number(((user.totalWagered || 0) + betAmount).toFixed(2)); user.wagerCompleted = Number(((user.wagerCompleted || 0) + betAmount).toFixed(2)); }
         }
 
         const grid = generateSpinGrid(id);
@@ -723,16 +744,15 @@ app.post('/api/spin', async (req, res) => {
         const maxWin = betAmount * 40;
         if (actualWin > maxWin) actualWin = maxWin;
 
-        // RTP control: строгий контроль частоты выигрышей
-        // rtpTarget (например 94) / 100 * 0.22 = ~20% шанс выигрыша при 94 RTP
-        // При низком RTP (например 30) — шанс ~6%
+        // RTP control: fair probability based on RTP percentage
+        // rtpTarget 90 = 90% RTP -> winChance scales proportionally
         if (!freeSpinsMode && actualWin > 0) {
-            const winChance = (rtpTarget / 100) * 0.22;
+            const winChance = rtpTarget / 100;
             if (Math.random() > winChance) {
                 actualWin = 0;
             } else {
-                // Урезаем размер выигрыша: максимум 3x от ставки за обычный спин
-                actualWin = Math.min(actualWin, betAmount * 3);
+                // Cap max win per regular spin at 5x bet
+                actualWin = Math.min(actualWin, betAmount * 5);
             }
         }
 
@@ -776,7 +796,7 @@ app.post('/api/spin', async (req, res) => {
 
 // === MINE GAME (Minecraft-style) ===
 const MINE_BLOCKS = ['dirt', 'stone', 'redstone', 'gold', 'diamond', 'obsidian'];
-const MINE_BLOCK_MULTS = { grass: 0.05, dirt: 0.05, stone: 0.1, redstone: 0.2, gold: 0.3, diamond: 0.4, obsidian: 0.5 };
+const MINE_BLOCK_MULTS = { grass: 0.02, dirt: 0.02, stone: 0.05, redstone: 0.09, gold: 0.1, diamond: 0.2, obsidian: 0.3 };
 // 6 rows: row 0 = grass top layer (dirt + rare stone), rows 1-5 = underground
 const MINE_ROW_WEIGHTS = [
     // grass/dirt top: dirt=85%, stone=15%  (no ores)
@@ -829,26 +849,44 @@ function generateMineGrid() {
     return grid;
 }
 
-function generateMineHotbar() {
+function generateMineHotbar(rtpTarget) {
     // 3 rows x 5 cols = 15 slots
+    // TNT: 10%, Book: 5%, Pickaxes: RTP-dependent (lower RTP = fewer/worse pickaxes)
+    // Remaining: empty slots
+    const rtpFactor = Math.max(0.3, Math.min(1.0, (rtpTarget || 50) / 100));
+    const pickChance = 0.25 * rtpFactor; // 7.5%-25% depending on RTP
+    const tntChance = 0.10;
+    const bookChance = 0.05;
+
+    // Adjust pickaxe weights by RTP: lower RTP = more wooden, less diamond
+    const rtpPickWeights = [
+        0.46 + (1 - rtpFactor) * 0.3,  // wooden: more at low RTP
+        0.28,                            // stone: stable
+        0.14 * rtpFactor,               // iron: less at low RTP
+        0.08 * rtpFactor,               // golden: less at low RTP
+        0.04 * rtpFactor * rtpFactor    // diamond: much less at low RTP
+    ];
+    const wSum = rtpPickWeights.reduce((a, b) => a + b, 0);
+    const normPickWeights = rtpPickWeights.map(w => w / wSum);
+
     const slots = [];
     let pickCount = 0;
     for (let i = 0; i < 15; i++) {
         const r = Math.random();
-        if (r < 0.42) {
-            slots.push({ type: 'empty' });
-        } else if (r < 0.76) {
+        if (r < tntChance) {
+            slots.push({ type: 'tnt' });
+        } else if (r < tntChance + bookChance) {
+            slots.push({ type: 'book' });
+        } else if (r < tntChance + bookChance + pickChance) {
             const pr = Math.random(); let cum = 0; let pType = 'wooden';
             for (let j = 0; j < MINE_PICKAXES.length; j++) {
-                cum += MINE_PICKAXE_WEIGHTS[j];
+                cum += normPickWeights[j];
                 if (pr < cum) { pType = MINE_PICKAXES[j]; break; }
             }
             slots.push({ type: 'pickaxe', pickaxeType: pType });
             pickCount++;
-        } else if (r < 0.88) {
-            slots.push({ type: 'book' });
         } else {
-            slots.push({ type: 'tnt' });
+            slots.push({ type: 'empty' });
         }
     }
     if (pickCount === 0) {
@@ -885,12 +923,12 @@ app.post('/api/mine', async (req, res) => {
 
         if (!isFreeAutoSpin) {
             user[field] = Number((user[field] - betAmount).toFixed(2));
-            if (!isDemo) { user.stats.bets++; user.stats.minus += betAmount; }
+            if (!isDemo) { user.stats.bets++; user.stats.minus += betAmount; user.totalWagered = Number(((user.totalWagered || 0) + betAmount).toFixed(2)); user.wagerCompleted = Number(((user.wagerCompleted || 0) + betAmount).toFixed(2)); }
         }
 
         // For auto-spin: reuse existing grid (broken blocks stay null), only re-roll hotbar
         const grid = (isFreeAutoSpin && clientGrid) ? clientGrid : generateMineGrid();
-        const hotbar = generateMineHotbar();
+        const hotbar = generateMineHotbar(rtpTarget);
         // Per-column chest multipliers
         const chestMults = [];
         for (let c = 0; c < 5; c++) chestMults.push(pickChestMult());
@@ -912,13 +950,13 @@ app.post('/api/mine', async (req, res) => {
             blockWins.push(row);
         }
 
-        // RTP control: scale wins so total matches RTP target
-        const winChance = (rtpTarget / 100) * 0.22;
+        // RTP control: fair win chance based on RTP
+        const winChance = rtpTarget / 100;
         let scaleFactor = 1;
         if (Math.random() >= winChance) {
-            scaleFactor = 0.15;
+            scaleFactor = 0.1; // Low win on losing rolls
         }
-        let baseWin = Math.min(rawSum * scaleFactor, effectiveBet * 5);
+        let baseWin = Math.min(rawSum * scaleFactor, effectiveBet * 8);
 
         // Recalculate blockWins with scale factor
         const adjustedBlockWins = [];
@@ -1017,6 +1055,11 @@ app.post('/api/check_deposit', async (req, res) => {
             const user = await User.findOne({ id });
             user.balance = Number((user.balance + amountTON).toFixed(2));
             user.depositHistory.unshift({ hash: txHash, amount: amountTON, status: 'Успешно', time: getMskTime() });
+            // Wager requirement: add deposit * wager_multiplier to required wagering
+            const wagerSetting = await Settings.findOne({ key: 'wager_multiplier' });
+            const wagerMult = wagerSetting ? Number(wagerSetting.value) : 2;
+            user.totalDeposited = Number(((user.totalDeposited || 0) + amountTON).toFixed(2));
+            user.wagerRequired = Number(((user.wagerRequired || 0) + amountTON * wagerMult).toFixed(2));
             await user.save();
             foundNew = true;
             totalAdded += amountTON;
@@ -1079,6 +1122,9 @@ app.post('/api/withdraw', async (req, res) => {
     try {
         const user = await User.findOne({ id });
         if (isNaN(amount) || user.balance < amount || amount < 5) return res.status(400).json({error: 'Min 5 TON'});
+        // Check wager requirement
+        const wagerLeft = (user.wagerRequired || 0) - (user.wagerCompleted || 0);
+        if (wagerLeft > 0) return res.status(400).json({error: `Нужно отыграть ещё ${wagerLeft.toFixed(2)} TON перед выводом`});
         user.balance = Number((user.balance - amount).toFixed(2)); 
         
         const newW = await Withdraw.create({ userId: id, address, amount, time: getMskTime() });
@@ -1132,11 +1178,14 @@ app.post('/api/admin/data', checkAdmin, async (req, res) => {
         timeMsk: new Date(b.createdAt).toLocaleString("ru-RU", { timeZone: "Europe/Moscow" })
     }));
     
-    res.json({ 
-        withdraws, promos, users, totalUsers, 
+    const wagerSetting = await Settings.findOne({ key: 'wager_multiplier' });
+    const wagerMultiplier = wagerSetting ? wagerSetting.value : 2;
+
+    res.json({
+        withdraws, promos, users, totalUsers,
         totalDeposited, totalWithdrawn, latestDeposits,
-        latestBets, betHistory: latestBets, history: latestBets, 
-        rtp: rtpData, maintenance: maintenanceData 
+        latestBets, betHistory: latestBets, history: latestBets,
+        rtp: rtpData, maintenance: maintenanceData, wagerMultiplier
     });
 });
 
@@ -1177,18 +1226,30 @@ app.post(['/api/admin/user_details', '/api/admin/user_history'], checkAdmin, asy
         timeMsk: new Date(b.createdAt).toLocaleString("ru-RU", { timeZone: "Europe/Moscow" })
     }));
 
+    // Get deposit/withdraw totals for this user
+    const userDeposits = await Deposit.find({ userId: targetId }).sort({ _id: -1 }).limit(50);
+    const userWithdraws = await Withdraw.find({ userId: targetId }).sort({ _id: -1 }).limit(50);
+    const totalUserDeposited = userDeposits.reduce((s, d) => s + d.amount, 0);
+    const totalUserWithdrawn = userWithdraws.filter(w => w.status === 'approved').reduce((s, w) => s + w.amount, 0);
+
     const userObj = user.toObject();
     userObj.betHistory = formattedBets;
 
     res.json({
         user: userObj,
         bets: formattedBets,
-        betHistory: formattedBets, 
-        history: formattedBets,    
-        pagination: { 
-            currentPage: Number(page), 
-            totalPages, 
-            totalBets 
+        betHistory: formattedBets,
+        history: formattedBets,
+        deposits: userDeposits.map(d => ({ amount: d.amount, time: d.time, hash: d.hash })),
+        withdrawals: userWithdraws.map(w => ({ amount: w.amount, status: w.status, address: w.address, time: w.time, reason: w.reason })),
+        totalUserDeposited: Number(totalUserDeposited.toFixed(2)),
+        totalUserWithdrawn: Number(totalUserWithdrawn.toFixed(2)),
+        wagerRequired: user.wagerRequired || 0,
+        wagerCompleted: user.wagerCompleted || 0,
+        pagination: {
+            currentPage: Number(page),
+            totalPages,
+            totalBets
         }
     });
 });
@@ -1320,6 +1381,13 @@ app.post('/api/admin/set_rtp', checkAdmin, async (req, res) => {
     res.json({success: true});
 });
 
+app.post('/api/admin/set_wager', checkAdmin, async (req, res) => {
+    const { value } = req.body;
+    await Settings.updateOne({key: 'wager_multiplier'}, {value: Number(value)}, {upsert: true});
+    await logAdmin(`Изменил множитель отыгрыша на x${value}`);
+    res.json({success: true});
+});
+
 app.post('/api/admin/withdraw_action', checkAdmin, async (req, res) => {
     const { wId, action, reason } = req.body;
     const w = await Withdraw.findById(wId);
@@ -1354,7 +1422,7 @@ app.post('/api/admin/withdraw_action', checkAdmin, async (req, res) => {
 });
 
 app.post('/api/admin/user_action', checkAdmin, async (req, res) => {
-    const { userId, action } = req.body;
+    const { userId, action, msg } = req.body;
     if (!userId || !action) return res.status(400).json({ error: 'Не указаны параметры' });
     const user = await User.findOne({ id: String(userId) });
     if (!user) return res.status(404).json({ error: 'Пользователь не найден' });
@@ -1366,6 +1434,19 @@ app.post('/api/admin/user_action', checkAdmin, async (req, res) => {
         user.isBlocked = false;
         await logAdmin(`Разбанил пользователя ${user.username || user.id}`);
         if (bot) bot.sendMessage(user.id, '✅ Ваш аккаунт разблокирован.').catch(() => {});
+    } else if (action === 'message') {
+        if (!msg) return res.status(400).json({ error: 'Пустое сообщение' });
+        if (bot) {
+            try {
+                await bot.sendMessage(user.id, `📩 Сообщение от администрации:\n\n${msg}`);
+                await logAdmin(`Отправил сообщение пользователю ${user.username || user.id}: ${msg.substring(0, 50)}...`);
+            } catch(e) {
+                return res.status(400).json({ error: 'Не удалось отправить сообщение. Возможно, пользователь не запускал бота.' });
+            }
+        } else {
+            return res.status(400).json({ error: 'Бот не запущен' });
+        }
+        return res.json({ success: true });
     } else {
         return res.status(400).json({ error: 'Неизвестное действие' });
     }
