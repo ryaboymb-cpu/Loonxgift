@@ -17,6 +17,17 @@ header { padding: 15px; display: flex; justify-content: space-between; align-ite
 .avatar { width: 45px; height: 45px; border-radius: 50%; border: 2px solid var(--neon); object-fit: cover; }
 .bal-wrap { display: flex; align-items: center; gap: 5px; font-size: 18px; font-weight: 900; color: #fff; }
 
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background: #0b0f1a;
+}
+
+#root {
+  height: 100%;
+}
+
 /* ИСПРАВЛЕНО: Настоящий значок TON */
 .ton-icon { 
     width: 22px; 
