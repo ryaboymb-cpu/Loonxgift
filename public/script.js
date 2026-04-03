@@ -4,9 +4,9 @@ tonwebScript.src = 'https://unpkg.com/tonweb@0.0.60/dist/tonweb.js';
 document.head.appendChild(tonwebScript);
 
 const tg = window.Telegram.WebApp;
-
-tg.ready();
-tg.expand();
+const socket = io();
+let user = null; 
+let mode = 'real';
 
 // ═══ SOUND SYSTEM (Web Audio API) ═══
 let _audioCtx = null;
