@@ -34,10 +34,11 @@ mongoose.connect(process.env.MONGO_URI).then(() => console.log('✅ DB Connected
 
 // --- 1. TON CONNECT MANIFEST ---
 app.get('/tonconnect-manifest.json', (req, res) => {
+    const baseUrl = process.env.WEB_APP_URL || process.env.RENDER_EXTERNAL_URL || 'https://localhost';
     res.json({
-        url: process.env.WEB_APP_URL || process.env.RENDER_EXTERNAL_URL || 'https://localhost',
-        name: "LoonxGift", 
-        iconUrl: "https://cdn-icons-png.flaticon.com/512/149/149071.png",
+        url: baseUrl,
+        name: "LoonxGift",
+        iconUrl: baseUrl + "/toncoin-ton-logo.png",
         termsOfUseUrl: "",
         privacyPolicyUrl: ""
     });
@@ -625,27 +626,33 @@ app.post('/api/battle/cancel', async (req, res) => {
 // === SPIN GAME ===
 const spinUserStreaks = {};
 
-// 9 чистых пейлайнов: ряды + V-образные + ступеньки (только прямые и плавные линии)
+// 15 пейлайнов: ряды + V-образные + ступеньки + зигзаги + диагонали (синхронизировано с фронтендом)
 const SPIN_PAYLINES = [
-    [0,0,0,0,0],  // верхний ряд
-    [1,1,1,1,1],  // средний ряд
-    [2,2,2,2,2],  // нижний ряд
-    [0,1,2,1,0],  // V-вниз
-    [2,1,0,1,2],  // V-вверх
-    [0,0,1,2,2],  // ступенька вниз
-    [2,2,1,0,0],  // ступенька вверх
-    [0,1,1,1,2],  // прогиб вниз
-    [2,1,1,1,0],  // прогиб вверх
+    [1,1,1,1,1],  // 0: средний ряд
+    [0,0,0,0,0],  // 1: верхний ряд
+    [2,2,2,2,2],  // 2: нижний ряд
+    [0,1,2,1,0],  // 3: V-вниз
+    [2,1,0,1,2],  // 4: V-вверх
+    [0,0,1,2,2],  // 5: ступенька вниз
+    [2,2,1,0,0],  // 6: ступенька вверх
+    [1,0,1,0,1],  // 7: зигзаг верх
+    [0,1,0,1,0],  // 8: зигзаг низ
+    [1,2,1,2,1],  // 9: зигзаг низ2
+    [2,1,2,1,2],  // 10: зигзаг верх2
+    [0,1,1,1,2],  // 11: прогиб вниз
+    [2,1,1,1,0],  // 12: прогиб вверх
+    [1,1,0,1,1],  // 13: впадина вверх
+    [1,1,2,1,1],  // 14: впадина вниз
 ];
 
-const SPIN_PAYTABLE = { 'L': { 3: 0.5, 4: 1, 5: 2 }, 'X': { 3: 2, 4: 5, 5: 10 } };
+const SPIN_PAYTABLE = { 'L': { 3: 0.3, 4: 0.8, 5: 1.5 }, 'X': { 3: 1.5, 4: 4, 5: 8 } };
 
 function generateSpinGrid(userId) {
     const streak = spinUserStreaks[userId] || { losses: 0, wins: 0, progress: 0 };
-    // G очень редкий символ: 2.5% базово. При проигрышной серии чуть выше, при выигрышной — ниже
-    let freqG = 0.025, freqX = 0.28;
-    if (streak.losses >= 4) { freqX = Math.min(0.36, freqX + streak.losses * 0.015); freqG = Math.min(0.04, freqG + 0.005); }
-    else if (streak.wins >= 4) { freqX = Math.max(0.18, freqX - streak.wins * 0.02); freqG = Math.max(0.015, freqG - 0.005); }
+    // G очень редкий: 2%, X умеренно: 20%. При проигрышной серии чуть выше
+    let freqG = 0.02, freqX = 0.20;
+    if (streak.losses >= 4) { freqX = Math.min(0.28, freqX + streak.losses * 0.01); freqG = Math.min(0.035, freqG + 0.004); }
+    else if (streak.wins >= 3) { freqX = Math.max(0.14, freqX - streak.wins * 0.02); freqG = Math.max(0.012, freqG - 0.003); }
     const grid = [];
     for (let r = 0; r < 3; r++) {
         const row = [];
@@ -796,7 +803,7 @@ app.post('/api/spin', async (req, res) => {
 
 // === MINE GAME (Minecraft-style) ===
 const MINE_BLOCKS = ['dirt', 'stone', 'redstone', 'gold', 'diamond', 'obsidian'];
-const MINE_BLOCK_MULTS = { grass: 0.02, dirt: 0.02, stone: 0.05, redstone: 0.09, gold: 0.1, diamond: 0.2, obsidian: 0.3 };
+const MINE_BLOCK_MULTS = { grass: 0.05, dirt: 0.05, stone: 0.09, redstone: 0.1, gold: 0.15, diamond: 0.2, obsidian: 0.3 };
 // 6 rows: row 0 = grass top layer (dirt + rare stone), rows 1-5 = underground
 const MINE_ROW_WEIGHTS = [
     // grass/dirt top: dirt=85%, stone=15%  (no ores)
