@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>LoonxGift</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
@@ -73,6 +73,21 @@
             <div class="game-card" onclick="navGame('mine')" style="border-color: #c87020;">
                 <div class="g-icon" style="background: linear-gradient(135deg, #8B5A2B, #c87020); box-shadow: 0 0 15px rgba(200,112,32,0.3); font-size:22px;">⛏️</div>
                 <div><h3 style="margin-bottom:5px;">Mine</h3><p style="color:var(--sub); font-size:12px; font-weight:600;">Добывай блоки и выигрывай</p></div>
+            </div>
+
+            <div class="game-card" onclick="navGame('upgrade')" style="border-color: #00e5ff;">
+                <div class="g-icon" style="background: linear-gradient(135deg, #0097a7, #00e5ff); box-shadow: 0 0 15px rgba(0,229,255,0.3); font-size:22px;">⬆️</div>
+                <div><h3 style="margin-bottom:5px;">Upgrade</h3><p style="color:var(--sub); font-size:12px; font-weight:600;">Удвой свою ставку</p></div>
+            </div>
+
+            <div class="game-card" onclick="navGame('plinko')" style="border-color: #e040fb;">
+                <div class="g-icon" style="background: linear-gradient(135deg, #9c27b0, #e040fb); box-shadow: 0 0 15px rgba(224,64,251,0.3); font-size:22px;">📍</div>
+                <div><h3 style="margin-bottom:5px;">Plinko</h3><p style="color:var(--sub); font-size:12px; font-weight:600;">Шарик падает - ты выигрываешь</p></div>
+            </div>
+
+            <div class="game-card" onclick="navGame('duck')" style="border-color: #ffd600;">
+                <div class="g-icon" style="background: linear-gradient(135deg, #f9a825, #ffd600); box-shadow: 0 0 15px rgba(255,214,0,0.3); font-size:22px;">🦆</div>
+                <div><h3 style="margin-bottom:5px;">Duck</h3><p style="color:var(--sub); font-size:12px; font-weight:600;">Поймай утку с призом</p></div>
             </div>
 
             <h3 style="margin:20px 0 10px 0; color:var(--sub); font-size:14px; text-transform:uppercase;">Лайв Ставки</h3>
@@ -165,6 +180,7 @@
         </div>
 
         <div id="page-crash" class="page">
+            <button class="game-back-btn" onclick="nav('games', document.querySelector('.nav-item'))">← Назад</button>
             <div class="cr-history" id="cr-history"></div>
             <div class="crash-screen">
                 <div id="cr-x">1.00x</div>
@@ -177,6 +193,7 @@
         </div>
 
         <div id="page-mines" class="page">
+            <button class="game-back-btn" onclick="nav('games', document.querySelector('.nav-item'))">← Назад</button>
             <div class="mines-grid" id="mine-grid"></div>
             <div class="quick-bets" id="qb-mines" style="display:flex; justify-content:center; gap:5px; flex-wrap:wrap; margin-bottom:10px;"></div>
             <input type="number" id="mi-bet" class="input-box" placeholder="Сумма ставки (TON)">
@@ -184,6 +201,7 @@
         </div>
 
         <div id="page-coinflip" class="page">
+            <button class="game-back-btn" onclick="nav('games', document.querySelector('.nav-item'))">← Назад</button>
             <div class="coin-container">
                 <div class="coin" id="coin-3d">
                     <div class="c-face c-front">L</div>
@@ -200,10 +218,11 @@
         </div>
 
         <div id="page-spin" class="page">
+            <button class="game-back-btn" onclick="nav('games', document.querySelector('.nav-item'))">← Назад</button>
             <div class="spin-screen card">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
                     <span id="spin-progress-label" style="font-size:11px; color:var(--neon); font-weight:bold; letter-spacing:1px;">БОНУС ПРОГРЕСС: 0%</span>
-                    <span style="font-size:10px; color:var(--sub); font-weight:bold;">MAX ×40</span>
+                    <span style="font-size:10px; color:var(--sub); font-weight:bold;">MAX ×15</span>
                 </div>
                 <div class="spin-progress-bar"><div class="spin-progress-fill" id="spin-progress-fill" style="width:0%"></div></div>
 
@@ -225,6 +244,7 @@
         </div>
 
         <div id="page-mine" class="page">
+            <button class="game-back-btn" onclick="nav('games', document.querySelector('.nav-item'))">← Назад</button>
             <div class="card mine-card">
 
                 <!-- ИНВЕНТАРЬ 5×3: заполняется предметами по ходу игры -->
@@ -268,6 +288,47 @@
             </div>
         </div>
 
+        <div id="page-upgrade" class="page">
+            <button class="game-back-btn" onclick="nav('games', document.querySelector('.nav-item'))">← Назад</button>
+            <div class="card" style="text-align:center; padding:30px;">
+                <h2 style="color:#00e5ff; margin-bottom:15px;">⬆️ Upgrade</h2>
+                <div id="upgrade-display" style="font-size:48px; font-weight:900; color:#00e5ff; text-shadow:0 0 20px rgba(0,229,255,0.6); margin:20px 0;">1.00x</div>
+                <div id="upgrade-result" style="margin-bottom:15px; font-size:18px; font-weight:bold;"></div>
+                <div class="quick-bets" id="qb-upgrade"></div>
+                <input type="number" id="up-bet" class="input-box" placeholder="Ставка (0.1-25 TON)" step="0.1" min="0.1" max="25">
+                <button id="up-btn" class="btn" style="background:linear-gradient(135deg, #0097a7, #00e5ff); color:#fff;" onclick="playUpgrade()">АПГРЕЙД ⬆️</button>
+            </div>
+        </div>
+
+        <div id="page-plinko" class="page">
+            <button class="game-back-btn" onclick="nav('games', document.querySelector('.nav-item'))">← Назад</button>
+            <div class="card" style="text-align:center; padding:15px;">
+                <h2 style="color:#e040fb; margin-bottom:10px;">📍 Plinko</h2>
+                <canvas id="plinko-canvas" width="320" height="400" style="width:100%; max-width:320px; background:#0a0a0a; border-radius:12px; border:1px solid #333;"></canvas>
+                <div id="plinko-result" style="margin:10px 0; font-size:18px; font-weight:bold;"></div>
+                <div style="display:flex; gap:5px; justify-content:center; margin-bottom:10px;">
+                    <button class="qb-btn" onclick="setPlinkoRisk('low', this)" style="flex:none; padding:8px 14px;">Low</button>
+                    <button class="qb-btn qb-sel" onclick="setPlinkoRisk('medium', this)" style="flex:none; padding:8px 14px;">Medium</button>
+                    <button class="qb-btn" onclick="setPlinkoRisk('high', this)" style="flex:none; padding:8px 14px;">High</button>
+                </div>
+                <div class="quick-bets" id="qb-plinko"></div>
+                <input type="number" id="pl-bet" class="input-box" placeholder="Ставка (0.1-25 TON)" step="0.1" min="0.1" max="25">
+                <button id="pl-btn" class="btn" style="background:linear-gradient(135deg, #9c27b0, #e040fb); color:#fff;" onclick="playPlinko()">DROP 📍</button>
+            </div>
+        </div>
+
+        <div id="page-duck" class="page">
+            <button class="game-back-btn" onclick="nav('games', document.querySelector('.nav-item'))">← Назад</button>
+            <div class="card" style="text-align:center; padding:20px;">
+                <h2 style="color:#ffd600; margin-bottom:15px;">🦆 Duck Hunt</h2>
+                <div id="duck-pond" style="display:grid; grid-template-columns:repeat(5,1fr); gap:8px; margin-bottom:15px;"></div>
+                <div id="duck-result" style="margin-bottom:15px; font-size:18px; font-weight:bold;"></div>
+                <div class="quick-bets" id="qb-duck"></div>
+                <input type="number" id="dk-bet" class="input-box" placeholder="Ставка (0.1-25 TON)" step="0.1" min="0.1" max="25">
+                <button id="dk-btn" class="btn" style="background:linear-gradient(135deg, #f9a825, #ffd600); color:#000;" onclick="playDuck()">PLAY 🦆</button>
+            </div>
+        </div>
+
         <!-- ФРИСПИН АКТИВАЦИЯ ОВЕРЛЕЙ -->
         <div id="freespin-overlay" style="display:none; position:fixed; inset:0; z-index:9500; background:rgba(0,0,0,0.85); backdrop-filter:blur(8px); flex-direction:column; align-items:center; justify-content:center;">
             <div style="text-align:center; animation: fsPopIn 0.5s cubic-bezier(0.34,1.56,0.64,1);">
@@ -279,6 +340,7 @@
         </div>
 
         <div id="page-battle" class="page">
+            <button class="game-back-btn" onclick="nav('games', document.querySelector('.nav-item'))">← Назад</button>
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
                 <h3 style="color:var(--text); font-weight:900;">BATTLE LOBBIES</h3>
                 <button class="btn" style="width:auto; padding:8px 15px; font-size:12px; background:var(--neon-blue);" onclick="openBattleModal()">СОЗДАТЬ</button>
