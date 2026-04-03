@@ -165,7 +165,13 @@ async function initSettings() {
         { key: 'rtp_spin', value: 90 },
         { key: 'rtp_mine', value: 90 },
         { key: 'maintenance_mine', value: false },
-        { key: 'wager_multiplier', value: 2 }
+        { key: 'wager_multiplier', value: 2 },
+        { key: 'rtp_upgrade', value: 85 },
+        { key: 'rtp_plinko', value: 88 },
+        { key: 'rtp_duck', value: 87 },
+        { key: 'maintenance_upgrade', value: false },
+        { key: 'maintenance_plinko', value: false },
+        { key: 'maintenance_duck', value: false }
     ];
     for (let setting of defaultSettings) {
         const exists = await Settings.findOne({ key: setting.key });
@@ -197,8 +203,8 @@ if (process.env.BOT_TOKEN) {
         }
     });
 
-    bot.onText(/\/(start|help)(?: (.+))?/, async (msg, match) => {
-        const refParam = match[2] || '';
+    bot.onText(/\/start(?: (.+))?/, async (msg, match) => {
+        const refParam = match[1] || '';
         const text = `🚀 Привет, ${msg.from.first_name}!\nДобро пожаловать в LoonxGift.\n\nТут ты можешь играть и выигрывать TON! Твой баланс и все игры находятся внутри Mini App.\n\nВыбирай действие в меню ниже:`;
 
         const baseUrl = process.env.WEB_APP_URL || process.env.RENDER_EXTERNAL_URL || 'https://localhost';
@@ -232,6 +238,10 @@ if (process.env.BOT_TOKEN) {
             }
         });
     });
+
+    bot.onText(/\/help/, (msg) => {
+        bot.sendMessage(msg.chat.id, `ℹ️ LoonxGift — игровая платформа на TON.\n\nКоманды:\n/start — Запустить бота\n/help — Помощь\n\nОткройте Mini App для игры и управления балансом.`);
+    });
     console.log('🤖 Бот успешно запущен (Polling)');
 } else {
     console.log('❌ BOT_TOKEN не найден в .env');
@@ -255,7 +265,7 @@ async function runCrash() {
     crash.status = 'running'; crash.multiplier = 1.0;
     const rtpSetting = await Settings.findOne({key: 'rtp_crash'});
     const rtp = rtpSetting ? rtpSetting.value : 90; 
-    const limit = Math.pow(100 / (100 - (Math.random() * rtp)), 0.9).toFixed(2);
+    const limit = Math.pow(100 / (100 - (Math.random() * rtp)), 0.7).toFixed(2);
     
     const r = setInterval(async () => {
         crash.multiplier = (parseFloat(crash.multiplier) + 0.015).toFixed(2);
@@ -645,14 +655,14 @@ const SPIN_PAYLINES = [
     [1,1,2,1,1],  // 14: впадина вниз
 ];
 
-const SPIN_PAYTABLE = { 'L': { 3: 0.3, 4: 0.8, 5: 1.5 }, 'X': { 3: 1.5, 4: 4, 5: 8 } };
+const SPIN_PAYTABLE = { 'L': { 3: 0.2, 4: 0.5, 5: 1.0 }, 'X': { 3: 0.8, 4: 2.0, 5: 4.0 } };
 
 function generateSpinGrid(userId) {
     const streak = spinUserStreaks[userId] || { losses: 0, wins: 0, progress: 0 };
     // G очень редкий: 2%, X умеренно: 20%. При проигрышной серии чуть выше
-    let freqG = 0.02, freqX = 0.20;
-    if (streak.losses >= 4) { freqX = Math.min(0.28, freqX + streak.losses * 0.01); freqG = Math.min(0.035, freqG + 0.004); }
-    else if (streak.wins >= 3) { freqX = Math.max(0.14, freqX - streak.wins * 0.02); freqG = Math.max(0.012, freqG - 0.003); }
+    let freqG = 0.01, freqX = 0.15;
+    if (streak.losses >= 4) { freqX = Math.min(0.22, freqX + streak.losses * 0.008); freqG = Math.min(0.02, freqG + 0.002); }
+    else if (streak.wins >= 3) { freqX = Math.max(0.10, freqX - streak.wins * 0.015); freqG = Math.max(0.006, freqG - 0.002); }
     const grid = [];
     for (let r = 0; r < 3; r++) {
         const row = [];
@@ -693,7 +703,7 @@ function countSymbols(grid, sym) {
 function applyHiddenG(grid) {
     const rand = Math.random();
     // Скрытая G очень редко: 4% — одна штука, двух больше нет
-    let hiddenCount = rand < 0.04 ? 1 : 0;
+    let hiddenCount = rand < 0.01 ? 1 : 0;
     const positions = [];
     if (hiddenCount > 0) {
         const nonG = [];
@@ -748,7 +758,7 @@ app.post('/api/spin', async (req, res) => {
 
         const freeMult = freeSpinsMode ? (parseFloat(currentMultiplier) || 1) : 1;
         let actualWin = Number((totalWin * freeMult).toFixed(2));
-        const maxWin = betAmount * 40;
+        const maxWin = betAmount * 15;
         if (actualWin > maxWin) actualWin = maxWin;
 
         // RTP control: fair probability based on RTP percentage
@@ -759,7 +769,7 @@ app.post('/api/spin', async (req, res) => {
                 actualWin = 0;
             } else {
                 // Cap max win per regular spin at 5x bet
-                actualWin = Math.min(actualWin, betAmount * 5);
+                actualWin = Math.min(actualWin, betAmount * 3);
             }
         }
 
@@ -803,7 +813,7 @@ app.post('/api/spin', async (req, res) => {
 
 // === MINE GAME (Minecraft-style) ===
 const MINE_BLOCKS = ['dirt', 'stone', 'redstone', 'gold', 'diamond', 'obsidian'];
-const MINE_BLOCK_MULTS = { grass: 0.05, dirt: 0.05, stone: 0.09, redstone: 0.1, gold: 0.15, diamond: 0.2, obsidian: 0.3 };
+const MINE_BLOCK_MULTS = { grass: 0.02, dirt: 0.02, stone: 0.04, redstone: 0.05, gold: 0.08, diamond: 0.12, obsidian: 0.18 };
 // 6 rows: row 0 = grass top layer (dirt + rare stone), rows 1-5 = underground
 const MINE_ROW_WEIGHTS = [
     // grass/dirt top: dirt=85%, stone=15%  (no ores)
@@ -824,8 +834,8 @@ const MINE_PICKAXE_WEIGHTS = [0.46, 0.28, 0.14, 0.08, 0.04];
 const MINE_PICKAXE_MULTS = { wooden: 1.2, stone: 1.5, iron: 2.0, golden: 3.0, diamond: 5.0 };
 
 const CHEST_MULT_VALUES  = [2, 3, 4, 5, 6, 7, 8];
-const CHEST_MULT_WEIGHTS = [0.36, 0.25, 0.18, 0.10, 0.06, 0.03, 0.02];
-const CHEST_MULT_EXPECTED = 3.42; // weighted average, used to normalize base win
+const CHEST_MULT_WEIGHTS = [0.45, 0.25, 0.15, 0.08, 0.04, 0.02, 0.01];
+const CHEST_MULT_EXPECTED = 2.98;
 
 function pickChestMult() {
     const r = Math.random(); let cum = 0;
@@ -862,8 +872,8 @@ function generateMineHotbar(rtpTarget) {
     // Remaining: empty slots
     const rtpFactor = Math.max(0.3, Math.min(1.0, (rtpTarget || 50) / 100));
     const pickChance = 0.25 * rtpFactor; // 7.5%-25% depending on RTP
-    const tntChance = 0.10;
-    const bookChance = 0.05;
+    const tntChance = 0.03;
+    const bookChance = 0.02;
 
     // Adjust pickaxe weights by RTP: lower RTP = more wooden, less diamond
     const rtpPickWeights = [
@@ -963,7 +973,7 @@ app.post('/api/mine', async (req, res) => {
         if (Math.random() >= winChance) {
             scaleFactor = 0.1; // Low win on losing rolls
         }
-        let baseWin = Math.min(rawSum * scaleFactor, effectiveBet * 8);
+        let baseWin = Math.min(rawSum * scaleFactor, effectiveBet * 4);
 
         // Recalculate blockWins with scale factor
         const adjustedBlockWins = [];
@@ -1014,6 +1024,141 @@ app.post('/api/mine', async (req, res) => {
     }
 });
 
+// === UPGRADE GAME ===
+app.post('/api/upgrade', async (req, res) => {
+    const { id, bet, mode } = req.body;
+    if (actionLocks.has(id)) return res.status(429).json({ error: 'Подождите...' });
+    actionLocks.add(id);
+    try {
+        const user = await User.findOne({ id });
+        if (!user || user.isBlocked) return res.status(403).send();
+        const isDemo = mode === 'demo';
+        const field = isDemo ? 'demo_balance' : 'balance';
+        const betAmount = parseFloat(bet) || 0;
+        if (betAmount < 0.1 || betAmount > 25) return res.status(400).json({ error: 'Ставка от 0.1 до 25 TON' });
+        if (user[field] < betAmount) return res.status(400).json({ error: 'Недостаточно средств' });
+        const maintSetting = await Settings.findOne({ key: 'maintenance_upgrade' });
+        if (maintSetting && maintSetting.value === true) return res.status(400).json({ error: 'Игра на техническом обслуживании' });
+        const rtpSetting = await Settings.findOne({ key: 'rtp_upgrade' });
+        const rtpTarget = rtpSetting ? Number(rtpSetting.value) : 85;
+        user[field] = Number((user[field] - betAmount).toFixed(2));
+        if (!isDemo) { user.stats.bets++; user.stats.minus += betAmount; user.totalWagered = Number(((user.totalWagered || 0) + betAmount).toFixed(2)); user.wagerCompleted = Number(((user.wagerCompleted || 0) + betAmount).toFixed(2)); }
+        const winChance = rtpTarget / 100;
+        const isWin = Math.random() < winChance * 0.4;
+        const mult = isWin ? (1.5 + Math.random() * 2.5) : 0;
+        const actualWin = isWin ? Number((betAmount * mult).toFixed(2)) : 0;
+        if (actualWin > 0) { user[field] = Number((user[field] + actualWin).toFixed(2)); if (!isDemo) { user.stats.wins++; user.stats.plus += actualWin; } }
+        await user.save();
+        if (!isDemo) {
+            const betEntry = new Bet({ userId: user.id, username: user.username, avatar: user.photo || '', game: 'Upgrade', amount: betAmount, multiplier: mult, result: actualWin - betAmount, mode: 'Real', balanceAfter: user[field], balance: user[field] });
+            await betEntry.save(); pushToGlobalHistory(betEntry);
+        }
+        res.json({ win: actualWin, multiplier: Number(mult.toFixed(2)), user });
+    } catch (err) { console.error('Upgrade error:', err); res.status(500).json({ error: 'Ошибка сервера' }); } finally { actionLocks.delete(id); }
+});
+
+// === PLINKO GAME ===
+app.post('/api/plinko', async (req, res) => {
+    const { id, bet, mode, risk } = req.body;
+    if (actionLocks.has(id)) return res.status(429).json({ error: 'Подождите...' });
+    actionLocks.add(id);
+    try {
+        const user = await User.findOne({ id });
+        if (!user || user.isBlocked) return res.status(403).send();
+        const isDemo = mode === 'demo';
+        const field = isDemo ? 'demo_balance' : 'balance';
+        const betAmount = parseFloat(bet) || 0;
+        if (betAmount < 0.1 || betAmount > 25) return res.status(400).json({ error: 'Ставка от 0.1 до 25 TON' });
+        if (user[field] < betAmount) return res.status(400).json({ error: 'Недостаточно средств' });
+        const maintSetting = await Settings.findOne({ key: 'maintenance_plinko' });
+        if (maintSetting && maintSetting.value === true) return res.status(400).json({ error: 'Игра на техническом обслуживании' });
+        const rtpSetting = await Settings.findOne({ key: 'rtp_plinko' });
+        const rtpTarget = rtpSetting ? Number(rtpSetting.value) : 88;
+        user[field] = Number((user[field] - betAmount).toFixed(2));
+        if (!isDemo) { user.stats.bets++; user.stats.minus += betAmount; user.totalWagered = Number(((user.totalWagered || 0) + betAmount).toFixed(2)); user.wagerCompleted = Number(((user.wagerCompleted || 0) + betAmount).toFixed(2)); }
+        // Plinko: ball drops through 12 rows of pegs, landing in one of 13 buckets
+        const riskLevel = risk || 'medium';
+        const lowMults =    [1.2, 1.1, 1.0, 0.7, 0.5, 0.3, 0.2, 0.3, 0.5, 0.7, 1.0, 1.1, 1.2];
+        const medMults =    [2.0, 1.5, 1.2, 0.8, 0.5, 0.3, 0.2, 0.3, 0.5, 0.8, 1.2, 1.5, 2.0];
+        const highMults =   [5.0, 2.5, 1.5, 0.8, 0.4, 0.2, 0.1, 0.2, 0.4, 0.8, 1.5, 2.5, 5.0];
+        const mults = riskLevel === 'low' ? lowMults : riskLevel === 'high' ? highMults : medMults;
+        // Simulate ball path through 12 rows
+        const path = [];
+        let pos = 6; // start center
+        for (let row = 0; row < 12; row++) {
+            const goRight = Math.random() < 0.5;
+            pos = Math.max(0, Math.min(12, pos + (goRight ? 1 : -1)));
+            path.push(pos);
+        }
+        // RTP adjustment
+        let bucket = path[path.length - 1];
+        let mult = mults[bucket];
+        if (Math.random() > rtpTarget / 100 && mult > 1) { bucket = 6; mult = mults[6]; path[path.length - 1] = 6; }
+        const actualWin = Number((betAmount * mult).toFixed(2));
+        if (actualWin > 0) { user[field] = Number((user[field] + actualWin).toFixed(2)); if (!isDemo && actualWin > betAmount) { user.stats.wins++; user.stats.plus += actualWin; } }
+        await user.save();
+        if (!isDemo) {
+            const betEntry = new Bet({ userId: user.id, username: user.username, avatar: user.photo || '', game: 'Plinko', amount: betAmount, multiplier: mult, result: actualWin - betAmount, mode: 'Real', balanceAfter: user[field], balance: user[field] });
+            await betEntry.save(); pushToGlobalHistory(betEntry);
+        }
+        res.json({ path, bucket, multiplier: mult, win: actualWin, mults, user });
+    } catch (err) { console.error('Plinko error:', err); res.status(500).json({ error: 'Ошибка сервера' }); } finally { actionLocks.delete(id); }
+});
+
+// === DUCK GAME ===
+app.post('/api/duck', async (req, res) => {
+    const { id, bet, mode, duckCount } = req.body;
+    if (actionLocks.has(id)) return res.status(429).json({ error: 'Подождите...' });
+    actionLocks.add(id);
+    try {
+        const user = await User.findOne({ id });
+        if (!user || user.isBlocked) return res.status(403).send();
+        const isDemo = mode === 'demo';
+        const field = isDemo ? 'demo_balance' : 'balance';
+        const betAmount = parseFloat(bet) || 0;
+        if (betAmount < 0.1 || betAmount > 25) return res.status(400).json({ error: 'Ставка от 0.1 до 25 TON' });
+        if (user[field] < betAmount) return res.status(400).json({ error: 'Недостаточно средств' });
+        const maintSetting = await Settings.findOne({ key: 'maintenance_duck' });
+        if (maintSetting && maintSetting.value === true) return res.status(400).json({ error: 'Игра на техническом обслуживании' });
+        const rtpSetting = await Settings.findOne({ key: 'rtp_duck' });
+        const rtpTarget = rtpSetting ? Number(rtpSetting.value) : 87;
+        user[field] = Number((user[field] - betAmount).toFixed(2));
+        if (!isDemo) { user.stats.bets++; user.stats.minus += betAmount; user.totalWagered = Number(((user.totalWagered || 0) + betAmount).toFixed(2)); user.wagerCompleted = Number(((user.wagerCompleted || 0) + betAmount).toFixed(2)); }
+        // Duck: pick N ducks from a pond of 10, some have prizes
+        const totalDucks = 10;
+        const picks = Math.min(Math.max(1, duckCount || 3), 5);
+        const prizes = [];
+        for (let i = 0; i < totalDucks; i++) {
+            const r = Math.random();
+            if (r < 0.15) prizes.push(Number((betAmount * (0.5 + Math.random() * 2)).toFixed(2)));
+            else if (r < 0.35) prizes.push(Number((betAmount * (0.1 + Math.random() * 0.5)).toFixed(2)));
+            else prizes.push(0);
+        }
+        // Shuffle prizes
+        for (let i = prizes.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [prizes[i], prizes[j]] = [prizes[j], prizes[i]]; }
+        // Player picks
+        const picked = [];
+        const usedIdxs = new Set();
+        for (let p = 0; p < picks; p++) {
+            let idx;
+            do { idx = Math.floor(Math.random() * totalDucks); } while (usedIdxs.has(idx));
+            usedIdxs.add(idx);
+            picked.push({ index: idx, prize: prizes[idx] });
+        }
+        let totalWin = picked.reduce((s, p) => s + p.prize, 0);
+        // RTP control
+        if (Math.random() > rtpTarget / 100 && totalWin > betAmount) { totalWin = Number((betAmount * 0.1).toFixed(2)); picked.forEach(p => p.prize = Number((totalWin / picks).toFixed(2))); }
+        totalWin = Number(totalWin.toFixed(2));
+        if (totalWin > 0) { user[field] = Number((user[field] + totalWin).toFixed(2)); if (!isDemo && totalWin > betAmount) { user.stats.wins++; user.stats.plus += totalWin; } }
+        await user.save();
+        if (!isDemo) {
+            const betEntry = new Bet({ userId: user.id, username: user.username, avatar: user.photo || '', game: 'Duck', amount: betAmount, multiplier: betAmount > 0 ? totalWin / betAmount : 0, result: totalWin - betAmount, mode: 'Real', balanceAfter: user[field], balance: user[field] });
+            await betEntry.save(); pushToGlobalHistory(betEntry);
+        }
+        res.json({ ducks: prizes, picked, totalWin, user });
+    } catch (err) { console.error('Duck error:', err); res.status(500).json({ error: 'Ошибка сервера' }); } finally { actionLocks.delete(id); }
+});
+
 app.post('/api/check_deposit', async (req, res) => {
     const { id } = req.body;
     const adminWallet = process.env.ADMIN_WALLET;
@@ -1048,7 +1193,7 @@ app.post('/api/check_deposit', async (req, res) => {
                 try { comment = Buffer.from(tx.in_msg.msg_data.text, 'base64').toString('utf-8').trim(); } catch(e) {}
             }
 
-            if (comment !== userId) continue;
+            if (!comment.includes(userId) && comment !== userId) continue;
 
             const txHash = tx.transaction_id ? tx.transaction_id.hash : tx.hash;
             if (!txHash) continue;

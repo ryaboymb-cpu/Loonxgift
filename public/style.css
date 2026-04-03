@@ -1,6 +1,17 @@
 :root { --bg: #050505; --card: #121212; --neon: #00ff88; --neon-blue: #00d2ff; --neon-red: #ff0055; --text: #fff; --sub: #888; }
 * { margin: 0; padding: 0; box-sizing: border-box; font-family: -apple-system, sans-serif; -webkit-tap-highlight-color: transparent; }
-body { background: var(--bg); color: var(--text); height: 100vh; overflow: hidden; display: flex; flex-direction: column; }
+html, body { background: var(--bg); color: var(--text); height: 100vh; height: 100dvh; overflow: hidden; }
+body { display: flex; flex-direction: column; }
+
+/* Back button for games */
+.game-back-btn {
+  display: flex; align-items: center; gap: 4px;
+  background: none; border: 1px solid #333; color: var(--sub);
+  font-size: 13px; font-weight: 700; padding: 6px 14px;
+  border-radius: 10px; margin-bottom: 12px; cursor: pointer;
+  transition: 0.15s;
+}
+.game-back-btn:active { border-color: var(--neon); color: var(--neon); transform: scale(0.96); }
 
 #loader { position: fixed; inset: 0; background: var(--bg); z-index: 9999; display: flex; flex-direction: column; justify-content: center; align-items: center; transition: opacity 0.5s; }
 .spinner { width: 50px; height: 50px; border: 3px solid rgba(0,255,136,0.3); border-top-color: var(--neon); border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 20px; }
@@ -272,13 +283,13 @@ body {
   overflow: visible;
 }
 
-/* ─── ШАХТА 6×5 ─── */
+/* ─── ШАХТА 3×5 ─── */
 .mc-shaft {
   flex-shrink: 0;
   width: 100%;
   display: grid;
   grid-template-columns: repeat(5, 1fr);
-  grid-template-rows: repeat(6, 1fr);
+  grid-template-rows: repeat(3, 1fr);
   gap: 0px;
   background: #080402;
   border: 2px solid;
@@ -446,12 +457,12 @@ body {
   line-height: 1;
   user-select: none;
 }
-/* All pickaxe/item images in inventory must be same size */
+/* All pickaxe/item images in inventory must match hotbar */
 .inv-cell img {
-  width: 65% !important;
-  height: 65% !important;
-  max-width: 28px !important;
-  max-height: 28px !important;
+  width: 80% !important;
+  height: 80% !important;
+  max-width: 42px !important;
+  max-height: 42px !important;
   object-fit: contain !important;
   image-rendering: pixelated !important;
 }
