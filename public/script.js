@@ -81,21 +81,30 @@ function playSound(name) {
             o.frequency.setValueAtTime(1200, now);
             o.connect(g); o.start(now); o.stop(now + 0.04);
         } else if (name === 'explode') {
-            g.gain.setValueAtTime(0.25, now);
-            g.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
+            // Only play explosion in mine game
+            const minePage = document.getElementById('page-mine');
+            if (!minePage || !minePage.classList.contains('active')) return;
+            // Softer, deeper TNT explosion
+            g.gain.setValueAtTime(0.18, now);
+            g.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
             const n = ctx.createBufferSource();
-            const nb = ctx.createBuffer(1, ctx.sampleRate * 0.45, ctx.sampleRate);
+            const nb = ctx.createBuffer(1, ctx.sampleRate * 0.3, ctx.sampleRate);
             const nd = nb.getChannelData(0);
-            for (let i = 0; i < nd.length; i++) nd[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / nd.length, 0.5);
-            n.buffer = nb; n.connect(g); n.start(now); n.stop(now + 0.5);
+            for (let i = 0; i < nd.length; i++) nd[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / nd.length, 0.7);
+            n.buffer = nb;
+            const lp = ctx.createBiquadFilter();
+            lp.type = 'lowpass';
+            lp.frequency.setValueAtTime(400, now);
+            lp.frequency.exponentialRampToValueAtTime(80, now + 0.25);
+            n.connect(lp); lp.connect(g); n.start(now); n.stop(now + 0.35);
             const o = ctx.createOscillator();
-            o.type = 'sawtooth';
-            o.frequency.setValueAtTime(120, now);
-            o.frequency.exponentialRampToValueAtTime(30, now + 0.4);
+            o.type = 'sine';
+            o.frequency.setValueAtTime(80, now);
+            o.frequency.exponentialRampToValueAtTime(25, now + 0.3);
             const og = ctx.createGain();
-            og.gain.setValueAtTime(0.15, now);
-            og.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
-            o.connect(og); og.connect(ctx.destination); o.start(now); o.stop(now + 0.4);
+            og.gain.setValueAtTime(0.12, now);
+            og.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
+            o.connect(og); og.connect(ctx.destination); o.start(now); o.stop(now + 0.3);
         } else if (name === 'spin') {
             g.gain.setValueAtTime(0.06, now);
             g.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
@@ -399,7 +408,6 @@ async function payWithTonConnect() {
     // Build comment payload with user ID
     let payloadBase64 = "";
     try {
-        // Wait for TonWeb if it's still loading
         if (!window.TonWeb) {
             showToast('Загрузка TonWeb...');
             await new Promise((resolve, reject) => {
@@ -419,7 +427,6 @@ async function payWithTonConnect() {
         payloadBase64 = TonWeb.utils.bytesToBase64(bocBytes);
     } catch(e) {
         console.error('Comment payload error:', e);
-        // Fallback: try to send without comment payload - manual check will still work
     }
 
     const transaction = {
@@ -433,15 +440,47 @@ async function payWithTonConnect() {
 
     try {
         await tonConnectUI.sendTransaction(transaction);
-        showToast('Транзакция отправлена! Нажмите "ПРОВЕРИТЬ ОПЛАТУ" через 15-30 сек.');
-        // Auto-switch to manual tab to show check button
-        setTimeout(() => {
-            if($('dep-manual')) $('dep-manual').style.display = 'block';
-            if($('dep-connect')) $('dep-connect').style.display = 'none';
-        }, 3000);
+        showToast('Транзакция отправлена! Автоматическая проверка через 20 сек...');
+
+        // Auto-check deposit after delay (blockchain confirmation takes time)
+        let checkAttempts = 0;
+        const maxAttempts = 5;
+        const autoCheck = async () => {
+            checkAttempts++;
+            try {
+                const r = await fetch('/api/check_deposit', {
+                    method: 'POST',
+                    headers: {'Content-Type':'application/json'},
+                    body: JSON.stringify({id: user.id})
+                });
+                if (r.ok) {
+                    const d = await r.json();
+                    user = d.user;
+                    updateUI();
+                    renderWithdrawHistory();
+                    showToast(`+${d.added} TON зачислено!`);
+                    flyToBalance(d.added);
+                    return; // success
+                }
+            } catch(e) {}
+
+            if (checkAttempts < maxAttempts) {
+                showToast(`Проверка ${checkAttempts}/${maxAttempts}... Ожидание подтверждения.`);
+                setTimeout(autoCheck, 15000);
+            } else {
+                showToast('Автопроверка завершена. Нажмите "ПРОВЕРИТЬ ОПЛАТУ" вручную.');
+                if($('dep-manual')) $('dep-manual').style.display = 'block';
+                if($('dep-connect')) $('dep-connect').style.display = 'none';
+            }
+        };
+        setTimeout(autoCheck, 20000);
     } catch (e) {
         console.error('TON Connect error:', e);
-        showToast('Транзакция отменена или ошибка кошелька');
+        if (e && e.message && e.message.includes('User rejected')) {
+            showToast('Транзакция отменена пользователем');
+        } else {
+            showToast('Ошибка отправки транзакции. Попробуйте еще раз.');
+        }
     }
 }
 
@@ -570,7 +609,7 @@ socket.on('crashData', d => {
         else { btn.innerText = 'ОЖИДАНИЕ'; btn.style.background = '#555'; btn.disabled = true; }
     }
     if(d.status === 'crashed') {
-        playSound('explode');
+        playSound('break');
         if($('cr-x')) { $('cr-x').innerText = 'BOOM!'; $('cr-x').style.color = 'var(--neon-red)'; $('cr-x').style.textShadow = `0 0 20px rgba(255,0,85,0.4)`; }
         if(myCrashBets.length > 0) myCrashBets = []; 
         btn.innerText = 'ПОСТАВИТЬ'; btn.style.background = 'var(--neon)'; btn.disabled = false; isCashingOut = false;
@@ -656,7 +695,7 @@ function renderMines(isEnd = false) {
             if (!hitBomb) { if (Math.random() > ((rtpObj.mines||90) / 100)) { hitBomb = true; bombs[0] = i; } }
 
             if(hitBomb) {
-                playSound('explode');
+                playSound('break');
                 miActive=false; $('mi-btn').innerText='ИГРАТЬ'; showToast('БУМ!');
                 const cells = document.querySelectorAll('.m-cell');
                 cells.forEach((cell, idx) => {
@@ -1517,11 +1556,21 @@ let spinAnimInterval = null;
 const SPIN_SYMS_ANIM = ['L','L','X','L','G','L','X','L','L'];
 
 const SPIN_PAYLINES_FE = [
-    [1,1,1,1,1],[0,0,0,0,0],[2,2,2,2,2],
-    [0,1,2,1,0],[2,1,0,1,2],[0,0,1,2,2],
-    [2,2,1,0,0],[1,0,1,0,1],[0,1,0,1,0],
-    [1,2,1,2,1],[2,1,2,1,2],[0,1,1,1,2],
-    [2,1,1,1,0],[1,1,0,1,1],[1,1,2,1,1]
+    [1,1,1,1,1],  // 0: средний ряд
+    [0,0,0,0,0],  // 1: верхний ряд
+    [2,2,2,2,2],  // 2: нижний ряд
+    [0,1,2,1,0],  // 3: V-вниз
+    [2,1,0,1,2],  // 4: V-вверх
+    [0,0,1,2,2],  // 5: ступенька вниз
+    [2,2,1,0,0],  // 6: ступенька вверх
+    [1,0,1,0,1],  // 7: зигзаг верх
+    [0,1,0,1,0],  // 8: зигзаг низ
+    [1,2,1,2,1],  // 9: зигзаг низ2
+    [2,1,2,1,2],  // 10: зигзаг верх2
+    [0,1,1,1,2],  // 11: прогиб вниз
+    [2,1,1,1,0],  // 12: прогиб вверх
+    [1,1,0,1,1],  // 13: впадина вверх
+    [1,1,2,1,1],  // 14: впадина вниз
 ];
 
 function initSpinPage() {
@@ -1884,7 +1933,7 @@ function spawnPickaxeWorker(blockQueue, pickaxeType, workerIdx, onWorkerDone, on
         const pUrl = getPickaxeImg(pickaxeType);
         const el = document.createElement('img');
         el.src = pUrl;
-        el.style.cssText = `position:absolute;width:22px;height:22px;z-index:9999;pointer-events:none;image-rendering:pixelated;left:${bx}px;top:${startY}px;transform:translate(-50%,-100%);`;
+        el.style.cssText = `position:absolute;width:20px;height:20px;z-index:9999;pointer-events:none;image-rendering:pixelated;left:${bx}px;top:${startY}px;transform:translate(-50%,-100%);`;
         shaft.appendChild(el);
         _pickaxeEls.add(el);
 
@@ -1990,7 +2039,7 @@ function spawnPickaxeWorker(blockQueue, pickaxeType, workerIdx, onWorkerDone, on
         const pUrl = getPickaxeImg(pickaxeType);
         el = document.createElement('img');
         el.src = pUrl;
-        el.style.cssText = `position:absolute;width:22px;height:22px;z-index:9999;pointer-events:none;image-rendering:pixelated;transform:translate(-50%,-100%);left:${bxx}px;top:${sY}px;`;
+        el.style.cssText = `position:absolute;width:20px;height:20px;z-index:9999;pointer-events:none;image-rendering:pixelated;transform:translate(-50%,-100%);left:${bxx}px;top:${sY}px;`;
         shaft.appendChild(el);
         _pickaxeEls.add(el);
 
@@ -2389,6 +2438,18 @@ function revealMineShaft(grid, blockWins, win, balanceBefore, chestMults, isAuto
         uniquePickSlots.forEach((ps, wi) => {
             const dur = Math.floor((PICKAXE_DURABILITY[ps.pType] || 1) * (ps.durMult || 1));
             setTimeout(() => {
+                // Remove pickaxe from hotbar cell when it starts working
+                const invIdx = ps.idx;
+                const invRow = Math.floor(invIdx / MC_COLS);
+                const invCol = invIdx % MC_COLS;
+                const invCell = $(`inv-${invRow}-${invCol}`);
+                if (invCell) {
+                    invCell.innerHTML = '';
+                    invCell.className = 'inv-cell';
+                    delete invCell.dataset.slotType;
+                    delete invCell.dataset.pickType;
+                    delete invCell.dataset.hasPick;
+                }
                 spawnPickaxeWorker(colBlocks[ps.col] || [], ps.pType, wi, null, onBlockBroken, dur);
             }, wi * 150);
         });

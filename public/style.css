@@ -188,7 +188,7 @@ header { padding: 15px; display: flex; justify-content: space-between; align-ite
 /* === MINE GAME === */
 
 .content:has(#page-mine.active) {
-  padding: 2px 6px 68px !important;
+  padding: 0 2px 68px !important;
   overflow: auto !important;
   display: flex !important;
   flex-direction: column;
@@ -207,14 +207,14 @@ header { padding: 15px; display: flex; justify-content: space-between; align-ite
 .mine-card {
   flex: 0 0 auto !important;
   width: 100%;
-  max-width: 340px;
-  padding: 3px 4px;
+  max-width: 310px;
+  padding: 2px 2px;
   display: flex !important;
   flex-direction: column;
-  gap: 1px;
+  gap: 0px;
   overflow-y: visible;
   overflow-x: hidden;
-  border-radius: 8px !important;
+  border-radius: 6px !important;
   margin-bottom: 0 !important;
 }
 
@@ -222,17 +222,17 @@ header { padding: 15px; display: flex; justify-content: space-between; align-ite
 .mc-inventory {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
-  gap: 1px;
+  gap: 0px;
   background: #6e6e6e;
   border: 2px solid;
   border-color: #c8c8c8 #3a3a3a #3a3a3a #c8c8c8;
   border-radius: 3px 3px 0 0;
-  padding: 2px;
+  padding: 1px;
   flex-shrink: 0;
 }
 .inv-cell {
   background: #8b8b8b;
-  border: 2px solid;
+  border: 1px solid;
   border-color: #4a4a4a #d4d4d4 #d4d4d4 #4a4a4a;
   border-radius: 1px;
   display: flex;
@@ -260,7 +260,7 @@ header { padding: 15px; display: flex; justify-content: space-between; align-ite
 /* ─── ЗОНА ПОЛЁТА (пространство между инвентарём и шахтой) ─── */
 .mine-flight-zone {
   flex-shrink: 0;
-  height: 8px;
+  height: 4px;
   position: relative;
   background: linear-gradient(180deg, #1c1008 0%, #080402 100%);
   border-left: 2px solid #2a1808;
@@ -275,20 +275,20 @@ header { padding: 15px; display: flex; justify-content: space-between; align-ite
   display: grid;
   grid-template-columns: repeat(5, 1fr);
   grid-template-rows: repeat(6, 1fr);
-  gap: 1px;
+  gap: 0px;
   background: #080402;
   border: 2px solid;
   border-color: #3a2008 #0e0602 #0e0602 #3a2008;
   border-radius: 0 0 3px 3px;
-  padding: 2px;
+  padding: 1px;
   position: relative;
   overflow: visible;
 }
 .mc-blk {
   width: 100%;
   aspect-ratio: 1;
-  border-radius: 2px;
-  border: 2px solid;
+  border-radius: 1px;
+  border: 1px solid;
   position: relative;
   overflow: hidden;
   image-rendering: pixelated;
@@ -442,10 +442,12 @@ header { padding: 15px; display: flex; justify-content: space-between; align-ite
   line-height: 1;
   user-select: none;
 }
-/* All pickaxe images in inventory must be same size */
+/* All pickaxe/item images in inventory must be same size */
 .inv-cell img {
-  width: 70% !important;
-  height: 70% !important;
+  width: 65% !important;
+  height: 65% !important;
+  max-width: 28px !important;
+  max-height: 28px !important;
   object-fit: contain !important;
   image-rendering: pixelated !important;
 }
@@ -487,12 +489,12 @@ header { padding: 15px; display: flex; justify-content: space-between; align-ite
 .mc-chests-row {
   display: grid;
   grid-template-columns: repeat(5,1fr);
-  gap: 1px;
+  gap: 0px;
   background: #5c3010;
   border: 2px solid;
   border-color: #8a5018 #2a1408 #2a1408 #8a5018;
   border-radius: 2px;
-  padding: 2px;
+  padding: 1px;
   flex-shrink: 0;
   overflow: visible;
   position: relative;
@@ -502,10 +504,10 @@ header { padding: 15px; display: flex; justify-content: space-between; align-ite
   background: url('/sprites/chest_closed.png') center/100% 100% no-repeat;
   border: 1px solid;
   border-color: #a06428 #3a2008 #3a2008 #a06428;
-  height: 22px;
+  aspect-ratio: 1;
   position: relative;
   image-rendering: pixelated;
-  border-radius: 2px;
+  border-radius: 1px;
   overflow: visible;
 }
 .mc-chest::before, .mc-chest::after { display: none; }
