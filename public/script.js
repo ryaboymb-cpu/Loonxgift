@@ -8,9 +8,6 @@ const tg = window.Telegram.WebApp;
 tg.ready();
 tg.expand();
 
-tg.setHeaderColor('#0b0f1a');
-tg.setBackgroundColor('#0b0f1a');
-
 // ═══ SOUND SYSTEM (Web Audio API) ═══
 let _audioCtx = null;
 let _bgMusicGain = null;
