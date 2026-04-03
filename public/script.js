@@ -108,8 +108,25 @@ function playSound(name) {
     } catch(e) {}
 }
 
+let _bgAudioEl = null;
 function startBgMusic() {
     if (_bgMusicPlaying) return;
+    _bgMusicPlaying = true;
+    try {
+        // Try to play custom mp3 first (place your bg.mp3 in /public/ folder)
+        _bgAudioEl = new Audio('/bg.mp3');
+        _bgAudioEl.loop = true;
+        _bgAudioEl.volume = 0.15;
+        _bgAudioEl.play().catch(() => {
+            // If no custom mp3, fall back to synthesized ambient music
+            _bgAudioEl = null;
+            startSynthBgMusic();
+        });
+    } catch(e) {
+        startSynthBgMusic();
+    }
+}
+function startSynthBgMusic() {
     try {
         const ctx = getAudioCtx();
         _bgMusicGain = ctx.createGain();
@@ -128,33 +145,16 @@ function startBgMusic() {
             g1.gain.exponentialRampToValueAtTime(0.001, now + 3.5);
             o1.connect(g1); g1.connect(_bgMusicGain);
             o1.start(now); o1.stop(now + 3.8);
-            const o2 = ctx.createOscillator();
-            o2.type = 'sine';
-            o2.frequency.value = bassNotes[noteIdx % bassNotes.length] * 3;
-            const g2 = ctx.createGain();
-            g2.gain.setValueAtTime(0.015, now);
-            g2.gain.exponentialRampToValueAtTime(0.001, now + 2.5);
-            o2.connect(g2); g2.connect(_bgMusicGain);
-            o2.start(now); o2.stop(now + 2.8);
-            const pad = ctx.createOscillator();
-            pad.type = 'sine';
-            pad.frequency.value = bassNotes[noteIdx % bassNotes.length] * 6;
-            const pg = ctx.createGain();
-            pg.gain.setValueAtTime(0.008, now);
-            pg.gain.linearRampToValueAtTime(0.012, now + 1.5);
-            pg.gain.exponentialRampToValueAtTime(0.001, now + 3.5);
-            pad.connect(pg); pg.connect(_bgMusicGain);
-            pad.start(now); pad.stop(now + 3.8);
             noteIdx++;
             setTimeout(playNote, 3200);
         }
-        _bgMusicPlaying = true;
         playNote();
     } catch(e) {}
 }
 
 function stopBgMusic() {
     _bgMusicPlaying = false;
+    if (_bgAudioEl) { _bgAudioEl.pause(); _bgAudioEl = null; }
     if (_bgMusicGain) { _bgMusicGain.gain.value = 0; _bgMusicGain = null; }
 }
 
@@ -328,7 +328,7 @@ function updateUI() {
 
     if($('ref-link')) $('ref-link').innerText = `https://t.me/LoonxGift_Bot?start=${user.id}`;
     if($('ref-count')) $('ref-count').innerText = user.referrals ? user.referrals.length : 0;
-    if($('ref-earned')) $('ref-earned').innerText = (user.refEarned || 0).toFixed(2) + ' TON';
+    if($('ref-earned')) $('ref-earned').innerText = (user.referralEarnings || 0).toFixed(2) + ' TON';
     
     if($('ref-list')) {
         if(!user.referrals || user.referrals.length === 0) {
@@ -555,14 +555,22 @@ socket.on('crashData', d => {
         else if (myCrashBets.length === 1) { btn.innerText = 'ПОСТАВИТЬ 2-Ю СТАВКУ'; btn.style.background = 'var(--neon)'; btn.disabled = false; } 
         else { btn.innerText = 'МАКС. СТАВОК (2)'; btn.style.background = '#555'; btn.disabled = true; }
     }
-    if(d.status === 'running') { 
+    if(d.status === 'running') {
         const col = getCrashColor(d.multiplier);
-        if($('cr-x')) { $('cr-x').innerText = d.multiplier + 'x'; $('cr-x').style.color = col; $('cr-x').style.textShadow = `0 0 20px ${col}40`; }
-        if($('cr-timer')) $('cr-timer').innerText = '🚀 В ПОЛЕТЕ'; 
-        if (myCrashBets.length > 0) { btn.innerText = `ЗАБРАТЬ ${(myCrashBets[0] * d.multiplier).toFixed(2)} TON`; btn.style.background = 'var(--neon-red)'; btn.disabled = false; } 
+        if($('cr-x')) {
+            $('cr-x').innerText = d.multiplier + 'x';
+            $('cr-x').style.color = col;
+            $('cr-x').style.textShadow = `0 0 20px ${col}40`;
+            // Smooth pulse animation on multiplier update
+            $('cr-x').style.transform = 'scale(1.04)';
+            setTimeout(() => { if($('cr-x')) $('cr-x').style.transform = 'scale(1)'; }, 60);
+        }
+        if($('cr-timer')) $('cr-timer').innerText = '🚀 В ПОЛЕТЕ';
+        if (myCrashBets.length > 0) { btn.innerText = `ЗАБРАТЬ ${(myCrashBets[0] * d.multiplier).toFixed(2)} TON`; btn.style.background = 'var(--neon-red)'; btn.disabled = false; }
         else { btn.innerText = 'ОЖИДАНИЕ'; btn.style.background = '#555'; btn.disabled = true; }
     }
-    if(d.status === 'crashed') { 
+    if(d.status === 'crashed') {
+        playSound('explode');
         if($('cr-x')) { $('cr-x').innerText = 'BOOM!'; $('cr-x').style.color = 'var(--neon-red)'; $('cr-x').style.textShadow = `0 0 20px rgba(255,0,85,0.4)`; }
         if(myCrashBets.length > 0) myCrashBets = []; 
         btn.innerText = 'ПОСТАВИТЬ'; btn.style.background = 'var(--neon)'; btn.disabled = false; isCashingOut = false;
@@ -587,9 +595,10 @@ async function playCrash() {
         if(r.ok) { user = await r.json(); updateUI(); myCrashBets.push(crBet); btn.innerText = myCrashBets.length === 1 ? 'ПОСТАВИТЬ 2-Ю СТАВКУ' : 'МАКС. СТАВОК (2)'; if(myCrashBets.length===2) btn.disabled=true; showToast('Принято!'); } 
         else { showToast('Ошибка ставки!'); }
     } else if(curCrash.status === 'running' && myCrashBets.length > 0) {
-        isCashingOut = true; const win = myCrashBets[0] * curCrash.multiplier; 
+        playSound('click');
+        isCashingOut = true; const win = myCrashBets[0] * curCrash.multiplier;
         const r = await fetch('/api/bet', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id:user.id, game:'Crash', bet:0, win:win, mode: crMode}) });
-        if(r.ok) { user = await r.json(); updateUI(); myCrashBets.shift(); showToast(`+ ${win.toFixed(2)} TON!`); flyToBalance(win); if (myCrashBets.length > 0) btn.innerText = `ЗАБРАТЬ ${(myCrashBets[0] * curCrash.multiplier).toFixed(2)} TON`; else { btn.innerText = 'ОЖИДАНИЕ'; btn.style.background = '#555'; btn.disabled = true; } } 
+        if(r.ok) { user = await r.json(); updateUI(); myCrashBets.shift(); playSound('win'); showToast(`+ ${win.toFixed(2)} TON!`); flyToBalance(win); if (myCrashBets.length > 0) btn.innerText = `ЗАБРАТЬ ${(myCrashBets[0] * curCrash.multiplier).toFixed(2)} TON`; else { btn.innerText = 'ОЖИДАНИЕ'; btn.style.background = '#555'; btn.disabled = true; } }
         else { showToast('Не успел!'); } isCashingOut = false;
     }
 }
@@ -636,25 +645,34 @@ function renderMines(isEnd = false) {
              $('mine-grid').appendChild(c);
              continue;
         }
+        // Show empty cells before game starts (field is visible)
+        if(!miActive) {
+            c.style.cursor = 'default';
+        }
         c.onclick = () => {
             if(!miActive || c.classList.contains('open') || isMinesProcessing) return;
+            playSound('click');
             let hitBomb = bombs.includes(i);
             if (!hitBomb) { if (Math.random() > ((rtpObj.mines||90) / 100)) { hitBomb = true; bombs[0] = i; } }
 
-            if(hitBomb) { 
-                miActive=false; $('mi-btn').innerText='ИГРАТЬ'; showToast('БУМ!'); 
+            if(hitBomb) {
+                playSound('explode');
+                miActive=false; $('mi-btn').innerText='ИГРАТЬ'; showToast('БУМ!');
                 const cells = document.querySelectorAll('.m-cell');
                 cells.forEach((cell, idx) => {
                     cell.innerText = bombs.includes(idx) ? '💣' : '💎';
                     if(bombs.includes(idx)) { cell.style.background = 'var(--neon-red)'; cell.style.borderColor = 'var(--neon-red)'; }
                 });
-            } else { 
+            } else {
+                playSound('hit');
                 c.innerText='💎'; c.classList.add('open'); c.style.borderColor='var(--neon)'; openedCells++;
-                currentMinesWin = miBet * (1 + openedCells * 0.2); $('mi-btn').innerText = `ЗАБРАТЬ ${currentMinesWin.toFixed(2)} TON`; 
+                currentMinesWin = miBet * (1 + openedCells * 0.2); $('mi-btn').innerText = `ЗАБРАТЬ ${currentMinesWin.toFixed(2)} TON`;
             }
         }; $('mine-grid').appendChild(c);
     }
 }
+// Show mines grid on page load
+setTimeout(() => renderMines(), 300);
 
 // COINFLIP
 let cSide = 'L'; let isFlipping = false;
@@ -1096,48 +1114,76 @@ async function adminViewUser(userId, page = 1) {
     const data = await r.json();
     const u = data.user;
     const hist = data.history || [];
-    const totalPages = data.totalPages || 1;
-    
+    const totalPages = data.pagination ? data.pagination.totalPages : 1;
+    const deposits = data.deposits || [];
+    const withdrawals = data.withdrawals || [];
+    const totalUserDep = data.totalUserDeposited || 0;
+    const totalUserWith = data.totalUserWithdrawn || 0;
+    const wagerReq = data.wagerRequired || 0;
+    const wagerDone = data.wagerCompleted || 0;
+    const wagerLeft = Math.max(0, wagerReq - wagerDone);
+
     const c = $('admin-content');
     c.innerHTML = `
         <button onclick="renderAdminContent('users')" class="btn" style="margin-bottom:15px; background:#333; font-size:12px;">← НАЗАД К СПИСКУ</button>
-        
+
         <div style="background:#1a1a1a; padding:15px; border-radius:8px; margin-bottom:15px; border:1px solid var(--neon);">
             <h3 style="color:var(--neon); margin-bottom:5px;">${u.username || 'Игрок'} (ID: ${u.id})</h3>
-            <p style="font-size:14px; margin-bottom:5px;"><b>Текущий баланс:</b> <span style="color:var(--neon); font-weight:bold;">${u.balance.toFixed(2)} TON</span></p>
-            <p style="font-size:14px; margin-bottom:15px; color:#888;">Заработано на реф: ${(u.refEarned || 0).toFixed(2)} TON | С промокодов: ${(u.promoEarned || 0).toFixed(2)} TON</p>
-            
+            <p style="font-size:14px; margin-bottom:5px;"><b>Баланс:</b> <span style="color:var(--neon); font-weight:bold;">${u.balance.toFixed(2)} TON</span></p>
+            <p style="font-size:12px; color:#888; margin-bottom:3px;">Реф. доход: ${(u.referralEarnings || 0).toFixed(2)} TON | Промо: ${(u.stats?.promo || 0).toFixed(2)} TON</p>
+            <p style="font-size:12px; color:#888; margin-bottom:3px;">Всего проиграно: ${(u.stats?.minus || 0).toFixed(2)} TON | Выиграно: ${(u.stats?.plus || 0).toFixed(2)} TON</p>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin:10px 0; background:#111; padding:10px; border-radius:6px;">
+                <div style="text-align:center;"><div style="font-size:10px; color:#888;">ПОПОЛНЕНО</div><div style="color:var(--neon); font-weight:bold;">${totalUserDep.toFixed(2)} TON</div></div>
+                <div style="text-align:center;"><div style="font-size:10px; color:#888;">ВЫВЕДЕНО</div><div style="color:var(--neon-red); font-weight:bold;">${totalUserWith.toFixed(2)} TON</div></div>
+                <div style="text-align:center;"><div style="font-size:10px; color:#888;">ОТЫГРЫШ</div><div style="color:#ffcc00; font-weight:bold;">${wagerDone.toFixed(2)} / ${wagerReq.toFixed(2)}</div></div>
+                <div style="text-align:center;"><div style="font-size:10px; color:#888;">ОСТАЛОСЬ</div><div style="color:${wagerLeft > 0 ? 'var(--neon-red)' : 'var(--neon)'}; font-weight:bold;">${wagerLeft.toFixed(2)} TON</div></div>
+            </div>
+
             <div style="display:flex; gap:10px; margin-bottom:10px;">
                 <input type="number" id="ad-bal-val" class="input-box" placeholder="Сумма TON" style="margin-bottom:0;">
             </div>
-            <div style="display:flex; gap:10px;">
+            <div style="display:flex; gap:10px; margin-bottom:10px;">
                 <button class="btn" style="background:var(--neon); color:#000; font-size:12px;" onclick="adminChangeBal('${u.id}', 'add')">ВЫДАТЬ</button>
                 <button class="btn" style="background:var(--neon-red); font-size:12px;" onclick="adminChangeBal('${u.id}', 'sub')">ЗАБРАТЬ</button>
             </div>
+            <div style="display:flex; gap:10px;">
+                <button class="btn" style="background:var(--neon-blue); color:#000; font-size:12px;" onclick="adminMsgUser('${u.id}')">НАПИСАТЬ В ЛС</button>
+                <button class="btn" style="background:${u.isBlocked?'#555':'red'}; font-size:12px;" onclick="adminBan('${u.id}', ${!u.isBlocked}); setTimeout(()=>adminViewUser('${u.id}',1), 500)">${u.isBlocked?'РАЗБАН':'БАН'}</button>
+            </div>
         </div>
 
-        <h4 style="color:var(--neon-blue); margin-top:20px; margin-bottom:10px;">История ставок (Стр. ${page} / ${totalPages})</h4>
+        <h4 style="color:var(--neon-blue); margin-bottom:8px;">Депозиты (${deposits.length})</h4>
+        <div style="max-height:120px; overflow-y:auto; background:#111; border-radius:6px; margin-bottom:15px; padding:5px;">
+            ${deposits.length > 0 ? deposits.map(d => `<div style="padding:4px 8px; border-bottom:1px solid #222; font-size:11px;"><span style="color:var(--neon);">+${d.amount} TON</span> <span style="color:#666;">${d.time || ''}</span></div>`).join('') : '<div style="color:#555; text-align:center; padding:10px;">Нет депозитов</div>'}
+        </div>
+
+        <h4 style="color:var(--neon-red); margin-bottom:8px;">Выводы (${withdrawals.length})</h4>
+        <div style="max-height:120px; overflow-y:auto; background:#111; border-radius:6px; margin-bottom:15px; padding:5px;">
+            ${withdrawals.length > 0 ? withdrawals.map(w => `<div style="padding:4px 8px; border-bottom:1px solid #222; font-size:11px;"><span style="color:var(--neon-red);">-${w.amount} TON</span> <span style="color:${w.status==='approved'?'var(--neon)':w.status==='rejected'?'#ff4444':'#ffcc00'}">${w.status}</span> <span style="color:#666;">${w.time || ''}</span></div>`).join('') : '<div style="color:#555; text-align:center; padding:10px;">Нет выводов</div>'}
+        </div>
+
+        <h4 style="color:var(--neon-blue); margin-top:10px; margin-bottom:10px;">История ставок (Стр. ${page} / ${totalPages})</h4>
         <div style="overflow-x:auto;">
             <table style="width:100%; font-size:11px; text-align:left; border-collapse: collapse; background:#111; border-radius:8px;">
                 <tr style="background:#222; border-bottom:1px solid #444;">
                     <th style="padding:10px;">Время</th>
                     <th>Игра</th>
-                    <th>Ставка -> Выигрыш</th>
-                    <th>Баланс ПОСЛЕ</th>
+                    <th>Ставка -> Результат</th>
+                    <th>Баланс</th>
                 </tr>
                 ${hist.length > 0 ? hist.map(h => `
                 <tr style="border-bottom:1px solid #222;">
-                    <td style="padding:8px; color:#666;">${h.time || '---'}</td>
+                    <td style="padding:8px; color:#666;">${h.timeMsk || '---'}</td>
                     <td style="font-weight:bold;">${h.game}</td>
-                    <td style="color:${parseFloat(h.win) > 0 ? 'var(--neon)' : '#ff4d4d'}">
-                        ${h.bet} -> ${h.win}
+                    <td style="color:${h.result > 0 ? 'var(--neon)' : '#ff4d4d'}">
+                        ${h.amount} -> ${h.result > 0 ? '+' : ''}${h.result}
                     </td>
                     <td style="color:#aaa;">${(h.balanceAfter || 0).toFixed(2)}</td>
                 </tr>
                 `).join('') : '<tr><td colspan="4" style="padding:20px; text-align:center; color:#555;">История пуста</td></tr>'}
             </table>
         </div>
-        
+
         <div style="display:flex; justify-content:space-between; margin-top:15px; margin-bottom:30px;">
             <button class="btn" style="width:48%; background:#222; font-size:12px;" onclick="adminViewUser('${u.id}', ${page > 1 ? page - 1 : 1})" ${page === 1 ? 'disabled' : ''}>← Назад</button>
             <button class="btn" style="width:48%; background:#222; font-size:12px;" onclick="adminViewUser('${u.id}', ${page + 1})" ${page >= totalPages ? 'disabled' : ''}>Вперед →</button>
@@ -1245,6 +1291,10 @@ function renderAdminContent(tab) {
             <div><b>Coinflip RTP (%):</b> <input type="number" id="rtp-coinflip" value="${adData.rtp.coinflip||90}" class="input-box" style="padding:5px; width:70px; display:inline-block;"> <button class="btn" style="padding:5px; width:auto; display:inline-block;" onclick="adminRTP('coinflip')">OK</button></div>
             <div><b>🎰 Spin RTP (%):</b> <input type="number" id="rtp-spin" value="${adData.rtp.spin||40}" class="input-box" style="padding:5px; width:70px; display:inline-block;"> <button class="btn" style="padding:5px; width:auto; display:inline-block; background:linear-gradient(90deg,#ff6b00,#ff0055);" onclick="adminRTP('spin')">OK</button></div>
             <div><b>⛏️ Mine RTP (%):</b> <input type="number" id="rtp-mine" value="${adData.rtp.mine||40}" class="input-box" style="padding:5px; width:70px; display:inline-block;"> <button class="btn" style="padding:5px; width:auto; display:inline-block; background:linear-gradient(90deg,#7a4920,#c07030);" onclick="adminRTP('mine')">OK</button></div>
+            <hr>
+            <h4 style="color:var(--neon); margin-bottom:10px;">ОТЫГРЫШ (ВЕЙДЖЕР)</h4>
+            <div><b>Множитель отыгрыша (x):</b> <input type="number" id="wager-mult" value="${adData.wagerMultiplier || 2}" class="input-box" style="padding:5px; width:70px; display:inline-block;" step="0.5" min="1" max="20"> <button class="btn" style="padding:5px; width:auto; display:inline-block; background:#ffcc00; color:#000;" onclick="adminSetWager()">OK</button></div>
+            <p style="font-size:10px; color:#666; margin-bottom:15px;">Каждый депозит нужно отыграть xN от суммы перед выводом</p>
             <hr>
             <h4 style="color:var(--neon); margin-bottom:10px;">ОТКЛЮЧЕНИЕ ИГР (ТЕХ. РАБОТЫ)</h4>
             <label><input type="checkbox" ${adData.maintenance.crash ? 'checked' : ''} onchange="adminMaint('crash', this.checked)"> Crash</label><br>
@@ -1395,6 +1445,12 @@ async function adminRTP(game) {
 async function adminMaint(game, state) {
     await fetch('/api/admin/maintenance', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({pass: adminPass, game, state}) }); 
     adData.maintenance[game] = state; showToast(`Статус ${game} обновлен!`);
+}
+async function adminSetWager() {
+    const value = $('wager-mult').value;
+    await fetch('/api/admin/set_wager', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({pass: adminPass, value}) });
+    showToast(`Множитель отыгрыша: x${value}`);
+    adData.wagerMultiplier = Number(value);
 }
 async function adminDemoToggle(state) {
     await fetch('/api/admin/config', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({pass: adminPass, showDemo: state}) }); 
@@ -1608,7 +1664,7 @@ function renderMineHotbar(hotbar) {
             if (slot && slot.type === 'pickaxe') {
                 const img = document.createElement('img');
                 img.src = getPickaxeImg(slot.pickaxeType || 'wooden');
-                img.style.cssText = 'width:82%;height:82%;object-fit:contain;image-rendering:pixelated;filter:drop-shadow(0 1px 2px rgba(0,0,0,0.6));';
+                img.style.cssText = 'width:70%;height:70%;object-fit:contain;image-rendering:pixelated;filter:drop-shadow(0 1px 2px rgba(0,0,0,0.6));';
                 cell.appendChild(img);
                 cell.dataset.slotType = 'pickaxe';
                 cell.dataset.pickType = slot.pickaxeType;

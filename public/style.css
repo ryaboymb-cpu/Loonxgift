@@ -86,7 +86,7 @@ header { padding: 15px; display: flex; justify-content: space-between; align-ite
 
 /* --- ИГРЫ --- */
 .crash-screen { text-align: center; padding: 60px 0 80px 0; background: #0a0a0a; border-radius: 18px; margin-bottom: 15px; border: 1px solid #222; box-shadow: inset 0 0 40px rgba(0,0,0,0.8); position: relative; }
-#cr-x { font-size: 56px; font-weight: 900; transition: color 0.3s ease, text-shadow 0.3s ease; letter-spacing: 2px; }
+#cr-x { font-size: 56px; font-weight: 900; transition: color 0.15s ease, text-shadow 0.15s ease, transform 0.1s ease; letter-spacing: 2px; }
 .cr-history { display: flex; gap: 5px; padding: 0 15px 15px 15px; overflow-x: auto; white-space: nowrap; margin-bottom: 10px; border-bottom: 1px solid #222; }
 .cr-history::-webkit-scrollbar { display: none; }
 .cr-badge { padding: 4px 8px; border-radius: 6px; font-size: 11px; font-weight: bold; background: #1a1a1a; }
@@ -134,7 +134,7 @@ header { padding: 15px; display: flex; justify-content: space-between; align-ite
 
 .hotbar { position: fixed; bottom: 0; left: 0; width: 100%; height: 75px; background: rgba(5,5,5,0.95); border-top: 1px solid #222; display: flex; justify-content: space-around; align-items: center; z-index: 100; padding-bottom: env(safe-area-inset-bottom); backdrop-filter: blur(10px); }
 .nav-item { display: flex; flex-direction: column; align-items: center; gap: 5px; color: var(--sub); font-size: 11px; font-weight: 700; width: 25%; cursor: pointer; transition: 0.2s; }
-.nav-item svg { width: 26px; height: 26px; fill: currentColor; transition: 0.2s; }
+.nav-item svg { width: 26px; height: 26px; fill: currentColor; stroke: currentColor; transition: 0.2s; }
 .nav-item.active { color: var(--neon); }
 .nav-item.active svg { filter: drop-shadow(0 0 8px rgba(0,255,136,0.6)); transform: translateY(-3px); }
 
@@ -207,7 +207,7 @@ header { padding: 15px; display: flex; justify-content: space-between; align-ite
 .mine-card {
   flex: 0 0 auto !important;
   width: 100%;
-  max-width: 280px;
+  max-width: 340px;
   padding: 3px 4px;
   display: flex !important;
   flex-direction: column;
@@ -243,7 +243,6 @@ header { padding: 15px; display: flex; justify-content: space-between; align-ite
   overflow: visible;
   transition: background 0.12s;
   aspect-ratio: 1;
-  max-height: 36px;
 }
 .inv-cell.inv-book { background: #5a3a80; }
 .inv-cell.inv-tnt { background: #aa2020; }
@@ -275,7 +274,7 @@ header { padding: 15px; display: flex; justify-content: space-between; align-ite
   width: 100%;
   display: grid;
   grid-template-columns: repeat(5, 1fr);
-  grid-template-rows: repeat(6, minmax(0, 28px));
+  grid-template-rows: repeat(6, 1fr);
   gap: 1px;
   background: #080402;
   border: 2px solid;
@@ -287,8 +286,7 @@ header { padding: 15px; display: flex; justify-content: space-between; align-ite
 }
 .mc-blk {
   width: 100%;
-  height: 100%;
-  min-height: 0;
+  aspect-ratio: 1;
   border-radius: 2px;
   border: 2px solid;
   position: relative;
@@ -443,6 +441,13 @@ header { padding: 15px; display: flex; justify-content: space-between; align-ite
   pointer-events: none;
   line-height: 1;
   user-select: none;
+}
+/* All pickaxe images in inventory must be same size */
+.inv-cell img {
+  width: 70% !important;
+  height: 70% !important;
+  object-fit: contain !important;
+  image-rendering: pixelated !important;
 }
 
 /* ─── КНИГА СТАТУС ─── */
