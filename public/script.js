@@ -428,10 +428,9 @@ async function payWithTonConnect() {
     if(isNaN(amount) || amount < 0.5) return showToast('Минимум 0.5 TON');
     if(!adminWalletAddress) return showToast('Кошелек получателя не настроен');
 
-    // Validate TON address format
-    const addr = adminWalletAddress.trim();
-    if (!/^(EQ|UQ|0:|kQ)[a-zA-Z0-9_\-\/\+]{46,48}$/.test(addr) && !/^0:[a-f0-9]{64}$/.test(addr)) {
-        return showToast('Некорректный адрес кошелька. Обратитесь к админу.');
+    const addr = adminWalletAddress.trim().replace(/[\r\n]/g, '');
+    if (!addr || addr.length < 30) {
+        return showToast('Кошелек получателя не настроен. Обратитесь к админу.');
     }
 
     // Build comment payload (BOC cell) with user ID for TON Connect

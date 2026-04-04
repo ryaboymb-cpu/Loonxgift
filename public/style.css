@@ -222,7 +222,7 @@ body {
 .mine-card {
   flex: 0 0 auto !important;
   width: 100%;
-  max-width: 260px;
+  max-width: 240px;
   padding: 2px 2px;
   display: flex !important;
   flex-direction: column;
@@ -259,7 +259,7 @@ body {
   position: relative;
   overflow: visible;
   transition: background 0.12s;
-  aspect-ratio: 1.15;
+  aspect-ratio: 1.05;
 }
 .inv-cell.inv-book { background: #5a3a80; }
 .inv-cell.inv-tnt { background: #aa2020; }
@@ -303,7 +303,7 @@ body {
 }
 .mc-blk {
   width: 100%;
-  aspect-ratio: 1.15;
+  aspect-ratio: 1.05;
   border-radius: 1px;
   border: 1px solid;
   position: relative;
@@ -522,7 +522,7 @@ body {
   background: url('/sprites/chest_closed.png') center/100% 100% no-repeat;
   border: 1px solid;
   border-color: #a06428 #3a2008 #3a2008 #a06428;
-  aspect-ratio: 1.15;
+  aspect-ratio: 1.05;
   position: relative;
   image-rendering: pixelated;
   border-radius: 1px;
