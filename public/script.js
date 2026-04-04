@@ -2,6 +2,60 @@
 const tonwebScript = document.createElement('script');
 tonwebScript.src = 'https://unpkg.com/tonweb@0.0.60/dist/tonweb.js';
 document.head.appendChild(tonwebScript);
+// ===== TON CONNECT PAYMENT FIX =====
+async function payWithTonConnect() {
+    if (!tonConnectUI) return showToast('TON Connect не инициализирован');
+    if (!tonConnectUI.connected) return showToast('Сначала подключите кошелек');
+
+    const input = $('tc-amount');
+    if (!input) return showToast('Поле суммы не найдено');
+
+    const amount = parseFloat(input.value);
+    if (isNaN(amount) || amount <= 0) return showToast('Введите сумму');
+
+    if (!adminWalletAddress) return showToast('Кошелек не настроен');
+
+    let payloadBase64 = "";
+
+    try {
+        if (window.TonWeb) {
+            const tonweb = new TonWeb();
+            const cell = new tonweb.boc.Cell();
+
+            // ВАЖНО: memo = ID пользователя
+            cell.bits.writeUint(0, 32);
+            cell.bits.writeString(String(user.id));
+
+            const boc = await cell.toBoc();
+            payloadBase64 = TonWeb.utils.bytesToBase64(boc);
+        }
+    } catch (e) {
+        console.error('Ошибка payload:', e);
+    }
+
+    const tx = {
+        validUntil: Math.floor(Date.now() / 1000) + 600,
+        messages: [{
+            address: adminWalletAddress,
+            amount: (amount * 1e9).toString(),
+            ...(payloadBase64 ? { payload: payloadBase64 } : {})
+        }]
+    };
+
+    try {
+        await tonConnectUI.sendTransaction(tx);
+        showToast('✅ Отправлено! Жди подтверждение');
+
+        // 👉 можно добавить автопроверку позже
+        setTimeout(() => {
+            showToast('Если деньги не пришли — нажми "Проверить оплату"');
+        }, 5000);
+
+    } catch (e) {
+        console.error(e);
+        showToast('❌ Транзакция отменена');
+    }
+}
 
 const tg = window.Telegram.WebApp;
 const socket = io();
