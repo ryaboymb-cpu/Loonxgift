@@ -433,55 +433,81 @@ function switchDepTab(type, el) {
 
 async function payWithTonConnect() {
     if (!tonConnectUI) return showToast('TON Connect не загружен. Перезагрузите страницу.');
-    if (!tonConnectUI.connected) return showToast('Сначала подключите кошелек!');
-    const amount = parseFloat($('tc-amount').value);
-    if(isNaN(amount) || amount < 0.5) return showToast('Минимум 0.5 TON');
-    if(!adminWalletAddress) return showToast('Кошелек получателя не настроен');
 
-    const addr = adminWalletAddress.trim().replace(/[\r\n]/g, '');
-    if (!addr || addr.length < 30) {
-        return showToast('Кошелек получателя не настроен. Обратитесь к админу.');
-    }
-
-    // Build comment payload (BOC cell) with user ID for TON Connect
-    let payloadBoc = "";
-    try {
-        if (!window.TonWeb) {
-            showToast('Загрузка модуля оплаты...');
+    // Правильная проверка подключения (wallet, не .connected)
+    const isConnected = tonConnectUI.wallet !== null && tonConnectUI.wallet !== undefined;
+    if (!isConnected) {
+        showToast('Подключаем кошелек...');
+        try {
+            await tonConnectUI.openModal();
+            // Ждём подключения максимум 60 сек
             await new Promise((resolve, reject) => {
                 let tries = 0;
                 const check = setInterval(() => {
                     tries++;
-                    if (window.TonWeb) { clearInterval(check); resolve(); }
-                    else if (tries > 50) { clearInterval(check); reject(new Error('TonWeb timeout')); }
-                }, 200);
+                    if (tonConnectUI.wallet) { clearInterval(check); resolve(); }
+                    else if (tries > 60) { clearInterval(check); reject(new Error('timeout')); }
+                }, 1000);
             });
+        } catch(e) {
+            return showToast('Кошелек не подключён. Подключите через кнопку TON Connect.');
         }
-        const cell = new TonWeb.boc.Cell();
-        cell.bits.writeUint(0, 32); // text comment op code
-        cell.bits.writeString(String(user.id));
-        const boc = await cell.toBoc();
-        payloadBoc = TonWeb.utils.bytesToBase64(boc);
+    }
+
+    const amount = parseFloat($('tc-amount').value);
+    if(isNaN(amount) || amount < 0.5) return showToast('Минимум 0.5 TON');
+    if(!adminWalletAddress) return showToast('Кошелек получателя не настроен');
+
+    const addr = adminWalletAddress.trim().replace(/[\r\n\s]/g, '');
+    if (!addr || addr.length < 30) {
+        return showToast('Кошелек получателя не настроен. Обратитесь к админу.');
+    }
+
+    // Строим payload: 4 нулевых байта (text comment opcode) + UTF-8 ID пользователя
+    function buildCommentPayload(text) {
+        const textBytes = new TextEncoder().encode(text);
+        const bytes = new Uint8Array(4 + textBytes.length);
+        bytes[0] = 0; bytes[1] = 0; bytes[2] = 0; bytes[3] = 0;
+        bytes.set(textBytes, 4);
+        return btoa(String.fromCharCode(...bytes));
+    }
+
+    let payloadBoc = '';
+    try {
+        // Сначала пробуем через TonWeb (если загружен)
+        if (window.TonWeb) {
+            const cell = new TonWeb.boc.Cell();
+            cell.bits.writeUint(0, 32);
+            cell.bits.writeString(String(user.id));
+            const boc = await cell.toBoc();
+            payloadBoc = TonWeb.utils.bytesToBase64(boc);
+        } else {
+            // Фолбэк: простой base64 payload
+            payloadBoc = buildCommentPayload(String(user.id));
+        }
     } catch(e) {
-        console.error('Payload error:', e);
+        // Последний фолбэк — без payload (ручная проверка)
+        console.error('Payload build error:', e);
+        payloadBoc = buildCommentPayload(String(user.id));
     }
 
     const transaction = {
         validUntil: Math.floor(Date.now() / 1000) + 600,
         messages: [{
             address: addr,
-            amount: (amount * 1e9).toString(),
-            ...(payloadBoc ? { payload: payloadBoc } : {})
+            amount: Math.round(amount * 1e9).toString(),
+            payload: payloadBoc
         }]
     };
 
     try {
+        showToast('⏳ Отправляем транзакцию...');
         await tonConnectUI.sendTransaction(transaction);
-        showToast('Транзакция отправлена! Проверка через 20 сек...');
+        showToast('✅ Транзакция отправлена! Проверка через 20 сек...');
 
-        // Auto-check deposit after delay (blockchain confirmation takes time)
+        // Автопроверка с увеличивающимся интервалом
         let checkAttempts = 0;
-        const maxAttempts = 6;
+        const maxAttempts = 8;
         const autoCheck = async () => {
             checkAttempts++;
             try {
@@ -496,18 +522,21 @@ async function payWithTonConnect() {
                         user = d.user;
                         updateUI();
                         renderWithdrawHistory();
-                        showToast(`+${d.added.toFixed(2)} TON зачислено!`);
+                        showToast(`✅ +${d.added.toFixed(2)} TON зачислено!`);
                         flyToBalance(d.added);
-                        return;
+                        return; // Успех — выходим
                     }
                 }
             } catch(e) {}
 
             if (checkAttempts < maxAttempts) {
-                showToast(`Проверка ${checkAttempts}/${maxAttempts}... Ожидание подтверждения.`);
-                setTimeout(autoCheck, 20000);
+                showToast(`🔍 Проверка ${checkAttempts}/${maxAttempts}...`);
+                setTimeout(autoCheck, 20000); // каждые 20 сек
             } else {
-                showToast('Автопроверка завершена. Нажмите "ПРОВЕРИТЬ ОПЛАТУ" вручную.');
+                showToast('⚠️ Автопроверка завершена. Нажмите "ПРОВЕРИТЬ ОПЛАТУ" если не зачислилось.');
+            }
+        };
+        setTimeout(autoCheck, 20000);
             }
         };
         setTimeout(autoCheck, 20000);
@@ -1119,12 +1148,26 @@ function renderBattlePlayers(lobby) {
 }
 
 // ФИНАНСЫ И ПРОМО
-async function checkRealDeposit(btn) {
-    btn.innerText = "ПРОВЕРЯЕМ..."; btn.disabled = true;
-    const r = await fetch('/api/check_deposit', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id:user.id}) });
-    if(r.ok) { const d = await r.json(); user = d.user; updateUI(); renderWithdrawHistory(); showToast(`+${d.added} TON`); } 
-    else { const e = await r.json(); showToast(e.error || 'Не найдено'); } 
-    btn.innerText = "ПРОВЕРИТЬ ОПЛАТУ"; btn.disabled = false;
+async function checkRealDeposit(btn, silent = false) {
+    if (btn) { btn.innerText = "ПРОВЕРЯЕМ..."; btn.disabled = true; }
+    else if (!silent) showToast('🔍 Проверяем оплату...');
+    try {
+        const r = await fetch('/api/check_deposit', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id:user.id}) });
+        if(r.ok) {
+            const d = await r.json();
+            user = d.user;
+            updateUI();
+            renderWithdrawHistory();
+            showToast(`✅ +${d.added} TON зачислено!`);
+            flyToBalance(d.added);
+        } else {
+            const e = await r.json();
+            if (!silent) showToast(e.error || 'Не найдено. Подождите и попробуйте снова.');
+        }
+    } catch(err) {
+        if (!silent) showToast('Ошибка соединения');
+    }
+    if (btn) { btn.innerText = "ПРОВЕРИТЬ ОПЛАТУ"; btn.disabled = false; }
 }
 
 async function withdraw() {
@@ -1731,8 +1774,11 @@ function updateSpinUI() {
 // ========= MINE GAME =========
 const MINE_BLOCK_CLASS = {
     grass:'grass-blk', dirt:'dirt-blk',
-    stone:'stone-blk', redstone:'redstone-blk', gold:'gold-blk',
-    diamond:'diamond-blk', obsidian:'obsidian-blk',
+    stone:'stone-blk', redstone:'redstone-blk',
+    // Новые названия блоков (синхронизировано с сервером)
+    gold_block:'gold-blk', diamond_block:'diamond-blk', obsidian:'obsidian-blk',
+    // Старые названия (для обратной совместимости)
+    gold:'gold-blk', diamond:'diamond-blk',
     tnt:'tnt-blk', book:'book-blk', unknown:'unknown-blk'
 };
 const MC_ROWS = 6;
@@ -1833,11 +1879,11 @@ function initMineShaft(keepPersist, idlePreview) {
     shaft.innerHTML = '';
     const IDLE_BY_ROW = [
         ['grass','grass','grass','grass','grass'],
-        ['dirt','stone','stone','stone','stone','redstone'],
-        ['stone','stone','stone','redstone','redstone','redstone'],
-        ['stone','redstone','redstone','gold','gold','gold'],
-        ['redstone','gold','gold','gold','diamond','diamond'],
-        ['gold','diamond','diamond','diamond','obsidian','obsidian'],
+        ['dirt','stone','stone','stone','redstone'],
+        ['stone','stone','stone','redstone','redstone'],
+        ['stone','redstone','redstone','gold_block','gold_block'],
+        ['redstone','gold_block','gold_block','diamond_block','diamond_block'],
+        ['gold_block','diamond_block','diamond_block','obsidian','obsidian'],
     ];
     for (let r = 0; r < MC_ROWS; r++) {
         for (let c = 0; c < MC_COLS; c++) {
@@ -2217,7 +2263,12 @@ function flyItemToHotbar(blkEl, blockType, gridRow, gridCol) {
         image-rendering:pixelated; border-radius:3px;
     `;
 
-    const spriteMap = { book: '/sprites/block_book.png', tnt: '/sprites/block_tnt.png' };
+    const spriteMap = {
+        book: '/sprites/block_book.png', tnt: '/sprites/block_tnt.png',
+        gold_block: '/sprites/block_gold.png', diamond_block: '/sprites/block_diamond.png',
+        gold: '/sprites/block_gold.png', diamond: '/sprites/block_diamond.png',
+        obsidian: '/sprites/block_obsidian.png', redstone: '/sprites/block_redstone.png'
+    };
     const img = document.createElement('img');
     img.src = spriteMap[blockType] || '/sprites/block_stone.png';
     img.style.cssText = 'width:100%;height:100%;image-rendering:pixelated;';
@@ -2268,8 +2319,11 @@ function fillInvCell(row, col, blockType, pickaxeType) {
         book: '/sprites/block_book.png', tnt: '/sprites/block_tnt.png',
         grass: '/sprites/block_grass.png', dirt: '/sprites/block_dirt.png',
         stone: '/sprites/block_stone.png', redstone: '/sprites/block_redstone.png',
-        gold: '/sprites/block_gold.png', diamond: '/sprites/block_diamond.png',
-        obsidian: '/sprites/block_obsidian.png'
+        // Новые названия блоков
+        gold_block: '/sprites/block_gold.png', diamond_block: '/sprites/block_diamond.png',
+        obsidian: '/sprites/block_obsidian.png',
+        // Старые названия (обратная совместимость)
+        gold: '/sprites/block_gold.png', diamond: '/sprites/block_diamond.png'
     };
     if (blockType === 'book') {
         cell.className = 'inv-cell filled inv-book';
@@ -2291,15 +2345,17 @@ function spawnBreakParticles(blockEl, blockType) {
     const cx = rect.left + rect.width / 2;
     const cy = rect.top + rect.height / 2;
     const clrs = {
-        grass:    ['#4a8c2a','#6cb040','#3a7020'],
-        dirt:     ['#8b6040','#a07050','#6b4a30'],
-        stone:    ['#888','#aaa','#777'],
-        redstone: ['#880000','#cc2020','#ff4444'],
-        gold:     ['#c8a000','#ffe060','#deb800'],
-        diamond:  ['#006b9a','#00e4ff','#4acce0'],
-        obsidian: ['#0e0420','#6030a0','#3010a0'],
-        tnt:      ['#cc1010','#ff4040','#ff8888'],
-        book:     ['#4c1090','#ffd700','#c080ff'],
+        grass:        ['#4a8c2a','#6cb040','#3a7020'],
+        dirt:         ['#8b6040','#a07050','#6b4a30'],
+        stone:        ['#888','#aaa','#777'],
+        redstone:     ['#880000','#cc2020','#ff4444'],
+        gold_block:   ['#c8a000','#ffe060','#deb800'],
+        diamond_block:['#006b9a','#00e4ff','#4acce0'],
+        gold:         ['#c8a000','#ffe060','#deb800'],
+        diamond:      ['#006b9a','#00e4ff','#4acce0'],
+        obsidian:     ['#0e0420','#6030a0','#3010a0'],
+        tnt:          ['#cc1010','#ff4040','#ff8888'],
+        book:         ['#4c1090','#ffd700','#c080ff'],
     };
     const c = clrs[blockType] || clrs.stone;
     for (let i = 0; i < 12; i++) {
