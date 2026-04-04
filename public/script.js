@@ -13,7 +13,7 @@ async function payWithTonConnect() {
     const amount = parseFloat(input.value);
     if (isNaN(amount) || amount <= 0) return showToast('Введите сумму');
 
-    if (!adminWalletAddress) return showToast('Кошелек не настроен');
+    if (!ADMIN_WALLET) return showToast('Кошелек не настроен');
 
     let payloadBase64 = "";
 
