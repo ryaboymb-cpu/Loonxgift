@@ -181,7 +181,7 @@ body {
 .spin-cell::before { content: ''; position: absolute; inset: 0; border-radius: 8px; background: linear-gradient(135deg, rgba(255,255,255,0.04) 0%, transparent 60%); }
 .spin-cell.sym-L { color: var(--neon); text-shadow: 0 0 8px rgba(0,255,136,0.6); }
 .spin-cell.sym-X { color: #ffcc00; text-shadow: 0 0 8px rgba(255,204,0,0.6); }
-.spin-cell.sym-N { color: #555; text-shadow: none; opacity: 0.7; }
+.spin-cell.sym-N { color: #444; text-shadow: none; }
 .spin-cell.sym-G { color: #ff0055; text-shadow: 0 0 10px rgba(255,0,85,0.7); }
 .spin-cell.win-cell { border-color: var(--neon); box-shadow: 0 0 12px rgba(0,255,136,0.5); animation: spinWin 0.5s ease; }
 .spin-cell.win-cell.sym-X { border-color: #ffcc00; box-shadow: 0 0 12px rgba(255,204,0,0.5); }
@@ -461,18 +461,15 @@ body {
   line-height: 1;
   user-select: none;
 }
-/* All pickaxe/item images in inventory must match hotbar - FIXED SIZE */
+/* All pickaxe/item images in inventory must match hotbar */
 .inv-cell img {
-  width: 65% !important;
-  height: 65% !important;
-  max-width: 26px !important;
-  max-height: 26px !important;
-  min-width: 16px !important;
-  min-height: 16px !important;
+  width: 70% !important;
+  height: 70% !important;
+  max-width: 28px !important;
+  max-height: 28px !important;
   object-fit: contain !important;
   image-rendering: pixelated !important;
   display: block;
-  flex-shrink: 0;
 }
 
 /* ─── КНИГА СТАТУС ─── */
