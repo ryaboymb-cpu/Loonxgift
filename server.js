@@ -661,23 +661,30 @@ const SPIN_PAYLINES = [
 ];
 
 // L symbols do NOT pay — only X symbols pay (makes most spins losing)
+// Таблица выплат: только X платит. L = проигрыш (но не каждый спин — зависит от частоты X)
+// Как в реальном слоте: крутится сетка, если совпало X×3+ — выигрыш, иначе — нет
 const SPIN_PAYTABLE = { 'X': { 3: 1.0, 4: 2.5, 5: 5.0 } };
 
 function generateSpinGrid(userId, rtpTarget) {
     const streak = spinUserStreaks[userId] || { losses: 0, wins: 0, progress: 0 };
-    // RTP controls whether this spin CAN win at all
-    // rtp 90 → 30% chance of winning spin, rtp 50 → 16%, rtp 10 → 3%
-    const canWin = Math.random() < (rtpTarget / 300);
 
-    // G (scatter/gift) frequency: very rare
+    // Реальный слот: вероятность X на ячейку определяет шанс выигрыша
+    // RTP 90 → freqX ~0.22 (высокий шанс совпадений)
+    // RTP 50 → freqX ~0.12
+    // RTP 10 → freqX ~0.06
+    // Формула: freqX = 0.06 + (rtpTarget / 100) * 0.17
+    const rtpFactor = Math.max(0.1, Math.min(1.0, rtpTarget / 100));
+    let freqX = 0.06 + rtpFactor * 0.17; // от 0.07 (rtp10) до 0.23 (rtp100)
+
+    // G (scatter/gift): очень редко, не зависит от RTP
     const freqG = 0.004;
-    // X frequency depends on whether spin is "winning" or "losing"
-    let freqX = canWin ? 0.18 : 0.04; // winning spins get more X symbols
 
-    // Streak adjustments (very small)
-    if (streak.losses >= 8) { freqX = Math.min(0.22, freqX + 0.02); }
-    else if (streak.wins >= 3) { freqX = Math.max(0.02, freqX * 0.5); }
+    // Серийная коррекция (небольшая, не критичная)
+    if (streak.losses >= 10) freqX = Math.min(0.26, freqX + 0.03);
+    else if (streak.wins >= 4) freqX = Math.max(0.04, freqX * 0.7);
 
+    // Генерация сетки 3×5 — как реальный слот, без предопределённого результата
+    // Сервер просто случайно заполняет ячейки, функция checkSpinWins считает выигрыш
     const grid = [];
     for (let r = 0; r < 3; r++) {
         const row = [];
@@ -823,12 +830,24 @@ app.post('/api/spin', async (req, res) => {
 });
 
 // === MINE GAME (Minecraft-style) ===
-const MINE_BLOCKS = ['dirt', 'stone', 'redstone', 'gold', 'diamond', 'obsidian'];
-const MINE_BLOCK_MULTS = { grass: 0.01, dirt: 0.02, stone: 0.03, redstone: 0.04, gold: 0.06, diamond: 0.08, obsidian: 0.10 };
+const MINE_BLOCKS = ['dirt', 'stone', 'redstone', 'gold_block', 'diamond_block', 'obsidian'];
+
+// ФИКСИРОВАННЫЕ множители блоков — НЕ меняются от RTP или ставки
+// reward = betAmount * multiplier (только линейно)
+const MINE_BLOCK_MULTS = {
+    grass:         0.00,  // трава не даёт награду
+    dirt:          0.05,
+    stone:         0.09,
+    redstone:      0.12,
+    gold_block:    0.15,
+    diamond_block: 0.20,
+    obsidian:      0.23
+};
 // 6 rows: row 0 = grass top layer, rows 1-5 = underground
+// Порядок: dirt, stone, redstone, gold_block, diamond_block, obsidian
 const MINE_ROW_WEIGHTS = [
-    // grass/dirt top: dirt=85%, stone=15%  (no ores)
-    [0.85, 0.15, 0.00, 0.00, 0.00, 0.00],
+    // grass top layer: только dirt
+    [1.00, 0.00, 0.00, 0.00, 0.00, 0.00],
     // row 1 — mostly stone
     [0.10, 0.62, 0.20, 0.06, 0.015, 0.005],
     // row 2
@@ -962,44 +981,45 @@ app.post('/api/mine', async (req, res) => {
         for (let c = 0; c < 5; c++) chestMults.push(pickChestMult());
         const effectiveBet = isFreeAutoSpin ? 0.5 : betAmount;
 
-        // Each block has FIXED mult: block win = bet * blockMult (consistent for same bet)
-        // null blocks (broken in auto-spin) give 0 win
+        // ФИКСИРОВАННЫЕ множители блоков: reward = betAmount * multiplier (только линейно)
+        // Множители НЕ зависят от ставки, RTP, уровня и т.д.
+        // RTP влияет только на шанс выпадения редких блоков (через MINE_ROW_WEIGHTS)
         const blockWins = [];
         for (let r = 0; r < 6; r++) {
             const row = [];
             for (let c = 0; c < 5; c++) {
                 if (!grid[r][c]) { row.push(0); continue; }
-                const bm = MINE_BLOCK_MULTS[grid[r][c]] || 0;
-                const bw = parseFloat((effectiveBet * bm).toFixed(4));
+                const blockType = grid[r][c];
+                // Получаем фиксированный множитель блока
+                const mult = MINE_BLOCK_MULTS[blockType] || 0;
+                // reward = betAmount * multiplier (только линейно, без доп. коэффициентов)
+                const bw = parseFloat((effectiveBet * mult).toFixed(3));
                 row.push(bw);
             }
             blockWins.push(row);
         }
 
-        // RTP control: win chance = rtp/200 (rtp 90 = 45% win, rtp 50 = 25%, rtp 10 = 5%)
+        // RTP контроль: регулирует шанс что раунд вообще принесёт выигрыш
+        // rtp 90 = 45% шанс выигрыша, rtp 50 = 25%, rtp 10 = 5%
         const winChance = rtpTarget / 200;
-        let scaleFactor = 1;
-        if (Math.random() >= winChance) {
-            scaleFactor = 0; // No win on losing rolls
-        }
+        const isWinningRound = Math.random() < winChance;
 
-        // Apply scale factor to block wins
+        // На проигрышном раунде обнуляем все block wins (но сетку показываем как есть)
         const adjustedBlockWins = [];
         for (let r = 0; r < 6; r++) {
             const row = [];
             for (let c = 0; c < 5; c++) {
-                row.push(parseFloat((blockWins[r][c] * scaleFactor).toFixed(4)));
+                row.push(isWinningRound ? blockWins[r][c] : 0);
             }
             adjustedBlockWins.push(row);
         }
 
-        // Block win sum (from mining blocks only, no chest)
+        // Сумма выигрыша с блоков
         let blockWinSum = 0;
         for (let r = 0; r < 6; r++) {
             for (let c = 0; c < 5; c++) blockWinSum += adjustedBlockWins[r][c];
         }
-        // Hard cap block wins: max = bet * 1.5
-        let actualWin = Math.min(Number(blockWinSum.toFixed(2)), effectiveBet * 1.5);
+        let actualWin = Number(blockWinSum.toFixed(2));
 
         // CHESTS: multiply ENTIRE user balance (not just block wins)
         // Reaching a chest = clearing entire column = very rare (~0.5% per column)
