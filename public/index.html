@@ -415,6 +415,144 @@
         <div id="admin-content" style="flex: 1; overflow-y: auto;"></div>
     </div>
 
+    <script>
+    // ====== TON CONNECT ИНИЦИАЛИЗАЦИЯ ======
+    let tonConnectUI = null;
+    let tcWallet = null;
+
+    async function initTonConnect() {
+        try {
+            const manifestUrl = window.location.origin + '/tonconnect-manifest.json';
+            tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
+                manifestUrl: manifestUrl,
+                buttonRootId: 'ton-connect-btn'
+            });
+
+            // Слушаем изменение статуса кошелька
+            tonConnectUI.onStatusChange(wallet => {
+                tcWallet = wallet;
+                if (wallet) {
+                    console.log('TON Connect: кошелёк подключён', wallet.account.address);
+                } else {
+                    console.log('TON Connect: кошелёк отключён');
+                }
+            });
+        } catch (e) {
+            console.error('TonConnect init error:', e);
+        }
+    }
+
+    // Вызываем инициализацию после загрузки страницы
+    window.addEventListener('load', () => {
+        setTimeout(initTonConnect, 500);
+    });
+
+    // ====== ОПЛАТА ЧЕРЕЗ TON CONNECT ======
+    async function payWithTonConnect() {
+        const amountInput = document.getElementById('tc-amount');
+        const amount = parseFloat(amountInput ? amountInput.value : 0);
+
+        if (!amount || amount < 0.5) {
+            showToast('❌ Минимальная сумма: 0.5 TON', 'red');
+            return;
+        }
+
+        if (!tonConnectUI) {
+            showToast('❌ TonConnect не инициализирован', 'red');
+            return;
+        }
+
+        // Подключаем кошелёк если не подключён
+        if (!tcWallet) {
+            try {
+                await tonConnectUI.connectWallet();
+            } catch (e) {
+                showToast('❌ Кошелёк не подключён', 'red');
+                return;
+            }
+        }
+
+        if (!tcWallet) {
+            showToast('❌ Подключите кошелёк сначала', 'red');
+            return;
+        }
+
+        const userId = currentUser ? String(currentUser.id) : null;
+        if (!userId) {
+            showToast('❌ Ошибка авторизации', 'red');
+            return;
+        }
+
+        // Получаем адрес кошелька казино
+        const adminWallet = document.getElementById('dep-wallet') ?
+            document.getElementById('dep-wallet').innerText.trim() : null;
+
+        if (!adminWallet || adminWallet === 'Загрузка...') {
+            showToast('❌ Адрес кошелька не загружен', 'red');
+            return;
+        }
+
+        try {
+            showToast('⏳ Отправка транзакции...', 'blue');
+
+            // Сумма в нанотонах (1 TON = 1,000,000,000 nanoton)
+            const nanoAmount = BigInt(Math.round(amount * 1e9)).toString();
+
+            // Комментарий = ID пользователя (для идентификации платежа)
+            const commentBytes = new TextEncoder().encode(userId);
+            const commentHex = Array.from(commentBytes).map(b => b.toString(16).padStart(2, '0')).join('');
+
+            const transaction = {
+                validUntil: Math.floor(Date.now() / 1000) + 300, // 5 минут
+                messages: [
+                    {
+                        address: adminWallet,
+                        amount: nanoAmount,
+                        payload: 'te6cckEBAQEADgAAGAAAAA' + btoa(userId) // base64 комментарий
+                    }
+                ]
+            };
+
+            // Более простой способ отправки с текстовым комментарием
+            const txResult = await tonConnectUI.sendTransaction({
+                validUntil: Math.floor(Date.now() / 1000) + 300,
+                messages: [
+                    {
+                        address: adminWallet,
+                        amount: nanoAmount,
+                        // text comment payload (0x00000000 + UTF8 text)
+                        payload: buildTonCommentPayload(userId)
+                    }
+                ]
+            });
+
+            showToast('✅ Транзакция отправлена! Ждём подтверждения...', 'green');
+
+            // Автоматически проверяем через 15 секунд
+            setTimeout(() => {
+                checkRealDeposit(null, true);
+            }, 15000);
+
+        } catch (e) {
+            if (e.message && e.message.includes('Reject')) {
+                showToast('❌ Транзакция отменена пользователем', 'red');
+            } else {
+                showToast('❌ Ошибка транзакции: ' + (e.message || e), 'red');
+            }
+            console.error('TonConnect tx error:', e);
+        }
+    }
+
+    // Строим payload с текстовым комментарием для TON
+    function buildTonCommentPayload(text) {
+        // Формат: 4 байта (0x00000000) + UTF-8 текст → base64
+        const textBytes = new TextEncoder().encode(text);
+        const payload = new Uint8Array(4 + textBytes.length);
+        payload[0] = 0; payload[1] = 0; payload[2] = 0; payload[3] = 0;
+        payload.set(textBytes, 4);
+        return btoa(String.fromCharCode(...payload));
+    }
+    </script>
     <script src="script.js"></script>
 </body>
 </html>
