@@ -432,117 +432,66 @@ function switchDepTab(type, el) {
 }
 
 async function payWithTonConnect() {
-    if (!tonConnectUI) return showToast('TON Connect не загружен. Перезагрузите страницу.');
-
-    // Правильная проверка подключения
-    const isConnected = tonConnectUI.wallet !== null && tonConnectUI.wallet !== undefined;
-    if (!isConnected) {
-        showToast('Подключаем кошелек...');
-        try {
-            await tonConnectUI.openModal();
-            await new Promise((resolve, reject) => {
-                let tries = 0;
-                const check = setInterval(() => {
-                    tries++;
-                    if (tonConnectUI.wallet) { clearInterval(check); resolve(); }
-                    else if (tries > 60) { clearInterval(check); reject(new Error('timeout')); }
-                }, 1000);
-            });
-        } catch(e) {
-            return showToast('Кошелек не подключён. Подключите через кнопку TON Connect.');
-        }
+    if (!tonConnectUI) return showToast('TON Connect не загружен.');
+    
+    // Правильная проверка — .wallet, не .connected
+    if (!tonConnectUI.wallet) {
+        showToast('Подключите кошелек через кнопку TON Connect вверху экрана.');
+        try { await tonConnectUI.openModal(); } catch(e) {}
+        return;
     }
 
     const amount = parseFloat($('tc-amount') ? $('tc-amount').value : 0);
     if(isNaN(amount) || amount < 0.5) return showToast('Минимум 0.5 TON');
-    if(!adminWalletAddress) return showToast('Кошелек получателя не настроен');
+    if(!adminWalletAddress) return showToast('Кошелек не настроен на сервере');
 
-    // TonConnect требует адрес в raw формате (0:xxxx) или friendly (EQ/UQ)
-    // Используем адрес как есть — SDK сам конвертирует
     const addr = adminWalletAddress.trim().replace(/[\r\n\s]/g, '');
-    if (!addr || addr.length < 30) {
-        return showToast('Кошелек получателя не настроен. Обратитесь к админу.');
+    if (!addr || addr.length < 30) return showToast('Неверный адрес кошелька');
+
+    // Строим payload: 4 нулевых байта + UTF-8 ID
+    function buildPayload(text) {
+        const tb = new TextEncoder().encode(text);
+        const bytes = new Uint8Array(4 + tb.length);
+        bytes.set(tb, 4);
+        let bin = '';
+        bytes.forEach(b => bin += String.fromCharCode(b));
+        return btoa(bin);
     }
 
-    // Строим BOC payload с текстовым комментарием (ID юзера)
-    // Формат: 4 нулевых байта (opcode text comment) + UTF-8 строка
-    function buildCommentPayload(text) {
-        const textBytes = new TextEncoder().encode(text);
-        const bytes = new Uint8Array(4 + textBytes.length);
-        // 4 нулевых байта = opcode для text comment в TON
-        bytes[0] = 0; bytes[1] = 0; bytes[2] = 0; bytes[3] = 0;
-        bytes.set(textBytes, 4);
-        // Кодируем в base64 для TonConnect SDK
-        let binary = '';
-        bytes.forEach(b => binary += String.fromCharCode(b));
-        return btoa(binary);
-    }
-
-    let payloadBoc = buildCommentPayload(String(user.id));
-
-    // Если TonWeb загружен — используем правильный BOC формат
+    // Если TonWeb загружен — используем правильный BOC
+    let payload = buildPayload(String(user.id));
     if (window.TonWeb) {
         try {
             const cell = new TonWeb.boc.Cell();
             cell.bits.writeUint(0, 32);
             cell.bits.writeString(String(user.id));
             const boc = await cell.toBoc();
-            payloadBoc = TonWeb.utils.bytesToBase64(boc);
-        } catch(e) {
-            console.warn('TonWeb BOC failed, using fallback:', e);
-        }
+            payload = TonWeb.utils.bytesToBase64(boc);
+        } catch(e) { console.warn('TonWeb failed, using fallback'); }
     }
-
-    const nanoAmount = String(Math.round(amount * 1e9));
 
     try {
         showToast('⏳ Отправляем транзакцию...');
         await tonConnectUI.sendTransaction({
             validUntil: Math.floor(Date.now() / 1000) + 600,
-            messages: [{
-                address: addr,   // SDK сам разберёт UQ/EQ/raw формат
-                amount: nanoAmount,
-                payload: payloadBoc
-            }]
+            messages: [{ address: addr, amount: String(Math.round(amount * 1e9)), payload }]
         });
-        showToast('✅ Транзакция отправлена! Проверка через 20 сек...');
+        showToast('✅ Отправлено! Проверка через 20 сек...');
 
-        let checkAttempts = 0;
-        const maxAttempts = 8;
+        let attempts = 0;
         const autoCheck = async () => {
-            checkAttempts++;
-            try {
-                const r = await fetch('/api/check_deposit', {
-                    method: 'POST',
-                    headers: {'Content-Type':'application/json'},
-                    body: JSON.stringify({id: user.id})
-                });
-                if (r.ok) {
-                    const d = await r.json();
-                    if (d.added > 0) {
-                        user = d.user;
-                        updateUI();
-                        renderWithdrawHistory();
-                        showToast(`✅ +${d.added.toFixed(2)} TON зачислено!`);
-                        flyToBalance(d.added);
-                        return;
-                    }
-                }
-            } catch(e) {}
-            if (checkAttempts < maxAttempts) {
-                setTimeout(autoCheck, 20000);
-            } else {
-                showToast('⚠️ Нажмите "ПРОВЕРИТЬ ОПЛАТУ" если не зачислилось.');
-            }
+            attempts++;
+            await checkRealDeposit(null, true);
+            if (attempts < 8) setTimeout(autoCheck, 20000);
+            else showToast('⚠️ Нажмите ПРОВЕРИТЬ ОПЛАТУ если не зачислилось');
         };
         setTimeout(autoCheck, 20000);
-    } catch (e) {
-        console.error('TON Connect error:', e);
-        const msg = e?.message || String(e);
-        if (msg.includes('reject') || msg.includes('cancel') || msg.toLowerCase().includes('user')) {
-            showToast('❌ Транзакция отменена');
+    } catch(e) {
+        const msg = (e && e.message) ? e.message : String(e);
+        if (msg.toLowerCase().includes('reject') || msg.toLowerCase().includes('cancel')) {
+            showToast('Транзакция отменена');
         } else {
-            showToast('❌ Ошибка: ' + msg.slice(0, 100));
+            showToast('Ошибка: ' + msg.slice(0, 80));
         }
     }
 }
@@ -1144,25 +1093,20 @@ function renderBattlePlayers(lobby) {
 }
 
 // ФИНАНСЫ И ПРОМО
-async function checkRealDeposit(btn, silent = false) {
+async function checkRealDeposit(btn, silent) {
     if (btn) { btn.innerText = "ПРОВЕРЯЕМ..."; btn.disabled = true; }
-    else if (!silent) showToast('🔍 Проверяем оплату...');
     try {
         const r = await fetch('/api/check_deposit', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id:user.id}) });
         if(r.ok) {
             const d = await r.json();
-            user = d.user;
-            updateUI();
-            renderWithdrawHistory();
-            showToast(`✅ +${d.added} TON зачислено!`);
+            user = d.user; updateUI(); renderWithdrawHistory();
+            showToast('✅ +' + d.added + ' TON зачислено!');
             flyToBalance(d.added);
         } else {
             const e = await r.json();
-            if (!silent) showToast(e.error || 'Не найдено. Подождите и попробуйте снова.');
+            if (!silent) showToast(e.error || 'Оплата не найдена. Проверьте комментарий.');
         }
-    } catch(err) {
-        if (!silent) showToast('Ошибка соединения');
-    }
+    } catch(e) { if (!silent) showToast('Ошибка соединения'); }
     if (btn) { btn.innerText = "ПРОВЕРИТЬ ОПЛАТУ"; btn.disabled = false; }
 }
 
@@ -1662,7 +1606,7 @@ let spinProgressValue = 0;
 let spinIsSpinning = false;
 let spinAnimInterval = null;
 
-const SPIN_SYMS_ANIM = ['N','L','X','N','G','N','L','N','X','N','L','N'];
+const SPIN_SYMS_ANIM = ['N','L','X','N','G','N','X','L','N','L','N','X'];
 
 const SPIN_PAYLINES_FE = [
     [1,1,1,1,1],  // 0: средний ряд
@@ -1706,8 +1650,8 @@ function initSpinPage() {
         });
         spBetInput._hasChangeListener = true;
     }
-    // Pre-fill idle grid with nice pattern (N = нейтральный)
-    const symbols = ['N','L','X','N','G','N','X','L','N','X','N','L','N','X','N'];
+    // Pre-fill idle grid with nice pattern
+    const symbols = ['N','L','X','N','G','N','X','L','N','L','N','X','N','L','N'];
     for (let r = 0; r < 3; r++) {
         for (let c = 0; c < 5; c++) {
             const cell = $(`sc-${r}-${c}`);
@@ -1771,10 +1715,9 @@ function updateSpinUI() {
 const MINE_BLOCK_CLASS = {
     grass:'grass-blk', dirt:'dirt-blk',
     stone:'stone-blk', redstone:'redstone-blk',
-    // Новые названия блоков (синхронизировано с сервером)
-    gold_block:'gold-blk', diamond_block:'diamond-blk', obsidian:'obsidian-blk',
-    // Старые названия (для обратной совместимости)
-    gold:'gold-blk', diamond:'diamond-blk',
+    gold:'gold-blk', gold_block:'gold-blk',
+    diamond:'diamond-blk', diamond_block:'diamond-blk',
+    obsidian:'obsidian-blk',
     tnt:'tnt-blk', book:'book-blk', unknown:'unknown-blk'
 };
 const MC_ROWS = 6;
@@ -1875,11 +1818,11 @@ function initMineShaft(keepPersist, idlePreview) {
     shaft.innerHTML = '';
     const IDLE_BY_ROW = [
         ['grass','grass','grass','grass','grass'],
-        ['dirt','stone','stone','stone','redstone'],
-        ['stone','stone','stone','redstone','redstone'],
-        ['stone','redstone','redstone','gold_block','gold_block'],
-        ['redstone','gold_block','gold_block','diamond_block','diamond_block'],
-        ['gold_block','diamond_block','diamond_block','obsidian','obsidian'],
+        ['dirt','stone','stone','stone','stone','redstone'],
+        ['stone','stone','stone','redstone','redstone','redstone'],
+        ['stone','redstone','redstone','gold','gold','gold'],
+        ['redstone','gold','gold','gold','diamond','diamond'],
+        ['gold','diamond','diamond','diamond','obsidian','obsidian'],
     ];
     for (let r = 0; r < MC_ROWS; r++) {
         for (let c = 0; c < MC_COLS; c++) {
@@ -2259,12 +2202,7 @@ function flyItemToHotbar(blkEl, blockType, gridRow, gridCol) {
         image-rendering:pixelated; border-radius:3px;
     `;
 
-    const spriteMap = {
-        book: '/sprites/block_book.png', tnt: '/sprites/block_tnt.png',
-        gold_block: '/sprites/block_gold.png', diamond_block: '/sprites/block_diamond.png',
-        gold: '/sprites/block_gold.png', diamond: '/sprites/block_diamond.png',
-        obsidian: '/sprites/block_obsidian.png', redstone: '/sprites/block_redstone.png'
-    };
+    const spriteMap = { book: '/sprites/block_book.png', tnt: '/sprites/block_tnt.png' };
     const img = document.createElement('img');
     img.src = spriteMap[blockType] || '/sprites/block_stone.png';
     img.style.cssText = 'width:100%;height:100%;image-rendering:pixelated;';
@@ -2315,11 +2253,8 @@ function fillInvCell(row, col, blockType, pickaxeType) {
         book: '/sprites/block_book.png', tnt: '/sprites/block_tnt.png',
         grass: '/sprites/block_grass.png', dirt: '/sprites/block_dirt.png',
         stone: '/sprites/block_stone.png', redstone: '/sprites/block_redstone.png',
-        // Новые названия блоков
-        gold_block: '/sprites/block_gold.png', diamond_block: '/sprites/block_diamond.png',
-        obsidian: '/sprites/block_obsidian.png',
-        // Старые названия (обратная совместимость)
-        gold: '/sprites/block_gold.png', diamond: '/sprites/block_diamond.png'
+        gold: '/sprites/block_gold.png', diamond: '/sprites/block_diamond.png',
+        obsidian: '/sprites/block_obsidian.png'
     };
     if (blockType === 'book') {
         cell.className = 'inv-cell filled inv-book';
@@ -2341,17 +2276,15 @@ function spawnBreakParticles(blockEl, blockType) {
     const cx = rect.left + rect.width / 2;
     const cy = rect.top + rect.height / 2;
     const clrs = {
-        grass:        ['#4a8c2a','#6cb040','#3a7020'],
-        dirt:         ['#8b6040','#a07050','#6b4a30'],
-        stone:        ['#888','#aaa','#777'],
-        redstone:     ['#880000','#cc2020','#ff4444'],
-        gold_block:   ['#c8a000','#ffe060','#deb800'],
-        diamond_block:['#006b9a','#00e4ff','#4acce0'],
-        gold:         ['#c8a000','#ffe060','#deb800'],
-        diamond:      ['#006b9a','#00e4ff','#4acce0'],
-        obsidian:     ['#0e0420','#6030a0','#3010a0'],
-        tnt:          ['#cc1010','#ff4040','#ff8888'],
-        book:         ['#4c1090','#ffd700','#c080ff'],
+        grass:    ['#4a8c2a','#6cb040','#3a7020'],
+        dirt:     ['#8b6040','#a07050','#6b4a30'],
+        stone:    ['#888','#aaa','#777'],
+        redstone: ['#880000','#cc2020','#ff4444'],
+        gold:     ['#c8a000','#ffe060','#deb800'],
+        diamond:  ['#006b9a','#00e4ff','#4acce0'],
+        obsidian: ['#0e0420','#6030a0','#3010a0'],
+        tnt:      ['#cc1010','#ff4040','#ff8888'],
+        book:     ['#4c1090','#ffd700','#c080ff'],
     };
     const c = clrs[blockType] || clrs.stone;
     for (let i = 0; i < 12; i++) {
@@ -3131,7 +3064,7 @@ async function playSpin() {
         const data = await r.json();
         if (!r.ok) {
             clearInterval(spinAnimInterval);
-            for (let ri = 0; ri < 3; ri++) for (let ci = 0; ci < 5; ci++) { const c = $(`sc-${ri}-${ci}`); if(c) { c.className='spin-cell sym-L'; c.innerText='L'; } }
+            for (let ri = 0; ri < 3; ri++) for (let ci = 0; ci < 5; ci++) { const c = $(`sc-${ri}-${ci}`); if(c) { c.className='spin-cell sym-N'; c.innerText='N'; } }
             showToast(data.error || 'Ошибка');
             return;
         }
@@ -3156,8 +3089,8 @@ async function playSpin() {
             const bonusMult = Math.min(7, spinFreeSpinsMult * 2);
             spinFreeSpins += data.bonusSpins || 1;
             spinFreeSpinsMult = bonusMult;
-            showToast(`🎁 ЕБАТЬ БОНУСКА 💰 +${data.bonusSpins || 1} фриспин! Множитель ×${spinFreeSpinsMult}!`, 4000);
-
+            showToast(`🎁 БОНУС! +${data.bonusSpins || 1} фриспин! Множитель ×${spinFreeSpinsMult}!`, 4000);
+        }
 
         // Free spins won from scatter G (max 8, нет ре-триггера во фриспинах)
         if (data.freeSpinsWon > 0 && !isFreeSpins) {
