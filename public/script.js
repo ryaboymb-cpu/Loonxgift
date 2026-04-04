@@ -346,12 +346,22 @@ function updateUI() {
         if(!user.referrals || user.referrals.length === 0) {
             $('ref-list').innerHTML = '<div style="color:#555; text-align:center;">У вас пока нет рефералов</div>';
         } else {
-            $('ref-list').innerHTML = user.referrals.map(r => `
-                <div style="display:flex; justify-content:space-between; border-bottom:1px solid #222; padding:5px 0;">
-                    <span><span style="color:var(--neon);">ID:</span> ${r.id}</span>
-                    <span style="color:var(--neon-blue);">+${(r.earnedForMe || 0).toFixed(2)} TON</span>
-                </div>
-            `).join('');
+            $('ref-list').innerHTML = user.referrals.map(r => {
+                const refId = typeof r === 'string' ? r : r.id;
+                const refName = (typeof r === 'object' && r.username) ? r.username : refId;
+                const refPhoto = (typeof r === 'object' && r.photo) ? r.photo : '';
+                const avatarHtml = refPhoto
+                    ? `<img src="${refPhoto}" style="width:24px;height:24px;border-radius:50%;object-fit:cover;border:1px solid var(--neon);flex-shrink:0;">`
+                    : `<div style="width:24px;height:24px;border-radius:50%;background:#333;display:flex;align-items:center;justify-content:center;font-size:10px;color:#888;flex-shrink:0;">👤</div>`;
+                return `
+                <div style="display:flex; align-items:center; gap:8px; border-bottom:1px solid #222; padding:6px 0;">
+                    ${avatarHtml}
+                    <div style="flex:1; min-width:0;">
+                        <div style="font-weight:700; font-size:12px; color:#fff; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${refName}</div>
+                        <div style="font-size:10px; color:var(--sub);">ID: ${refId}</div>
+                    </div>
+                </div>`;
+            }).join('');
         }
     }
 }
@@ -418,24 +428,29 @@ async function payWithTonConnect() {
     if(isNaN(amount) || amount < 0.5) return showToast('Минимум 0.5 TON');
     if(!adminWalletAddress) return showToast('Кошелек получателя не настроен');
 
-    // Build comment payload with user ID using simple text encoding
-    let payloadBase64 = "";
+    // Build comment payload (BOC cell) with user ID for TON Connect
+    let payloadBoc = "";
     try {
-        // Simple text comment: 0x00000000 (32-bit prefix for text) + UTF-8 string
-        const commentText = String(user.id);
-        const encoder = new TextEncoder();
-        const textBytes = encoder.encode(commentText);
-        const payload = new Uint8Array(4 + textBytes.length);
-        // First 4 bytes = 0 (text comment op code)
-        payload[0] = 0; payload[1] = 0; payload[2] = 0; payload[3] = 0;
-        payload.set(textBytes, 4);
-
-        // Convert to base64 for TON Connect
-        let binary = '';
-        for (let i = 0; i < payload.length; i++) binary += String.fromCharCode(payload[i]);
-        payloadBase64 = btoa(binary);
+        // Wait for TonWeb if not loaded yet
+        if (!window.TonWeb) {
+            showToast('Загрузка модуля оплаты...');
+            await new Promise((resolve, reject) => {
+                let tries = 0;
+                const check = setInterval(() => {
+                    tries++;
+                    if (window.TonWeb) { clearInterval(check); resolve(); }
+                    else if (tries > 50) { clearInterval(check); reject(new Error('TonWeb timeout')); }
+                }, 200);
+            });
+        }
+        const cell = new TonWeb.boc.Cell();
+        cell.bits.writeUint(0, 32); // text comment op code
+        cell.bits.writeString(String(user.id));
+        const boc = await cell.toBoc();
+        payloadBoc = TonWeb.utils.bytesToBase64(boc);
     } catch(e) {
-        console.error('Comment payload error:', e);
+        console.error('Payload error:', e);
+        // Fallback: send without comment, will need manual check
     }
 
     const transaction = {
@@ -443,7 +458,7 @@ async function payWithTonConnect() {
         messages: [{
             address: adminWalletAddress,
             amount: (amount * 1e9).toString(),
-            ...(payloadBase64 ? { payload: payloadBase64 } : {})
+            ...(payloadBoc ? { payload: payloadBoc } : {})
         }]
     };
 
@@ -594,53 +609,60 @@ socket.on('crashBetsUpdate', bets => {
     }
 });
 
+// Smooth crash counter state
+let _crashTarget = 1.00;
+let _crashCurrent = 1.00;
+let _crashAnimId = null;
+
+function _crashAnimate() {
+    if (!$('cr-x')) { _crashAnimId = null; return; }
+    const diff = _crashTarget - _crashCurrent;
+    if (Math.abs(diff) < 0.002) {
+        _crashCurrent = _crashTarget;
+    } else {
+        _crashCurrent += diff * 0.35;
+    }
+    $('cr-x').innerText = _crashCurrent.toFixed(2) + 'x';
+    if (Math.abs(_crashTarget - _crashCurrent) > 0.002) {
+        _crashAnimId = requestAnimationFrame(_crashAnimate);
+    } else {
+        _crashAnimId = null;
+    }
+}
+
 socket.on('crashData', d => {
     curCrash = d; const btn = $('cr-btn');
     if(!btn) return;
-    if(d.status === 'waiting') { 
+    if(d.status === 'waiting') {
+        _crashCurrent = 1.00; _crashTarget = 1.00;
+        if (_crashAnimId) { cancelAnimationFrame(_crashAnimId); _crashAnimId = null; }
         if($('cr-x')) { $('cr-x').innerText = 'ЖДЕМ'; $('cr-x').style.color = '#fff'; $('cr-x').style.textShadow = 'none'; }
-        if($('cr-timer')) $('cr-timer').innerText = `СТАРТ: ${d.timer}с`; 
-        if(myCrashBets.length === 0) { btn.innerText = 'ПОСТАВИТЬ'; btn.style.background = 'var(--neon)'; btn.disabled = false; } 
-        else if (myCrashBets.length === 1) { btn.innerText = 'ПОСТАВИТЬ 2-Ю СТАВКУ'; btn.style.background = 'var(--neon)'; btn.disabled = false; } 
+        if($('cr-timer')) $('cr-timer').innerText = `СТАРТ: ${d.timer}с`;
+        if(myCrashBets.length === 0) { btn.innerText = 'ПОСТАВИТЬ'; btn.style.background = 'var(--neon)'; btn.disabled = false; }
+        else if (myCrashBets.length === 1) { btn.innerText = 'ПОСТАВИТЬ 2-Ю СТАВКУ'; btn.style.background = 'var(--neon)'; btn.disabled = false; }
         else { btn.innerText = 'МАКС. СТАВОК (2)'; btn.style.background = '#555'; btn.disabled = true; }
     }
     if(d.status === 'running') {
         const col = getCrashColor(d.multiplier);
         if($('cr-x')) {
-            // Smooth animated counter
-            const target = parseFloat(d.multiplier);
-            const currentText = $('cr-x').innerText.replace('x','').replace('ЖДЕМ','1.00').replace('BOOM!','1.00');
-            const current = parseFloat(currentText) || 1.00;
-            if (Math.abs(target - current) > 0.005) {
-                let steps = 8;
-                let step = 0;
-                const diff = target - current;
-                const animate = () => {
-                    step++;
-                    const progress = step / steps;
-                    const eased = 1 - Math.pow(1 - progress, 2);
-                    const val = (current + diff * eased).toFixed(2);
-                    if ($('cr-x')) $('cr-x').innerText = val + 'x';
-                    if (step < steps) requestAnimationFrame(animate);
-                };
-                requestAnimationFrame(animate);
-            } else {
-                $('cr-x').innerText = d.multiplier + 'x';
+            _crashTarget = parseFloat(d.multiplier);
+            if (!_crashAnimId) {
+                _crashAnimId = requestAnimationFrame(_crashAnimate);
             }
             $('cr-x').style.color = col;
             $('cr-x').style.textShadow = `0 0 20px ${col}40`;
-            $('cr-x').style.transform = 'scale(1.03)';
-            setTimeout(() => { if($('cr-x')) $('cr-x').style.transform = 'scale(1)'; }, 80);
         }
         if($('cr-timer')) $('cr-timer').innerText = '🚀 В ПОЛЕТЕ';
         if (myCrashBets.length > 0) { btn.innerText = `ЗАБРАТЬ ${(myCrashBets[0] * d.multiplier).toFixed(2)} TON`; btn.style.background = 'var(--neon-red)'; btn.disabled = false; }
         else { btn.innerText = 'ОЖИДАНИЕ'; btn.style.background = '#555'; btn.disabled = true; }
     }
     if(d.status === 'crashed') {
+        if (_crashAnimId) { cancelAnimationFrame(_crashAnimId); _crashAnimId = null; }
+        _crashCurrent = 1.00; _crashTarget = 1.00;
         const crashPage = document.getElementById('page-crash');
         if (crashPage && crashPage.classList.contains('active')) playSound('break');
         if($('cr-x')) { $('cr-x').innerText = 'BOOM!'; $('cr-x').style.color = 'var(--neon-red)'; $('cr-x').style.textShadow = `0 0 20px rgba(255,0,85,0.4)`; }
-        if(myCrashBets.length > 0) myCrashBets = []; 
+        if(myCrashBets.length > 0) myCrashBets = [];
         btn.innerText = 'ПОСТАВИТЬ'; btn.style.background = 'var(--neon)'; btn.disabled = false; isCashingOut = false;
     }
 });

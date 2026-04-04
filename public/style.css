@@ -9,7 +9,7 @@ body { display: flex; flex-direction: column; }
   background: none; border: 1px solid #333; color: var(--sub);
   font-size: 13px; font-weight: 700; padding: 6px 14px;
   border-radius: 10px; margin-bottom: 12px; cursor: pointer;
-  transition: 0.15s;
+  transition: 0.15s; align-self: flex-start;
 }
 .game-back-btn:active { border-color: var(--neon); color: var(--neon); transform: scale(0.96); }
 
@@ -217,12 +217,12 @@ body {
   align-items: center;
   justify-content: flex-start;
   width: 100%;
-  padding: 0;
+  padding: 6px 8px 0;
 }
 .mine-card {
   flex: 0 0 auto !important;
   width: 100%;
-  max-width: 310px;
+  max-width: 280px;
   padding: 2px 2px;
   display: flex !important;
   flex-direction: column;
@@ -231,6 +231,8 @@ body {
   overflow-x: hidden;
   border-radius: 6px !important;
   margin-bottom: 0 !important;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 /* ─── ИНВЕНТАРЬ 5×3 ─── */
@@ -459,12 +461,13 @@ body {
 }
 /* All pickaxe/item images in inventory must match hotbar */
 .inv-cell img {
-  width: 80% !important;
-  height: 80% !important;
-  max-width: 42px !important;
-  max-height: 42px !important;
+  width: 75% !important;
+  height: 75% !important;
+  max-width: 36px !important;
+  max-height: 36px !important;
   object-fit: contain !important;
   image-rendering: pixelated !important;
+  display: block;
 }
 
 /* ─── КНИГА СТАТУС ─── */

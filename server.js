@@ -268,7 +268,7 @@ async function runCrash() {
     const limit = Math.pow(100 / (100 - (Math.random() * rtp)), 0.7).toFixed(2);
     
     const r = setInterval(async () => {
-        crash.multiplier = (parseFloat(crash.multiplier) + 0.015).toFixed(2);
+        crash.multiplier = (parseFloat(crash.multiplier) + 0.01).toFixed(2);
         io.emit('crashData', crash);
         
         if(parseFloat(crash.multiplier) >= limit) { 
@@ -297,9 +297,9 @@ async function runCrash() {
                 }
             }
             
-            setTimeout(startCrash, 4000); 
+            setTimeout(startCrash, 4000);
         }
-    }, 100);
+    }, 50);
 }
 startCrash();
 
@@ -335,9 +335,8 @@ setInterval(async () => {
         
         if (lobby.players.length >= 4) {
             shouldStart = true;
-        } else if (lobby.players.length > 1 && lobby.timerStartedAt) {
-            const twoMinsAgo = new Date(Date.now() - 2 * 60 * 1000);
-            if (lobby.timerStartedAt < twoMinsAgo) shouldStart = true;
+        } else if (lobby.players.length > 1 && lobby.timerEndTime) {
+            if (new Date() >= lobby.timerEndTime) shouldStart = true;
         }
 
         if (shouldStart) {
@@ -450,6 +449,12 @@ app.post('/api/auth', async (req, res) => {
         ...b.toObject(),
         timeMsk: new Date(b.createdAt).toLocaleString("ru-RU", { timeZone: "Europe/Moscow" })
     }));
+
+    // Enrich referrals with username and avatar
+    if (userObj.referrals && userObj.referrals.length > 0) {
+        const refUsers = await User.find({ id: { $in: userObj.referrals } }, 'id username photo');
+        userObj.referrals = refUsers.map(r => ({ id: r.id, username: r.username || 'User', photo: r.photo || '' }));
+    }
 
     const wagerSett = await Settings.findOne({ key: 'wager_multiplier' });
     const wagerMult = wagerSett ? wagerSett.value : 2;
@@ -761,16 +766,9 @@ app.post('/api/spin', async (req, res) => {
         const maxWin = betAmount * 15;
         if (actualWin > maxWin) actualWin = maxWin;
 
-        // RTP control: fair probability based on RTP percentage
-        // rtpTarget 90 = 90% RTP -> winChance scales proportionally
+        // RTP control: scale payout by RTP percentage
         if (!freeSpinsMode && actualWin > 0) {
-            const winChance = rtpTarget / 100;
-            if (Math.random() > winChance) {
-                actualWin = 0;
-            } else {
-                // Cap max win per regular spin at 5x bet
-                actualWin = Math.min(actualWin, betAmount * 3);
-            }
+            actualWin = Number((actualWin * (rtpTarget / 100)).toFixed(2));
         }
 
         let progressGain = gCount * 20 + hiddenGs.length * 10;
@@ -813,7 +811,7 @@ app.post('/api/spin', async (req, res) => {
 
 // === MINE GAME (Minecraft-style) ===
 const MINE_BLOCKS = ['dirt', 'stone', 'redstone', 'gold', 'diamond', 'obsidian'];
-const MINE_BLOCK_MULTS = { grass: 0.02, dirt: 0.02, stone: 0.04, redstone: 0.05, gold: 0.08, diamond: 0.12, obsidian: 0.18 };
+const MINE_BLOCK_MULTS = { grass: 0.05, dirt: 0.05, stone: 0.09, redstone: 0.1, gold: 0.15, diamond: 0.19, obsidian: 0.2 };
 // 3 rows: row 0 = grass top layer, rows 1-2 = underground
 const MINE_ROW_WEIGHTS = [
     // grass/dirt top: dirt=85%, stone=15%  (no ores)
