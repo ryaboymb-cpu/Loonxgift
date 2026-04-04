@@ -661,38 +661,47 @@ const SPIN_PAYLINES = [
 ];
 
 // L symbols do NOT pay — only X symbols pay (makes most spins losing)
-// Таблица выплат: только X платит. L = проигрыш (но не каждый спин — зависит от частоты X)
-// Как в реальном слоте: крутится сетка, если совпало X×3+ — выигрыш, иначе — нет
-const SPIN_PAYTABLE = { 'X': { 3: 1.0, 4: 2.5, 5: 5.0 } };
+// Таблица выплат:
+// X — редкий, платит много (x3 от L)
+// L — обычный, платит мало
+// N — нейтральный, не платит ничего (для заполнения, частый)
+// G — scatter, даёт фриспины
+const SPIN_PAYTABLE = {
+    'X': { 3: 3.0, 4: 7.5, 5: 15.0 },  // X редкий — платит в 3 раза больше L
+    'L': { 3: 1.0, 4: 2.5, 5: 5.0  },  // L обычный — базовые выплаты
+    // N не платит ничего
+};
 
 function generateSpinGrid(userId, rtpTarget) {
     const streak = spinUserStreaks[userId] || { losses: 0, wins: 0, progress: 0 };
 
-    // Реальный слот: вероятность X на ячейку определяет шанс выигрыша
-    // RTP 90 → freqX ~0.22 (высокий шанс совпадений)
-    // RTP 50 → freqX ~0.12
-    // RTP 10 → freqX ~0.06
-    // Формула: freqX = 0.06 + (rtpTarget / 100) * 0.17
+    // Частоты символов на ячейку:
+    // N — нейтральный (самый частый, ~55%)
+    // L — обычный (~25-30%)
+    // X — редкий (~8-15% зависит от RTP)
+    // G — scatter (~0.4%)
     const rtpFactor = Math.max(0.1, Math.min(1.0, rtpTarget / 100));
-    let freqX = 0.06 + rtpFactor * 0.17; // от 0.07 (rtp10) до 0.23 (rtp100)
 
-    // G (scatter/gift): очень редко, не зависит от RTP
     const freqG = 0.004;
+    const freqX = 0.04 + rtpFactor * 0.11; // rtp10→4%, rtp90→14%
+    const freqL = 0.15 + rtpFactor * 0.12; // rtp10→15%, rtp90→27%
+    // freqN = остаток (55-80%)
 
-    // Серийная коррекция (небольшая, не критичная)
-    if (streak.losses >= 10) freqX = Math.min(0.26, freqX + 0.03);
-    else if (streak.wins >= 4) freqX = Math.max(0.04, freqX * 0.7);
+    // Серийная коррекция
+    let adjX = freqX;
+    let adjL = freqL;
+    if (streak.losses >= 10) { adjX = Math.min(0.18, adjX + 0.03); adjL = Math.min(0.30, adjL + 0.04); }
+    else if (streak.wins >= 4) { adjX = Math.max(0.02, adjX * 0.6); adjL = Math.max(0.10, adjL * 0.8); }
 
-    // Генерация сетки 3×5 — как реальный слот, без предопределённого результата
-    // Сервер просто случайно заполняет ячейки, функция checkSpinWins считает выигрыш
     const grid = [];
     for (let r = 0; r < 3; r++) {
         const row = [];
         for (let c = 0; c < 5; c++) {
             const rand = Math.random();
             if (rand < freqG) row.push('G');
-            else if (rand < freqG + freqX) row.push('X');
-            else row.push('L');
+            else if (rand < freqG + adjX) row.push('X');
+            else if (rand < freqG + adjX + adjL) row.push('L');
+            else row.push('N');
         }
         grid.push(row);
     }
@@ -704,7 +713,8 @@ function checkSpinWins(grid, bet) {
     for (let li = 0; li < SPIN_PAYLINES.length; li++) {
         const line = SPIN_PAYLINES[li];
         const first = grid[line[0]][0];
-        if (first === 'G') continue;
+        // G и N не дают выигрыш на линиях
+        if (first === 'G' || first === 'N') continue;
         let count = 1;
         for (let i = 1; i < 5; i++) { if (grid[line[i]][i] === first) count++; else break; }
         if (count >= 3 && SPIN_PAYTABLE[first] && SPIN_PAYTABLE[first][count]) {
@@ -1217,24 +1227,60 @@ app.post('/api/check_deposit', async (req, res) => {
     const apiKey = process.env.TON_API_KEY;
 
     if (!adminWallet) return res.status(500).json({error: 'Адрес кошелька не настроен. Установите ADMIN_WALLET в .env'});
-    if (!apiKey) return res.status(500).json({error: 'TON_API_KEY не установлен в .env'});
 
     try {
         const cleanAddr = adminWallet.trim().replace(/[\r\n\s]/g, '');
-        const cleanKey = apiKey.trim().replace(/[\r\n\s]/g, '');
-        const tcUrl = `https://toncenter.com/api/v2/getTransactions?address=${cleanAddr}&limit=50`;
-        const tcRes = await fetch(tcUrl, {
-            headers: { 'X-API-Key': cleanKey }
-        });
-        if (!tcRes.ok) {
-            const errBody = await tcRes.text().catch(() => '');
-            console.error('TonCenter HTTP error:', tcRes.status, errBody);
-            return res.status(400).json({ error: `TonCenter HTTP ${tcRes.status}: ${errBody.slice(0, 100)}` });
+        const cleanKey = apiKey ? apiKey.trim().replace(/[\r\n\s]/g, '') : '';
+
+        // Пробуем разные эндпоинты TonCenter
+        const endpoints = [
+            `https://toncenter.com/api/v2/getTransactions?address=${cleanAddr}&limit=50`,
+            `https://toncenter.com/api/v2/getTransactions?address=${cleanAddr}&limit=50&archival=false`
+        ];
+
+        let data = null;
+        let lastError = '';
+
+        for (const tcUrl of endpoints) {
+            try {
+                const headers = { 'Content-Type': 'application/json' };
+                if (cleanKey) headers['X-API-Key'] = cleanKey;
+
+                const tcRes = await fetch(tcUrl, { headers });
+                const text = await tcRes.text();
+
+                let parsed;
+                try { parsed = JSON.parse(text); } catch(e) {
+                    lastError = `Не JSON: ${text.slice(0, 80)}`;
+                    continue;
+                }
+
+                if (!tcRes.ok || !parsed.ok) {
+                    lastError = parsed.error || `HTTP ${tcRes.status}`;
+                    // 403 = ключ не тот или домен заблокирован — пробуем без ключа
+                    if (tcRes.status === 403 && cleanKey) {
+                        const tcRes2 = await fetch(tcUrl, {});
+                        const text2 = await tcRes2.text();
+                        try {
+                            const parsed2 = JSON.parse(text2);
+                            if (parsed2.ok) { data = parsed2; break; }
+                            lastError = parsed2.error || `HTTP ${tcRes2.status}`;
+                        } catch(e) { lastError = text2.slice(0, 80); }
+                    }
+                    continue;
+                }
+
+                data = parsed;
+                break;
+            } catch(e) {
+                lastError = e.message;
+                continue;
+            }
         }
-        const data = await tcRes.json();
-        if (!data.ok) {
-            console.error('TonCenter error:', data.error);
-            return res.status(400).json({ error: `Ошибка TonCenter: ${data.error || 'нет ответа'}` });
+
+        if (!data || !data.ok) {
+            console.error('TonCenter failed:', lastError);
+            return res.status(400).json({ error: `Ошибка TonCenter: ${lastError}. Проверьте TON_API_KEY в настройках Render.` });
         }
 
         let foundNew = false;
@@ -1244,12 +1290,21 @@ app.post('/api/check_deposit', async (req, res) => {
         for (const tx of (data.result || [])) {
             if (!tx.in_msg || !tx.in_msg.value || Number(tx.in_msg.value) <= 0) continue;
 
-            // Check comment in multiple possible fields
+            // Проверяем комментарий во всех возможных полях
             let comment = '';
             if (tx.in_msg.message) comment = String(tx.in_msg.message).trim();
-            if (!comment && tx.in_msg.msg_data && tx.in_msg.msg_data.text) {
-                try { comment = Buffer.from(tx.in_msg.msg_data.text, 'base64').toString('utf-8').trim(); } catch(e) {}
+            if (!comment && tx.in_msg.msg_data) {
+                const md = tx.in_msg.msg_data;
+                if (md.text) {
+                    try { comment = Buffer.from(md.text, 'base64').toString('utf-8').replace(/\x00/g, '').trim(); } catch(e) {}
+                }
+                if (!comment && md.body) {
+                    try { comment = Buffer.from(md.body, 'base64').toString('utf-8').replace(/\x00/g, '').trim(); } catch(e) {}
+                }
             }
+
+            // Очищаем null-байты из комментария
+            comment = comment.replace(/\x00/g, '').trim();
 
             if (!comment.includes(userId) && comment !== userId) continue;
 
