@@ -1,5 +1,6 @@
 :root { --bg: #050505; --card: #121212; --neon: #00ff88; --neon-blue: #00d2ff; --neon-red: #ff0055; --text: #fff; --sub: #888; }
-* { margin: 0; padding: 0; box-sizing: border-box; font-family: -apple-system, sans-serif; -webkit-tap-highlight-color: transparent; }
+* { margin: 0; padding: 0; box-sizing: border-box; font-family: -apple-system, sans-serif; -webkit-tap-highlight-color: transparent; -webkit-user-select: none; user-select: none; }
+input, textarea { -webkit-user-select: text; user-select: text; }
 html, body { background: var(--bg); color: var(--text); height: 100vh; height: 100dvh; overflow: hidden; }
 body { display: flex; flex-direction: column; }
 
@@ -222,7 +223,7 @@ body {
 .mine-card {
   flex: 0 0 auto !important;
   width: 100%;
-  max-width: 240px;
+  max-width: 190px;
   padding: 2px 2px;
   display: flex !important;
   flex-direction: column;
@@ -259,7 +260,7 @@ body {
   position: relative;
   overflow: visible;
   transition: background 0.12s;
-  aspect-ratio: 1.05;
+  aspect-ratio: 1;
 }
 .inv-cell.inv-book { background: #5a3a80; }
 .inv-cell.inv-tnt { background: #aa2020; }
@@ -303,7 +304,7 @@ body {
 }
 .mc-blk {
   width: 100%;
-  aspect-ratio: 1.05;
+  aspect-ratio: 1;
   border-radius: 1px;
   border: 1px solid;
   position: relative;
@@ -522,7 +523,7 @@ body {
   background: url('/sprites/chest_closed.png') center/100% 100% no-repeat;
   border: 1px solid;
   border-color: #a06428 #3a2008 #3a2008 #a06428;
-  aspect-ratio: 1.05;
+  aspect-ratio: 1;
   position: relative;
   image-rendering: pixelated;
   border-radius: 1px;
@@ -647,8 +648,8 @@ body {
 
 /* ─── БЕТ-СТРОКА ─── */
 .mine-bet-row { display: flex; align-items: center; gap: 3px; flex-shrink: 0; }
-.mine-card .quick-bets { margin: 0 !important; gap: 3px !important; }
-.mine-card .quick-bets .qb-btn { padding: 5px 0; font-size: 11px; min-width: 30px; }
+.mine-card .quick-bets { margin: 0 !important; gap: 2px !important; }
+.mine-card .quick-bets .qb-btn { padding: 3px 0; font-size: 10px; min-width: 26px; }
 .mine-btn {
   background: linear-gradient(180deg, #00cc55 0%, #008833 100%);
   box-shadow: 0 2px 8px rgba(0,0,0,0.5), inset 0 1px 0 rgba(150,255,150,0.3);
@@ -657,15 +658,15 @@ body {
   letter-spacing: 1px;
   border: 2px solid;
   border-color: #00ee66 #005522 #005522 #00ee66;
-  height: 34px;
-  padding: 0 10px;
+  height: 30px;
+  padding: 0 8px;
   white-space: nowrap;
-  font-size: 13px;
+  font-size: 11px;
   border-radius: 5px;
   text-shadow: 0 1px 2px rgba(0,0,0,0.4);
 }
 .mine-btn:active { transform: translateY(1px); box-shadow: 0 1px 4px rgba(0,0,0,0.5); }
-#page-mine .input-box { height: 34px; padding: 0 8px; font-size: 12px; margin: 0; }
+#page-mine .input-box { height: 30px; padding: 0 6px; font-size: 11px; margin: 0; }
 .mine-btn:disabled { background: #1a2a1a !important; border-color: #333 !important; box-shadow: none !important; color: #555 !important; }
 
 /* Pickaxe color filters */

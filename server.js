@@ -660,17 +660,24 @@ const SPIN_PAYLINES = [
     [1,1,2,1,1],  // 14: впадина вниз
 ];
 
-const SPIN_PAYTABLE = { 'L': { 3: 0.2, 4: 0.5, 5: 1.0 }, 'X': { 3: 0.8, 4: 2.0, 5: 4.0 } };
+// L symbols do NOT pay — only X symbols pay (makes most spins losing)
+const SPIN_PAYTABLE = { 'X': { 3: 1.0, 4: 2.5, 5: 5.0 } };
 
 function generateSpinGrid(userId, rtpTarget) {
     const streak = spinUserStreaks[userId] || { losses: 0, wins: 0, progress: 0 };
-    // RTP controls feature frequency: rtp 90 → 9% X, rtp 50 → 5% X, rtp 5 → 0.5% X
-    const rtpFactor = Math.max(0.05, (rtpTarget || 90) / 1000);
-    let freqG = 0.005 * rtpFactor * 2;
-    let freqX = rtpFactor;
+    // RTP controls whether this spin CAN win at all
+    // rtp 90 → 30% chance of winning spin, rtp 50 → 16%, rtp 10 → 3%
+    const canWin = Math.random() < (rtpTarget / 300);
+
+    // G (scatter/gift) frequency: very rare
+    const freqG = 0.004;
+    // X frequency depends on whether spin is "winning" or "losing"
+    let freqX = canWin ? 0.18 : 0.04; // winning spins get more X symbols
+
     // Streak adjustments (very small)
-    if (streak.losses >= 6) { freqX = Math.min(0.12, freqX + 0.01); }
-    else if (streak.wins >= 2) { freqX = Math.max(0.02, freqX * 0.5); }
+    if (streak.losses >= 8) { freqX = Math.min(0.22, freqX + 0.02); }
+    else if (streak.wins >= 3) { freqX = Math.max(0.02, freqX * 0.5); }
+
     const grid = [];
     for (let r = 0; r < 3; r++) {
         const row = [];
@@ -950,15 +957,14 @@ app.post('/api/mine', async (req, res) => {
         // For auto-spin: reuse existing grid (broken blocks stay null), only re-roll hotbar
         const grid = (isFreeAutoSpin && clientGrid) ? clientGrid : generateMineGrid();
         const hotbar = generateMineHotbar(rtpTarget);
-        // Per-column chest multipliers
+        // Per-column chest multipliers (these multiply ENTIRE balance if reached)
         const chestMults = [];
         for (let c = 0; c < 5; c++) chestMults.push(pickChestMult());
         const effectiveBet = isFreeAutoSpin ? 0.5 : betAmount;
 
-        // Each block has fixed mult: block win = bet * blockMult
+        // Each block has FIXED mult: block win = bet * blockMult (consistent for same bet)
         // null blocks (broken in auto-spin) give 0 win
         const blockWins = [];
-        let rawSum = 0;
         for (let r = 0; r < 6; r++) {
             const row = [];
             for (let c = 0; c < 5; c++) {
@@ -966,7 +972,6 @@ app.post('/api/mine', async (req, res) => {
                 const bm = MINE_BLOCK_MULTS[grid[r][c]] || 0;
                 const bw = parseFloat((effectiveBet * bm).toFixed(4));
                 row.push(bw);
-                rawSum += bw;
             }
             blockWins.push(row);
         }
@@ -978,7 +983,7 @@ app.post('/api/mine', async (req, res) => {
             scaleFactor = 0; // No win on losing rolls
         }
 
-        // Cap individual block wins and apply scale
+        // Apply scale factor to block wins
         const adjustedBlockWins = [];
         for (let r = 0; r < 6; r++) {
             const row = [];
@@ -988,18 +993,32 @@ app.post('/api/mine', async (req, res) => {
             adjustedBlockWins.push(row);
         }
 
-        // Total win = sum of block wins per column (NO chest multiplication on block wins)
-        // Chest multiplier only adds a small bonus
-        let actualWin = 0;
-        for (let c = 0; c < 5; c++) {
-            let colWin = 0;
-            for (let r = 0; r < 6; r++) colWin += adjustedBlockWins[r][c];
-            // Chest adds +10% per multiplier point above 1 (not full multiplication)
-            const chestBonus = 1 + (chestMults[c] - 1) * 0.1;
-            actualWin += colWin * chestBonus;
+        // Block win sum (from mining blocks only, no chest)
+        let blockWinSum = 0;
+        for (let r = 0; r < 6; r++) {
+            for (let c = 0; c < 5; c++) blockWinSum += adjustedBlockWins[r][c];
         }
-        // Hard cap: max win = bet * 2
-        actualWin = Math.min(Number(actualWin.toFixed(2)), effectiveBet * 2);
+        // Hard cap block wins: max = bet * 1.5
+        let actualWin = Math.min(Number(blockWinSum.toFixed(2)), effectiveBet * 1.5);
+
+        // CHESTS: multiply ENTIRE user balance (not just block wins)
+        // Reaching a chest = clearing entire column = very rare (~0.5% per column)
+        // Chest activation is determined server-side based on probability
+        const chestActivated = [];
+        for (let c = 0; c < 5; c++) {
+            // 0.5% chance per column that the chest "activates" (column gets fully mined)
+            chestActivated.push(Math.random() < 0.005);
+        }
+
+        // If ANY chest activates, the chest multiplier applies to entire current balance
+        let chestBonusWin = 0;
+        const currentBalance = user[field] + actualWin; // balance after block wins
+        for (let c = 0; c < 5; c++) {
+            if (chestActivated[c]) {
+                chestBonusWin += currentBalance * (chestMults[c] - 1); // multiply balance by chestMult
+            }
+        }
+        actualWin = Number((actualWin + chestBonusWin).toFixed(2));
 
         let bookCount = hotbar.filter(s => s.type === 'book').length;
         if (bookCount >= 3) {
@@ -1022,7 +1041,7 @@ app.post('/api/mine', async (req, res) => {
             pushToGlobalHistory(betEntry);
         }
 
-        res.json({ grid, blockWins: adjustedBlockWins, hotbar, chestMults, win: actualWin, user, freeSpinsLeft: user.mineFreeSpins || 0 });
+        res.json({ grid, blockWins: adjustedBlockWins, hotbar, chestMults, chestActivated, win: actualWin, user, freeSpinsLeft: user.mineFreeSpins || 0 });
     } catch (err) {
         console.error('Mine error:', err);
         res.status(500).json({ error: 'Ошибка сервера' });
@@ -1181,10 +1200,11 @@ app.post('/api/check_deposit', async (req, res) => {
     if (!apiKey) return res.status(500).json({error: 'TON_API_KEY не установлен в .env'});
 
     try {
-        const cleanAddr = adminWallet.trim().replace(/[\r\n]/g, '');
+        const cleanAddr = adminWallet.trim().replace(/[\r\n\s]/g, '');
+        const cleanKey = apiKey.trim().replace(/[\r\n\s]/g, '');
         const tcUrl = `https://toncenter.com/api/v2/getTransactions?address=${cleanAddr}&limit=50`;
         const tcRes = await fetch(tcUrl, {
-            headers: { 'X-API-Key': apiKey }
+            headers: { 'X-API-Key': cleanKey }
         });
         if (!tcRes.ok) {
             const errBody = await tcRes.text().catch(() => '');
