@@ -814,20 +814,14 @@ app.post('/api/spin', async (req, res) => {
 // === MINE GAME (Minecraft-style) ===
 const MINE_BLOCKS = ['dirt', 'stone', 'redstone', 'gold', 'diamond', 'obsidian'];
 const MINE_BLOCK_MULTS = { grass: 0.02, dirt: 0.02, stone: 0.04, redstone: 0.05, gold: 0.08, diamond: 0.12, obsidian: 0.18 };
-// 6 rows: row 0 = grass top layer (dirt + rare stone), rows 1-5 = underground
+// 3 rows: row 0 = grass top layer, rows 1-2 = underground
 const MINE_ROW_WEIGHTS = [
     // grass/dirt top: dirt=85%, stone=15%  (no ores)
     [0.85, 0.15, 0.00, 0.00, 0.00, 0.00],
-    // row 1 — mostly stone
-    [0.10, 0.62, 0.20, 0.06, 0.015, 0.005],
-    // row 2
-    [0.05, 0.45, 0.28, 0.15, 0.05, 0.02],
-    // row 3 — middle
-    [0.00, 0.30, 0.30, 0.24, 0.11, 0.05],
-    // row 4
-    [0.00, 0.18, 0.26, 0.28, 0.18, 0.10],
-    // row 5 — bottom (rare ores)
-    [0.00, 0.10, 0.20, 0.30, 0.24, 0.16]
+    // row 1 — mixed
+    [0.05, 0.40, 0.28, 0.16, 0.07, 0.04],
+    // row 2 — bottom (rare ores)
+    [0.00, 0.20, 0.25, 0.28, 0.17, 0.10]
 ];
 const MINE_PICKAXES = ['wooden', 'stone', 'iron', 'golden', 'diamond'];
 const MINE_PICKAXE_WEIGHTS = [0.46, 0.28, 0.14, 0.08, 0.04];
@@ -848,7 +842,7 @@ function pickChestMult() {
 
 function generateMineGrid() {
     const grid = [];
-    for (let r = 0; r < 6; r++) {
+    for (let r = 0; r < 3; r++) {
         const row = [];
         for (let c = 0; c < 5; c++) {
             if (r === 0) {
