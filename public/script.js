@@ -434,13 +434,12 @@ function switchDepTab(type, el) {
 async function payWithTonConnect() {
     if (!tonConnectUI) return showToast('TON Connect не загружен. Перезагрузите страницу.');
 
-    // Правильная проверка подключения (wallet, не .connected)
+    // Правильная проверка подключения
     const isConnected = tonConnectUI.wallet !== null && tonConnectUI.wallet !== undefined;
     if (!isConnected) {
         showToast('Подключаем кошелек...');
         try {
             await tonConnectUI.openModal();
-            // Ждём подключения максимум 60 сек
             await new Promise((resolve, reject) => {
                 let tries = 0;
                 const check = setInterval(() => {
@@ -454,58 +453,60 @@ async function payWithTonConnect() {
         }
     }
 
-    const amount = parseFloat($('tc-amount').value);
+    const amount = parseFloat($('tc-amount') ? $('tc-amount').value : 0);
     if(isNaN(amount) || amount < 0.5) return showToast('Минимум 0.5 TON');
     if(!adminWalletAddress) return showToast('Кошелек получателя не настроен');
 
+    // TonConnect требует адрес в raw формате (0:xxxx) или friendly (EQ/UQ)
+    // Используем адрес как есть — SDK сам конвертирует
     const addr = adminWalletAddress.trim().replace(/[\r\n\s]/g, '');
     if (!addr || addr.length < 30) {
         return showToast('Кошелек получателя не настроен. Обратитесь к админу.');
     }
 
-    // Строим payload: 4 нулевых байта (text comment opcode) + UTF-8 ID пользователя
+    // Строим BOC payload с текстовым комментарием (ID юзера)
+    // Формат: 4 нулевых байта (opcode text comment) + UTF-8 строка
     function buildCommentPayload(text) {
         const textBytes = new TextEncoder().encode(text);
         const bytes = new Uint8Array(4 + textBytes.length);
+        // 4 нулевых байта = opcode для text comment в TON
         bytes[0] = 0; bytes[1] = 0; bytes[2] = 0; bytes[3] = 0;
         bytes.set(textBytes, 4);
-        return btoa(String.fromCharCode(...bytes));
+        // Кодируем в base64 для TonConnect SDK
+        let binary = '';
+        bytes.forEach(b => binary += String.fromCharCode(b));
+        return btoa(binary);
     }
 
-    let payloadBoc = '';
-    try {
-        // Сначала пробуем через TonWeb (если загружен)
-        if (window.TonWeb) {
+    let payloadBoc = buildCommentPayload(String(user.id));
+
+    // Если TonWeb загружен — используем правильный BOC формат
+    if (window.TonWeb) {
+        try {
             const cell = new TonWeb.boc.Cell();
             cell.bits.writeUint(0, 32);
             cell.bits.writeString(String(user.id));
             const boc = await cell.toBoc();
             payloadBoc = TonWeb.utils.bytesToBase64(boc);
-        } else {
-            // Фолбэк: простой base64 payload
-            payloadBoc = buildCommentPayload(String(user.id));
+        } catch(e) {
+            console.warn('TonWeb BOC failed, using fallback:', e);
         }
-    } catch(e) {
-        // Последний фолбэк — без payload (ручная проверка)
-        console.error('Payload build error:', e);
-        payloadBoc = buildCommentPayload(String(user.id));
     }
 
-    const transaction = {
-        validUntil: Math.floor(Date.now() / 1000) + 600,
-        messages: [{
-            address: addr,
-            amount: Math.round(amount * 1e9).toString(),
-            payload: payloadBoc
-        }]
-    };
+    const nanoAmount = String(Math.round(amount * 1e9));
 
     try {
         showToast('⏳ Отправляем транзакцию...');
-        await tonConnectUI.sendTransaction(transaction);
+        await tonConnectUI.sendTransaction({
+            validUntil: Math.floor(Date.now() / 1000) + 600,
+            messages: [{
+                address: addr,   // SDK сам разберёт UQ/EQ/raw формат
+                amount: nanoAmount,
+                payload: payloadBoc
+            }]
+        });
         showToast('✅ Транзакция отправлена! Проверка через 20 сек...');
 
-        // Автопроверка с увеличивающимся интервалом
         let checkAttempts = 0;
         const maxAttempts = 8;
         const autoCheck = async () => {
@@ -524,26 +525,24 @@ async function payWithTonConnect() {
                         renderWithdrawHistory();
                         showToast(`✅ +${d.added.toFixed(2)} TON зачислено!`);
                         flyToBalance(d.added);
-                        return; // Успех — выходим
+                        return;
                     }
                 }
             } catch(e) {}
-
             if (checkAttempts < maxAttempts) {
-                showToast(`🔍 Проверка ${checkAttempts}/${maxAttempts}...`);
-                setTimeout(autoCheck, 20000); // каждые 20 сек
+                setTimeout(autoCheck, 20000);
             } else {
-                showToast('⚠️ Автопроверка завершена. Нажмите "ПРОВЕРИТЬ ОПЛАТУ" если не зачислилось.');
+                showToast('⚠️ Нажмите "ПРОВЕРИТЬ ОПЛАТУ" если не зачислилось.');
             }
         };
         setTimeout(autoCheck, 20000);
     } catch (e) {
         console.error('TON Connect error:', e);
         const msg = e?.message || String(e);
-        if (msg.includes('reject') || msg.includes('cancel') || msg.includes('Cancelled')) {
-            showToast('Транзакция отменена');
+        if (msg.includes('reject') || msg.includes('cancel') || msg.toLowerCase().includes('user')) {
+            showToast('❌ Транзакция отменена');
         } else {
-            showToast('Ошибка транзакции: ' + msg.slice(0, 80));
+            showToast('❌ Ошибка: ' + msg.slice(0, 100));
         }
     }
 }
@@ -1663,7 +1662,7 @@ let spinProgressValue = 0;
 let spinIsSpinning = false;
 let spinAnimInterval = null;
 
-const SPIN_SYMS_ANIM = ['L','L','X','L','G','L','X','L','L'];
+const SPIN_SYMS_ANIM = ['N','L','X','N','G','N','L','N','X','N','L','N'];
 
 const SPIN_PAYLINES_FE = [
     [1,1,1,1,1],  // 0: средний ряд
@@ -1707,8 +1706,8 @@ function initSpinPage() {
         });
         spBetInput._hasChangeListener = true;
     }
-    // Pre-fill idle grid with nice pattern
-    const symbols = ['L','L','X','L','G','X','L','L','X','L','L','X','L','X','L'];
+    // Pre-fill idle grid with nice pattern (N = нейтральный)
+    const symbols = ['N','L','X','N','G','N','X','L','N','X','N','L','N','X','N'];
     for (let r = 0; r < 3; r++) {
         for (let c = 0; c < 5; c++) {
             const cell = $(`sc-${r}-${c}`);
@@ -3157,8 +3156,8 @@ async function playSpin() {
             const bonusMult = Math.min(7, spinFreeSpinsMult * 2);
             spinFreeSpins += data.bonusSpins || 1;
             spinFreeSpinsMult = bonusMult;
-            showToast(`🎁 БОНУС! +${data.bonusSpins || 1} фриспин! Множитель ×${spinFreeSpinsMult}!`, 4000);
-        }
+            showToast(`🎁 ЕБАТЬ БОНУСКА 💰 +${data.bonusSpins || 1} фриспин! Множитель ×${spinFreeSpinsMult}!`, 4000);
+
 
         // Free spins won from scatter G (max 8, нет ре-триггера во фриспинах)
         if (data.freeSpinsWon > 0 && !isFreeSpins) {
