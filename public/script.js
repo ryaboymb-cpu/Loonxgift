@@ -171,8 +171,8 @@ document.addEventListener('click', () => { if (!_bgMusicPlaying) startBgMusic();
 document.addEventListener('touchstart', () => { if (!_bgMusicPlaying) startBgMusic(); }, { once: true });
 let adminPass = '';
 let globalRtp = 90;
-let rtpObj = { crash: 90, mines: 90, coinflip: 90, spin: 94, mine: 40 };
-let maintenance = { crash: false, mines: false, coinflip: false, battle: false, spin: false, mine: false };
+let rtpObj = { crash: 90, mines: 90, coinflip: 90, spin: 94, mine: 40, upgrade: 85, plinko: 88, duck: 87 };
+let maintenance = { crash: false, mines: false, coinflip: false, battle: false, spin: false, mine: false, upgrade: false, plinko: false, duck: false };
 let adminWalletAddress = '';
 let isShowDemo = false;
 
@@ -262,6 +262,9 @@ function renderQuickBets() {
         'qb-coinflip': 'co-bet',
         'qb-spin':     'sp-bet',
         'qb-mine':     'mn-bet',
+        'qb-upgrade':  'up-bet',
+        'qb-plinko':   'pl-bet',
+        'qb-duck':     'dk-bet',
     };
     Object.entries(targets).forEach(([elId, betId]) => {
         const el = $(elId);
@@ -284,8 +287,8 @@ window.onload = async () => {
     }
 
     user = data.user;
-    rtpObj = data.rtp || { crash: 90, mines: 90, coinflip: 90, spin: 94 };
-    maintenance = data.maintenance || { crash: false, mines: false, coinflip: false, battle: false, spin: false };
+    rtpObj = data.rtp || { crash: 90, mines: 90, coinflip: 90, spin: 94, upgrade: 85, plinko: 88, duck: 87 };
+    maintenance = data.maintenance || { crash: false, mines: false, coinflip: false, battle: false, spin: false, upgrade: false, plinko: false, duck: false };
     isShowDemo = data.config ? data.config.showDemo : false;
     
     adminWalletAddress = data.adminWallet || '';
@@ -370,19 +373,29 @@ function nav(pageId, el) {
     if(el) { document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active')); el.classList.add('active'); }
 }
 
-function navGame(game) { 
+function navGame(game) {
     let mKey = game;
-    if(game === 'coin') mKey = 'coinflip'; 
+    if(game === 'coin') mKey = 'coinflip';
     if (maintenance[mKey]) return showToast('Временно тех. перерыв');
     // При уходе с Mine — убить все анимации кирок
     if (game !== 'mine') killAllPickaxes();
-    nav(game); 
+    nav(game);
     if(game === 'battle') renderBattleLobbies();
     if(game === 'spin') initSpinPage();
     if(game === 'mine') { mineIsActive = true; initMineGrid(); }
+    if(game === 'duck') initDuckPond();
 }
 
 function setQuickBet(inputId, amount, btn) {
+    // Spin bet change confirmation with bonus reset
+    if (inputId === 'sp-bet' && spinProgressValue > 0) {
+        const prev = parseFloat($(inputId)?.value) || 0;
+        if (prev !== amount) {
+            if (!confirm('Вы уверены? Прогресс бонуса будет сброшен!')) return;
+            spinProgressValue = 0;
+            updateSpinProgress(0);
+        }
+    }
     if ($(inputId)) $(inputId).value = amount;
     if (btn) {
         const parent = btn.closest('.quick-bets');
@@ -405,26 +418,22 @@ async function payWithTonConnect() {
     if(isNaN(amount) || amount < 0.5) return showToast('Минимум 0.5 TON');
     if(!adminWalletAddress) return showToast('Кошелек получателя не настроен');
 
-    // Build comment payload with user ID
+    // Build comment payload with user ID using simple text encoding
     let payloadBase64 = "";
     try {
-        if (!window.TonWeb) {
-            showToast('Загрузка TonWeb...');
-            await new Promise((resolve, reject) => {
-                let tries = 0;
-                const check = setInterval(() => {
-                    tries++;
-                    if (window.TonWeb) { clearInterval(check); resolve(); }
-                    else if (tries > 30) { clearInterval(check); reject(new Error('TonWeb not loaded')); }
-                }, 200);
-            });
-        }
-        const tonweb = new TonWeb();
-        const cell = new tonweb.boc.Cell();
-        cell.bits.writeUint(0, 32);
-        cell.bits.writeString(String(user.id));
-        const bocBytes = await cell.toBoc();
-        payloadBase64 = TonWeb.utils.bytesToBase64(bocBytes);
+        // Simple text comment: 0x00000000 (32-bit prefix for text) + UTF-8 string
+        const commentText = String(user.id);
+        const encoder = new TextEncoder();
+        const textBytes = encoder.encode(commentText);
+        const payload = new Uint8Array(4 + textBytes.length);
+        // First 4 bytes = 0 (text comment op code)
+        payload[0] = 0; payload[1] = 0; payload[2] = 0; payload[3] = 0;
+        payload.set(textBytes, 4);
+
+        // Convert to base64 for TON Connect
+        let binary = '';
+        for (let i = 0; i < payload.length; i++) binary += String.fromCharCode(payload[i]);
+        payloadBase64 = btoa(binary);
     } catch(e) {
         console.error('Comment payload error:', e);
     }
@@ -440,11 +449,11 @@ async function payWithTonConnect() {
 
     try {
         await tonConnectUI.sendTransaction(transaction);
-        showToast('Транзакция отправлена! Автоматическая проверка через 20 сек...');
+        showToast('Транзакция отправлена! Проверка через 20 сек...');
 
         // Auto-check deposit after delay (blockchain confirmation takes time)
         let checkAttempts = 0;
-        const maxAttempts = 5;
+        const maxAttempts = 6;
         const autoCheck = async () => {
             checkAttempts++;
             try {
@@ -455,31 +464,32 @@ async function payWithTonConnect() {
                 });
                 if (r.ok) {
                     const d = await r.json();
-                    user = d.user;
-                    updateUI();
-                    renderWithdrawHistory();
-                    showToast(`+${d.added} TON зачислено!`);
-                    flyToBalance(d.added);
-                    return; // success
+                    if (d.added > 0) {
+                        user = d.user;
+                        updateUI();
+                        renderWithdrawHistory();
+                        showToast(`+${d.added.toFixed(2)} TON зачислено!`);
+                        flyToBalance(d.added);
+                        return;
+                    }
                 }
             } catch(e) {}
 
             if (checkAttempts < maxAttempts) {
                 showToast(`Проверка ${checkAttempts}/${maxAttempts}... Ожидание подтверждения.`);
-                setTimeout(autoCheck, 15000);
+                setTimeout(autoCheck, 20000);
             } else {
                 showToast('Автопроверка завершена. Нажмите "ПРОВЕРИТЬ ОПЛАТУ" вручную.');
-                if($('dep-manual')) $('dep-manual').style.display = 'block';
-                if($('dep-connect')) $('dep-connect').style.display = 'none';
             }
         };
         setTimeout(autoCheck, 20000);
     } catch (e) {
         console.error('TON Connect error:', e);
-        if (e && e.message && e.message.includes('User rejected')) {
-            showToast('Транзакция отменена пользователем');
+        const msg = e?.message || String(e);
+        if (msg.includes('reject') || msg.includes('cancel') || msg.includes('Cancelled')) {
+            showToast('Транзакция отменена');
         } else {
-            showToast('Ошибка отправки транзакции. Попробуйте еще раз.');
+            showToast('Ошибка транзакции: ' + msg.slice(0, 80));
         }
     }
 }
@@ -597,19 +607,38 @@ socket.on('crashData', d => {
     if(d.status === 'running') {
         const col = getCrashColor(d.multiplier);
         if($('cr-x')) {
-            $('cr-x').innerText = d.multiplier + 'x';
+            // Smooth animated counter
+            const target = parseFloat(d.multiplier);
+            const currentText = $('cr-x').innerText.replace('x','').replace('ЖДЕМ','1.00').replace('BOOM!','1.00');
+            const current = parseFloat(currentText) || 1.00;
+            if (Math.abs(target - current) > 0.005) {
+                let steps = 8;
+                let step = 0;
+                const diff = target - current;
+                const animate = () => {
+                    step++;
+                    const progress = step / steps;
+                    const eased = 1 - Math.pow(1 - progress, 2);
+                    const val = (current + diff * eased).toFixed(2);
+                    if ($('cr-x')) $('cr-x').innerText = val + 'x';
+                    if (step < steps) requestAnimationFrame(animate);
+                };
+                requestAnimationFrame(animate);
+            } else {
+                $('cr-x').innerText = d.multiplier + 'x';
+            }
             $('cr-x').style.color = col;
             $('cr-x').style.textShadow = `0 0 20px ${col}40`;
-            // Smooth pulse animation on multiplier update
-            $('cr-x').style.transform = 'scale(1.04)';
-            setTimeout(() => { if($('cr-x')) $('cr-x').style.transform = 'scale(1)'; }, 60);
+            $('cr-x').style.transform = 'scale(1.03)';
+            setTimeout(() => { if($('cr-x')) $('cr-x').style.transform = 'scale(1)'; }, 80);
         }
         if($('cr-timer')) $('cr-timer').innerText = '🚀 В ПОЛЕТЕ';
         if (myCrashBets.length > 0) { btn.innerText = `ЗАБРАТЬ ${(myCrashBets[0] * d.multiplier).toFixed(2)} TON`; btn.style.background = 'var(--neon-red)'; btn.disabled = false; }
         else { btn.innerText = 'ОЖИДАНИЕ'; btn.style.background = '#555'; btn.disabled = true; }
     }
     if(d.status === 'crashed') {
-        playSound('break');
+        const crashPage = document.getElementById('page-crash');
+        if (crashPage && crashPage.classList.contains('active')) playSound('break');
         if($('cr-x')) { $('cr-x').innerText = 'BOOM!'; $('cr-x').style.color = 'var(--neon-red)'; $('cr-x').style.textShadow = `0 0 20px rgba(255,0,85,0.4)`; }
         if(myCrashBets.length > 0) myCrashBets = []; 
         btn.innerText = 'ПОСТАВИТЬ'; btn.style.background = 'var(--neon)'; btn.disabled = false; isCashingOut = false;
@@ -705,7 +734,7 @@ function renderMines(isEnd = false) {
             } else {
                 playSound('hit');
                 c.innerText='💎'; c.classList.add('open'); c.style.borderColor='var(--neon)'; openedCells++;
-                currentMinesWin = miBet * (1 + openedCells * 0.2); $('mi-btn').innerText = `ЗАБРАТЬ ${currentMinesWin.toFixed(2)} TON`;
+                currentMinesWin = miBet * (1 + openedCells * 0.12); $('mi-btn').innerText = `ЗАБРАТЬ ${currentMinesWin.toFixed(2)} TON`;
             }
         }; $('mine-grid').appendChild(c);
     }
@@ -1330,6 +1359,9 @@ function renderAdminContent(tab) {
             <div><b>Coinflip RTP (%):</b> <input type="number" id="rtp-coinflip" value="${adData.rtp.coinflip||90}" class="input-box" style="padding:5px; width:70px; display:inline-block;"> <button class="btn" style="padding:5px; width:auto; display:inline-block;" onclick="adminRTP('coinflip')">OK</button></div>
             <div><b>🎰 Spin RTP (%):</b> <input type="number" id="rtp-spin" value="${adData.rtp.spin||40}" class="input-box" style="padding:5px; width:70px; display:inline-block;"> <button class="btn" style="padding:5px; width:auto; display:inline-block; background:linear-gradient(90deg,#ff6b00,#ff0055);" onclick="adminRTP('spin')">OK</button></div>
             <div><b>⛏️ Mine RTP (%):</b> <input type="number" id="rtp-mine" value="${adData.rtp.mine||40}" class="input-box" style="padding:5px; width:70px; display:inline-block;"> <button class="btn" style="padding:5px; width:auto; display:inline-block; background:linear-gradient(90deg,#7a4920,#c07030);" onclick="adminRTP('mine')">OK</button></div>
+            <div><b>⬆️ Upgrade RTP (%):</b> <input type="number" id="rtp-upgrade" value="${adData.rtp.upgrade||85}" class="input-box" style="padding:5px; width:70px; display:inline-block;"> <button class="btn" style="padding:5px; width:auto; display:inline-block; background:linear-gradient(90deg,#0097a7,#00e5ff);" onclick="adminRTP('upgrade')">OK</button></div>
+            <div><b>📍 Plinko RTP (%):</b> <input type="number" id="rtp-plinko" value="${adData.rtp.plinko||88}" class="input-box" style="padding:5px; width:70px; display:inline-block;"> <button class="btn" style="padding:5px; width:auto; display:inline-block; background:linear-gradient(90deg,#9c27b0,#e040fb);" onclick="adminRTP('plinko')">OK</button></div>
+            <div><b>🦆 Duck RTP (%):</b> <input type="number" id="rtp-duck" value="${adData.rtp.duck||87}" class="input-box" style="padding:5px; width:70px; display:inline-block;"> <button class="btn" style="padding:5px; width:auto; display:inline-block; background:linear-gradient(90deg,#f9a825,#ffd600); color:#000;" onclick="adminRTP('duck')">OK</button></div>
             <hr>
             <h4 style="color:var(--neon); margin-bottom:10px;">ОТЫГРЫШ (ВЕЙДЖЕР)</h4>
             <div><b>Множитель отыгрыша (x):</b> <input type="number" id="wager-mult" value="${adData.wagerMultiplier || 2}" class="input-box" style="padding:5px; width:70px; display:inline-block;" step="0.5" min="1" max="20"> <button class="btn" style="padding:5px; width:auto; display:inline-block; background:#ffcc00; color:#000;" onclick="adminSetWager()">OK</button></div>
@@ -1342,6 +1374,9 @@ function renderAdminContent(tab) {
             <label><input type="checkbox" ${adData.maintenance.battle ? 'checked' : ''} onchange="adminMaint('battle', this.checked)"> Battle Roulette</label><br>
             <label><input type="checkbox" ${adData.maintenance.spin ? 'checked' : ''} onchange="adminMaint('spin', this.checked)"> 🎰 Spin</label><br>
             <label><input type="checkbox" ${adData.maintenance.mine ? 'checked' : ''} onchange="adminMaint('mine', this.checked)"> ⛏️ Mine</label><br>
+            <label><input type="checkbox" ${adData.maintenance.upgrade ? 'checked' : ''} onchange="adminMaint('upgrade', this.checked)"> ⬆️ Upgrade</label><br>
+            <label><input type="checkbox" ${adData.maintenance.plinko ? 'checked' : ''} onchange="adminMaint('plinko', this.checked)"> 📍 Plinko</label><br>
+            <label><input type="checkbox" ${adData.maintenance.duck ? 'checked' : ''} onchange="adminMaint('duck', this.checked)"> 🦆 Duck</label><br>
             <hr>
             <h4 style="color:var(--neon); margin-bottom:10px;">ОТОБРАЖЕНИЕ В ИСТОРИИ</h4>
             <label><input type="checkbox" ${isShowDemo ? 'checked' : ''} onchange="adminDemoToggle(this.checked)"> Показывать Demo ставки</label><br>
@@ -1504,8 +1539,8 @@ async function loadAdminGameStats() {
         if (!r.ok) { c.innerHTML = '<div style="color:red;">Ошибка загрузки</div>'; return; }
         const data = await r.json();
         const stats = data.stats;
-        const gameNames = { Crash:'🚀 Crash', Mines:'💣 Mines', Coinflip:'🪙 Coinflip', Battle:'⚔️ Battle', Spin:'🎰 Spin', Mine:'⛏️ Mine' };
-        const colors = { Crash:'#ff0055', Mines:'#00ff88', Coinflip:'#ffcc00', Battle:'#8a2be2', Spin:'#ff6b00', Mine:'#c87020' };
+        const gameNames = { Crash:'🚀 Crash', Mines:'💣 Mines', Coinflip:'🪙 Coinflip', Battle:'⚔️ Battle', Spin:'🎰 Spin', Mine:'⛏️ Mine', Upgrade:'⬆️ Upgrade', Plinko:'📍 Plinko', Duck:'🦆 Duck' };
+        const colors = { Crash:'#ff0055', Mines:'#00ff88', Coinflip:'#ffcc00', Battle:'#8a2be2', Spin:'#ff6b00', Mine:'#c87020', Upgrade:'#00e5ff', Plinko:'#e040fb', Duck:'#ffd600' };
         let totalBet = 0, totalPayout = 0, totalPlays = 0;
         Object.values(stats).forEach(s => { totalBet += s.totalBet; totalPayout += s.totalPayout; totalPlays += s.playCount; });
         const totalProfit = totalBet - totalPayout;
@@ -1573,11 +1608,30 @@ const SPIN_PAYLINES_FE = [
     [1,1,2,1,1],  // 14: впадина вниз
 ];
 
+let _spinBetPrev = 0;
 function initSpinPage() {
     if (!$('spin-grid')) return;
     buildSpinGrid();
     updateSpinProgress(spinProgressValue);
     updateSpinUI();
+    // Bet change listener for bonus reset confirmation
+    const spBetInput = $('sp-bet');
+    if (spBetInput && !spBetInput._hasChangeListener) {
+        _spinBetPrev = parseFloat(spBetInput.value) || 0;
+        spBetInput.addEventListener('change', () => {
+            const newVal = parseFloat(spBetInput.value) || 0;
+            if (newVal !== _spinBetPrev && spinProgressValue > 0) {
+                if (!confirm('Вы уверены? Прогресс бонуса будет сброшен!')) {
+                    spBetInput.value = _spinBetPrev;
+                    return;
+                }
+                spinProgressValue = 0;
+                updateSpinProgress(0);
+            }
+            _spinBetPrev = newVal;
+        });
+        spBetInput._hasChangeListener = true;
+    }
     // Pre-fill idle grid with nice pattern
     const symbols = ['L','L','X','L','G','X','L','L','X','L','L','X','L','X','L'];
     for (let r = 0; r < 3; r++) {
@@ -1646,7 +1700,7 @@ const MINE_BLOCK_CLASS = {
     diamond:'diamond-blk', obsidian:'obsidian-blk',
     tnt:'tnt-blk', book:'book-blk', unknown:'unknown-blk'
 };
-const MC_ROWS = 6;
+const MC_ROWS = 3;
 const MC_COLS = 5;
 const INV_ROWS = 3;
 const INV_COLS = 5;
@@ -2712,6 +2766,232 @@ function highlightSpinWins(winLines, grid) {
             }
         }
     });
+}
+
+// ===================== UPGRADE GAME =====================
+let isUpgrading = false;
+async function playUpgrade() {
+    if (isUpgrading) return;
+    const betVal = parseFloat($('up-bet')?.value);
+    if (isNaN(betVal) || betVal < 0.1 || betVal > 25) return showToast('Мин 0.1, Макс 25 TON');
+    const bal = mode === 'demo' ? user.demo_balance : user.balance;
+    if (betVal > bal) return showToast('Недостаточно средств');
+    isUpgrading = true;
+    const btn = $('up-btn');
+    if (btn) btn.disabled = true;
+    playSound('click');
+    try {
+        const r = await fetch('/api/upgrade', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: user.id, bet: betVal, mode }) });
+        const data = await r.json();
+        if (!r.ok) { showToast(data.error || 'Ошибка'); return; }
+        user = data.user; updateUI();
+        const display = $('upgrade-display');
+        const result = $('upgrade-result');
+        if (display) { display.innerText = data.multiplier.toFixed(2) + 'x'; display.style.color = data.win > 0 ? '#00ff88' : '#ff0055'; }
+        if (result) { result.innerText = data.win > 0 ? `+${data.win.toFixed(2)} TON` : `- ${betVal.toFixed(2)} TON`; result.style.color = data.win > 0 ? '#00ff88' : '#ff0055'; }
+        if (data.win > 0) { playSound('win'); flyToBalance(data.win); }
+    } catch (e) { showToast('Ошибка соединения'); } finally { isUpgrading = false; if (btn) btn.disabled = false; }
+}
+
+// ===================== PLINKO GAME =====================
+let plinkoRisk = 'medium';
+let isPlinkoing = false;
+function setPlinkoRisk(risk, btn) {
+    plinkoRisk = risk;
+    if (btn) {
+        const parent = btn.closest('div');
+        if (parent) parent.querySelectorAll('.qb-btn').forEach(b => b.classList.remove('qb-sel'));
+        btn.classList.add('qb-sel');
+    }
+}
+
+async function playPlinko() {
+    if (isPlinkoing) return;
+    const betVal = parseFloat($('pl-bet')?.value);
+    if (isNaN(betVal) || betVal < 0.1 || betVal > 25) return showToast('Мин 0.1, Макс 25 TON');
+    const bal = mode === 'demo' ? user.demo_balance : user.balance;
+    if (betVal > bal) return showToast('Недостаточно средств');
+    isPlinkoing = true;
+    const btn = $('pl-btn');
+    if (btn) btn.disabled = true;
+    playSound('click');
+    try {
+        const r = await fetch('/api/plinko', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: user.id, bet: betVal, mode, risk: plinkoRisk }) });
+        const data = await r.json();
+        if (!r.ok) { showToast(data.error || 'Ошибка'); return; }
+        user = data.user; updateUI();
+        // Animate plinko ball on canvas
+        animatePlinkoBall(data.path, data.slotIndex, data.multiplier, data.win, betVal);
+    } catch (e) { showToast('Ошибка соединения'); } finally { isPlinkoing = false; if (btn) btn.disabled = false; }
+}
+
+function animatePlinkoBall(path, slotIndex, mult, win, bet) {
+    const canvas = $('plinko-canvas');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const W = canvas.width, H = canvas.height;
+    const rows = 12;
+    const slotCount = 13;
+    const pinR = 3;
+    const ballR = 6;
+    const padTop = 30, padBot = 40;
+    const rowH = (H - padTop - padBot) / rows;
+
+    // Draw background pins
+    ctx.clearRect(0, 0, W, H);
+    for (let r = 0; r < rows; r++) {
+        const pinsInRow = r + 3;
+        const rowW = (pinsInRow - 1) * (W / (slotCount + 1));
+        const startX = (W - rowW) / 2;
+        for (let p = 0; p < pinsInRow; p++) {
+            ctx.beginPath();
+            ctx.arc(startX + p * (rowW / (pinsInRow - 1 || 1)), padTop + r * rowH, pinR, 0, Math.PI * 2);
+            ctx.fillStyle = '#444';
+            ctx.fill();
+        }
+    }
+
+    // Draw slot multipliers at bottom
+    const mults = plinkoRisk === 'high' ? [10, 3, 1.5, 0.5, 0.3, 0.2, 0.3, 0.5, 1.5, 3, 10, 3, 1.5] :
+                  plinkoRisk === 'low' ? [1.2, 1.1, 1.0, 0.7, 0.5, 0.3, 0.2, 0.3, 0.5, 0.7, 1.0, 1.1, 1.2] :
+                  [2.0, 1.5, 1.2, 0.8, 0.5, 0.3, 0.2, 0.3, 0.5, 0.8, 1.2, 1.5, 2.0];
+
+    for (let i = 0; i < slotCount; i++) {
+        const x = (i + 0.5) * (W / slotCount);
+        ctx.fillStyle = i === slotIndex ? '#e040fb' : '#222';
+        ctx.fillRect(x - 10, H - padBot + 5, 20, 25);
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 8px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(mults[i] + 'x', x, H - padBot + 22);
+    }
+
+    // Animate ball falling
+    const ballPath = [];
+    let bx = W / 2;
+    for (let r = 0; r < rows; r++) {
+        const dir = (path && path[r] !== undefined) ? path[r] : (Math.random() > 0.5 ? 1 : -1);
+        bx += dir * (W / (slotCount + 1)) * 0.4;
+        bx = Math.max(ballR, Math.min(W - ballR, bx));
+        ballPath.push({ x: bx, y: padTop + r * rowH });
+    }
+    const finalX = (slotIndex + 0.5) * (W / slotCount);
+    ballPath.push({ x: finalX, y: H - padBot });
+
+    let frame = 0;
+    const totalFrames = ballPath.length * 6;
+    const drawFrame = () => {
+        const idx = Math.min(Math.floor(frame / 6), ballPath.length - 1);
+        const pos = ballPath[idx];
+
+        // Redraw pins
+        ctx.clearRect(0, 0, W, H);
+        for (let r = 0; r < rows; r++) {
+            const pinsInRow = r + 3;
+            const rowW2 = (pinsInRow - 1) * (W / (slotCount + 1));
+            const startX = (W - rowW2) / 2;
+            for (let p = 0; p < pinsInRow; p++) {
+                ctx.beginPath();
+                ctx.arc(startX + p * (rowW2 / (pinsInRow - 1 || 1)), padTop + r * rowH, pinR, 0, Math.PI * 2);
+                ctx.fillStyle = '#444';
+                ctx.fill();
+            }
+        }
+        // Slot labels
+        for (let i = 0; i < slotCount; i++) {
+            const sx = (i + 0.5) * (W / slotCount);
+            ctx.fillStyle = i === slotIndex ? '#e040fb' : '#222';
+            ctx.fillRect(sx - 10, H - padBot + 5, 20, 25);
+            ctx.fillStyle = '#fff';
+            ctx.font = 'bold 8px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(mults[i] + 'x', sx, H - padBot + 22);
+        }
+        // Ball
+        ctx.beginPath();
+        ctx.arc(pos.x, pos.y, ballR, 0, Math.PI * 2);
+        ctx.fillStyle = '#e040fb';
+        ctx.shadowColor = '#e040fb';
+        ctx.shadowBlur = 10;
+        ctx.fill();
+        ctx.shadowBlur = 0;
+
+        frame++;
+        if (frame < totalFrames) {
+            requestAnimationFrame(drawFrame);
+        } else {
+            // Done
+            const result = $('plinko-result');
+            if (result) {
+                result.innerText = win > 0 ? `${mult}x = +${win.toFixed(2)} TON` : `${mult}x = -${bet.toFixed(2)} TON`;
+                result.style.color = win >= bet ? '#00ff88' : '#ff0055';
+            }
+            if (win > 0) { playSound('win'); flyToBalance(win); }
+        }
+    };
+    requestAnimationFrame(drawFrame);
+}
+
+// ===================== DUCK GAME =====================
+let isDuckPlaying = false;
+function initDuckPond() {
+    const pond = $('duck-pond');
+    if (!pond) return;
+    pond.innerHTML = '';
+    for (let i = 0; i < 15; i++) {
+        const cell = document.createElement('div');
+        cell.style.cssText = 'aspect-ratio:1; background:#1a1a1a; border-radius:10px; border:1px solid #333; display:flex; align-items:center; justify-content:center; font-size:28px; cursor:pointer; transition:0.2s;';
+        cell.innerText = '🌊';
+        cell.dataset.idx = i;
+        pond.appendChild(cell);
+    }
+}
+
+async function playDuck() {
+    if (isDuckPlaying) return;
+    const betVal = parseFloat($('dk-bet')?.value);
+    if (isNaN(betVal) || betVal < 0.1 || betVal > 25) return showToast('Мин 0.1, Макс 25 TON');
+    const bal = mode === 'demo' ? user.demo_balance : user.balance;
+    if (betVal > bal) return showToast('Недостаточно средств');
+    isDuckPlaying = true;
+    const btn = $('dk-btn');
+    if (btn) btn.disabled = true;
+    playSound('click');
+    try {
+        const duckCount = 3 + Math.floor(Math.random() * 3);
+        const r = await fetch('/api/duck', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: user.id, bet: betVal, mode, duckCount }) });
+        const data = await r.json();
+        if (!r.ok) { showToast(data.error || 'Ошибка'); return; }
+        user = data.user; updateUI();
+        // Reveal ducks on pond
+        const pond = $('duck-pond');
+        if (pond) {
+            const cells = pond.querySelectorAll('div');
+            const duckPositions = data.duckPositions || [];
+            cells.forEach((c, i) => {
+                setTimeout(() => {
+                    if (duckPositions.includes(i)) {
+                        c.innerText = '🦆';
+                        c.style.background = data.win > 0 ? '#1b3a1b' : '#3a1b1b';
+                        c.style.borderColor = data.win > 0 ? '#00ff88' : '#ff0055';
+                    } else {
+                        c.innerText = '🌊';
+                        c.style.background = '#111';
+                    }
+                }, i * 80);
+            });
+            setTimeout(() => {
+                const result = $('duck-result');
+                if (result) {
+                    result.innerText = data.win > 0 ? `+${data.win.toFixed(2)} TON` : `-${betVal.toFixed(2)} TON`;
+                    result.style.color = data.win > 0 ? '#00ff88' : '#ff0055';
+                }
+                if (data.win > 0) { playSound('win'); flyToBalance(data.win); }
+            }, 15 * 80 + 200);
+        }
+    } catch (e) { showToast('Ошибка соединения'); } finally {
+        setTimeout(() => { isDuckPlaying = false; if (btn) btn.disabled = false; initDuckPond(); }, 15 * 80 + 1500);
+    }
 }
 
 async function playSpin() {
