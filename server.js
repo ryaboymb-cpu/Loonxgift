@@ -664,14 +664,13 @@ const SPIN_PAYTABLE = { 'L': { 3: 0.2, 4: 0.5, 5: 1.0 }, 'X': { 3: 0.8, 4: 2.0, 
 
 function generateSpinGrid(userId, rtpTarget) {
     const streak = spinUserStreaks[userId] || { losses: 0, wins: 0, progress: 0 };
-    // RTP directly controls feature frequency
-    // rtp 90 = base rates, rtp 50 = half rates, rtp 10 = very rare
-    const rtpFactor = Math.max(0.1, (rtpTarget || 90) / 100);
-    let freqG = 0.01 * rtpFactor;
-    let freqX = 0.15 * rtpFactor;
-    // Streak adjustments (smaller than RTP impact)
-    if (streak.losses >= 4) { freqX = Math.min(0.22, freqX + streak.losses * 0.005); freqG = Math.min(0.02, freqG + 0.001); }
-    else if (streak.wins >= 3) { freqX = Math.max(0.05, freqX - streak.wins * 0.01); freqG = Math.max(0.003, freqG - 0.001); }
+    // RTP controls feature frequency: rtp 90 → 9% X, rtp 50 → 5% X, rtp 5 → 0.5% X
+    const rtpFactor = Math.max(0.05, (rtpTarget || 90) / 1000);
+    let freqG = 0.005 * rtpFactor * 2;
+    let freqX = rtpFactor;
+    // Streak adjustments (very small)
+    if (streak.losses >= 6) { freqX = Math.min(0.12, freqX + 0.01); }
+    else if (streak.wins >= 2) { freqX = Math.max(0.02, freqX * 0.5); }
     const grid = [];
     for (let r = 0; r < 3; r++) {
         const row = [];
@@ -770,10 +769,12 @@ app.post('/api/spin', async (req, res) => {
         const maxWin = betAmount * 15;
         if (actualWin > maxWin) actualWin = maxWin;
 
-        // RTP already controls grid generation (feature frequency)
-        // Additional cap: max regular spin win at bet * 5
-        if (!freeSpinsMode && actualWin > betAmount * 5) {
-            actualWin = Number((betAmount * 5).toFixed(2));
+        // Hard cap on spin wins
+        if (!freeSpinsMode && actualWin > betAmount * 3) {
+            actualWin = Number((betAmount * 3).toFixed(2));
+        }
+        if (freeSpinsMode && actualWin > betAmount * 8) {
+            actualWin = Number((betAmount * 8).toFixed(2));
         }
 
         let progressGain = gCount * 20 + hiddenGs.length * 10;
@@ -816,7 +817,7 @@ app.post('/api/spin', async (req, res) => {
 
 // === MINE GAME (Minecraft-style) ===
 const MINE_BLOCKS = ['dirt', 'stone', 'redstone', 'gold', 'diamond', 'obsidian'];
-const MINE_BLOCK_MULTS = { grass: 0.05, dirt: 0.05, stone: 0.09, redstone: 0.1, gold: 0.15, diamond: 0.19, obsidian: 0.2 };
+const MINE_BLOCK_MULTS = { grass: 0.01, dirt: 0.02, stone: 0.03, redstone: 0.04, gold: 0.06, diamond: 0.08, obsidian: 0.10 };
 // 6 rows: row 0 = grass top layer, rows 1-5 = underground
 const MINE_ROW_WEIGHTS = [
     // grass/dirt top: dirt=85%, stone=15%  (no ores)
@@ -836,9 +837,9 @@ const MINE_PICKAXES = ['wooden', 'stone', 'iron', 'golden', 'diamond'];
 const MINE_PICKAXE_WEIGHTS = [0.46, 0.28, 0.14, 0.08, 0.04];
 const MINE_PICKAXE_MULTS = { wooden: 1.2, stone: 1.5, iron: 2.0, golden: 3.0, diamond: 5.0 };
 
-const CHEST_MULT_VALUES  = [2, 3, 4, 5, 6, 7, 8];
-const CHEST_MULT_WEIGHTS = [0.45, 0.25, 0.15, 0.08, 0.04, 0.02, 0.01];
-const CHEST_MULT_EXPECTED = 2.98;
+const CHEST_MULT_VALUES  = [2, 2, 3, 3, 4];
+const CHEST_MULT_WEIGHTS = [0.50, 0.25, 0.15, 0.07, 0.03];
+const CHEST_MULT_EXPECTED = 2.3;
 
 function pickChestMult() {
     const r = Math.random(); let cum = 0;
@@ -970,32 +971,35 @@ app.post('/api/mine', async (req, res) => {
             blockWins.push(row);
         }
 
-        // RTP control: fair win chance based on RTP
-        const winChance = rtpTarget / 100;
+        // RTP control: win chance = rtp/200 (rtp 90 = 45% win, rtp 50 = 25%, rtp 10 = 5%)
+        const winChance = rtpTarget / 200;
         let scaleFactor = 1;
         if (Math.random() >= winChance) {
-            scaleFactor = 0.1; // Low win on losing rolls
+            scaleFactor = 0; // No win on losing rolls
         }
-        let baseWin = Math.min(rawSum * scaleFactor, effectiveBet * 4);
 
-        // Recalculate blockWins with scale factor
+        // Cap individual block wins and apply scale
         const adjustedBlockWins = [];
         for (let r = 0; r < 6; r++) {
             const row = [];
             for (let c = 0; c < 5; c++) {
-                row.push(rawSum > 0 ? parseFloat((blockWins[r][c] * scaleFactor * (baseWin / (rawSum * scaleFactor || 1))).toFixed(4)) : 0);
+                row.push(parseFloat((blockWins[r][c] * scaleFactor).toFixed(4)));
             }
             adjustedBlockWins.push(row);
         }
 
-        // Total win = sum of (column_win * column_chest_mult) for each column
+        // Total win = sum of block wins per column (NO chest multiplication on block wins)
+        // Chest multiplier only adds a small bonus
         let actualWin = 0;
         for (let c = 0; c < 5; c++) {
             let colWin = 0;
             for (let r = 0; r < 6; r++) colWin += adjustedBlockWins[r][c];
-            actualWin += colWin * chestMults[c];
+            // Chest adds +10% per multiplier point above 1 (not full multiplication)
+            const chestBonus = 1 + (chestMults[c] - 1) * 0.1;
+            actualWin += colWin * chestBonus;
         }
-        actualWin = Number(actualWin.toFixed(2));
+        // Hard cap: max win = bet * 2
+        actualWin = Math.min(Number(actualWin.toFixed(2)), effectiveBet * 2);
 
         let bookCount = hotbar.filter(s => s.type === 'book').length;
         if (bookCount >= 3) {
@@ -1046,10 +1050,10 @@ app.post('/api/upgrade', async (req, res) => {
         const rtpTarget = rtpSetting ? Number(rtpSetting.value) : 85;
         user[field] = Number((user[field] - betAmount).toFixed(2));
         if (!isDemo) { user.stats.bets++; user.stats.minus += betAmount; user.totalWagered = Number(((user.totalWagered || 0) + betAmount).toFixed(2)); user.wagerCompleted = Number(((user.wagerCompleted || 0) + betAmount).toFixed(2)); }
-        const winChance = rtpTarget / 100;
-        const isWin = Math.random() < winChance * 0.4;
-        const mult = isWin ? (1.5 + Math.random() * 2.5) : 0;
-        const actualWin = isWin ? Number((betAmount * mult).toFixed(2)) : 0;
+        const winChance = (rtpTarget / 100) * 0.25;
+        const isWin = Math.random() < winChance;
+        const mult = isWin ? (1.3 + Math.random() * 1.7) : 0;
+        const actualWin = isWin ? Math.min(Number((betAmount * mult).toFixed(2)), betAmount * 3) : 0;
         if (actualWin > 0) { user[field] = Number((user[field] + actualWin).toFixed(2)); if (!isDemo) { user.stats.wins++; user.stats.plus += actualWin; } }
         await user.save();
         if (!isDemo) {
@@ -1096,7 +1100,9 @@ app.post('/api/plinko', async (req, res) => {
         // RTP adjustment
         let bucket = path[path.length - 1];
         let mult = mults[bucket];
-        if (Math.random() > rtpTarget / 100 && mult > 1) { bucket = 6; mult = mults[6]; path[path.length - 1] = 6; }
+        // RTP: chance to force low-value bucket
+        const loseChance = 1 - (rtpTarget / 150);
+        if (Math.random() < loseChance && mult >= 0.8) { bucket = 6; mult = mults[6]; path[path.length - 1] = 6; }
         const actualWin = Number((betAmount * mult).toFixed(2));
         if (actualWin > 0) { user[field] = Number((user[field] + actualWin).toFixed(2)); if (!isDemo && actualWin > betAmount) { user.stats.wins++; user.stats.plus += actualWin; } }
         await user.save();
@@ -1149,8 +1155,12 @@ app.post('/api/duck', async (req, res) => {
             picked.push({ index: idx, prize: prizes[idx] });
         }
         let totalWin = picked.reduce((s, p) => s + p.prize, 0);
-        // RTP control
-        if (Math.random() > rtpTarget / 100 && totalWin > betAmount) { totalWin = Number((betAmount * 0.1).toFixed(2)); picked.forEach(p => p.prize = Number((totalWin / picks).toFixed(2))); }
+        // RTP control: stricter loss chance
+        const duckLoseChance = 1 - (rtpTarget / 150);
+        if (Math.random() < duckLoseChance || totalWin > betAmount * 2) {
+            totalWin = Number((betAmount * (Math.random() * 0.2)).toFixed(2));
+            picked.forEach(p => p.prize = Number((totalWin / picks).toFixed(2)));
+        }
         totalWin = Number(totalWin.toFixed(2));
         if (totalWin > 0) { user[field] = Number((user[field] + totalWin).toFixed(2)); if (!isDemo && totalWin > betAmount) { user.stats.wins++; user.stats.plus += totalWin; } }
         await user.save();
@@ -1171,8 +1181,8 @@ app.post('/api/check_deposit', async (req, res) => {
     if (!apiKey) return res.status(500).json({error: 'TON_API_KEY не установлен в .env'});
 
     try {
-        const encodedAddr = encodeURIComponent(adminWallet.trim());
-        const tcUrl = `https://toncenter.com/api/v2/getTransactions?address=${encodedAddr}&limit=50`;
+        const cleanAddr = adminWallet.trim().replace(/[\r\n]/g, '');
+        const tcUrl = `https://toncenter.com/api/v2/getTransactions?address=${cleanAddr}&limit=50`;
         const tcRes = await fetch(tcUrl, {
             headers: { 'X-API-Key': apiKey }
         });
