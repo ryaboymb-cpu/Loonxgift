@@ -537,9 +537,6 @@ async function payWithTonConnect() {
             }
         };
         setTimeout(autoCheck, 20000);
-            }
-        };
-        setTimeout(autoCheck, 20000);
     } catch (e) {
         console.error('TON Connect error:', e);
         const msg = e?.message || String(e);
