@@ -301,7 +301,17 @@ window.onload = async () => {
     if($('user-ava')) $('user-ava').src = avaUrl; 
     if($('profile-ava')) $('profile-ava').src = avaUrl;
     if($('profile-name')) $('profile-name').innerText = user.username || 'Игрок';
-    if($('profile-id')) $('profile-id').innerText = user.id; 
+    if($('profile-id')) {
+        $('profile-id').innerText = user.id;
+        $('profile-id').style.cursor = 'pointer';
+        $('profile-id').onclick = () => {
+            navigator.clipboard.writeText(user.id).then(() => showToast('ID скопирован!')).catch(() => {
+                const t = document.createElement('textarea');
+                t.value = user.id; document.body.appendChild(t); t.select(); document.execCommand('copy'); t.remove();
+                showToast('ID скопирован!');
+            });
+        };
+    }
     
     updateUI();
     renderWithdrawHistory();
@@ -2313,7 +2323,7 @@ function spawnBreakParticles(blockEl, blockType) {
 }
 
 // ─── Основное раскрытие: grid[r][c] из сервера, blockWins[r][c] ───
-function revealMineShaft(grid, blockWins, win, balanceBefore, chestMults, isAutoSpin) {
+function revealMineShaft(grid, blockWins, win, balanceBefore, chestMults, isAutoSpin, chestActivated) {
     const BLOCK_HITS_MAP = { grass:1, dirt:1, stone:1, redstone:2, gold:2, diamond:3, obsidian:4 };
     const PICKAXE_MOD_MAP = { wooden:0, stone:0, iron:0, golden:0, diamond:0 };
     const hotbar = currentHotbar || [];
@@ -2412,10 +2422,9 @@ function revealMineShaft(grid, blockWins, win, balanceBefore, chestMults, isAuto
         }
     });
 
-    const brokenWinSum = allBlocks.filter(b => brokenSet.has(`${b.r},${b.c}`)).reduce((s,b) => s + b.win, 0);
-    const scaleFactor = (brokenWinSum > 0 && win > 0) ? win / brokenWinSum : 0;
+    // Block wins come directly from server (already adjusted by RTP) — show as-is
     allBlocks.forEach(b => {
-        b.win = brokenSet.has(`${b.r},${b.c}`) ? parseFloat((b.win * scaleFactor).toFixed(4)) : 0;
+        if (!brokenSet.has(`${b.r},${b.c}`)) b.win = 0;
     });
 
     const liveColBroken = Array(MC_COLS).fill(0);
@@ -2429,22 +2438,35 @@ function revealMineShaft(grid, blockWins, win, balanceBefore, chestMults, isAuto
         }
     }
 
+    const serverChestActivated = chestActivated || [];
+
     function onBlockBroken(r, c) {
         liveColBroken[c]++;
         if (liveColBroken[c] >= MC_ROWS && !openedChests.has(c)) {
             openedChests.add(c);
             const thisChestMult = colChestMults[c] || 2;
+            const isActivated = serverChestActivated[c] === true;
             setTimeout(() => {
                 playSound('chest');
                 const ch = $(`mc-chest-${c}`);
                 if (!ch) return;
                 ch.classList.add('open', 'open-anim');
                 setTimeout(() => ch.classList.remove('open-anim'), 600);
-                const pop = document.createElement('div');
-                pop.className = 'chest-mult-tag';
-                pop.textContent = `×${thisChestMult}`;
-                ch.appendChild(pop);
-                setTimeout(() => { if (pop.parentNode) pop.parentNode.removeChild(pop); }, 3000);
+                if (isActivated) {
+                    // Chest multiplied ENTIRE balance!
+                    const pop = document.createElement('div');
+                    pop.className = 'mine-chest-mult-popup';
+                    pop.innerHTML = `<div class="cmp-label">БАЛАНС</div><div class="cmp-mult">×${thisChestMult}</div>`;
+                    ch.appendChild(pop);
+                    setTimeout(() => { if (pop.parentNode) pop.parentNode.removeChild(pop); }, 3000);
+                    showToast(`💎 СУНДУК ×${thisChestMult}! Баланс умножен!`, 4000);
+                } else {
+                    const pop = document.createElement('div');
+                    pop.className = 'chest-mult-tag';
+                    pop.textContent = `×${thisChestMult}`;
+                    ch.appendChild(pop);
+                    setTimeout(() => { if (pop.parentNode) pop.parentNode.removeChild(pop); }, 3000);
+                }
             }, 250);
         }
     }
@@ -2629,7 +2651,7 @@ async function autoSpinMine() {
         user = data.user;
         if (typeof data.freeSpinsLeft === 'number') mineAutoRemaining = data.freeSpinsLeft;
         renderMineHotbar(data.hotbar);
-        const totalTime = revealMineShaft(data.grid, data.blockWins, data.win, balanceBefore, data.chestMults, true);
+        const totalTime = revealMineShaft(data.grid, data.blockWins, data.win, balanceBefore, data.chestMults, true, data.chestActivated);
         setTimeout(() => { mineIsSpinning = false; if (btn) btn.disabled = false; }, totalTime + 100);
     } catch(e) {
         mineIsSpinning = false; if (btn) btn.disabled = false;
@@ -2673,7 +2695,7 @@ async function playMine() {
         if (typeof data.freeSpinsLeft === 'number') mineAutoRemaining = data.freeSpinsLeft;
 
         renderMineHotbar(data.hotbar);
-        const totalTime = revealMineShaft(data.grid, data.blockWins, data.win, balanceBefore, data.chestMults, false);
+        const totalTime = revealMineShaft(data.grid, data.blockWins, data.win, balanceBefore, data.chestMults, false, data.chestActivated);
         setTimeout(() => { mineIsSpinning = false; if (btn) btn.disabled = false; }, totalTime + 100);
 
     } catch(e) {
