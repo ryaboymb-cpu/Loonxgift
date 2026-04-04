@@ -222,7 +222,7 @@ body {
 .mine-card {
   flex: 0 0 auto !important;
   width: 100%;
-  max-width: 280px;
+  max-width: 260px;
   padding: 2px 2px;
   display: flex !important;
   flex-direction: column;
@@ -259,7 +259,7 @@ body {
   position: relative;
   overflow: visible;
   transition: background 0.12s;
-  aspect-ratio: 1;
+  aspect-ratio: 1.15;
 }
 .inv-cell.inv-book { background: #5a3a80; }
 .inv-cell.inv-tnt { background: #aa2020; }
@@ -285,13 +285,13 @@ body {
   overflow: visible;
 }
 
-/* ─── ШАХТА 3×5 ─── */
+/* ─── ШАХТА 6×5 ─── */
 .mc-shaft {
   flex-shrink: 0;
   width: 100%;
   display: grid;
   grid-template-columns: repeat(5, 1fr);
-  grid-template-rows: repeat(3, 1fr);
+  grid-template-rows: repeat(6, 1fr);
   gap: 0px;
   background: #080402;
   border: 2px solid;
@@ -303,7 +303,7 @@ body {
 }
 .mc-blk {
   width: 100%;
-  aspect-ratio: 1;
+  aspect-ratio: 1.15;
   border-radius: 1px;
   border: 1px solid;
   position: relative;
@@ -461,10 +461,10 @@ body {
 }
 /* All pickaxe/item images in inventory must match hotbar */
 .inv-cell img {
-  width: 75% !important;
-  height: 75% !important;
-  max-width: 36px !important;
-  max-height: 36px !important;
+  width: 70% !important;
+  height: 70% !important;
+  max-width: 28px !important;
+  max-height: 28px !important;
   object-fit: contain !important;
   image-rendering: pixelated !important;
   display: block;
@@ -522,7 +522,7 @@ body {
   background: url('/sprites/chest_closed.png') center/100% 100% no-repeat;
   border: 1px solid;
   border-color: #a06428 #3a2008 #3a2008 #a06428;
-  aspect-ratio: 1;
+  aspect-ratio: 1.15;
   position: relative;
   image-rendering: pixelated;
   border-radius: 1px;

@@ -662,12 +662,16 @@ const SPIN_PAYLINES = [
 
 const SPIN_PAYTABLE = { 'L': { 3: 0.2, 4: 0.5, 5: 1.0 }, 'X': { 3: 0.8, 4: 2.0, 5: 4.0 } };
 
-function generateSpinGrid(userId) {
+function generateSpinGrid(userId, rtpTarget) {
     const streak = spinUserStreaks[userId] || { losses: 0, wins: 0, progress: 0 };
-    // G очень редкий: 2%, X умеренно: 20%. При проигрышной серии чуть выше
-    let freqG = 0.01, freqX = 0.15;
-    if (streak.losses >= 4) { freqX = Math.min(0.22, freqX + streak.losses * 0.008); freqG = Math.min(0.02, freqG + 0.002); }
-    else if (streak.wins >= 3) { freqX = Math.max(0.10, freqX - streak.wins * 0.015); freqG = Math.max(0.006, freqG - 0.002); }
+    // RTP directly controls feature frequency
+    // rtp 90 = base rates, rtp 50 = half rates, rtp 10 = very rare
+    const rtpFactor = Math.max(0.1, (rtpTarget || 90) / 100);
+    let freqG = 0.01 * rtpFactor;
+    let freqX = 0.15 * rtpFactor;
+    // Streak adjustments (smaller than RTP impact)
+    if (streak.losses >= 4) { freqX = Math.min(0.22, freqX + streak.losses * 0.005); freqG = Math.min(0.02, freqG + 0.001); }
+    else if (streak.wins >= 3) { freqX = Math.max(0.05, freqX - streak.wins * 0.01); freqG = Math.max(0.003, freqG - 0.001); }
     const grid = [];
     for (let r = 0; r < 3; r++) {
         const row = [];
@@ -745,7 +749,7 @@ app.post('/api/spin', async (req, res) => {
             if (!isDemo) { user.stats.bets++; user.stats.minus += betAmount; user.totalWagered = Number(((user.totalWagered || 0) + betAmount).toFixed(2)); user.wagerCompleted = Number(((user.wagerCompleted || 0) + betAmount).toFixed(2)); }
         }
 
-        const grid = generateSpinGrid(id);
+        const grid = generateSpinGrid(id, rtpTarget);
         // Считаем G ДО hidden G — только настоящие скаттеры триггерят фриспины
         const gCountBase = countSymbols(grid, 'G');
         const hiddenGs = applyHiddenG(grid);
@@ -766,9 +770,10 @@ app.post('/api/spin', async (req, res) => {
         const maxWin = betAmount * 15;
         if (actualWin > maxWin) actualWin = maxWin;
 
-        // RTP control: scale payout by RTP percentage
-        if (!freeSpinsMode && actualWin > 0) {
-            actualWin = Number((actualWin * (rtpTarget / 100)).toFixed(2));
+        // RTP already controls grid generation (feature frequency)
+        // Additional cap: max regular spin win at bet * 5
+        if (!freeSpinsMode && actualWin > betAmount * 5) {
+            actualWin = Number((betAmount * 5).toFixed(2));
         }
 
         let progressGain = gCount * 20 + hiddenGs.length * 10;
@@ -812,14 +817,20 @@ app.post('/api/spin', async (req, res) => {
 // === MINE GAME (Minecraft-style) ===
 const MINE_BLOCKS = ['dirt', 'stone', 'redstone', 'gold', 'diamond', 'obsidian'];
 const MINE_BLOCK_MULTS = { grass: 0.05, dirt: 0.05, stone: 0.09, redstone: 0.1, gold: 0.15, diamond: 0.19, obsidian: 0.2 };
-// 3 rows: row 0 = grass top layer, rows 1-2 = underground
+// 6 rows: row 0 = grass top layer, rows 1-5 = underground
 const MINE_ROW_WEIGHTS = [
     // grass/dirt top: dirt=85%, stone=15%  (no ores)
     [0.85, 0.15, 0.00, 0.00, 0.00, 0.00],
-    // row 1 — mixed
-    [0.05, 0.40, 0.28, 0.16, 0.07, 0.04],
-    // row 2 — bottom (rare ores)
-    [0.00, 0.20, 0.25, 0.28, 0.17, 0.10]
+    // row 1 — mostly stone
+    [0.10, 0.62, 0.20, 0.06, 0.015, 0.005],
+    // row 2
+    [0.05, 0.45, 0.28, 0.15, 0.05, 0.02],
+    // row 3 — middle
+    [0.00, 0.30, 0.30, 0.24, 0.11, 0.05],
+    // row 4
+    [0.00, 0.18, 0.26, 0.28, 0.18, 0.10],
+    // row 5 — bottom (rare ores)
+    [0.00, 0.10, 0.20, 0.30, 0.24, 0.16]
 ];
 const MINE_PICKAXES = ['wooden', 'stone', 'iron', 'golden', 'diamond'];
 const MINE_PICKAXE_WEIGHTS = [0.46, 0.28, 0.14, 0.08, 0.04];
@@ -840,7 +851,7 @@ function pickChestMult() {
 
 function generateMineGrid() {
     const grid = [];
-    for (let r = 0; r < 3; r++) {
+    for (let r = 0; r < 6; r++) {
         const row = [];
         for (let c = 0; c < 5; c++) {
             if (r === 0) {
@@ -1160,10 +1171,15 @@ app.post('/api/check_deposit', async (req, res) => {
     if (!apiKey) return res.status(500).json({error: 'TON_API_KEY не установлен в .env'});
 
     try {
-        const tcUrl = `https://toncenter.com/api/v2/getTransactions?address=${adminWallet}&limit=50&api_key=${apiKey}`;
-        const tcRes = await fetch(tcUrl);
+        const encodedAddr = encodeURIComponent(adminWallet.trim());
+        const tcUrl = `https://toncenter.com/api/v2/getTransactions?address=${encodedAddr}&limit=50`;
+        const tcRes = await fetch(tcUrl, {
+            headers: { 'X-API-Key': apiKey }
+        });
         if (!tcRes.ok) {
-            return res.status(400).json({ error: `TonCenter HTTP ${tcRes.status}` });
+            const errBody = await tcRes.text().catch(() => '');
+            console.error('TonCenter HTTP error:', tcRes.status, errBody);
+            return res.status(400).json({ error: `TonCenter HTTP ${tcRes.status}: ${errBody.slice(0, 100)}` });
         }
         const data = await tcRes.json();
         if (!data.ok) {

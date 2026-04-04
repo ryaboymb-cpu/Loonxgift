@@ -428,10 +428,15 @@ async function payWithTonConnect() {
     if(isNaN(amount) || amount < 0.5) return showToast('Минимум 0.5 TON');
     if(!adminWalletAddress) return showToast('Кошелек получателя не настроен');
 
+    // Validate TON address format
+    const addr = adminWalletAddress.trim();
+    if (!/^(EQ|UQ|0:|kQ)[a-zA-Z0-9_\-\/\+]{46,48}$/.test(addr) && !/^0:[a-f0-9]{64}$/.test(addr)) {
+        return showToast('Некорректный адрес кошелька. Обратитесь к админу.');
+    }
+
     // Build comment payload (BOC cell) with user ID for TON Connect
     let payloadBoc = "";
     try {
-        // Wait for TonWeb if not loaded yet
         if (!window.TonWeb) {
             showToast('Загрузка модуля оплаты...');
             await new Promise((resolve, reject) => {
@@ -450,13 +455,12 @@ async function payWithTonConnect() {
         payloadBoc = TonWeb.utils.bytesToBase64(boc);
     } catch(e) {
         console.error('Payload error:', e);
-        // Fallback: send without comment, will need manual check
     }
 
     const transaction = {
         validUntil: Math.floor(Date.now() / 1000) + 600,
         messages: [{
-            address: adminWalletAddress,
+            address: addr,
             amount: (amount * 1e9).toString(),
             ...(payloadBoc ? { payload: payloadBoc } : {})
         }]
@@ -1722,7 +1726,7 @@ const MINE_BLOCK_CLASS = {
     diamond:'diamond-blk', obsidian:'obsidian-blk',
     tnt:'tnt-blk', book:'book-blk', unknown:'unknown-blk'
 };
-const MC_ROWS = 3;
+const MC_ROWS = 6;
 const MC_COLS = 5;
 const INV_ROWS = 3;
 const INV_COLS = 5;
