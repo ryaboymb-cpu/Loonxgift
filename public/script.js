@@ -431,6 +431,28 @@ function switchDepTab(type, el) {
     if($('dep-connect')) $('dep-connect').style.display = type === 'connect' ? 'block' : 'none';
 }
 
+// Конвертация friendly адреса (UQ.../EQ...) в raw формат (0:xxxx)
+// TonConnect принимает ТОЛЬКО raw формат, иначе Wrong 'address'
+function friendlyToRaw(friendly) {
+    try {
+        if (!friendly) return null;
+        const addr = friendly.trim().replace(/[\r\n\s ]/g, '');
+        // Если уже raw формат (0:xxxx) — возвращаем как есть
+        if (/^-?[0-9]+:[0-9a-fA-F]{64}$/.test(addr)) return addr;
+        // Декодируем base64url адрес (UQ.../EQ...)
+        const b64 = addr.replace(/-/g, '+').replace(/_/g, '/');
+        const bytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+        if (bytes.length < 34) return null;
+        const wc = bytes[1] === 0xff ? -1 : bytes[1]; // workchain
+        const hexAddr = Array.from(bytes.slice(2, 34))
+            .map(b => b.toString(16).padStart(2, '0')).join('');
+        return `${wc}:${hexAddr}`;
+    } catch(e) {
+        console.error('friendlyToRaw error:', e);
+        return null;
+    }
+}
+
 async function payWithTonConnect() {
     if (!tonConnectUI) return showToast('TON Connect не загружен. Перезагрузите страницу.');
     // .wallet — правильная проверка (.connected не существует в TonConnect UI SDK)
@@ -439,50 +461,45 @@ async function payWithTonConnect() {
         try { await tonConnectUI.openModal(); } catch(e) {}
         return;
     }
-    const amount = parseFloat($('tc-amount').value);
+    const amount = parseFloat($('tc-amount') ? $('tc-amount').value : 0);
     if(isNaN(amount) || amount < 0.5) return showToast('Минимум 0.5 TON');
     if(!adminWalletAddress) return showToast('Кошелек получателя не настроен');
 
-    const addr = adminWalletAddress.trim().replace(/[\r\n]/g, '');
-    if (!addr || addr.length < 30) {
-        return showToast('Кошелек получателя не настроен. Обратитесь к админу.');
-    }
+    // Конвертируем адрес в raw формат — TonConnect требует именно его
+    const rawAddr = friendlyToRaw(adminWalletAddress);
+    if (!rawAddr) return showToast('Неверный формат адреса кошелька. Обратитесь в поддержку.');
 
-    // Build comment payload (BOC cell) with user ID for TON Connect
-    let payloadBoc = "";
+    // Строим BOC payload с MEMO = ID пользователя
+    let payloadBoc = '';
     try {
-        if (!window.TonWeb) {
-            showToast('Загрузка модуля оплаты...');
-            await new Promise((resolve, reject) => {
-                let tries = 0;
-                const check = setInterval(() => {
-                    tries++;
-                    if (window.TonWeb) { clearInterval(check); resolve(); }
-                    else if (tries > 50) { clearInterval(check); reject(new Error('TonWeb timeout')); }
-                }, 200);
-            });
+        if (window.TonWeb) {
+            const cell = new TonWeb.boc.Cell();
+            cell.bits.writeUint(0, 32);
+            cell.bits.writeString(String(user.id));
+            const boc = await cell.toBoc();
+            payloadBoc = TonWeb.utils.bytesToBase64(boc);
+        } else {
+            // Фолбэк без TonWeb
+            const tb = new TextEncoder().encode(String(user.id));
+            const bytes = new Uint8Array(4 + tb.length);
+            bytes.set(tb, 4);
+            let bin = ''; bytes.forEach(b => bin += String.fromCharCode(b));
+            payloadBoc = btoa(bin);
         }
-        const cell = new TonWeb.boc.Cell();
-        cell.bits.writeUint(0, 32); // text comment op code
-        cell.bits.writeString(String(user.id));
-        const boc = await cell.toBoc();
-        payloadBoc = TonWeb.utils.bytesToBase64(boc);
-    } catch(e) {
-        console.error('Payload error:', e);
-    }
+    } catch(e) { console.error('Payload error:', e); }
 
     const transaction = {
         validUntil: Math.floor(Date.now() / 1000) + 600,
         messages: [{
-            address: addr,
-            amount: (amount * 1e9).toString(),
+            address: rawAddr,                          // raw формат: 0:xxxx
+            amount: String(Math.round(amount * 1e9)), // целые нанотоны
             ...(payloadBoc ? { payload: payloadBoc } : {})
         }]
     };
 
     try {
         await tonConnectUI.sendTransaction(transaction);
-        showToast('Транзакция отправлена! Проверка через 20 сек...');
+        showToast('✅ Отправлено! Проверка через 15 сек...');
 
         // Auto-check deposit after delay (blockchain confirmation takes time)
         let checkAttempts = 0;
