@@ -367,8 +367,8 @@
             <svg viewBox="0 0 24 24"><path d="M20 7H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2zm-2 8a2 2 0 1 1 0-4 2 2 0 0 1 0 4z"/><path d="M4 5h14v2H4z"/></svg>
             Кошелек
         </div>
-        <div class="nav-item" onclick="nav('upgrade', this); initUpgrade();">
-            <svg viewBox="0 0 24 24"><path d="M4 12l8-8 8 8h-4v6H8v-6z"/></svg>Апгрейд
+        <div class="nav-item" onclick="nav('upgrade',this);initUpgrade();">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 12l8-8 8 8h-4v6H8v-6z"/></svg>Апгрейд
         </div>
         <div class="nav-item" onclick="nav('profile', this)">
             <svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
@@ -402,22 +402,8 @@
         <button class="btn" style="background:#333; margin-bottom: 30px;" onclick="closeBattleGame()">ЗАКРЫТЬ И СМОТРЕТЬ В ФОНЕ</button>
     </div>
 
-    <div id="admin-modal" class="modal-full" style="display:none; position:fixed; inset:0; background:#000; z-index:9999; flex-direction:column; padding:20px;">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
-            <h2 style="color:var(--neon); text-shadow: 0 0 10px rgba(0,255,136,0.3);">Лоникс дай 50к</h2>
-            <button onclick="document.getElementById('admin-modal').style.display='none'" style="background:none; border:none; color:var(--neon-red); font-size:24px; font-weight:bold; cursor:pointer;">×</button>
-        </div>
-        <div class="admin-tabs" style="display:flex; gap:5px; margin-bottom:15px; overflow-x:auto;">
-            <button class="admin-tab active" onclick="switchAdminTab('withdraws')">Выводы/Депы</button>
-            <button class="admin-tab" onclick="switchAdminTab('users')">Юзеры</button>
-            <button class="admin-tab" onclick="switchAdminTab('promo')">Промо</button>
-            <button class="admin-tab" onclick="switchAdminTab('rtp')">Настройки</button>
-            <button class="admin-tab" onclick="switchAdminTab('stats')">Статистика</button>
-            <button class="admin-tab" onclick="switchAdminTab('logs')">Логи</button>
-        </div>
-        <div id="admin-content" style="flex: 1; overflow-y: auto;"></div>
-    </div>
 
+        
     <script src="script.js"></script>
 </body>
 </html>
