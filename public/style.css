@@ -241,6 +241,7 @@ body {
 .mc-inventory {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
+  margin-bottom: 4px;
   gap: 0px;
   background: #6e6e6e;
   border: 2px solid;
@@ -279,7 +280,7 @@ body {
 /* ─── ЗОНА ПОЛЁТА (пространство между инвентарём и шахтой) ─── */
 .mine-flight-zone {
   flex-shrink: 0;
-  height: 8px;
+  height: 12px;
   position: relative;
   background: linear-gradient(180deg, #1c1008 0%, #080402 100%);
   border-left: 2px solid #2a1808;
@@ -740,49 +741,3 @@ body {
   min-width: 34px;
   text-align: right;
 }
-
-/* ─── UPGRADE GAME ─── */
-.upg-wheel {
-    width:220px; height:220px; border-radius:50%;
-    background:conic-gradient(#00ff88 0% 50%, #1a1a2e 50% 100%);
-    margin:12px auto; position:relative;
-    display:flex; align-items:center; justify-content:center;
-    box-shadow:0 0 30px rgba(0,255,136,0.15);
-    transition:background 0.12s;
-}
-.upg-wheel::after {
-    content:''; width:80px; height:80px; border-radius:50%;
-    background:#0a0a1a; position:absolute;
-}
-.upg-wheel-inner {
-    position:absolute; z-index:2; text-align:center;
-}
-.upg-arrow-top {
-    position:absolute; top:-22px; left:50%; transform:translateX(-50%);
-    width:0; height:0;
-    border-left:8px solid transparent;
-    border-right:8px solid transparent;
-    border-top:18px solid #fff;
-    filter:drop-shadow(0 0 4px rgba(255,255,255,0.5));
-    z-index:3;
-}
-.upg-stats { display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin:10px 0; }
-.upg-stat { background:#111; border-radius:10px; padding:10px 5px; text-align:center; border:1px solid #222; }
-.upg-stat .v { font-size:18px; font-weight:900; color:var(--neon); }
-.upg-stat .l { font-size:10px; color:var(--sub); margin-top:2px; }
-.upg-slider {
-    width:100%; -webkit-appearance:none; height:6px; border-radius:3px; cursor:pointer;
-    background:linear-gradient(to right,#ff0055,#ff6600,#ffcc00,#00ff88); margin:12px 0;
-}
-.upg-slider::-webkit-slider-thumb {
-    -webkit-appearance:none; width:24px; height:24px; border-radius:50%;
-    background:#fff; border:3px solid var(--neon);
-    box-shadow:0 0 10px rgba(0,255,136,0.4); cursor:pointer;
-}
-.upg-presets { display:flex; gap:6px; flex-wrap:wrap; justify-content:center; margin:6px 0; }
-.upg-preset {
-    background:#1a1a1a; border:1px solid #333; color:#aaa;
-    border-radius:8px; padding:6px 10px; font-size:11px; cursor:pointer;
-    text-align:center; transition:all 0.15s;
-}
-.upg-preset:active,.upg-preset:hover { background:var(--neon); color:#000; border-color:var(--neon); }
