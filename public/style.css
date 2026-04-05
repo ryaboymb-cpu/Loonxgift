@@ -241,7 +241,6 @@ body {
 .mc-inventory {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
-  margin-bottom: 4px;
   gap: 0px;
   background: #6e6e6e;
   border: 2px solid;
@@ -280,7 +279,7 @@ body {
 /* ─── ЗОНА ПОЛЁТА (пространство между инвентарём и шахтой) ─── */
 .mine-flight-zone {
   flex-shrink: 0;
-  height: 12px;
+  height: 10px;
   position: relative;
   background: linear-gradient(180deg, #1c1008 0%, #080402 100%);
   border-left: 2px solid #2a1808;
@@ -740,4 +739,15 @@ body {
   white-space: nowrap;
   min-width: 34px;
   text-align: right;
+}
+
+/* upgrade slider thumb */
+#upg-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 24px; height: 24px;
+  border-radius: 50%;
+  background: #fff;
+  border: 3px solid #00e5ff;
+  box-shadow: 0 0 8px rgba(0,229,255,0.5);
+  cursor: pointer;
 }
