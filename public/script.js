@@ -433,8 +433,9 @@ function switchDepTab(type, el) {
 
 async function payWithTonConnect() {
     if (!tonConnectUI) return showToast('TON Connect не загружен. Перезагрузите страницу.');
+    // .wallet — правильная проверка (.connected не существует в TonConnect UI SDK)
     if (!tonConnectUI.wallet) {
-        showToast('Подключите кошелек через кнопку TON Connect вверху!');
+        showToast('Подключи кошелёк через кнопку TON Connect!');
         try { await tonConnectUI.openModal(); } catch(e) {}
         return;
     }
@@ -500,9 +501,10 @@ async function payWithTonConnect() {
                         user = d.user;
                         updateUI();
                         renderWithdrawHistory();
-                        showToast(`+${d.added.toFixed(2)} TON зачислено!`);
-                        flyToBalance(d.added);
-                        return;
+                        user = d.user; updateUI(); renderWithdrawHistory();
+                    showToast(`✅ +${d.added.toFixed(2)} TON зачислено!`);
+                    flyToBalance(d.added);
+                    return;
                     }
                 }
             } catch(e) {}
@@ -1124,13 +1126,25 @@ function renderBattlePlayers(lobby) {
 
 // ФИНАНСЫ И ПРОМО
 async function checkRealDeposit(btn, silent) {
-    if (btn) { btn.innerText = "ПРОВЕРЯЕМ..."; btn.disabled = true; }
+    if (btn) { btn.innerText = 'ПРОВЕРЯЕМ...'; btn.disabled = true; }
     try {
-        const r = await fetch('/api/check_deposit', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id:user.id}) });
-        if(r.ok) { const d = await r.json(); user = d.user; updateUI(); renderWithdrawHistory(); showToast('✅ +' + d.added + ' TON зачислено!'); }
-        else { const e = await r.json(); if (!silent) showToast(e.error || 'Оплата не найдена. Укажите ID в комментарии.'); }
-    } catch(e) { if (!silent) showToast('Ошибка соединения'); }
-    if (btn) { btn.innerText = "ПРОВЕРИТЬ ОПЛАТУ"; btn.disabled = false; }
+        const r = await fetch('/api/check_deposit', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: user.id })
+        });
+        const d = await r.json();
+        if (r.ok && d.success) {
+            user = d.user; updateUI(); renderWithdrawHistory();
+            showToast(`✅ +${d.added} TON зачислено!`);
+        } else {
+            if (!silent) showToast(d.error || 'Оплата не найдена. Укажи ID в комментарии перевода.');
+        }
+    } catch (e) {
+        console.error('checkRealDeposit error:', e);
+        if (!silent) showToast('Ошибка соединения. Попробуй ещё раз.');
+    }
+    if (btn) { btn.innerText = 'ПРОВЕРИТЬ ОПЛАТУ'; btn.disabled = false; }
 }
 
 async function withdraw() {
