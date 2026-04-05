@@ -661,46 +661,32 @@ const SPIN_PAYLINES = [
 ];
 
 // L symbols do NOT pay — only X symbols pay (makes most spins losing)
-// Таблица выплат:
-// X — редкий, платит много (x3 от L)
-// L — обычный, платит мало
-// N — нейтральный, не платит ничего (для заполнения, частый)
+// X — редкий, платит в 3 раза больше L
+// L — обычный, базовые выплаты  
+// N — нейтральный, ничего не платит (заполнитель)
 // G — scatter, даёт фриспины
 const SPIN_PAYTABLE = {
-    'X': { 3: 3.0, 4: 7.5, 5: 15.0 },  // X редкий — платит в 3 раза больше L
-    'L': { 3: 1.0, 4: 2.5, 5: 5.0  },  // L обычный — базовые выплаты
-    // N не платит ничего
+    'X': { 3: 3.0, 4: 7.5, 5: 15.0 },
+    'L': { 3: 1.0, 4: 2.5, 5:  5.0 }
 };
 
 function generateSpinGrid(userId, rtpTarget) {
     const streak = spinUserStreaks[userId] || { losses: 0, wins: 0, progress: 0 };
-
-    // Частоты символов на ячейку:
-    // N — нейтральный (самый частый, ~55%)
-    // L — обычный (~25-30%)
-    // X — редкий (~8-15% зависит от RTP)
-    // G — scatter (~0.4%)
     const rtpFactor = Math.max(0.1, Math.min(1.0, rtpTarget / 100));
-
     const freqG = 0.004;
-    const freqX = 0.04 + rtpFactor * 0.11; // rtp10→4%, rtp90→14%
-    const freqL = 0.15 + rtpFactor * 0.12; // rtp10→15%, rtp90→27%
-    // freqN = остаток (55-80%)
-
-    // Серийная коррекция
-    let adjX = freqX;
-    let adjL = freqL;
-    if (streak.losses >= 10) { adjX = Math.min(0.18, adjX + 0.03); adjL = Math.min(0.30, adjL + 0.04); }
-    else if (streak.wins >= 4) { adjX = Math.max(0.02, adjX * 0.6); adjL = Math.max(0.10, adjL * 0.8); }
-
+    let freqX = 0.04 + rtpFactor * 0.10; // rtp10→5%, rtp90→13%
+    let freqL = 0.15 + rtpFactor * 0.12; // rtp10→16%, rtp90→26%
+    // N = остаток (~60-80%)
+    if (streak.losses >= 8) { freqX = Math.min(0.17, freqX + 0.03); freqL = Math.min(0.30, freqL + 0.04); }
+    else if (streak.wins >= 3) { freqX = Math.max(0.02, freqX * 0.6); }
     const grid = [];
     for (let r = 0; r < 3; r++) {
         const row = [];
         for (let c = 0; c < 5; c++) {
             const rand = Math.random();
             if (rand < freqG) row.push('G');
-            else if (rand < freqG + adjX) row.push('X');
-            else if (rand < freqG + adjX + adjL) row.push('L');
+            else if (rand < freqG + freqX) row.push('X');
+            else if (rand < freqG + freqX + freqL) row.push('L');
             else row.push('N');
         }
         grid.push(row);
@@ -713,7 +699,6 @@ function checkSpinWins(grid, bet) {
     for (let li = 0; li < SPIN_PAYLINES.length; li++) {
         const line = SPIN_PAYLINES[li];
         const first = grid[line[0]][0];
-        // G и N не дают выигрыш на линиях
         if (first === 'G' || first === 'N') continue;
         let count = 1;
         for (let i = 1; i < 5; i++) { if (grid[line[i]][i] === first) count++; else break; }
@@ -841,23 +826,20 @@ app.post('/api/spin', async (req, res) => {
 
 // === MINE GAME (Minecraft-style) ===
 const MINE_BLOCKS = ['dirt', 'stone', 'redstone', 'gold_block', 'diamond_block', 'obsidian'];
-
-// ФИКСИРОВАННЫЕ множители блоков — НЕ меняются от RTP или ставки
-// reward = betAmount * multiplier (только линейно)
+// ФИКСИРОВАННЫЕ множители: reward = betAmount * multiplier (только линейно, без доп. коэффициентов)
 const MINE_BLOCK_MULTS = {
-    grass:         0.00,  // трава не даёт награду
-    dirt:          0.05,
-    stone:         0.09,
-    redstone:      0.12,
-    gold_block:    0.15,
+    grass: 0.00,
+    dirt: 0.05,
+    stone: 0.09,
+    redstone: 0.12,
+    gold_block: 0.15,
     diamond_block: 0.20,
-    obsidian:      0.23
+    obsidian: 0.23
 };
 // 6 rows: row 0 = grass top layer, rows 1-5 = underground
-// Порядок: dirt, stone, redstone, gold_block, diamond_block, obsidian
 const MINE_ROW_WEIGHTS = [
-    // grass top layer: только dirt
-    [1.00, 0.00, 0.00, 0.00, 0.00, 0.00],
+    // grass/dirt top: dirt=85%, stone=15%  (no ores)
+    [0.85, 0.15, 0.00, 0.00, 0.00, 0.00],
     // row 1 — mostly stone
     [0.10, 0.62, 0.20, 0.06, 0.015, 0.005],
     // row 2
@@ -991,35 +973,30 @@ app.post('/api/mine', async (req, res) => {
         for (let c = 0; c < 5; c++) chestMults.push(pickChestMult());
         const effectiveBet = isFreeAutoSpin ? 0.5 : betAmount;
 
-        // ФИКСИРОВАННЫЕ множители блоков: reward = betAmount * multiplier (только линейно)
-        // Множители НЕ зависят от ставки, RTP, уровня и т.д.
-        // RTP влияет только на шанс выпадения редких блоков (через MINE_ROW_WEIGHTS)
+        // ФИКСИРОВАННЫЕ множители блоков: reward = betAmount * multiplier
+        // Формула строго линейная: bw = effectiveBet * mult
         const blockWins = [];
         for (let r = 0; r < 6; r++) {
             const row = [];
             for (let c = 0; c < 5; c++) {
                 if (!grid[r][c]) { row.push(0); continue; }
-                const blockType = grid[r][c];
-                // Получаем фиксированный множитель блока
-                const mult = MINE_BLOCK_MULTS[blockType] || 0;
-                // reward = betAmount * multiplier (только линейно, без доп. коэффициентов)
+                const mult = MINE_BLOCK_MULTS[grid[r][c]] || 0;
                 const bw = parseFloat((effectiveBet * mult).toFixed(3));
                 row.push(bw);
             }
             blockWins.push(row);
         }
 
-        // RTP контроль: регулирует шанс что раунд вообще принесёт выигрыш
+        // RTP контроль: шанс что раунд вообще выигрышный
         // rtp 90 = 45% шанс выигрыша, rtp 50 = 25%, rtp 10 = 5%
         const winChance = rtpTarget / 200;
-        const isWinningRound = Math.random() < winChance;
+        const isWinRound = Math.random() < winChance;
 
-        // На проигрышном раунде обнуляем все block wins (но сетку показываем как есть)
         const adjustedBlockWins = [];
         for (let r = 0; r < 6; r++) {
             const row = [];
             for (let c = 0; c < 5; c++) {
-                row.push(isWinningRound ? blockWins[r][c] : 0);
+                row.push(isWinRound ? blockWins[r][c] : 0);
             }
             adjustedBlockWins.push(row);
         }
@@ -1232,55 +1209,27 @@ app.post('/api/check_deposit', async (req, res) => {
         const cleanAddr = adminWallet.trim().replace(/[\r\n\s]/g, '');
         const cleanKey = apiKey ? apiKey.trim().replace(/[\r\n\s]/g, '') : '';
 
-        // Пробуем разные эндпоинты TonCenter
-        const endpoints = [
-            `https://toncenter.com/api/v2/getTransactions?address=${cleanAddr}&limit=50`,
-            `https://toncenter.com/api/v2/getTransactions?address=${cleanAddr}&limit=50&archival=false`
-        ];
-
+        // Пробуем с ключом и без — на случай если ключ просроченный
+        const tcUrl = `https://toncenter.com/api/v2/getTransactions?address=${cleanAddr}&limit=50`;
         let data = null;
         let lastError = '';
 
-        for (const tcUrl of endpoints) {
+        for (const useKey of [true, false]) {
             try {
-                const headers = { 'Content-Type': 'application/json' };
-                if (cleanKey) headers['X-API-Key'] = cleanKey;
-
+                const headers = {};
+                if (useKey && cleanKey) headers['X-API-Key'] = cleanKey;
                 const tcRes = await fetch(tcUrl, { headers });
                 const text = await tcRes.text();
-
                 let parsed;
-                try { parsed = JSON.parse(text); } catch(e) {
-                    lastError = `Не JSON: ${text.slice(0, 80)}`;
-                    continue;
-                }
-
-                if (!tcRes.ok || !parsed.ok) {
-                    lastError = parsed.error || `HTTP ${tcRes.status}`;
-                    // 403 = ключ не тот или домен заблокирован — пробуем без ключа
-                    if (tcRes.status === 403 && cleanKey) {
-                        const tcRes2 = await fetch(tcUrl, {});
-                        const text2 = await tcRes2.text();
-                        try {
-                            const parsed2 = JSON.parse(text2);
-                            if (parsed2.ok) { data = parsed2; break; }
-                            lastError = parsed2.error || `HTTP ${tcRes2.status}`;
-                        } catch(e) { lastError = text2.slice(0, 80); }
-                    }
-                    continue;
-                }
-
-                data = parsed;
-                break;
-            } catch(e) {
-                lastError = e.message;
-                continue;
-            }
+                try { parsed = JSON.parse(text); } catch(e) { lastError = 'Не JSON: ' + text.slice(0,80); continue; }
+                if (parsed && parsed.ok) { data = parsed; break; }
+                lastError = parsed.error || ('HTTP ' + tcRes.status);
+            } catch(e) { lastError = e.message; }
         }
 
         if (!data || !data.ok) {
             console.error('TonCenter failed:', lastError);
-            return res.status(400).json({ error: `Ошибка TonCenter: ${lastError}. Проверьте TON_API_KEY в настройках Render.` });
+            return res.status(400).json({ error: 'Ошибка TonCenter: ' + lastError + '. Проверьте TON_API_KEY.' });
         }
 
         let foundNew = false;
@@ -1290,21 +1239,16 @@ app.post('/api/check_deposit', async (req, res) => {
         for (const tx of (data.result || [])) {
             if (!tx.in_msg || !tx.in_msg.value || Number(tx.in_msg.value) <= 0) continue;
 
-            // Проверяем комментарий во всех возможных полях
+            // Проверяем комментарий во всех возможных местах
             let comment = '';
             if (tx.in_msg.message) comment = String(tx.in_msg.message).trim();
             if (!comment && tx.in_msg.msg_data) {
                 const md = tx.in_msg.msg_data;
-                if (md.text) {
-                    try { comment = Buffer.from(md.text, 'base64').toString('utf-8').replace(/\x00/g, '').trim(); } catch(e) {}
-                }
-                if (!comment && md.body) {
-                    try { comment = Buffer.from(md.body, 'base64').toString('utf-8').replace(/\x00/g, '').trim(); } catch(e) {}
-                }
+                if (md.text) { try { comment = Buffer.from(md.text, 'base64').toString('utf-8').trim(); } catch(e) {} }
+                if (!comment && md.body) { try { comment = Buffer.from(md.body, 'base64').toString('utf-8').trim(); } catch(e) {} }
             }
-
-            // Очищаем null-байты из комментария
-            comment = comment.replace(/\x00/g, '').trim();
+            // Убираем null-байты
+            comment = comment.replace(/\x00/g, '').replace(/\u0000/g, '').trim();
 
             if (!comment.includes(userId) && comment !== userId) continue;
 
