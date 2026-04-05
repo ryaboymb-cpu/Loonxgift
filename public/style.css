@@ -181,7 +181,7 @@ body {
 .spin-cell::before { content: ''; position: absolute; inset: 0; border-radius: 8px; background: linear-gradient(135deg, rgba(255,255,255,0.04) 0%, transparent 60%); }
 .spin-cell.sym-L { color: var(--neon); text-shadow: 0 0 8px rgba(0,255,136,0.6); }
 .spin-cell.sym-X { color: #ffcc00; text-shadow: 0 0 8px rgba(255,204,0,0.6); }
-.spin-cell.sym-N { color: #ff0055; opacity:0.5; }
+.spin-cell.sym-N { color: #ff0055; opacity:0.55; font-size:14px; }
 .spin-cell.sym-G { color: #ff0055; text-shadow: 0 0 10px rgba(255,0,85,0.7); }
 .spin-cell.win-cell { border-color: var(--neon); box-shadow: 0 0 12px rgba(0,255,136,0.5); animation: spinWin 0.5s ease; }
 .spin-cell.win-cell.sym-X { border-color: #ffcc00; box-shadow: 0 0 12px rgba(255,204,0,0.5); }
@@ -249,10 +249,6 @@ body {
   padding: 1px;
   flex-shrink: 0;
 }
-/* Хотбар поверх анимаций кирок */
-.mc-inventory { position:relative; z-index:10; }
-.mc-chests-row { position:relative; z-index:10; }
-
 .inv-cell {
   background: #8b8b8b;
   border: 1px solid;
@@ -467,8 +463,8 @@ body {
 }
 /* All pickaxe/item images in inventory must match hotbar */
 .inv-cell img {
-  width: 55% !important;
-  height: 55% !important;
+  width: 56% !important;
+  height: 56% !important;
   max-width: 20px !important;
   max-height: 20px !important;
   min-width: 12px !important;
@@ -744,3 +740,18 @@ body {
   min-width: 34px;
   text-align: right;
 }
+
+/* ─── UPGRADE GAME ─── */
+.upgrade-wheel-wrap { position:relative; width:100%; max-width:300px; margin:0 auto; }
+.upgrade-wheel-wrap canvas { width:100% !important; border-radius:50%; }
+.upgrade-info-row { display:flex; justify-content:space-between; align-items:center; background:#111; border-radius:12px; padding:12px 16px; margin:10px 0; }
+.upgrade-info-box { text-align:center; }
+.upgrade-info-box .upg-val { font-size:20px; font-weight:900; color:var(--neon); }
+.upgrade-info-box .upg-lbl { font-size:10px; color:var(--sub); margin-top:2px; }
+.upgrade-slider { width:100%; -webkit-appearance:none; height:6px; border-radius:3px; background:linear-gradient(to right,#00ff88,#ffcc00,#ff0055); margin:12px 0; }
+.upgrade-slider::-webkit-slider-thumb { -webkit-appearance:none; width:22px; height:22px; border-radius:50%; background:#fff; box-shadow:0 0 8px rgba(0,255,136,0.6); cursor:pointer; }
+/* Хотбар z-index чтобы перекрывал летящие кирки */
+.mc-inventory { position:relative; z-index:20 !important; }
+.mc-chests-row { position:relative; z-index:20 !important; }
+/* Зазор между шахтой и хотбаром для анимации кирок */
+.mc-shaft { margin-bottom: 4px; }
