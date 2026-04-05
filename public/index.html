@@ -85,9 +85,9 @@
                 <div><h3 style="margin-bottom:5px;">Plinko</h3><p style="color:var(--sub); font-size:12px; font-weight:600;">Шарик падает - ты выигрываешь</p></div>
             </div>
 
-            <div class="game-card" onclick="navGame('duck')" style="border-color: #ffd600;">
-                <div class="g-icon" style="background: linear-gradient(135deg, #f9a825, #ffd600); box-shadow: 0 0 15px rgba(255,214,0,0.3); font-size:22px;">🦆</div>
-                <div><h3 style="margin-bottom:5px;">Duck</h3><p style="color:var(--sub); font-size:12px; font-weight:600;">Поймай утку с призом</p></div>
+            <div class="game-card" onclick="navGame('cases')" style="border-color: #9c27b0;">
+                <div class="g-icon" style="background:linear-gradient(135deg,#6a1b9a,#ce93d8);box-shadow:0 0 15px rgba(156,39,176,0.3);font-size:22px;">🎁</div>
+                <div><h3 style="margin-bottom:5px;">Cases</h3><p style="color:var(--sub);font-size:12px;font-weight:600;">Открой кейс с призами</p></div>
             </div>
 
             <h3 style="margin:20px 0 10px 0; color:var(--sub); font-size:14px; text-transform:uppercase;">Лайв Ставки</h3>
@@ -290,54 +290,43 @@
 
         <div id="page-upgrade" class="page">
             <button class="game-back-btn" onclick="nav('games', document.querySelector('.nav-item'))">← Назад</button>
-            <div class="card" style="padding:16px;">
-                <!-- Заголовок с шансом→выигрышем -->
-                <div id="upg-header" style="display:flex;align-items:center;justify-content:space-between;background:#111;border-radius:10px;padding:10px 14px;margin-bottom:12px;border:1px solid #222;">
-                    <span style="color:var(--neon);font-size:13px;font-weight:bold;" id="upg-chance-pct">50%</span>
-                    <span style="color:#555;font-size:13px;">1 TON → <span id="upg-win-preview" style="color:#fff;font-weight:bold;">1.84 TON</span></span>
-                    <span style="color:var(--neon);font-size:13px;font-weight:bold;" id="upg-mult-show">x1.84</span>
+            <div class="card" style="padding:14px;">
+                <!-- Шанс/Множитель/Выигрыш -->
+                <div style="display:flex;justify-content:space-between;background:#111;border-radius:10px;padding:9px 14px;margin-bottom:10px;border:1px solid #222;font-size:13px;">
+                    <span style="color:var(--neon);font-weight:bold;" id="upg-chance-pct">50%</span>
+                    <span style="color:#aaa;">ставка → <span id="upg-win-preview" style="color:#fff;font-weight:bold;">0 TON</span></span>
+                    <span style="color:var(--neon);font-weight:bold;" id="upg-mult-show">x1.84</span>
                 </div>
-
                 <!-- Колесо -->
-                <div style="position:relative;text-align:center;margin-bottom:10px;">
-                    <!-- Указатель сверху -->
-                    <div style="position:absolute;top:-6px;left:50%;transform:translateX(-50%);width:0;height:0;border-left:8px solid transparent;border-right:8px solid transparent;border-top:14px solid #fff;z-index:10;filter:drop-shadow(0 0 4px rgba(255,255,255,0.6));"></div>
-                    <canvas id="upg-canvas" style="border-radius:50%;max-width:240px;width:100%;"></canvas>
+                <div style="position:relative;text-align:center;margin-bottom:8px;">
+                    <div style="position:absolute;top:-8px;left:50%;transform:translateX(-50%);width:0;height:0;border-left:9px solid transparent;border-right:9px solid transparent;border-top:16px solid #fff;z-index:10;"></div>
+                    <canvas id="upg-canvas" style="border-radius:50%;width:260px;max-width:90vw;display:block;margin:0 auto;"></canvas>
                 </div>
-
-                <!-- Шанс: слайдер -->
-                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
-                    <span style="font-size:11px;color:var(--sub);">1%</span>
-                    <span style="font-size:12px;color:#fff;font-weight:bold;">Шанс: <span id="upg-slider-val">50%</span></span>
-                    <span style="font-size:11px;color:var(--sub);">95%</span>
+                <!-- Слайдер -->
+                <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--sub);margin-bottom:3px;">
+                    <span>1%</span><span style="color:#fff;font-weight:bold;" id="upg-slider-val">50%</span><span>95%</span>
                 </div>
-                <input type="range" id="upg-slider" min="1" max="95" value="50"
-                    oninput="upgSetChance(this.value)"
-                    style="width:100%;-webkit-appearance:none;height:6px;border-radius:3px;background:linear-gradient(to right,#ff0055,#ff6600,#ffcc00,#00ff88);margin-bottom:10px;cursor:pointer;">
-
-                <!-- Пресеты -->
-                <div style="display:flex;gap:5px;justify-content:center;flex-wrap:wrap;margin-bottom:10px;">
-                    <button class="qb-btn" onclick="upgSetChance(5)" style="font-size:11px;flex:none;">5%</button>
-                    <button class="qb-btn" onclick="upgSetChance(15)" style="font-size:11px;flex:none;">15%</button>
-                    <button class="qb-btn" onclick="upgSetChance(33)" style="font-size:11px;flex:none;">33%</button>
-                    <button class="qb-btn" onclick="upgSetChance(50)" style="font-size:11px;flex:none;">50%</button>
-                    <button class="qb-btn" onclick="upgSetChance(75)" style="font-size:11px;flex:none;">75%</button>
-                    <button class="qb-btn" onclick="upgSetChance(90)" style="font-size:11px;flex:none;">90%</button>
+                <input type="range" id="upg-slider" min="1" max="95" value="50" oninput="upgSetChance(this.value)"
+                    style="width:100%;-webkit-appearance:none;height:6px;border-radius:3px;background:linear-gradient(to right,#ff0055,#ff6600,#ffcc00,#00e676);margin-bottom:8px;cursor:pointer;">
+                <!-- Пресеты шанса -->
+                <div style="display:flex;gap:5px;flex-wrap:wrap;justify-content:center;margin-bottom:8px;">
+                    <button class="qb-btn" style="font-size:11px;" onclick="upgSetChance(5)">5%</button>
+                    <button class="qb-btn" style="font-size:11px;" onclick="upgSetChance(15)">15%</button>
+                    <button class="qb-btn" style="font-size:11px;" onclick="upgSetChance(33)">33%</button>
+                    <button class="qb-btn" style="font-size:11px;" onclick="upgSetChance(50)">50%</button>
+                    <button class="qb-btn" style="font-size:11px;" onclick="upgSetChance(75)">75%</button>
+                    <button class="qb-btn" style="font-size:11px;" onclick="upgSetChance(90)">90%</button>
                 </div>
-
                 <!-- Ставка -->
-                <div class="quick-bets" style="margin-bottom:8px;">
+                <div class="quick-bets" style="margin-bottom:7px;">
                     <div class="qb-btn" onclick="upgSetBet(0.5)">0.5</div>
                     <div class="qb-btn" onclick="upgSetBet(1)">1</div>
                     <div class="qb-btn" onclick="upgSetBet(5)">5</div>
                     <div class="qb-btn" onclick="upgSetBet(10)">10</div>
                     <div class="qb-btn" onclick="upgSetBet(25)">25</div>
                 </div>
-                <input type="number" id="up-bet" class="input-box" placeholder="Ставка (0.1–25 TON)" step="0.1" min="0.1" max="25" oninput="upgUpdatePreview()">
-
-                <!-- Результат -->
-                <div id="upgrade-result" style="text-align:center;font-size:16px;font-weight:bold;min-height:24px;margin-bottom:8px;"></div>
-
+                <input type="number" id="up-bet" class="input-box" placeholder="Ставка (0.1–25 TON)" oninput="upgUpdateInfo()">
+                <div id="upgrade-result" style="text-align:center;font-size:16px;font-weight:bold;min-height:22px;margin:6px 0;"></div>
                 <button id="up-btn" class="btn" style="background:linear-gradient(135deg,#0097a7,#00e5ff);color:#fff;" onclick="playUpgrade()">АПГРЕЙД ⬆️</button>
             </div>
         </div>
@@ -359,15 +348,13 @@
             </div>
         </div>
 
-        <div id="page-duck" class="page">
+        <div id="page-cases" class="page">
             <button class="game-back-btn" onclick="nav('games', document.querySelector('.nav-item'))">← Назад</button>
             <div class="card" style="text-align:center; padding:20px;">
-                <h2 style="color:#ffd600; margin-bottom:15px;">🦆 Duck Hunt</h2>
-                <div id="duck-pond" style="display:grid; grid-template-columns:repeat(5,1fr); gap:8px; margin-bottom:15px;"></div>
-                <div id="duck-result" style="margin-bottom:15px; font-size:18px; font-weight:bold;"></div>
-                <div class="quick-bets" id="qb-duck"></div>
-                <input type="number" id="dk-bet" class="input-box" placeholder="Ставка (0.1-25 TON)" step="0.1" min="0.1" max="25">
-                <button id="dk-btn" class="btn" style="background:linear-gradient(135deg, #f9a825, #ffd600); color:#000;" onclick="playDuck()">PLAY 🦆</button>
+                <h2 style="color:#ce93d8; margin-bottom:10px;">🎁 CASES</h2>
+                <p style="color:var(--sub); font-size:13px; margin-bottom:20px;">Скоро — выбирай кейс и открывай призы!</p>
+                <div style="font-size:64px; margin:20px 0;">🎁</div>
+                <p style="color:#555; font-size:12px;">Игра в разработке. Следи за обновлениями!</p>
             </div>
         </div>
 
