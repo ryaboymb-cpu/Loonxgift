@@ -661,8 +661,8 @@ const SPIN_PAYLINES = [
 ];
 
 // L symbols do NOT pay — only X symbols pay (makes most spins losing)
-// X редкий (2.5x от L), L обычный, N нейтральный, G scatter
-const SPIN_PAYTABLE = { 'X':{ 3:2.5, 4:6.0, 5:12.0 }, 'L':{ 3:0.9, 4:2.2, 5:4.5 } };
+// X редкий (2.5x от L), L обычный, N нейтральный (красный), G scatter
+const SPIN_PAYTABLE={'X':{3:2.5,4:6.0,5:12.0},'L':{3:0.9,4:2.2,5:4.5}};
 
 function generateSpinGrid(userId, rtpTarget) {
     const streak = spinUserStreaks[userId] || { losses: 0, wins: 0, progress: 0 };
@@ -670,20 +670,20 @@ function generateSpinGrid(userId, rtpTarget) {
     // rtp 90 → 30% chance of winning spin, rtp 50 → 16%, rtp 10 → 3%
     const rtpF=Math.max(0.1,Math.min(1.0,rtpTarget/100));
     const freqG=0.004;
-    let freqX=0.05+rtpF*0.08;  // rtp90→~12%
-    let freqL=0.20+rtpF*0.10;  // rtp90→~29% (чуть больше L)
-    // N = остаток (~60%+) — красный нейтральный
-    if (streak.losses>=8){ freqX=Math.min(0.17,freqX+0.03); freqL=Math.min(0.33,freqL+0.04); }
-    else if (streak.wins>=4){ freqX=Math.max(0.02,freqX*0.6); }
+    let freqX=0.05+rtpF*0.08;    // rtp90→~12%
+    let freqL=0.22+rtpF*0.10;    // rtp90→~31% (чуть больше L)
+    // N = остаток (~57%) — нейтральный, красный цвет
+    if (streak.losses>=8){freqX=Math.min(0.17,freqX+0.03);freqL=Math.min(0.35,freqL+0.04);}
+    else if (streak.wins>=4){freqX=Math.max(0.02,freqX*0.6);}
     const grid=[];
     for (let r=0;r<3;r++){
         const row=[];
         for (let c=0;c<5;c++){
             const rand=Math.random();
-            if (rand<freqG)               row.push('G');
-            else if (rand<freqG+freqX)    row.push('X');
-            else if (rand<freqG+freqX+freqL) row.push('L');
-            else                          row.push('N');
+            if (rand<freqG)                  row.push('G');
+            else if (rand<freqG+freqX)        row.push('X');
+            else if (rand<freqG+freqX+freqL)  row.push('L');
+            else                              row.push('N');
         }
         grid.push(row);
     }
@@ -821,9 +821,9 @@ app.post('/api/spin', async (req, res) => {
 });
 
 // === MINE GAME (Minecraft-style) ===
-const MINE_BLOCKS = ['dirt','stone','redstone','gold_block','diamond_block','obsidian'];
-// ФИКСИРОВАННЫЕ множители: reward = bet * mult
-const MINE_BLOCK_MULTS={grass:0.00,dirt:0.05,stone:0.09,redstone:0.12,gold_block:0.15,diamond_block:0.20,obsidian:0.23,gold:0.15,diamond:0.20};
+const MINE_BLOCKS=['dirt','stone','redstone','gold_block','diamond_block','obsidian'];
+// ФИКСИРОВАННЫЕ множители (reward = bet * mult ЗА ОДИН БЛОК)
+const MINE_BLOCK_MULTS={grass:0.00,dirt:0.05,stone:0.10,redstone:0.16,gold_block:0.25,diamond_block:0.40,obsidian:0.60,gold:0.25,diamond:0.40};
 // 6 rows: row 0 = grass top layer, rows 1-5 = underground
 const MINE_ROW_WEIGHTS = [
     [1.00,0.00,0.00,0.00,0.00,0.00], // grass row
@@ -960,13 +960,19 @@ app.post('/api/mine', async (req, res) => {
         for (let c = 0; c < 5; c++) chestMults.push(pickChestMult());
         const effectiveBet = isFreeAutoSpin ? 0.5 : betAmount;
 
-        // ВСЕГДА показываем множитель блока: reward = bet * mult (строго линейно)
-        // RTP регулируется вероятностью появления дорогих блоков (через MINE_ROW_WEIGHTS)
+        // ФИКСИРОВАННЫЕ множители: reward = bet * mult ЗА КАЖДЫЙ БЛОК в мined колонках
+        // КЛЮЧЕВОЙ ФИК: считаем ТОЛЬКО колонки где есть кирки в хотбаре
+        // Хотбар: 3 ряда × 5 колонок = 15 слотов, slot[i].column = i % 5
+        const minedCols = new Set();
+        hotbar.forEach((slot,idx)=>{ if(slot&&slot.type==='pickaxe') minedCols.add(idx%5); });
+        if (minedCols.size===0) minedCols.add(Math.floor(Math.random()*5)); // минимум 1 колонка
+        console.log('[Mine] minedCols='+[...minedCols].join(','));
+
         const adjustedBlockWins=[];
         for (let r=0;r<6;r++){
             const row=[];
             for (let c=0;c<5;c++){
-                if (!grid[r][c]){row.push(0);continue;}
+                if (!grid[r][c]||!minedCols.has(c)){row.push(0);continue;}
                 const mult=MINE_BLOCK_MULTS[grid[r][c]]||0;
                 row.push(parseFloat((effectiveBet*mult).toFixed(3)));
             }
@@ -985,15 +991,12 @@ app.post('/api/mine', async (req, res) => {
             chestActivated.push(Math.random() < 0.005);
         }
 
-        // If ANY chest activates, the chest multiplier applies to entire current balance
-        let chestBonusWin = 0;
-        const currentBalance = user[field] + actualWin; // balance after block wins
-        for (let c = 0; c < 5; c++) {
-            if (chestActivated[c]) {
-                chestBonusWin += currentBalance * (chestMults[c] - 1); // multiply balance by chestMult
-            }
+        // Сундук даёт скромный бонус: bet * chestMult (не весь баланс!)
+        let chestBonusWin=0;
+        for (let c=0;c<5;c++){
+            if (chestActivated[c]) chestBonusWin+=effectiveBet*(chestMults[c]-1);
         }
-        actualWin = Number((actualWin + chestBonusWin).toFixed(2));
+        actualWin=Number((actualWin+chestBonusWin).toFixed(2));
 
         let bookCount = hotbar.filter(s => s.type === 'book').length;
         if (bookCount >= 3) {
@@ -1170,32 +1173,33 @@ app.post('/api/check_deposit', async (req, res) => {
     const { id } = req.body;
     const adminWallet = process.env.ADMIN_WALLET;
     const apiKey      = process.env.TON_API_KEY;
-    if (!adminWallet) return res.status(500).json({error:'ADMIN_WALLET не задан в Render → Environment'});
-    if (!apiKey)      return res.status(500).json({error:'TON_API_KEY не задан в Render → Environment'});
+    if (!adminWallet) return res.status(500).json({error:'ADMIN_WALLET не задан в Render Environment'});
+    if (!apiKey)      return res.status(500).json({error:'TON_API_KEY не задан в Render Environment'});
 
-    // TonCenter v2 требует raw адрес (0:hex), UQ/EQ вызывает 422
+    // TonCenter v2 требует raw-адрес: 0:hex64
+    // UQ.../EQ... — это base64url, надо декодировать
     function toRaw(addr) {
         addr = addr.trim().replace(/[\r\n\s]/g,'');
-        if (/^-?[0-9]+:[0-9a-fA-F]{64}$/.test(addr)) return addr;
+        if (/^-?[0-9]+:[0-9a-fA-F]{64}$/.test(addr)) return addr; // уже raw
         try {
             const b = Buffer.from(addr.replace(/-/g,'+').replace(/_/g,'/'),'base64');
             if (b.length < 34) return null;
-            return (b[1]===0xff?-1:b[1]) + ':' + b.slice(2,34).toString('hex');
+            const wc = b[1]===0xff ? -1 : b[1];
+            return wc+':'+b.slice(2,34).toString('hex');
         } catch(e){ return null; }
     }
 
-    const rawAddr = toRaw(adminWallet);
-    if (!rawAddr) return res.status(500).json({error:'Неверный ADMIN_WALLET. Нужен UQ.../EQ... адрес.'});
-
+    const rawAddr  = toRaw(adminWallet);
+    if (!rawAddr) return res.status(500).json({error:'Неверный ADMIN_WALLET (нужен UQ.../EQ... адрес TON)'});
     const cleanKey = apiKey.trim().replace(/[\r\n\s]/g,'');
     const userId   = String(id).trim();
-    console.log('[Dep] rawAddr='+rawAddr.slice(0,15)+'... userId='+userId);
+    console.log('[Dep] rawAddr='+rawAddr.slice(0,15)+'... user='+userId);
 
     try {
-        const r    = await fetch('https://toncenter.com/api/v2/getTransactions?address='+encodeURIComponent(rawAddr)+'&limit=50&api_key='+cleanKey);
-        const text = await r.text();
-        if (!r.ok) { console.error('[Dep] HTTP',r.status,text.slice(0,100)); return res.status(400).json({error:'TonCenter HTTP '+r.status+'. Проверь API ключ.'}); }
-        let data; try { data=JSON.parse(text); } catch(e){ return res.status(500).json({error:'TonCenter: не JSON'}); }
+        const r = await fetch('https://toncenter.com/api/v2/getTransactions?address='+encodeURIComponent(rawAddr)+'&limit=50&api_key='+cleanKey);
+        const txt = await r.text();
+        if (!r.ok) { console.error('[Dep] HTTP',r.status,txt.slice(0,100)); return res.status(400).json({error:'TonCenter HTTP '+r.status+'. Проверь TON_API_KEY.'}); }
+        let data; try{data=JSON.parse(txt);}catch(e){return res.status(500).json({error:'TonCenter: не JSON'});}
         if (!data.ok) { console.error('[Dep]',data.error); return res.status(400).json({error:'TonCenter: '+data.error}); }
 
         let foundNew=false, totalAdded=0;
@@ -1205,8 +1209,8 @@ app.post('/api/check_deposit', async (req, res) => {
             if (tx.in_msg.message) comment=String(tx.in_msg.message).replace(/\u0000/g,'').trim();
             if (!comment&&tx.in_msg.msg_data) {
                 const md=tx.in_msg.msg_data;
-                if (md.text) try{ comment=Buffer.from(md.text,'base64').toString('utf-8').replace(/\u0000/g,'').trim(); }catch(e){}
-                if (!comment&&md.body) try{ comment=Buffer.from(md.body,'base64').slice(4).toString('utf-8').replace(/[^\x20-\x7E\u0400-\u04FF]/g,'').trim(); }catch(e){}
+                if (md.text) try{comment=Buffer.from(md.text,'base64').toString('utf-8').replace(/\u0000/g,'').trim();}catch(e){}
+                if (!comment&&md.body) try{comment=Buffer.from(md.body,'base64').slice(4).toString('utf-8').replace(/[^\x20-\x7E\u0400-\u04FF]/g,'').trim();}catch(e){}
             }
             if (!comment||!comment.includes(userId)) continue;
             const txHash=tx.transaction_id?tx.transaction_id.hash:tx.hash;
@@ -1223,20 +1227,16 @@ app.post('/api/check_deposit', async (req, res) => {
                 user.depositHistory=user.depositHistory||[];
                 user.depositHistory.unshift({hash:txHash,amount:amt,status:'Успешно',time:getMskTime()});
                 const ws=await Settings.findOne({key:'wager_multiplier'});
-                const wm=ws?Number(ws.value):2;
                 user.totalDeposited=Number(((user.totalDeposited||0)+amt).toFixed(2));
-                user.wagerRequired=Number(((user.wagerRequired||0)+amt*wm).toFixed(2));
+                user.wagerRequired=Number(((user.wagerRequired||0)+amt*(ws?Number(ws.value):2)).toFixed(2));
                 await user.save();
                 foundNew=true; totalAdded+=amt;
                 console.log('[Dep] +'+amt+' TON user='+userId);
                 if (bot) bot.sendMessage(id,'📥 ✅ Баланс пополнен на *'+amt+' TON*!',{parse_mode:'Markdown'}).catch(()=>{});
-                if (user.referredBy) {
-                    const ref=await User.findOne({id:user.referredBy});
-                    if (ref){const bon=Number((amt*0.10).toFixed(2));ref.balance=Number((ref.balance+bon).toFixed(2));ref.referralEarnings=Number(((ref.referralEarnings||0)+bon).toFixed(2));await ref.save();}
-                }
-            } catch(de){ console.error('[Dep] DB:',de.message); }
+                if (user.referredBy){const ref=await User.findOne({id:user.referredBy});if(ref){const bon=Number((amt*0.1).toFixed(2));ref.balance=Number((ref.balance+bon).toFixed(2));ref.referralEarnings=Number(((ref.referralEarnings||0)+bon).toFixed(2));await ref.save();}}
+            } catch(de){console.error('[Dep] DB:',de.message);}
         }
-        if (foundNew){ const u=await User.findOne({id}); return res.json({success:true,added:totalAdded,user:u}); }
+        if (foundNew){const u=await User.findOne({id});return res.json({success:true,added:totalAdded,user:u});}
         return res.status(400).json({error:'Оплата не найдена. Укажи ID '+userId+' в комментарии перевода.'});
     } catch(e){ console.error('[Dep]',e.message); return res.status(500).json({error:'Ошибка. Попробуй позже.'}); }
 });
@@ -1672,6 +1672,49 @@ app.post('/api/user/history', async (req, res) => {
 });
 
 // Keep-alive endpoint (for uptime monitors like UptimeRobot)
+
+// ─── UPGRADE GAME ──────────────────────────────────
+app.post('/api/upgrade', async (req, res) => {
+    const { id, bet, chance, mode } = req.body;
+    if (actionLocks.has(id)) return res.status(429).json({error:'Подожди...'});
+    actionLocks.add(id);
+    try {
+        const user = await User.findOne({id});
+        if (!user||user.isBlocked) return res.status(403).send();
+        const isDemo = mode==='demo';
+        const field  = isDemo?'demo_balance':'balance';
+        const betAmt = parseFloat(bet)||0;
+        const chanceP= parseFloat(chance)||0;
+        if (betAmt<0.1||betAmt>500) return res.status(400).json({error:'Ставка 0.1–500 TON'});
+        if (chanceP<1||chanceP>95) return res.status(400).json({error:'Шанс 1–95%'});
+        if (user[field]<betAmt) return res.status(400).json({error:'Недостаточно средств'});
+
+        // Мультиплиер: RTP 92%, формула mult = 0.92 / (chance/100)
+        const mult   = Math.floor((92/chanceP)*100)/100;
+        const isWin  = Math.random()*100 < chanceP;
+        const profit = isWin ? parseFloat((betAmt*mult-betAmt).toFixed(2)) : -betAmt;
+
+        user[field] = isWin
+            ? Number((user[field]-betAmt+betAmt*mult).toFixed(2))
+            : Number((user[field]-betAmt).toFixed(2));
+        if (!isDemo){
+            user.stats.bets++;
+            if (isWin){user.stats.wins++;user.stats.plus+=betAmt*mult-betAmt;}
+            else {user.stats.minus+=betAmt;}
+        }
+        await user.save();
+
+        if (!isDemo) {
+            const avatar=user.photo||'https://cdn-icons-png.flaticon.com/512/149/149071.png';
+            const entry=new Bet({userId:user.id,username:user.username,avatar,game:'Upgrade',
+                amount:betAmt,multiplier:isWin?mult:0,result:profit,mode:'Real'});
+            await entry.save();
+            pushToGlobalHistory(entry);
+        }
+        res.json({win:isWin,multiplier:mult,profit,user});
+    } finally { actionLocks.delete(id); }
+});
+
 app.get('/ping', (req, res) => res.status(200).json({ ok: true, time: Date.now() }));
 
 const PORT = process.env.PORT || 3000;
