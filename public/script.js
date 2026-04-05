@@ -432,66 +432,64 @@ function switchDepTab(type, el) {
 }
 
 async function payWithTonConnect() {
-    if (!tonConnectUI) return showToast('TON Connect не загружен. Перезагрузите страницу.');
+    if (!tonConnectUI) return showToast('TON Connect не загружен');
     if (!tonConnectUI.wallet) {
-        showToast('Сначала подключи кошелёк через кнопку TON Connect!');
+        showToast('Сначала подключи кошелёк кнопкой TON Connect!');
         try { await tonConnectUI.openModal(); } catch(e) {}
         return;
     }
     const amount = parseFloat($('tc-amount') ? $('tc-amount').value : 0);
     if (isNaN(amount) || amount < 0.5) return showToast('Минимум 0.5 TON');
-    if (!adminWalletAddress) return showToast('Кошелек получателя не настроен');
+    if (!adminWalletAddress) return showToast('Кошелёк казино не настроен');
 
-    const addr = adminWalletAddress.trim().replace(/[\r\n\s]/g, '');
-    if (!addr || addr.length < 10) return showToast('Неверный адрес кошелька');
+    const adminAddr = adminWalletAddress.trim().replace(/[\r\n\s]/g, '');
+    const amountInNano = String(Math.round(amount * 1e9));
 
-    // Строим payload с MEMO = ID пользователя
-    // Используем TonWeb если загружен, иначе простой fallback
-    let payloadBoc = '';
+    // Создаём payload с MEMO = ID пользователя
+    // ТОЧНО как в рабочем примере: TonWeb.boc.Cell с writeUint(0,32) + writeString(userId)
+    let payloadBase64 = '';
     try {
         if (window.TonWeb) {
-            const tw = new TonWeb();
-            const cell = new tw.boc.Cell();
+            const cell = new TonWeb.boc.Cell();
             cell.bits.writeUint(0, 32);
             cell.bits.writeString(String(user.id));
-            const boc = await cell.toBoc();
-            payloadBoc = TonWeb.utils.bytesToBase64(boc);
+            const bocBytes = await cell.toBoc(false);
+            payloadBase64 = TonWeb.utils.bytesToBase64(bocBytes);
         } else {
+            // Фолбэк без TonWeb
             const tb = new TextEncoder().encode(String(user.id));
             const bytes = new Uint8Array(4 + tb.length);
             bytes.set(tb, 4);
-            let bin = '';
-            bytes.forEach(b => bin += String.fromCharCode(b));
-            payloadBoc = btoa(bin);
+            let bin = ''; bytes.forEach(b => bin += String.fromCharCode(b));
+            payloadBase64 = btoa(bin);
         }
-    } catch(e) { console.error('Payload build error:', e); }
+    } catch(e) { console.error('Payload error:', e); }
 
-    // TonConnect UI принимает friendly адрес (UQ.../EQ...) напрямую — SDK сам конвертирует
-    // НЕ нужно конвертировать в raw формат вручную — это и вызывало Wrong 'address'
+    const transaction = {
+        validUntil: Math.floor(Date.now() / 1000) + 360,
+        messages: [{
+            address: adminAddr,
+            amount: amountInNano,
+            ...(payloadBase64 ? { payload: payloadBase64 } : {})
+        }]
+    };
+
     try {
-        await tonConnectUI.sendTransaction({
-            validUntil: Math.floor(Date.now() / 1000) + 600,
-            messages: [{
-                address: addr,
-                amount: String(Math.round(amount * 1e9)),
-                ...(payloadBoc ? { payload: payloadBoc } : {})
-            }]
-        });
-        showToast('✅ Отправлено! Автопроверка через 15 сек...');
+        await tonConnectUI.sendTransaction(transaction);
+        showToast('✅ Транзакция отправлена! Автопроверка через 15 сек...');
         let attempts = 0;
         const autoCheck = async () => {
             attempts++;
             try {
                 const r = await fetch('/api/check_deposit', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ id: user.id })
+                    method: 'POST', headers: {'Content-Type':'application/json'},
+                    body: JSON.stringify({id: user.id})
                 });
                 if (r.ok) {
                     const d = await r.json();
                     if (d.success && d.added > 0) {
                         user = d.user; updateUI(); renderWithdrawHistory();
-                        showToast('✅ +' + d.added + ' TON зачислено!');
+                        showToast('+' + d.added + ' TON зачислено!');
                         return;
                     }
                 }
@@ -501,13 +499,9 @@ async function payWithTonConnect() {
         };
         setTimeout(autoCheck, 15000);
     } catch(e) {
-        const msg = (e && e.message) ? e.message.toLowerCase() : String(e).toLowerCase();
-        if (msg.includes('reject') || msg.includes('cancel') || msg.includes('user')) {
-            showToast('Транзакция отменена');
-        } else {
-            console.error('TonConnect error:', e);
-            showToast('Ошибка: ' + (e.message || '').slice(0, 80));
-        }
+        const msg = (e && e.message) ? e.message.toLowerCase() : '';
+        if (msg.includes('reject') || msg.includes('cancel')) showToast('Транзакция отменена');
+        else { console.error('TonConnect error:', e); showToast('Ошибка: ' + (e.message||'').slice(0,60)); }
     }
 }
 
@@ -1112,22 +1106,15 @@ function renderBattlePlayers(lobby) {
 async function checkRealDeposit(btn, silent) {
     if (btn) { btn.innerText = 'ПРОВЕРЯЕМ...'; btn.disabled = true; }
     try {
-        const r = await fetch('/api/check_deposit', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ id: user.id })
-        });
+        const r = await fetch('/api/check_deposit', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id:user.id}) });
         const d = await r.json();
         if (r.ok && d.success) {
             user = d.user; updateUI(); renderWithdrawHistory();
-            showToast(`✅ +${d.added} TON зачислено!`);
-        } else {
-            if (!silent) showToast(d.error || 'Оплата не найдена. Укажи ID в комментарии перевода.');
+            showToast('✅ +' + d.added + ' TON зачислено!');
+        } else if (!silent) {
+            showToast(d.error || 'Оплата не найдена. Укажи ID в комментарии перевода.');
         }
-    } catch (e) {
-        console.error('checkRealDeposit error:', e);
-        if (!silent) showToast('Ошибка соединения. Попробуй ещё раз.');
-    }
+    } catch(e) { if (!silent) showToast('Ошибка соединения'); }
     if (btn) { btn.innerText = 'ПРОВЕРИТЬ ОПЛАТУ'; btn.disabled = false; }
 }
 
@@ -1627,7 +1614,7 @@ let spinProgressValue = 0;
 let spinIsSpinning = false;
 let spinAnimInterval = null;
 
-const SPIN_SYMS_ANIM = ['L','L','X','L','G','L','X','L','L'];
+const SPIN_SYMS_ANIM = ['N','L','X','N','G','N','X','L','N','L','N'];
 
 const SPIN_PAYLINES_FE = [
     [1,1,1,1,1],  // 0: средний ряд
@@ -1672,7 +1659,7 @@ function initSpinPage() {
         spBetInput._hasChangeListener = true;
     }
     // Pre-fill idle grid with nice pattern
-    const symbols = ['L','L','X','L','G','X','L','L','X','L','L','X','L','X','L'];
+    const symbols = ['N','L','X','N','G','N','X','L','N','L','N','X','N','L','N'];
     for (let r = 0; r < 3; r++) {
         for (let c = 0; c < 5; c++) {
             const cell = $(`sc-${r}-${c}`);
@@ -1735,8 +1722,10 @@ function updateSpinUI() {
 // ========= MINE GAME =========
 const MINE_BLOCK_CLASS = {
     grass:'grass-blk', dirt:'dirt-blk',
-    stone:'stone-blk', redstone:'redstone-blk', gold:'gold-blk',
-    diamond:'diamond-blk', obsidian:'obsidian-blk',
+    stone:'stone-blk', redstone:'redstone-blk',
+    gold:'gold-blk',           gold_block:'gold-blk',
+    diamond:'diamond-blk',     diamond_block:'diamond-blk',
+    obsidian:'obsidian-blk',
     tnt:'tnt-blk', book:'book-blk', unknown:'unknown-blk'
 };
 const MC_ROWS = 6;
@@ -1806,22 +1795,21 @@ function renderMineHotbar(hotbar) {
             if (slot && slot.type === 'pickaxe') {
                 const img = document.createElement('img');
                 img.src = getPickaxeImg(slot.pickaxeType || 'wooden');
-                // Фиксированный размер через CSS класс — все кирки одинаковые
-                img.className = 'inv-pick-img';
+                img.style.cssText = 'width:70%;height:70%;object-fit:contain;image-rendering:pixelated;filter:drop-shadow(0 1px 2px rgba(0,0,0,0.6));';
                 cell.appendChild(img);
                 cell.dataset.slotType = 'pickaxe';
                 cell.dataset.pickType = slot.pickaxeType;
             } else if (slot && slot.type === 'book') {
                 const img = document.createElement('img');
                 img.src = '/sprites/block_book.png';
-                img.className = 'inv-pick-img';
+                img.style.cssText = 'width:80%;height:80%;object-fit:contain;image-rendering:pixelated;';
                 cell.appendChild(img);
                 cell.dataset.slotType = 'book';
                 cell.className += ' inv-book';
             } else if (slot && slot.type === 'tnt') {
                 const img = document.createElement('img');
                 img.src = '/sprites/block_tnt.png';
-                img.className = 'inv-pick-img';
+                img.style.cssText = 'width:80%;height:80%;object-fit:contain;image-rendering:pixelated;';
                 cell.appendChild(img);
                 cell.dataset.slotType = 'tnt';
                 cell.className += ' inv-tnt';
@@ -2273,7 +2261,8 @@ function fillInvCell(row, col, blockType, pickaxeType) {
         book: '/sprites/block_book.png', tnt: '/sprites/block_tnt.png',
         grass: '/sprites/block_grass.png', dirt: '/sprites/block_dirt.png',
         stone: '/sprites/block_stone.png', redstone: '/sprites/block_redstone.png',
-        gold: '/sprites/block_gold.png', diamond: '/sprites/block_diamond.png',
+        gold: '/sprites/block_gold.png',         gold_block: '/sprites/block_gold.png',
+        diamond: '/sprites/block_diamond.png',   diamond_block: '/sprites/block_diamond.png',
         obsidian: '/sprites/block_obsidian.png'
     };
     if (blockType === 'book') {
@@ -2296,15 +2285,12 @@ function spawnBreakParticles(blockEl, blockType) {
     const cx = rect.left + rect.width / 2;
     const cy = rect.top + rect.height / 2;
     const clrs = {
-        grass:    ['#4a8c2a','#6cb040','#3a7020'],
-        dirt:     ['#8b6040','#a07050','#6b4a30'],
-        stone:    ['#888','#aaa','#777'],
-        redstone: ['#880000','#cc2020','#ff4444'],
-        gold:     ['#c8a000','#ffe060','#deb800'],
-        diamond:  ['#006b9a','#00e4ff','#4acce0'],
-        obsidian: ['#0e0420','#6030a0','#3010a0'],
-        tnt:      ['#cc1010','#ff4040','#ff8888'],
-        book:     ['#4c1090','#ffd700','#c080ff'],
+        grass:'#4a8c2a,#6cb040,#3a7020'.split(','), dirt:'#8b6040,#a07050,#6b4a30'.split(','),
+        stone:'#888,#aaa,#777'.split(','), redstone:'#880000,#cc2020,#ff4444'.split(','),
+        gold:'#c8a000,#ffe060,#deb800'.split(','), gold_block:'#c8a000,#ffe060,#deb800'.split(','),
+        diamond:'#006b9a,#00e4ff,#4acce0'.split(','), diamond_block:'#006b9a,#00e4ff,#4acce0'.split(','),
+        obsidian:'#0e0420,#6030a0,#3010a0'.split(','),
+        tnt:'#cc1010,#ff4040,#ff8888'.split(','), book:'#4c1090,#ffd700,#c080ff'.split(','),
     };
     const c = clrs[blockType] || clrs.stone;
     for (let i = 0; i < 12; i++) {
@@ -2616,9 +2602,9 @@ function setupMineTextures() {
 
 function initMineGrid() {
     setupMineTextures();
-    // Принудительно очищаем инвентарь перед новой игрой
-    const oldInv = $('mc-inventory');
-    if (oldInv) oldInv.innerHTML = '';
+    // Очищаем инвентарь перед новой игрой чтобы кирки не оставались
+    const oldInvEl = $('mc-inventory');
+    if (oldInvEl) oldInvEl.innerHTML = '';
     renderMineHotbar(null);
     initMineShaft(false, true);
 }
