@@ -1199,12 +1199,12 @@ app.post('/api/check_deposit', async (req, res) => {
     if (!adminWallet) return res.status(500).json({ error: 'ADMIN_WALLET не настроен в Render → Environment' });
     if (!apiKey)      return res.status(500).json({ error: 'TON_API_KEY не настроен. Получи на https://toncenter.com' });
 
-    const cleanAddr = adminWallet.trim().replace(/[\r\n\s]/g, '');
     const cleanKey  = apiKey.trim().replace(/[\r\n\s]/g, '');
     const userId    = String(id).trim();
-
-    // api_key В URL — самый надёжный способ (header X-API-Key иногда режется на Render)
-    const tcUrl = `https://toncenter.com/api/v2/getTransactions?address=${cleanAddr}&limit=50&api_key=${cleanKey}`;
+    // Кодируем адрес для URL (UQ/EQ адреса содержат спецсимволы)
+    const encodedAddr = encodeURIComponent(adminWallet.trim().replace(/[\r\n\s]/g, ''));
+    // api_key в URL — надёжнее чем в заголовке на Render
+    const tcUrl = `https://toncenter.com/api/v2/getTransactions?address=${encodedAddr}&limit=50&api_key=${cleanKey}`;
 
     let data;
     try {
