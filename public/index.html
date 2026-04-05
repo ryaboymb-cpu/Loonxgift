@@ -290,13 +290,55 @@
 
         <div id="page-upgrade" class="page">
             <button class="game-back-btn" onclick="nav('games', document.querySelector('.nav-item'))">← Назад</button>
-            <div class="card" style="text-align:center; padding:30px;">
-                <h2 style="color:#00e5ff; margin-bottom:15px;">⬆️ Upgrade</h2>
-                <div id="upgrade-display" style="font-size:48px; font-weight:900; color:#00e5ff; text-shadow:0 0 20px rgba(0,229,255,0.6); margin:20px 0;">1.00x</div>
-                <div id="upgrade-result" style="margin-bottom:15px; font-size:18px; font-weight:bold;"></div>
-                <div class="quick-bets" id="qb-upgrade"></div>
-                <input type="number" id="up-bet" class="input-box" placeholder="Ставка (0.1-25 TON)" step="0.1" min="0.1" max="25">
-                <button id="up-btn" class="btn" style="background:linear-gradient(135deg, #0097a7, #00e5ff); color:#fff;" onclick="playUpgrade()">АПГРЕЙД ⬆️</button>
+            <div class="card" style="padding:16px;">
+                <!-- Заголовок с шансом→выигрышем -->
+                <div id="upg-header" style="display:flex;align-items:center;justify-content:space-between;background:#111;border-radius:10px;padding:10px 14px;margin-bottom:12px;border:1px solid #222;">
+                    <span style="color:var(--neon);font-size:13px;font-weight:bold;" id="upg-chance-pct">50%</span>
+                    <span style="color:#555;font-size:13px;">1 TON → <span id="upg-win-preview" style="color:#fff;font-weight:bold;">1.84 TON</span></span>
+                    <span style="color:var(--neon);font-size:13px;font-weight:bold;" id="upg-mult-show">x1.84</span>
+                </div>
+
+                <!-- Колесо -->
+                <div style="position:relative;text-align:center;margin-bottom:10px;">
+                    <!-- Указатель сверху -->
+                    <div style="position:absolute;top:-6px;left:50%;transform:translateX(-50%);width:0;height:0;border-left:8px solid transparent;border-right:8px solid transparent;border-top:14px solid #fff;z-index:10;filter:drop-shadow(0 0 4px rgba(255,255,255,0.6));"></div>
+                    <canvas id="upg-canvas" style="border-radius:50%;max-width:240px;width:100%;"></canvas>
+                </div>
+
+                <!-- Шанс: слайдер -->
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+                    <span style="font-size:11px;color:var(--sub);">1%</span>
+                    <span style="font-size:12px;color:#fff;font-weight:bold;">Шанс: <span id="upg-slider-val">50%</span></span>
+                    <span style="font-size:11px;color:var(--sub);">95%</span>
+                </div>
+                <input type="range" id="upg-slider" min="1" max="95" value="50"
+                    oninput="upgSetChance(this.value)"
+                    style="width:100%;-webkit-appearance:none;height:6px;border-radius:3px;background:linear-gradient(to right,#ff0055,#ff6600,#ffcc00,#00ff88);margin-bottom:10px;cursor:pointer;">
+
+                <!-- Пресеты -->
+                <div style="display:flex;gap:5px;justify-content:center;flex-wrap:wrap;margin-bottom:10px;">
+                    <button class="qb-btn" onclick="upgSetChance(5)" style="font-size:11px;flex:none;">5%</button>
+                    <button class="qb-btn" onclick="upgSetChance(15)" style="font-size:11px;flex:none;">15%</button>
+                    <button class="qb-btn" onclick="upgSetChance(33)" style="font-size:11px;flex:none;">33%</button>
+                    <button class="qb-btn" onclick="upgSetChance(50)" style="font-size:11px;flex:none;">50%</button>
+                    <button class="qb-btn" onclick="upgSetChance(75)" style="font-size:11px;flex:none;">75%</button>
+                    <button class="qb-btn" onclick="upgSetChance(90)" style="font-size:11px;flex:none;">90%</button>
+                </div>
+
+                <!-- Ставка -->
+                <div class="quick-bets" style="margin-bottom:8px;">
+                    <div class="qb-btn" onclick="upgSetBet(0.5)">0.5</div>
+                    <div class="qb-btn" onclick="upgSetBet(1)">1</div>
+                    <div class="qb-btn" onclick="upgSetBet(5)">5</div>
+                    <div class="qb-btn" onclick="upgSetBet(10)">10</div>
+                    <div class="qb-btn" onclick="upgSetBet(25)">25</div>
+                </div>
+                <input type="number" id="up-bet" class="input-box" placeholder="Ставка (0.1–25 TON)" step="0.1" min="0.1" max="25" oninput="upgUpdatePreview()">
+
+                <!-- Результат -->
+                <div id="upgrade-result" style="text-align:center;font-size:16px;font-weight:bold;min-height:24px;margin-bottom:8px;"></div>
+
+                <button id="up-btn" class="btn" style="background:linear-gradient(135deg,#0097a7,#00e5ff);color:#fff;" onclick="playUpgrade()">АПГРЕЙД ⬆️</button>
             </div>
         </div>
 
@@ -367,9 +409,6 @@
             <svg viewBox="0 0 24 24"><path d="M20 7H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2zm-2 8a2 2 0 1 1 0-4 2 2 0 0 1 0 4z"/><path d="M4 5h14v2H4z"/></svg>
             Кошелек
         </div>
-        <div class="nav-item" onclick="nav('upgrade',this);initUpgrade();">
-            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 12l8-8 8 8h-4v6H8v-6z"/></svg>Апгрейд
-        </div>
         <div class="nav-item" onclick="nav('profile', this)">
             <svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
             Профиль
@@ -402,8 +441,22 @@
         <button class="btn" style="background:#333; margin-bottom: 30px;" onclick="closeBattleGame()">ЗАКРЫТЬ И СМОТРЕТЬ В ФОНЕ</button>
     </div>
 
+    <div id="admin-modal" class="modal-full" style="display:none; position:fixed; inset:0; background:#000; z-index:9999; flex-direction:column; padding:20px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+            <h2 style="color:var(--neon); text-shadow: 0 0 10px rgba(0,255,136,0.3);">Лоникс дай 50к</h2>
+            <button onclick="document.getElementById('admin-modal').style.display='none'" style="background:none; border:none; color:var(--neon-red); font-size:24px; font-weight:bold; cursor:pointer;">×</button>
+        </div>
+        <div class="admin-tabs" style="display:flex; gap:5px; margin-bottom:15px; overflow-x:auto;">
+            <button class="admin-tab active" onclick="switchAdminTab('withdraws')">Выводы/Депы</button>
+            <button class="admin-tab" onclick="switchAdminTab('users')">Юзеры</button>
+            <button class="admin-tab" onclick="switchAdminTab('promo')">Промо</button>
+            <button class="admin-tab" onclick="switchAdminTab('rtp')">Настройки</button>
+            <button class="admin-tab" onclick="switchAdminTab('stats')">Статистика</button>
+            <button class="admin-tab" onclick="switchAdminTab('logs')">Логи</button>
+        </div>
+        <div id="admin-content" style="flex: 1; overflow-y: auto;"></div>
+    </div>
 
-        
     <script src="script.js"></script>
 </body>
 </html>
