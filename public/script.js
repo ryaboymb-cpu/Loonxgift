@@ -431,119 +431,86 @@ function switchDepTab(type, el) {
     if($('dep-connect')) $('dep-connect').style.display = type === 'connect' ? 'block' : 'none';
 }
 
-// Конвертация friendly адреса (UQ.../EQ...) в raw формат (0:xxxx)
-// TonConnect принимает ТОЛЬКО raw формат, иначе Wrong 'address'
-function friendlyToRaw(friendly) {
-    try {
-        if (!friendly) return null;
-        const addr = friendly.trim().replace(/[\r\n\s ]/g, '');
-        // Если уже raw формат (0:xxxx) — возвращаем как есть
-        if (/^-?[0-9]+:[0-9a-fA-F]{64}$/.test(addr)) return addr;
-        // Декодируем base64url адрес (UQ.../EQ...)
-        const b64 = addr.replace(/-/g, '+').replace(/_/g, '/');
-        const bytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
-        if (bytes.length < 34) return null;
-        const wc = bytes[1] === 0xff ? -1 : bytes[1]; // workchain
-        const hexAddr = Array.from(bytes.slice(2, 34))
-            .map(b => b.toString(16).padStart(2, '0')).join('');
-        return `${wc}:${hexAddr}`;
-    } catch(e) {
-        console.error('friendlyToRaw error:', e);
-        return null;
-    }
-}
-
 async function payWithTonConnect() {
     if (!tonConnectUI) return showToast('TON Connect не загружен. Перезагрузите страницу.');
-    // .wallet — правильная проверка (.connected не существует в TonConnect UI SDK)
     if (!tonConnectUI.wallet) {
-        showToast('Подключи кошелёк через кнопку TON Connect!');
+        showToast('Сначала подключи кошелёк через кнопку TON Connect!');
         try { await tonConnectUI.openModal(); } catch(e) {}
         return;
     }
     const amount = parseFloat($('tc-amount') ? $('tc-amount').value : 0);
-    if(isNaN(amount) || amount < 0.5) return showToast('Минимум 0.5 TON');
-    if(!adminWalletAddress) return showToast('Кошелек получателя не настроен');
+    if (isNaN(amount) || amount < 0.5) return showToast('Минимум 0.5 TON');
+    if (!adminWalletAddress) return showToast('Кошелек получателя не настроен');
 
-    // Конвертируем адрес в raw формат — TonConnect требует именно его
-    const rawAddr = friendlyToRaw(adminWalletAddress);
-    if (!rawAddr) return showToast('Неверный формат адреса кошелька. Обратитесь в поддержку.');
+    const addr = adminWalletAddress.trim().replace(/[\r\n\s]/g, '');
+    if (!addr || addr.length < 10) return showToast('Неверный адрес кошелька');
 
-    // Строим BOC payload с MEMO = ID пользователя
+    // Строим payload с MEMO = ID пользователя
+    // Используем TonWeb если загружен, иначе простой fallback
     let payloadBoc = '';
     try {
         if (window.TonWeb) {
-            const cell = new TonWeb.boc.Cell();
+            const tw = new TonWeb();
+            const cell = new tw.boc.Cell();
             cell.bits.writeUint(0, 32);
             cell.bits.writeString(String(user.id));
             const boc = await cell.toBoc();
             payloadBoc = TonWeb.utils.bytesToBase64(boc);
         } else {
-            // Фолбэк без TonWeb
             const tb = new TextEncoder().encode(String(user.id));
             const bytes = new Uint8Array(4 + tb.length);
             bytes.set(tb, 4);
-            let bin = ''; bytes.forEach(b => bin += String.fromCharCode(b));
+            let bin = '';
+            bytes.forEach(b => bin += String.fromCharCode(b));
             payloadBoc = btoa(bin);
         }
-    } catch(e) { console.error('Payload error:', e); }
+    } catch(e) { console.error('Payload build error:', e); }
 
-    const transaction = {
-        validUntil: Math.floor(Date.now() / 1000) + 600,
-        messages: [{
-            address: rawAddr,                          // raw формат: 0:xxxx
-            amount: String(Math.round(amount * 1e9)), // целые нанотоны
-            ...(payloadBoc ? { payload: payloadBoc } : {})
-        }]
-    };
-
+    // TonConnect UI принимает friendly адрес (UQ.../EQ...) напрямую — SDK сам конвертирует
+    // НЕ нужно конвертировать в raw формат вручную — это и вызывало Wrong 'address'
     try {
-        await tonConnectUI.sendTransaction(transaction);
-        showToast('✅ Отправлено! Проверка через 15 сек...');
-
-        // Auto-check deposit after delay (blockchain confirmation takes time)
-        let checkAttempts = 0;
-        const maxAttempts = 6;
+        await tonConnectUI.sendTransaction({
+            validUntil: Math.floor(Date.now() / 1000) + 600,
+            messages: [{
+                address: addr,
+                amount: String(Math.round(amount * 1e9)),
+                ...(payloadBoc ? { payload: payloadBoc } : {})
+            }]
+        });
+        showToast('✅ Отправлено! Автопроверка через 15 сек...');
+        let attempts = 0;
         const autoCheck = async () => {
-            checkAttempts++;
+            attempts++;
             try {
                 const r = await fetch('/api/check_deposit', {
                     method: 'POST',
-                    headers: {'Content-Type':'application/json'},
-                    body: JSON.stringify({id: user.id})
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id: user.id })
                 });
                 if (r.ok) {
                     const d = await r.json();
-                    if (d.added > 0) {
-                        user = d.user;
-                        updateUI();
-                        renderWithdrawHistory();
+                    if (d.success && d.added > 0) {
                         user = d.user; updateUI(); renderWithdrawHistory();
-                    showToast(`✅ +${d.added.toFixed(2)} TON зачислено!`);
-                    flyToBalance(d.added);
-                    return;
+                        showToast('✅ +' + d.added + ' TON зачислено!');
+                        return;
                     }
                 }
             } catch(e) {}
-
-            if (checkAttempts < maxAttempts) {
-                showToast(`Проверка ${checkAttempts}/${maxAttempts}... Ожидание подтверждения.`);
-                setTimeout(autoCheck, 20000);
-            } else {
-                showToast('Автопроверка завершена. Нажмите "ПРОВЕРИТЬ ОПЛАТУ" вручную.');
-            }
+            if (attempts < 8) setTimeout(autoCheck, 15000);
+            else showToast('Нажми ПРОВЕРИТЬ ОПЛАТУ если не зачислилось');
         };
-        setTimeout(autoCheck, 20000);
-    } catch (e) {
-        console.error('TON Connect error:', e);
-        const msg = e?.message || String(e);
-        if (msg.includes('reject') || msg.includes('cancel') || msg.includes('Cancelled')) {
+        setTimeout(autoCheck, 15000);
+    } catch(e) {
+        const msg = (e && e.message) ? e.message.toLowerCase() : String(e).toLowerCase();
+        if (msg.includes('reject') || msg.includes('cancel') || msg.includes('user')) {
             showToast('Транзакция отменена');
         } else {
-            showToast('Ошибка транзакции: ' + msg.slice(0, 80));
+            console.error('TonConnect error:', e);
+            showToast('Ошибка: ' + (e.message || '').slice(0, 80));
         }
     }
 }
+
 
 function renderWithdrawHistory() {
     const list = $('w-history-list');
@@ -1839,21 +1806,22 @@ function renderMineHotbar(hotbar) {
             if (slot && slot.type === 'pickaxe') {
                 const img = document.createElement('img');
                 img.src = getPickaxeImg(slot.pickaxeType || 'wooden');
-                img.style.cssText = 'width:70%;height:70%;object-fit:contain;image-rendering:pixelated;filter:drop-shadow(0 1px 2px rgba(0,0,0,0.6));';
+                // Фиксированный размер через CSS класс — все кирки одинаковые
+                img.className = 'inv-pick-img';
                 cell.appendChild(img);
                 cell.dataset.slotType = 'pickaxe';
                 cell.dataset.pickType = slot.pickaxeType;
             } else if (slot && slot.type === 'book') {
                 const img = document.createElement('img');
                 img.src = '/sprites/block_book.png';
-                img.style.cssText = 'width:80%;height:80%;object-fit:contain;image-rendering:pixelated;';
+                img.className = 'inv-pick-img';
                 cell.appendChild(img);
                 cell.dataset.slotType = 'book';
                 cell.className += ' inv-book';
             } else if (slot && slot.type === 'tnt') {
                 const img = document.createElement('img');
                 img.src = '/sprites/block_tnt.png';
-                img.style.cssText = 'width:80%;height:80%;object-fit:contain;image-rendering:pixelated;';
+                img.className = 'inv-pick-img';
                 cell.appendChild(img);
                 cell.dataset.slotType = 'tnt';
                 cell.className += ' inv-tnt';
@@ -2648,6 +2616,9 @@ function setupMineTextures() {
 
 function initMineGrid() {
     setupMineTextures();
+    // Принудительно очищаем инвентарь перед новой игрой
+    const oldInv = $('mc-inventory');
+    if (oldInv) oldInv.innerHTML = '';
     renderMineHotbar(null);
     initMineShaft(false, true);
 }
