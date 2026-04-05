@@ -258,9 +258,11 @@ body {
   justify-content: center;
   font-size: 12px;
   position: relative;
-  overflow: visible;
+  overflow: hidden;
   transition: background 0.12s;
   aspect-ratio: 1;
+  min-width: 0;
+  min-height: 0;
 }
 .inv-cell.inv-book { background: #5a3a80; }
 .inv-cell.inv-tnt { background: #aa2020; }
@@ -461,14 +463,17 @@ body {
   user-select: none;
 }
 /* All pickaxe/item images in inventory must match hotbar */
-.inv-cell img {
-  width: 70% !important;
-  height: 70% !important;
-  max-width: 28px !important;
-  max-height: 28px !important;
+.inv-cell img, .inv-pick-img {
+  width: 60% !important;
+  height: 60% !important;
+  max-width: 24px !important;
+  max-height: 24px !important;
+  min-width: 14px !important;
+  min-height: 14px !important;
   object-fit: contain !important;
   image-rendering: pixelated !important;
   display: block;
+  flex-shrink: 0;
 }
 
 /* ─── КНИГА СТАТУС ─── */
