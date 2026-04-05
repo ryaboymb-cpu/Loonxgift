@@ -432,66 +432,96 @@ function switchDepTab(type, el) {
 }
 
 async function payWithTonConnect() {
-    if (!tonConnectUI) return showToast('TON Connect не загружен.');
-    
-    // Правильная проверка — .wallet, не .connected
+    if (!tonConnectUI) return showToast('TON Connect не загружен. Перезагрузите страницу.');
     if (!tonConnectUI.wallet) {
-        showToast('Подключите кошелек через кнопку TON Connect вверху экрана.');
+        showToast('Подключите кошелек через кнопку TON Connect вверху!');
         try { await tonConnectUI.openModal(); } catch(e) {}
         return;
     }
-
-    const amount = parseFloat($('tc-amount') ? $('tc-amount').value : 0);
+    const amount = parseFloat($('tc-amount').value);
     if(isNaN(amount) || amount < 0.5) return showToast('Минимум 0.5 TON');
-    if(!adminWalletAddress) return showToast('Кошелек не настроен на сервере');
+    if(!adminWalletAddress) return showToast('Кошелек получателя не настроен');
 
-    const addr = adminWalletAddress.trim().replace(/[\r\n\s]/g, '');
-    if (!addr || addr.length < 30) return showToast('Неверный адрес кошелька');
-
-    // Строим payload: 4 нулевых байта + UTF-8 ID
-    function buildPayload(text) {
-        const tb = new TextEncoder().encode(text);
-        const bytes = new Uint8Array(4 + tb.length);
-        bytes.set(tb, 4);
-        let bin = '';
-        bytes.forEach(b => bin += String.fromCharCode(b));
-        return btoa(bin);
+    const addr = adminWalletAddress.trim().replace(/[\r\n]/g, '');
+    if (!addr || addr.length < 30) {
+        return showToast('Кошелек получателя не настроен. Обратитесь к админу.');
     }
 
-    // Если TonWeb загружен — используем правильный BOC
-    let payload = buildPayload(String(user.id));
-    if (window.TonWeb) {
-        try {
-            const cell = new TonWeb.boc.Cell();
-            cell.bits.writeUint(0, 32);
-            cell.bits.writeString(String(user.id));
-            const boc = await cell.toBoc();
-            payload = TonWeb.utils.bytesToBase64(boc);
-        } catch(e) { console.warn('TonWeb failed, using fallback'); }
+    // Build comment payload (BOC cell) with user ID for TON Connect
+    let payloadBoc = "";
+    try {
+        if (!window.TonWeb) {
+            showToast('Загрузка модуля оплаты...');
+            await new Promise((resolve, reject) => {
+                let tries = 0;
+                const check = setInterval(() => {
+                    tries++;
+                    if (window.TonWeb) { clearInterval(check); resolve(); }
+                    else if (tries > 50) { clearInterval(check); reject(new Error('TonWeb timeout')); }
+                }, 200);
+            });
+        }
+        const cell = new TonWeb.boc.Cell();
+        cell.bits.writeUint(0, 32); // text comment op code
+        cell.bits.writeString(String(user.id));
+        const boc = await cell.toBoc();
+        payloadBoc = TonWeb.utils.bytesToBase64(boc);
+    } catch(e) {
+        console.error('Payload error:', e);
     }
+
+    const transaction = {
+        validUntil: Math.floor(Date.now() / 1000) + 600,
+        messages: [{
+            address: addr,
+            amount: (amount * 1e9).toString(),
+            ...(payloadBoc ? { payload: payloadBoc } : {})
+        }]
+    };
 
     try {
-        showToast('⏳ Отправляем транзакцию...');
-        await tonConnectUI.sendTransaction({
-            validUntil: Math.floor(Date.now() / 1000) + 600,
-            messages: [{ address: addr, amount: String(Math.round(amount * 1e9)), payload }]
-        });
-        showToast('✅ Отправлено! Проверка через 20 сек...');
+        await tonConnectUI.sendTransaction(transaction);
+        showToast('Транзакция отправлена! Проверка через 20 сек...');
 
-        let attempts = 0;
+        // Auto-check deposit after delay (blockchain confirmation takes time)
+        let checkAttempts = 0;
+        const maxAttempts = 6;
         const autoCheck = async () => {
-            attempts++;
-            await checkRealDeposit(null, true);
-            if (attempts < 8) setTimeout(autoCheck, 20000);
-            else showToast('⚠️ Нажмите ПРОВЕРИТЬ ОПЛАТУ если не зачислилось');
+            checkAttempts++;
+            try {
+                const r = await fetch('/api/check_deposit', {
+                    method: 'POST',
+                    headers: {'Content-Type':'application/json'},
+                    body: JSON.stringify({id: user.id})
+                });
+                if (r.ok) {
+                    const d = await r.json();
+                    if (d.added > 0) {
+                        user = d.user;
+                        updateUI();
+                        renderWithdrawHistory();
+                        showToast(`+${d.added.toFixed(2)} TON зачислено!`);
+                        flyToBalance(d.added);
+                        return;
+                    }
+                }
+            } catch(e) {}
+
+            if (checkAttempts < maxAttempts) {
+                showToast(`Проверка ${checkAttempts}/${maxAttempts}... Ожидание подтверждения.`);
+                setTimeout(autoCheck, 20000);
+            } else {
+                showToast('Автопроверка завершена. Нажмите "ПРОВЕРИТЬ ОПЛАТУ" вручную.');
+            }
         };
         setTimeout(autoCheck, 20000);
-    } catch(e) {
-        const msg = (e && e.message) ? e.message : String(e);
-        if (msg.toLowerCase().includes('reject') || msg.toLowerCase().includes('cancel')) {
+    } catch (e) {
+        console.error('TON Connect error:', e);
+        const msg = e?.message || String(e);
+        if (msg.includes('reject') || msg.includes('cancel') || msg.includes('Cancelled')) {
             showToast('Транзакция отменена');
         } else {
-            showToast('Ошибка: ' + msg.slice(0, 80));
+            showToast('Ошибка транзакции: ' + msg.slice(0, 80));
         }
     }
 }
@@ -1097,15 +1127,8 @@ async function checkRealDeposit(btn, silent) {
     if (btn) { btn.innerText = "ПРОВЕРЯЕМ..."; btn.disabled = true; }
     try {
         const r = await fetch('/api/check_deposit', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id:user.id}) });
-        if(r.ok) {
-            const d = await r.json();
-            user = d.user; updateUI(); renderWithdrawHistory();
-            showToast('✅ +' + d.added + ' TON зачислено!');
-            flyToBalance(d.added);
-        } else {
-            const e = await r.json();
-            if (!silent) showToast(e.error || 'Оплата не найдена. Проверьте комментарий.');
-        }
+        if(r.ok) { const d = await r.json(); user = d.user; updateUI(); renderWithdrawHistory(); showToast('✅ +' + d.added + ' TON зачислено!'); }
+        else { const e = await r.json(); if (!silent) showToast(e.error || 'Оплата не найдена. Укажите ID в комментарии.'); }
     } catch(e) { if (!silent) showToast('Ошибка соединения'); }
     if (btn) { btn.innerText = "ПРОВЕРИТЬ ОПЛАТУ"; btn.disabled = false; }
 }
@@ -1606,7 +1629,7 @@ let spinProgressValue = 0;
 let spinIsSpinning = false;
 let spinAnimInterval = null;
 
-const SPIN_SYMS_ANIM = ['N','L','X','N','G','N','X','L','N','L','N','X'];
+const SPIN_SYMS_ANIM = ['L','L','X','L','G','L','X','L','L'];
 
 const SPIN_PAYLINES_FE = [
     [1,1,1,1,1],  // 0: средний ряд
@@ -1651,7 +1674,7 @@ function initSpinPage() {
         spBetInput._hasChangeListener = true;
     }
     // Pre-fill idle grid with nice pattern
-    const symbols = ['N','L','X','N','G','N','X','L','N','L','N','X','N','L','N'];
+    const symbols = ['L','L','X','L','G','X','L','L','X','L','L','X','L','X','L'];
     for (let r = 0; r < 3; r++) {
         for (let c = 0; c < 5; c++) {
             const cell = $(`sc-${r}-${c}`);
@@ -1714,10 +1737,8 @@ function updateSpinUI() {
 // ========= MINE GAME =========
 const MINE_BLOCK_CLASS = {
     grass:'grass-blk', dirt:'dirt-blk',
-    stone:'stone-blk', redstone:'redstone-blk',
-    gold:'gold-blk', gold_block:'gold-blk',
-    diamond:'diamond-blk', diamond_block:'diamond-blk',
-    obsidian:'obsidian-blk',
+    stone:'stone-blk', redstone:'redstone-blk', gold:'gold-blk',
+    diamond:'diamond-blk', obsidian:'obsidian-blk',
     tnt:'tnt-blk', book:'book-blk', unknown:'unknown-blk'
 };
 const MC_ROWS = 6;
@@ -3064,7 +3085,7 @@ async function playSpin() {
         const data = await r.json();
         if (!r.ok) {
             clearInterval(spinAnimInterval);
-            for (let ri = 0; ri < 3; ri++) for (let ci = 0; ci < 5; ci++) { const c = $(`sc-${ri}-${ci}`); if(c) { c.className='spin-cell sym-N'; c.innerText='N'; } }
+            for (let ri = 0; ri < 3; ri++) for (let ci = 0; ci < 5; ci++) { const c = $(`sc-${ri}-${ci}`); if(c) { c.className='spin-cell sym-L'; c.innerText='L'; } }
             showToast(data.error || 'Ошибка');
             return;
         }
