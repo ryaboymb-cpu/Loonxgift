@@ -432,100 +432,78 @@ function switchDepTab(type, el) {
 }
 
 async function payWithTonConnect() {
-    if (!tonConnectUI) return showToast('TON Connect не загружен. Перезагрузите страницу.');
+    if (!tonConnectUI) return showToast('TON Connect не загружен');
     // .wallet — правильная проверка, .connected не существует в SDK
     if (!tonConnectUI.wallet) {
-        showToast('Подключи кошелёк кнопкой TON Connect!');
+        showToast('Сначала подключи кошелёк кнопкой TON Connect!');
         try { await tonConnectUI.openModal(); } catch(e) {}
         return;
     }
-    const amount = parseFloat($('tc-amount').value);
-    if(isNaN(amount) || amount < 0.5) return showToast('Минимум 0.5 TON');
-    if(!adminWalletAddress) return showToast('Кошелек получателя не настроен');
+    const amount = parseFloat($('tc-amount') ? $('tc-amount').value : 0);
+    if (isNaN(amount)||amount<0.5) return showToast('Минимум 0.5 TON');
+    if (!adminWalletAddress) return showToast('Кошелёк казино не настроен');
 
-    const addr = adminWalletAddress.trim().replace(/[\r\n\s]/g, '');
-    if (!addr || addr.length < 30) {
-        return showToast('Кошелек получателя не настроен. Обратитесь к админу.');
+    // TonConnect SDK требует raw-адрес 0:hex64
+    // atob с правильным padding (иначе обрезает байты)
+    function friendlyToRaw(a) {
+        try {
+            a=a.trim().replace(/[\r\n\s]/g,'');
+            if (/^-?[0-9]+:[0-9a-fA-F]{64}$/.test(a)) return a;
+            let b64=a.replace(/-/g,'+').replace(/_/g,'/');
+            while(b64.length%4) b64+='=';
+            const bin=atob(b64);
+            if (bin.length<34) return null;
+            const wc=bin.charCodeAt(1)===255?-1:bin.charCodeAt(1);
+            let hex='';
+            for(let i=2;i<34;i++) hex+=bin.charCodeAt(i).toString(16).padStart(2,'0');
+            return wc+':'+hex;
+        } catch(e){ console.error('toRaw err:',e); return null; }
     }
 
-    // Build comment payload (BOC cell) with user ID for TON Connect
-    let payloadBoc = "";
+    const rawAddr=friendlyToRaw(adminWalletAddress);
+    if (!rawAddr) return showToast('Неверный адрес кошелька. Обратись в поддержку.');
+
+    // Payload с MEMO = ID пользователя
+    let payloadBase64='';
     try {
-        if (!window.TonWeb) {
-            showToast('Загрузка модуля оплаты...');
-            await new Promise((resolve, reject) => {
-                let tries = 0;
-                const check = setInterval(() => {
-                    tries++;
-                    if (window.TonWeb) { clearInterval(check); resolve(); }
-                    else if (tries > 50) { clearInterval(check); reject(new Error('TonWeb timeout')); }
-                }, 200);
-            });
-        }
-        const cell = new TonWeb.boc.Cell();
-        cell.bits.writeUint(0, 32); // text comment op code
-        cell.bits.writeString(String(user.id));
-        const boc = await cell.toBoc();
-        payloadBoc = TonWeb.utils.bytesToBase64(boc);
-    } catch(e) {
-        console.error('Payload error:', e);
-    }
-
-    const transaction = {
-        validUntil: Math.floor(Date.now() / 1000) + 600,
-        messages: [{
-            address: addr,
-            amount: (amount * 1e9).toString(),
-            ...(payloadBoc ? { payload: payloadBoc } : {})
-        }]
-    };
-
-    try {
-        await tonConnectUI.sendTransaction(transaction);
-        showToast('Транзакция отправлена! Проверка через 20 сек...');
-
-        // Auto-check deposit after delay (blockchain confirmation takes time)
-        let checkAttempts = 0;
-        const maxAttempts = 6;
-        const autoCheck = async () => {
-            checkAttempts++;
-            try {
-                const r = await fetch('/api/check_deposit', {
-                    method: 'POST',
-                    headers: {'Content-Type':'application/json'},
-                    body: JSON.stringify({id: user.id})
-                });
-                if (r.ok) {
-                    const d = await r.json();
-                    if (d.success && d.added > 0) {
-                        user = d.user;
-                        updateUI();
-                        renderWithdrawHistory();
-                        showToast(`+${d.added.toFixed(2)} TON зачислено!`);
-                        flyToBalance(d.added);
-                        return;
-                    }
-                }
-            } catch(e) {}
-
-            if (checkAttempts < maxAttempts) {
-                showToast(`Проверка ${checkAttempts}/${maxAttempts}... Ожидание подтверждения.`);
-                setTimeout(autoCheck, 20000);
-            } else {
-                showToast('Автопроверка завершена. Нажмите "ПРОВЕРИТЬ ОПЛАТУ" вручную.');
-            }
-        };
-        setTimeout(autoCheck, 20000);
-    } catch (e) {
-        console.error('TON Connect error:', e);
-        const msg = e?.message || String(e);
-        if (msg.includes('reject') || msg.includes('cancel') || msg.includes('Cancelled')) {
-            showToast('Транзакция отменена');
+        if (window.TonWeb) {
+            const cell=new TonWeb.boc.Cell();
+            cell.bits.writeUint(0,32);
+            cell.bits.writeString(String(user.id));
+            const boc=await cell.toBoc(false);
+            payloadBase64=TonWeb.utils.bytesToBase64(boc);
         } else {
-            showToast('Ошибка транзакции: ' + msg.slice(0, 80));
+            const tb=new TextEncoder().encode(String(user.id));
+            const by=new Uint8Array(4+tb.length); by.set(tb,4);
+            let bin=''; by.forEach(b=>bin+=String.fromCharCode(b));
+            payloadBase64=btoa(bin);
         }
+    } catch(e){ console.error('payload:',e); }
+
+    try {
+        await tonConnectUI.sendTransaction({
+            validUntil: Math.floor(Date.now()/1000)+360,
+            messages:[{address:rawAddr, amount:String(Math.round(amount*1e9)), ...(payloadBase64?{payload:payloadBase64}:{})}]
+        });
+        showToast('✅ Отправлено! Автопроверка через 15 сек...');
+        let att=0;
+        const chk=async()=>{
+            att++;
+            try{
+                const r=await fetch('/api/check_deposit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:user.id})});
+                if(r.ok){const d=await r.json();if(d.success&&d.added>0){user=d.user;updateUI();renderWithdrawHistory();showToast('+'+d.added+' TON зачислено!');flyToBalance(d.added);return;}}
+            }catch(e){}
+            if(att<8) setTimeout(chk,15000);
+            else showToast('Нажми ПРОВЕРИТЬ ОПЛАТУ если не зачислилось');
+        };
+        setTimeout(chk,15000);
+    } catch(e){
+        const m=(e&&e.message)?e.message.toLowerCase():'';
+        if(m.includes('reject')||m.includes('cancel')) showToast('Транзакция отменена');
+        else{console.error('TC err:',e); showToast('Ошибка: '+(e.message||'').slice(0,60));}
     }
 }
+
 
 function renderWithdrawHistory() {
     const list = $('w-history-list');
@@ -1125,14 +1103,14 @@ function renderBattlePlayers(lobby) {
 
 // ФИНАНСЫ И ПРОМО
 async function checkRealDeposit(btn, silent) {
-    if (btn) { btn.innerText = 'ПРОВЕРЯЕМ...'; btn.disabled = true; }
-    try {
-        const r = await fetch('/api/check_deposit', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:user.id})});
-        const d = await r.json();
-        if (r.ok && d.success) { user=d.user; updateUI(); renderWithdrawHistory(); if(d.added>0){showToast('+'+d.added+' TON зачислено!');flyToBalance(d.added);} }
-        else if (!silent) showToast(d.error || 'Оплата не найдена. Укажи ID в комментарии.');
-    } catch(e) { if (!silent) showToast('Ошибка соединения'); }
-    if (btn) { btn.innerText = 'ПРОВЕРИТЬ ОПЛАТУ'; btn.disabled = false; }
+    if(btn){btn.innerText='ПРОВЕРЯЕМ...';btn.disabled=true;}
+    try{
+        const r=await fetch('/api/check_deposit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:user.id})});
+        const d=await r.json();
+        if(r.ok&&d.success){user=d.user;updateUI();renderWithdrawHistory();if(d.added>0){showToast('+'+d.added+' TON зачислено!');flyToBalance(d.added);}}
+        else if(!silent) showToast(d.error||'Оплата не найдена. Укажи ID в комментарии.');
+    }catch(e){if(!silent)showToast('Ошибка соединения');}
+    if(btn){btn.innerText='ПРОВЕРИТЬ ОПЛАТУ';btn.disabled=false;}
 }
 
 async function withdraw() {
@@ -1737,7 +1715,7 @@ function updateSpinUI() {
 }
 
 // ========= MINE GAME =========
-const MINE_BLOCK_CLASS = {
+const MINE_BLOCK_CLASS={
     grass:'grass-blk', dirt:'dirt-blk', stone:'stone-blk', redstone:'redstone-blk',
     gold_block:'gold-blk', gold:'gold-blk',
     diamond_block:'diamond-blk', diamond:'diamond-blk',
@@ -2030,8 +2008,13 @@ function spawnPickaxeWorker(blockQueue, pickaxeType, workerIdx, onWorkerDone, on
         const pUrl = getPickaxeImg(pickaxeType);
         const el = document.createElement('img');
         el.src = pUrl;
-        el.style.cssText = `position:absolute;width:20px;height:20px;z-index:9999;pointer-events:none;image-rendering:pixelated;left:${bx}px;top:${startY}px;transform:translate(-50%,-100%);`;
-        shaft.appendChild(el);
+        // Добавляем в body чтобы z-index работал поверх position:fixed hotbar
+        const shaftRect=shaft.getBoundingClientRect();
+        const absX=shaftRect.left+bx, absStartY=shaftRect.top+startY;
+        el.dataset.shaftX=bx; el.dataset.shaftTop=startY;
+        el._shaftRef=shaft;
+        el.style.cssText = `position:fixed;width:20px;height:20px;z-index:99999;pointer-events:none;image-rendering:pixelated;left:${absX}px;top:${absStartY}px;transform:translate(-50%,-100%);`;
+        document.body.appendChild(el);
         _pickaxeEls.add(el);
 
         function removeEl() {
@@ -2039,7 +2022,9 @@ function spawnPickaxeWorker(blockQueue, pickaxeType, workerIdx, onWorkerDone, on
             if (el.parentNode) el.parentNode.removeChild(el);
         }
 
-        _animProp(el, 'top', startY, hoverY, 180, t => t*t, () => {
+        // Для position:fixed нужны экранные координаты
+        function getAbsY(shaftRelY){ const sr=shaft.getBoundingClientRect(); return sr.top+shaftRelY; }
+        _animProp(el, 'top', getAbsY(startY), getAbsY(hoverY), 180, t => t*t, () => {
             if (!mineIsActive) { removeEl(); return; }
             blkEl.classList.add('cracking-1');
             doHits(hitsCanDo, 0);
@@ -2050,7 +2035,7 @@ function spawnPickaxeWorker(blockQueue, pickaxeType, workerIdx, onWorkerDone, on
             const swingAngle = hitNum % 2 === 0 ? -25 : 25;
             el.style.transform = `translate(-50%,-100%) rotate(${swingAngle}deg)`;
 
-            _animProp(el, 'top', hoverY, hitY, 120, t => t*t, () => {
+            _animProp(el, 'top', getAbsY(hoverY), getAbsY(hitY), 120, t => t*t, () => {
                 if (!mineIsActive) { removeEl(); return; }
                 el.style.transform = `translate(-50%,-100%) rotate(0deg)`;
                 playSound('hit');
@@ -2069,13 +2054,13 @@ function spawnPickaxeWorker(blockQueue, pickaxeType, workerIdx, onWorkerDone, on
                         doBreakBlock(blkEl, blk, null, () => {
                             if (onBlockBroken) onBlockBroken(blk.r, blk.c);
                         });
-                        _animProp(el, 'top', hitY, startY, 200, t => 1-(1-t)*(1-t), () => {
+                        _animProp(el, 'top', getAbsY(hitY), getAbsY(startY), 200, t => 1-(1-t)*(1-t), () => {
                             removeEl();
                             setTimeout(processNext, 100);
                         });
                     } else {
                         blkEl.classList.add('cracking-2');
-                        _animProp(el, 'top', hitY, hoverY, 100, t => 1-(1-t)*(1-t), () => {
+                        _animProp(el, 'top', getAbsY(hitY), getAbsY(hoverY), 100, t => 1-(1-t)*(1-t), () => {
                             if (!mineIsActive) { removeEl(); return; }
                             doPickaxeBreak(null, () => { removeEl(); if (onWorkerDone) onWorkerDone(); }, true, el, bx, hoverY);
                         });
@@ -3149,48 +3134,48 @@ async function playSpin() {
 
 // ─── UPGRADE GAME ─────────────────────────────────
 let upgradeChance=50;
-function getUpgradeMult(c){return Math.floor(92/c*100)/100;}
+function getUpgradeMult(c){return Math.max(1.01,Math.floor(92/c*100)/100);}
 function updateUpgradeInfo(){
     const bet=parseFloat($('upg-bet')?$('upg-bet').value:0)||0;
     const mult=getUpgradeMult(upgradeChance);
-    if($('upg-chance-label'))$('upg-chance-label').innerText=upgradeChance+'%';
-    if($('upg-mult-label'))$('upg-mult-label').innerText='x'+mult;
-    if($('upg-win-label'))$('upg-win-label').innerText=parseFloat((bet*mult).toFixed(2))+' TON';
-}
-function renderUpgradeWheel(chance){
-    const canvas=$('upg-canvas');if(!canvas)return;
-    const ctx2=canvas.getContext('2d');
-    const W=canvas.width=canvas.offsetWidth||280,H=canvas.height=W,cx=W/2,cy=H/2,R=W*0.44,rIn=W*0.20;
-    ctx2.clearRect(0,0,W,H);
-    ctx2.beginPath();ctx2.arc(cx,cy,R,0,Math.PI*2);ctx2.fillStyle='#1a1a2e';ctx2.fill();
-    const hue=chance<20?'#ff0055':chance<50?'#ff6600':'#00ff88';
-    const a0=-Math.PI/2;
-    ctx2.beginPath();ctx2.moveTo(cx,cy);ctx2.arc(cx,cy,R,a0,a0+(chance/100)*Math.PI*2);ctx2.closePath();
-    ctx2.fillStyle=hue;ctx2.fill();
-    ctx2.beginPath();ctx2.arc(cx,cy,rIn,0,Math.PI*2);ctx2.fillStyle='#0a0a1a';ctx2.fill();
-    ctx2.fillStyle='#fff';ctx2.font='bold '+(W*0.06)+'px Arial';ctx2.textAlign='center';ctx2.textBaseline='middle';
-    ctx2.fillText('UPGRADE',cx,cy-8);ctx2.font=(W*0.05)+'px Arial';ctx2.fillText('GAME',cx,cy+10);
-    ctx2.beginPath();ctx2.moveTo(cx-7,cy-R-8);ctx2.lineTo(cx+7,cy-R-8);ctx2.lineTo(cx,cy-R+5);ctx2.closePath();
-    ctx2.fillStyle='#fff';ctx2.fill();
+    if($('upg-chance-val')) $('upg-chance-val').innerText=upgradeChance+'%';
+    if($('upg-mult-val'))   $('upg-mult-val').innerText='x'+mult;
+    if($('upg-win-val'))    $('upg-win-val').innerText=parseFloat((bet*mult).toFixed(2))+' TON';
+    if($('upg-lose-pct'))   $('upg-lose-pct').innerText=(100-upgradeChance)+'%';
+    // conic-gradient колесо
+    const hue=upgradeChance<20?'#ff0055':upgradeChance<50?'#ff6600':'#00ff88';
+    const wheel=document.querySelector('.upg-wheel');
+    if(wheel){wheel.style.background='conic-gradient('+hue+' 0% '+upgradeChance+'%, #1a1a2e '+upgradeChance+'% 100%)';}
 }
 function setUpgradeChance(val){
     upgradeChance=Math.max(1,Math.min(95,parseInt(val)||50));
-    if($('upg-slider'))$('upg-slider').value=upgradeChance;
-    renderUpgradeWheel(upgradeChance);updateUpgradeInfo();
+    if($('upg-slider')) $('upg-slider').value=upgradeChance;
+    updateUpgradeInfo();
 }
-function initUpgrade(){renderUpgradeWheel(upgradeChance);updateUpgradeInfo();}
+function initUpgrade(){updateUpgradeInfo();}
 async function playUpgrade(){
     const bet=parseFloat($('upg-bet')?$('upg-bet').value:0);
-    if(isNaN(bet)||bet<0.1)return showToast('Мин. 0.1 TON');
-    if(bet>(mode==='real'?user.balance:user.demo_balance))return showToast('Недостаточно средств');
-    const btn=$('upg-btn');if(btn){btn.disabled=true;btn.innerText='...';}
+    if(isNaN(bet)||bet<0.1) return showToast('Мин. 0.1 TON');
+    if(bet>(mode==='real'?user.balance:user.demo_balance)) return showToast('Недостаточно средств');
+    const btn=$('upg-btn'); if(btn){btn.disabled=true;btn.innerText='...';}
+    // Анимация вращения колеса
+    const wheel=document.querySelector('.upg-wheel');
+    let fr=0;
+    const spinId=setInterval(()=>{
+        fr++;
+        const fc=Math.random()*94+1, fh=fc<20?'#ff0055':fc<50?'#ff6600':'#00ff88';
+        if(wheel) wheel.style.background='conic-gradient('+fh+' 0% '+fc+'%, #1a1a2e '+fc+'% 100%)';
+        if(fr>18) clearInterval(spinId);
+    },60);
     try{
         const r=await fetch('/api/upgrade',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:user.id,bet,chance:upgradeChance,mode})});
         const d=await r.json();
         if(!r.ok){showToast(d.error||'Ошибка');return;}
-        user=d.user;updateUI();
-        let fr=0;const spin=()=>{if(fr>18){renderUpgradeWheel(upgradeChance);return;}renderUpgradeWheel(Math.random()*94+1);fr++;setTimeout(spin,55);};spin();
-        setTimeout(()=>{if(d.win){showToast('✅ WIN! +'+d.profit.toFixed(2)+' TON (x'+d.multiplier+')');flyToBalance(d.profit);}else showToast('❌ Проигрыш: -'+bet+' TON');},1100);
+        setTimeout(()=>{
+            user=d.user; updateUI(); updateUpgradeInfo();
+            if(d.win){showToast('✅ Победа +'+d.profit.toFixed(2)+' TON (x'+d.multiplier+')');flyToBalance(d.profit);}
+            else showToast('❌ Проигрыш: -'+bet+' TON');
+        },1200);
     }catch(e){showToast('Ошибка соединения');}
-    finally{if(btn){btn.disabled=false;btn.innerText='UPGRADE';}}
+    finally{setTimeout(()=>{if(btn){btn.disabled=false;btn.innerText='UPGRADE ⬆️';}},1300);}
 }
