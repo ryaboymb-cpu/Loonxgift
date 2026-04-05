@@ -458,7 +458,7 @@ app.post('/api/auth', async (req, res) => {
 
     const wagerSett = await Settings.findOne({ key: 'wager_multiplier' });
     const wagerMult = wagerSett ? wagerSett.value : 2;
-    res.json({ user: userObj, adminWallet: (process.env.ADMIN_WALLET||'').trim().replace(/[\r\n\s]/g,''), rtp: rtpData, maintenance: maintenanceData, wagerMultiplier: wagerMult });
+    res.json({ user: userObj, adminWallet: process.env.ADMIN_WALLET, rtp: rtpData, maintenance: maintenanceData, wagerMultiplier: wagerMult });
 });
 
 app.post('/api/bet', async (req, res) => {
@@ -676,10 +676,10 @@ function generateSpinGrid(userId, rtpTarget) {
     const grid=[];
     for(let r=0;r<3;r++){const row=[];
         for(let c=0;c<5;c++){const rand=Math.random();
-            if(rand<freqG)              row.push('G');
-            else if(rand<freqG+freqX)   row.push('X');
-            else if(rand<freqG+freqX+freqL) row.push('L');
-            else                        row.push('N');
+            if(rand<freqG)                  row.push('G');
+            else if(rand<freqG+freqX)        row.push('X');
+            else if(rand<freqG+freqX+freqL)  row.push('L');
+            else                             row.push('N');
         }grid.push(row);}
     return grid;
 }
@@ -816,7 +816,7 @@ app.post('/api/spin', async (req, res) => {
 
 // === MINE GAME (Minecraft-style) ===
 const MINE_BLOCKS=['dirt','stone','redstone','gold_block','diamond_block','obsidian'];
-// Выигрыш только за СЛОМАННЫЕ блоки (в минированных колонках)
+// ФИКСИРОВАННЫЕ множители: win = bet * mult ЗА КАЖДЫЙ СЛОМАННЫЙ БЛОК
 const MINE_BLOCK_MULTS={grass:0.00,dirt:0.05,stone:0.09,redstone:0.12,gold_block:0.15,diamond_block:0.20,obsidian:0.23,gold:0.15,diamond:0.20};
 // 6 rows: row 0 = grass top layer, rows 1-5 = underground
 const MINE_ROW_WEIGHTS = [
@@ -954,20 +954,42 @@ app.post('/api/mine', async (req, res) => {
         for (let c = 0; c < 5; c++) chestMults.push(pickChestMult());
         const effectiveBet = isFreeAutoSpin ? 0.5 : betAmount;
 
-        // Выигрыш ТОЛЬКО за блоки в минированных колонках (где есть кирки)
-        // hotbar 3x5=15 слотов: колонка = idx % 5
-        const minedCols=new Set();
-        (hotbar||[]).forEach((slot,idx)=>{if(slot&&slot.type==='pickaxe')minedCols.add(idx%5);});
-        if(minedCols.size===0) minedCols.add(Math.floor(Math.random()*5));
+        // Win ТОЛЬКО за блоки которые реально сломает кирка (по её durability)
+        // PICKAXE_DURABILITY на сервере: wooden=1, stone=2, iron=3, golden=4, diamond=5
+        const SERVER_PICK_DUR = {wooden:1,stone:2,iron:3,golden:4,diamond:5};
+
+        // Для каждой колонки с киркой: считаем win за N блоков снизу вверх
+        // где N = durability кирки в этой колонке
+        const colPickaxes = {};  // col -> pickaxe type
+        (hotbar||[]).forEach((slot,idx)=>{
+            const col=idx%5;
+            if(slot&&slot.type==='pickaxe'){
+                // Берём лучшую кирку в колонке
+                const pType=slot.pickaxeType||'wooden';
+                const rank={wooden:0,stone:1,iron:2,golden:3,diamond:4};
+                if(!colPickaxes[col]||rank[pType]>rank[colPickaxes[col]]) colPickaxes[col]=pType;
+            }
+            if(slot&&slot.type==='tnt'){
+                // TNT взрывает: разрушает 3 блока в колонке
+                if(!colPickaxes[col]) colPickaxes[col]='tnt';
+            }
+        });
 
         const adjustedBlockWins=[];
-        for(let r=0;r<6;r++){const row=[];
-            for(let c=0;c<5;c++){
-                // Только блоки в minedCols дают выигрыш
-                if(!grid[r][c]||!minedCols.has(c)){row.push(0);continue;}
-                const mult=MINE_BLOCK_MULTS[grid[r][c]]||0;
-                row.push(parseFloat((effectiveBet*mult).toFixed(3)));
-            }adjustedBlockWins.push(row);}
+        for(let r=0;r<6;r++) adjustedBlockWins.push([0,0,0,0,0]);
+
+        for(const [colStr, pType] of Object.entries(colPickaxes)){
+            const col=parseInt(colStr);
+            const maxBlocks = pType==='tnt'?3:(SERVER_PICK_DUR[pType]||1);
+            let broken=0;
+            // Ломаем блоки начиная с row=1 (под травой) сверху вниз
+            for(let r=1;r<6&&broken<maxBlocks;r++){
+                if(!grid[r][col]) continue;
+                const mult=MINE_BLOCK_MULTS[grid[r][col]]||0;
+                adjustedBlockWins[r][col]=parseFloat((effectiveBet*mult).toFixed(3));
+                broken++;
+            }
+        }
 
         let blockWinSum=0;
         for(let r=0;r<6;r++) for(let c=0;c<5;c++) blockWinSum+=adjustedBlockWins[r][c];
@@ -982,7 +1004,7 @@ app.post('/api/mine', async (req, res) => {
             chestActivated.push(Math.random() < 0.005);
         }
 
-        // Сундук = бонус к ставке (не к всему балансу)
+        // Сундук: бонус к ставке (не к балансу)
         let chestBonusWin=0;
         for(let c=0;c<5;c++){if(chestActivated[c])chestBonusWin+=effectiveBet*(chestMults[c]-1);}
         actualWin=Number((actualWin+chestBonusWin).toFixed(2));
@@ -1019,35 +1041,58 @@ app.post('/api/mine', async (req, res) => {
 
 // === UPGRADE GAME ===
 app.post('/api/upgrade', async (req, res) => {
-    const { id, bet, mode } = req.body;
+    const { id, bet, chance, mode } = req.body;
     if (actionLocks.has(id)) return res.status(429).json({ error: 'Подождите...' });
     actionLocks.add(id);
     try {
         const user = await User.findOne({ id });
         if (!user || user.isBlocked) return res.status(403).send();
-        const isDemo = mode === 'demo';
-        const field = isDemo ? 'demo_balance' : 'balance';
-        const betAmount = parseFloat(bet) || 0;
-        if (betAmount < 0.1 || betAmount > 25) return res.status(400).json({ error: 'Ставка от 0.1 до 25 TON' });
-        if (user[field] < betAmount) return res.status(400).json({ error: 'Недостаточно средств' });
+        const isDemo   = mode === 'demo';
+        const field    = isDemo ? 'demo_balance' : 'balance';
+        const betAmt   = parseFloat(bet) || 0;
+        const chanceP  = Math.max(1, Math.min(95, parseFloat(chance) || 50));
+
+        if (betAmt < 0.1 || betAmt > 25) return res.status(400).json({ error: 'Ставка от 0.1 до 25 TON' });
+        if (user[field] < betAmt) return res.status(400).json({ error: 'Недостаточно средств' });
+
         const maintSetting = await Settings.findOne({ key: 'maintenance_upgrade' });
-        if (maintSetting && maintSetting.value === true) return res.status(400).json({ error: 'Игра на техническом обслуживании' });
-        const rtpSetting = await Settings.findOne({ key: 'rtp_upgrade' });
-        const rtpTarget = rtpSetting ? Number(rtpSetting.value) : 85;
-        user[field] = Number((user[field] - betAmount).toFixed(2));
-        if (!isDemo) { user.stats.bets++; user.stats.minus += betAmount; user.totalWagered = Number(((user.totalWagered || 0) + betAmount).toFixed(2)); user.wagerCompleted = Number(((user.wagerCompleted || 0) + betAmount).toFixed(2)); }
-        const winChance = (rtpTarget / 100) * 0.25;
-        const isWin = Math.random() < winChance;
-        const mult = isWin ? (1.3 + Math.random() * 1.7) : 0;
-        const actualWin = isWin ? Math.min(Number((betAmount * mult).toFixed(2)), betAmount * 3) : 0;
-        if (actualWin > 0) { user[field] = Number((user[field] + actualWin).toFixed(2)); if (!isDemo) { user.stats.wins++; user.stats.plus += actualWin; } }
-        await user.save();
+        if (maintSetting && maintSetting.value === true)
+            return res.status(400).json({ error: 'Игра на техническом обслуживании' });
+
+        // Множитель: RTP 92%, mult = 0.92 / (chance/100)
+        const mult  = Math.max(1.01, Math.floor(92 / chanceP * 100) / 100);
+        const isWin = Math.random() * 100 < chanceP;
+
+        user[field] = Number((user[field] - betAmt).toFixed(2));
         if (!isDemo) {
-            const betEntry = new Bet({ userId: user.id, username: user.username, avatar: user.photo || '', game: 'Upgrade', amount: betAmount, multiplier: mult, result: actualWin - betAmount, mode: 'Real', balanceAfter: user[field], balance: user[field] });
-            await betEntry.save(); pushToGlobalHistory(betEntry);
+            user.stats.bets++;
+            user.stats.minus = Number(((user.stats.minus||0) + betAmt).toFixed(2));
+            user.totalWagered   = Number(((user.totalWagered||0)   + betAmt).toFixed(2));
+            user.wagerCompleted = Number(((user.wagerCompleted||0) + betAmt).toFixed(2));
         }
-        res.json({ win: actualWin, multiplier: Number(mult.toFixed(2)), user });
-    } catch (err) { console.error('Upgrade error:', err); res.status(500).json({ error: 'Ошибка сервера' }); } finally { actionLocks.delete(id); }
+
+        const actualWin = isWin ? Number((betAmt * mult).toFixed(2)) : 0;
+        const profit    = isWin ? Number((actualWin - betAmt).toFixed(2)) : -betAmt;
+
+        if (isWin) {
+            user[field] = Number((user[field] + actualWin).toFixed(2));
+            if (!isDemo) { user.stats.wins++; user.stats.plus = Number(((user.stats.plus||0) + profit).toFixed(2)); }
+        }
+        await user.save();
+
+        if (!isDemo) {
+            const av = user.photo || '';
+            const entry = new Bet({ userId:user.id, username:user.username, avatar:av, game:'Upgrade',
+                amount:betAmt, multiplier:isWin?mult:0, result:profit, mode:'Real' });
+            await entry.save(); pushToGlobalHistory(entry);
+        }
+
+        console.log(`[Upgrade] bet=${betAmt} chance=${chanceP}% mult=${mult} win=${isWin} profit=${profit}`);
+        res.json({ win: actualWin, multiplier: mult, profit, user });
+    } catch (err) {
+        console.error('Upgrade error:', err);
+        res.status(500).json({ error: 'Ошибка сервера' });
+    } finally { actionLocks.delete(id); }
 });
 
 // === PLINKO GAME ===
@@ -1165,23 +1210,22 @@ app.post('/api/check_deposit', async (req, res) => {
     if (!adminWallet) return res.status(500).json({error:'ADMIN_WALLET не задан в Render'});
     if (!apiKey)      return res.status(500).json({error:'TON_API_KEY не задан в Render'});
 
-    // TonCenter требует raw-адрес 0:hex64
-    // UQ.../EQ... — base64url, декодируем с правильным padding
-    function toRaw(addr) {
-        addr = addr.trim().replace(/[\r\n\s]/g,'');
-        if (/^-?[0-9]+:[0-9a-fA-F]{64}$/.test(addr)) return addr;
+    // TonCenter требует raw-адрес 0:hex64, UQ.../EQ... надо конвертировать
+    function toRaw(a) {
+        a = a.trim().replace(/[\r\n\s]/g,'');
+        if (/^-?[0-9]+:[0-9a-fA-F]{64}$/.test(a)) return a;
         try {
-            let b64 = addr.replace(/-/g,'+').replace(/_/g,'/');
+            let b64 = a.replace(/-/g,'+').replace(/_/g,'/');
             while (b64.length%4) b64+='=';
-            const bytes = Buffer.from(b64,'base64');
-            if (bytes.length<34) return null;
-            const wc = bytes[1]===0xff?-1:bytes[1];
-            return wc+':'+bytes.slice(2,34).toString('hex');
+            const b = Buffer.from(b64,'base64');
+            if (b.length<34) return null;
+            const wc = b[1]===0xff?-1:b[1];
+            return wc+':'+b.slice(2,34).toString('hex');
         } catch(e){ return null; }
     }
 
     const rawAddr  = toRaw(adminWallet);
-    if (!rawAddr) return res.status(500).json({error:'Неверный ADMIN_WALLET (нужен UQ.../EQ... TON адрес)'});
+    if (!rawAddr) return res.status(500).json({error:'Неверный ADMIN_WALLET (нужен UQ.../EQ... адрес)'});
     const cleanKey = apiKey.trim().replace(/[\r\n\s]/g,'');
     const userId   = String(id).trim();
     console.log('[Dep] raw='+rawAddr.slice(0,15)+'... user='+userId);
@@ -1189,7 +1233,7 @@ app.post('/api/check_deposit', async (req, res) => {
     try {
         const r   = await fetch('https://toncenter.com/api/v2/getTransactions?address='+encodeURIComponent(rawAddr)+'&limit=50&api_key='+cleanKey);
         const txt = await r.text();
-        if (!r.ok) { console.error('[Dep]',r.status,txt.slice(0,80)); return res.status(400).json({error:'TonCenter HTTP '+r.status+'. Проверь API ключ.'}); }
+        if (!r.ok) { console.error('[Dep]',r.status,txt.slice(0,100)); return res.status(400).json({error:'TonCenter HTTP '+r.status}); }
         let data; try{data=JSON.parse(txt);}catch(e){return res.status(500).json({error:'TonCenter не JSON'});}
         if (!data.ok) { console.error('[Dep]',data.error); return res.status(400).json({error:'TonCenter: '+data.error}); }
 
@@ -1228,7 +1272,7 @@ app.post('/api/check_deposit', async (req, res) => {
             }catch(de){console.error('[Dep] DB:',de.message);}
         }
         if(foundNew){const u=await User.findOne({id});return res.json({success:true,added:totalAdded,user:u});}
-        return res.status(400).json({error:'Оплата не найдена. Укажи ID '+userId+' в комментарии.'});
+        return res.status(400).json({error:'Оплата не найдена. Укажи ID '+userId+' в комментарии перевода.'});
     }catch(e){console.error('[Dep]',e.message);return res.status(500).json({error:'Ошибка. Попробуй позже.'});}
 });
 
@@ -1663,29 +1707,6 @@ app.post('/api/user/history', async (req, res) => {
 });
 
 // Keep-alive endpoint (for uptime monitors like UptimeRobot)
-
-app.post('/api/upgrade', async (req, res) => {
-    const { id, bet, chance, mode } = req.body;
-    if(actionLocks.has(id)) return res.status(429).json({error:'Подожди...'});
-    actionLocks.add(id);
-    try{
-        const user=await User.findOne({id});
-        if(!user||user.isBlocked) return res.status(403).send();
-        const isDemo=mode==='demo', field=isDemo?'demo_balance':'balance';
-        const betAmt=parseFloat(bet)||0, chanceP=parseFloat(chance)||50;
-        if(betAmt<0.1||betAmt>500) return res.status(400).json({error:'Ставка 0.1–500 TON'});
-        if(chanceP<1||chanceP>95) return res.status(400).json({error:'Шанс 1–95%'});
-        if(user[field]<betAmt) return res.status(400).json({error:'Недостаточно средств'});
-        const mult=Math.max(1.01,Math.floor(92/chanceP*100)/100);
-        const isWin=Math.random()*100<chanceP;
-        const profit=isWin?parseFloat((betAmt*mult-betAmt).toFixed(2)):-betAmt;
-        user[field]=isWin?Number((user[field]+profit).toFixed(2)):Number((user[field]-betAmt).toFixed(2));
-        if(!isDemo){user.stats.bets++;if(isWin){user.stats.wins++;user.stats.plus+=Math.abs(profit);}else user.stats.minus+=betAmt;}
-        await user.save();
-        if(!isDemo){const e=new Bet({userId:user.id,username:user.username,avatar:user.photo||'',game:'Upgrade',amount:betAmt,multiplier:isWin?mult:0,result:profit,mode:'Real'});await e.save();pushToGlobalHistory(e);}
-        res.json({win:isWin,multiplier:mult,profit,user});
-    }finally{actionLocks.delete(id);}
-});
 app.get('/ping', (req, res) => res.status(200).json({ ok: true, time: Date.now() }));
 
 const PORT = process.env.PORT || 3000;
