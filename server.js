@@ -1199,34 +1199,52 @@ app.post('/api/check_deposit', async (req, res) => {
     if (!adminWallet) return res.status(500).json({ error: 'ADMIN_WALLET не настроен в Render → Environment' });
     if (!apiKey)      return res.status(500).json({ error: 'TON_API_KEY не настроен. Получи на https://toncenter.com' });
 
-    const cleanKey  = apiKey.trim().replace(/[\r\n\s]/g, '');
-    const userId    = String(id).trim();
-    // Кодируем адрес для URL (UQ/EQ адреса содержат спецсимволы)
-    const encodedAddr = encodeURIComponent(adminWallet.trim().replace(/[\r\n\s]/g, ''));
-    // api_key в URL — надёжнее чем в заголовке на Render
-    const tcUrl = `https://toncenter.com/api/v2/getTransactions?address=${encodedAddr}&limit=50&api_key=${cleanKey}`;
+    const cleanKey = apiKey.trim().replace(/[\r\n\s]/g, '');
+    const userId   = String(id).trim();
+
+    // Адрес кошелька — чистим и передаём как есть в TonCenter
+    // TonCenter v2 принимает friendly адрес UQ.../EQ... напрямую
+    const cleanAddr = adminWallet.trim().replace(/[\r\n\s]/g, '');
+
+    // Пробуем основной URL с api_key в параметре
+    const tcUrl = `https://toncenter.com/api/v2/getTransactions?address=${encodeURIComponent(cleanAddr)}&limit=50&api_key=${cleanKey}`;
+
+    console.log(`[Deposit] Запрос TonCenter: address=${cleanAddr.slice(0,10)}...`);
 
     let data;
     try {
-        const tcRes = await fetch(tcUrl, { headers: { 'Accept': 'application/json' } });
+        const tcRes = await fetch(tcUrl, {
+            headers: { 'Accept': 'application/json' },
+            signal: AbortSignal.timeout(10000) // таймаут 10 сек
+        });
+
+        const text = await tcRes.text();
 
         if (tcRes.status === 403) {
-            console.error('TonCenter 403: неверный API ключ');
-            return res.status(400).json({ error: 'TonCenter 403: API ключ неверный. Проверь TON_API_KEY на toncenter.com' });
+            console.error('[Deposit] TonCenter 403 — неверный API ключ');
+            return res.status(400).json({ error: 'TonCenter 403: неверный TON_API_KEY. Проверь на toncenter.com' });
+        }
+        if (tcRes.status === 422) {
+            console.error('[Deposit] TonCenter 422 — неверный формат адреса:', cleanAddr);
+            return res.status(400).json({ error: `TonCenter 422: неверный адрес ADMIN_WALLET="${cleanAddr.slice(0,15)}...". Проверь в Render → Environment` });
         }
         if (!tcRes.ok) {
-            const t = await tcRes.text().catch(() => '');
-            console.error('TonCenter HTTP', tcRes.status, t.slice(0, 200));
+            console.error(`[Deposit] TonCenter HTTP ${tcRes.status}:`, text.slice(0, 200));
             return res.status(400).json({ error: `TonCenter HTTP ${tcRes.status}. Попробуй позже.` });
         }
-        data = await tcRes.json();
+
+        try { data = JSON.parse(text); } catch(e) {
+            return res.status(500).json({ error: 'TonCenter вернул не JSON. Попробуй позже.' });
+        }
+
         if (!data.ok) {
-            console.error('TonCenter API error:', data.error);
+            console.error('[Deposit] TonCenter error:', data.error);
             return res.status(400).json({ error: `TonCenter error: ${data.error || 'unknown'}` });
         }
-    } catch (e) {
-        console.error('Сеть TonCenter:', e.message);
-        return res.status(500).json({ error: 'Не удалось подключиться к TonCenter. Попробуй позже.' });
+    } catch(e) {
+        if (e.name === 'TimeoutError') return res.status(500).json({ error: 'TonCenter не отвечает (таймаут). Попробуй позже.' });
+        console.error('[Deposit] Сеть:', e.message);
+        return res.status(500).json({ error: 'Ошибка соединения с TonCenter. Попробуй позже.' });
     }
 
     let foundNew = false;
@@ -1235,18 +1253,26 @@ app.post('/api/check_deposit', async (req, res) => {
     for (const tx of (data.result || [])) {
         if (!tx.in_msg || !tx.in_msg.value || Number(tx.in_msg.value) <= 0) continue;
 
-        // Читаем MEMO из всех возможных полей TonCenter
+        // Читаем MEMO из всех полей
         let comment = '';
         if (tx.in_msg.message) {
             comment = String(tx.in_msg.message).replace(/\u0000/g, '').trim();
         }
-        if (!comment && tx.in_msg.msg_data && tx.in_msg.msg_data.text) {
-            try { comment = Buffer.from(tx.in_msg.msg_data.text, 'base64').toString('utf-8').replace(/\u0000/g, '').trim(); } catch(e) {}
-        }
-        if (!comment && tx.in_msg.msg_data && tx.in_msg.msg_data.body) {
-            try { comment = Buffer.from(tx.in_msg.msg_data.body, 'base64').toString('utf-8').replace(/\u0000/g, '').replace(/[^\x20-\x7E\u0400-\u04FF]/g, '').trim(); } catch(e) {}
+        if (!comment && tx.in_msg.msg_data) {
+            const md = tx.in_msg.msg_data;
+            if (md.text) {
+                try { comment = Buffer.from(md.text, 'base64').toString('utf-8').replace(/\u0000/g, '').trim(); } catch(e) {}
+            }
+            if (!comment && md.body) {
+                try {
+                    const decoded = Buffer.from(md.body, 'base64').toString('utf-8');
+                    // Убираем первые 4 байта (opcode) и непечатаемые символы
+                    comment = decoded.replace(/[\x00-\x1F\x7F-\x9F]/g, '').trim();
+                } catch(e) {}
+            }
         }
 
+        console.log(`[Deposit] tx comment="${comment}" userId="${userId}"`);
         if (!comment || !comment.includes(userId)) continue;
 
         const txHash = tx.transaction_id ? tx.transaction_id.hash : tx.hash;
@@ -1271,7 +1297,7 @@ app.post('/api/check_deposit', async (req, res) => {
             await user.save();
             foundNew    = true;
             totalAdded += amountTON;
-            console.log(`✅ Депозит: ${amountTON} TON userId=${userId} hash=${txHash}`);
+            console.log(`[Deposit] ✅ Зачислено ${amountTON} TON userId=${userId}`);
             if (bot) bot.sendMessage(id, `📥 ✅ Баланс пополнен на *${amountTON} TON*!`, { parse_mode: 'Markdown' }).catch(() => {});
             if (user.referredBy) {
                 const referrer = await User.findOne({ id: user.referredBy });
@@ -1280,11 +1306,11 @@ app.post('/api/check_deposit', async (req, res) => {
                     referrer.balance = Number((referrer.balance + refBonus).toFixed(2));
                     referrer.referralEarnings = Number(((referrer.referralEarnings || 0) + refBonus).toFixed(2));
                     await referrer.save();
-                    if (bot) bot.sendMessage(referrer.id, `🎉 Реферал пополнил баланс! Вам *${refBonus} TON* (10%)`, { parse_mode: 'Markdown' }).catch(() => {});
+                    if (bot) bot.sendMessage(referrer.id, `🎉 Реферал пополнил! Вам *${refBonus} TON*`, { parse_mode: 'Markdown' }).catch(() => {});
                 }
             }
-        } catch (dbErr) {
-            console.error('Ошибка записи депозита:', dbErr.message);
+        } catch(dbErr) {
+            console.error('[Deposit] DB error:', dbErr.message);
         }
     }
 
@@ -1292,7 +1318,9 @@ app.post('/api/check_deposit', async (req, res) => {
         const updUser = await User.findOne({ id });
         return res.json({ success: true, added: totalAdded, user: updUser });
     }
-    return res.status(400).json({ error: `Оплата не найдена. Убедись что в комментарии перевода указан твой ID: ${userId}` });
+    return res.status(400).json({
+        error: `Оплата не найдена. Убедись что в комментарии перевода указан ID: ${userId}`
+    });
 });
 
 app.post('/api/promo', async (req, res) => {
