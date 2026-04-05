@@ -661,31 +661,29 @@ const SPIN_PAYLINES = [
 ];
 
 // L symbols do NOT pay — only X symbols pay (makes most spins losing)
-const SPIN_PAYTABLE = { 'X': { 3: 1.0, 4: 2.5, 5: 5.0 } };
+// X редкий (3x от L), L обычный, N нейтральный, G scatter
+const SPIN_PAYTABLE = {
+    'X': { 3: 3.0, 4: 7.5, 5: 15.0 },
+    'L': { 3: 1.0, 4: 2.5, 5:  5.0 }
+};
 
 function generateSpinGrid(userId, rtpTarget) {
     const streak = spinUserStreaks[userId] || { losses: 0, wins: 0, progress: 0 };
-    // RTP controls whether this spin CAN win at all
-    // rtp 90 → 30% chance of winning spin, rtp 50 → 16%, rtp 10 → 3%
-    const canWin = Math.random() < (rtpTarget / 300);
-
-    // G (scatter/gift) frequency: very rare
+    const rtpF = Math.max(0.1, Math.min(1.0, rtpTarget / 100));
     const freqG = 0.004;
-    // X frequency depends on whether spin is "winning" or "losing"
-    let freqX = canWin ? 0.18 : 0.04; // winning spins get more X symbols
-
-    // Streak adjustments (very small)
-    if (streak.losses >= 8) { freqX = Math.min(0.22, freqX + 0.02); }
-    else if (streak.wins >= 3) { freqX = Math.max(0.02, freqX * 0.5); }
-
+    let freqX = 0.04 + rtpF * 0.09;
+    let freqL = 0.12 + rtpF * 0.10;
+    if (streak.losses >= 8) { freqX = Math.min(0.16, freqX + 0.03); freqL = Math.min(0.26, freqL + 0.04); }
+    else if (streak.wins >= 4) { freqX = Math.max(0.02, freqX * 0.6); }
     const grid = [];
     for (let r = 0; r < 3; r++) {
         const row = [];
         for (let c = 0; c < 5; c++) {
             const rand = Math.random();
-            if (rand < freqG) row.push('G');
-            else if (rand < freqG + freqX) row.push('X');
-            else row.push('L');
+            if      (rand < freqG)                 row.push('G');
+            else if (rand < freqG + freqX)         row.push('X');
+            else if (rand < freqG + freqX + freqL) row.push('L');
+            else                                    row.push('N');
         }
         grid.push(row);
     }
@@ -697,7 +695,7 @@ function checkSpinWins(grid, bet) {
     for (let li = 0; li < SPIN_PAYLINES.length; li++) {
         const line = SPIN_PAYLINES[li];
         const first = grid[line[0]][0];
-        if (first === 'G') continue;
+        if (first === 'G' || first === 'N') continue;
         let count = 1;
         for (let i = 1; i < 5; i++) { if (grid[line[i]][i] === first) count++; else break; }
         if (count >= 3 && SPIN_PAYTABLE[first] && SPIN_PAYTABLE[first][count]) {
@@ -823,12 +821,12 @@ app.post('/api/spin', async (req, res) => {
 });
 
 // === MINE GAME (Minecraft-style) ===
-const MINE_BLOCKS = ['dirt', 'stone', 'redstone', 'gold', 'diamond', 'obsidian'];
-const MINE_BLOCK_MULTS = { grass: 0.01, dirt: 0.02, stone: 0.03, redstone: 0.04, gold: 0.06, diamond: 0.08, obsidian: 0.10 };
+const MINE_BLOCKS = ['dirt', 'stone', 'redstone', 'gold_block', 'diamond_block', 'obsidian'];
+const MINE_BLOCK_MULTS = { grass:0.00, dirt:0.05, stone:0.09, redstone:0.12, gold_block:0.15, diamond_block:0.20, obsidian:0.23, gold:0.15, diamond:0.20 };
 // 6 rows: row 0 = grass top layer, rows 1-5 = underground
 const MINE_ROW_WEIGHTS = [
     // grass/dirt top: dirt=85%, stone=15%  (no ores)
-    [0.85, 0.15, 0.00, 0.00, 0.00, 0.00],
+    [1.00, 0.00, 0.00, 0.00, 0.00, 0.00],
     // row 1 — mostly stone
     [0.10, 0.62, 0.20, 0.06, 0.015, 0.005],
     // row 2
@@ -962,44 +960,26 @@ app.post('/api/mine', async (req, res) => {
         for (let c = 0; c < 5; c++) chestMults.push(pickChestMult());
         const effectiveBet = isFreeAutoSpin ? 0.5 : betAmount;
 
-        // Each block has FIXED mult: block win = bet * blockMult (consistent for same bet)
-        // null blocks (broken in auto-spin) give 0 win
+        // ФИКСИРОВАННЫЕ множители: reward = bet * mult
         const blockWins = [];
         for (let r = 0; r < 6; r++) {
             const row = [];
             for (let c = 0; c < 5; c++) {
                 if (!grid[r][c]) { row.push(0); continue; }
-                const bm = MINE_BLOCK_MULTS[grid[r][c]] || 0;
-                const bw = parseFloat((effectiveBet * bm).toFixed(4));
-                row.push(bw);
+                const mult = MINE_BLOCK_MULTS[grid[r][c]] || 0;
+                row.push(parseFloat((effectiveBet * mult).toFixed(3)));
             }
             blockWins.push(row);
         }
 
-        // RTP control: win chance = rtp/200 (rtp 90 = 45% win, rtp 50 = 25%, rtp 10 = 5%)
-        const winChance = rtpTarget / 200;
-        let scaleFactor = 1;
-        if (Math.random() >= winChance) {
-            scaleFactor = 0; // No win on losing rolls
-        }
-
-        // Apply scale factor to block wins
-        const adjustedBlockWins = [];
-        for (let r = 0; r < 6; r++) {
-            const row = [];
-            for (let c = 0; c < 5; c++) {
-                row.push(parseFloat((blockWins[r][c] * scaleFactor).toFixed(4)));
-            }
-            adjustedBlockWins.push(row);
-        }
-
-        // Block win sum (from mining blocks only, no chest)
+        // RTP = шанс выигрышного раунда, множители ФИКСИРОВАННЫЕ
+        const isWinRound = Math.random() < (rtpTarget / 200);
+        const adjustedBlockWins = blockWins.map(row =>
+            row.map(w => isWinRound ? w : 0)
+        );
         let blockWinSum = 0;
-        for (let r = 0; r < 6; r++) {
-            for (let c = 0; c < 5; c++) blockWinSum += adjustedBlockWins[r][c];
-        }
-        // Hard cap block wins: max = bet * 1.5
-        let actualWin = Math.min(Number(blockWinSum.toFixed(2)), effectiveBet * 1.5);
+        for (let r = 0; r < 6; r++) for (let c = 0; c < 5; c++) blockWinSum += adjustedBlockWins[r][c];
+        let actualWin = Number(blockWinSum.toFixed(2));
 
         // CHESTS: multiply ENTIRE user balance (not just block wins)
         // Reaching a chest = clearing entire column = very rare (~0.5% per column)
@@ -1195,95 +1175,41 @@ app.post('/api/check_deposit', async (req, res) => {
     const { id } = req.body;
     const adminWallet = process.env.ADMIN_WALLET;
     const apiKey      = process.env.TON_API_KEY;
-
-    if (!adminWallet) return res.status(500).json({ error: 'ADMIN_WALLET не настроен в Render → Environment' });
-    if (!apiKey)      return res.status(500).json({ error: 'TON_API_KEY не настроен. Получи на https://toncenter.com' });
-
-    const cleanKey = apiKey.trim().replace(/[\r\n\s]/g, '');
-    const userId   = String(id).trim();
-
-    // Адрес кошелька — чистим и передаём как есть в TonCenter
-    // TonCenter v2 принимает friendly адрес UQ.../EQ... напрямую
-    const cleanAddr = adminWallet.trim().replace(/[\r\n\s]/g, '');
-
-    // Пробуем основной URL с api_key в параметре
-    const tcUrl = `https://toncenter.com/api/v2/getTransactions?address=${encodeURIComponent(cleanAddr)}&limit=50&api_key=${cleanKey}`;
-
-    console.log(`[Deposit] Запрос TonCenter: address=${cleanAddr.slice(0,10)}...`);
-
-    let data;
+    if (!adminWallet) return res.status(500).json({ error: 'ADMIN_WALLET не задан в Render Environment' });
+    if (!apiKey)      return res.status(500).json({ error: 'TON_API_KEY не задан в Render Environment' });
+    const userId = String(id).trim();
     try {
-        const tcRes = await fetch(tcUrl, {
-            headers: { 'Accept': 'application/json' },
-            signal: AbortSignal.timeout(10000) // таймаут 10 сек
-        });
-
-        const text = await tcRes.text();
-
-        if (tcRes.status === 403) {
-            console.error('[Deposit] TonCenter 403 — неверный API ключ');
-            return res.status(400).json({ error: 'TonCenter 403: неверный TON_API_KEY. Проверь на toncenter.com' });
+        const response = await fetch(
+            'https://toncenter.com/api/v2/getTransactions?address=' + adminWallet.trim() + '&limit=50&api_key=' + apiKey.trim()
+        );
+        if (!response.ok) {
+            const errText = await response.text().catch(() => '');
+            console.error('[Deposit] TonCenter HTTP', response.status, errText.slice(0, 200));
+            return res.status(400).json({ error: 'TonCenter HTTP ' + response.status + ': ' + errText.slice(0, 100) });
         }
-        if (tcRes.status === 422) {
-            console.error('[Deposit] TonCenter 422 — неверный формат адреса:', cleanAddr);
-            return res.status(400).json({ error: `TonCenter 422: неверный адрес ADMIN_WALLET="${cleanAddr.slice(0,15)}...". Проверь в Render → Environment` });
-        }
-        if (!tcRes.ok) {
-            console.error(`[Deposit] TonCenter HTTP ${tcRes.status}:`, text.slice(0, 200));
-            return res.status(400).json({ error: `TonCenter HTTP ${tcRes.status}. Попробуй позже.` });
-        }
-
-        try { data = JSON.parse(text); } catch(e) {
-            return res.status(500).json({ error: 'TonCenter вернул не JSON. Попробуй позже.' });
-        }
-
-        if (!data.ok) {
-            console.error('[Deposit] TonCenter error:', data.error);
-            return res.status(400).json({ error: `TonCenter error: ${data.error || 'unknown'}` });
-        }
-    } catch(e) {
-        if (e.name === 'TimeoutError') return res.status(500).json({ error: 'TonCenter не отвечает (таймаут). Попробуй позже.' });
-        console.error('[Deposit] Сеть:', e.message);
-        return res.status(500).json({ error: 'Ошибка соединения с TonCenter. Попробуй позже.' });
-    }
-
-    let foundNew = false;
-    let totalAdded = 0;
-
-    for (const tx of (data.result || [])) {
-        if (!tx.in_msg || !tx.in_msg.value || Number(tx.in_msg.value) <= 0) continue;
-
-        // Читаем MEMO из всех полей
-        let comment = '';
-        if (tx.in_msg.message) {
-            comment = String(tx.in_msg.message).replace(/\u0000/g, '').trim();
-        }
-        if (!comment && tx.in_msg.msg_data) {
-            const md = tx.in_msg.msg_data;
-            if (md.text) {
-                try { comment = Buffer.from(md.text, 'base64').toString('utf-8').replace(/\u0000/g, '').trim(); } catch(e) {}
+        const data = await response.json();
+        if (!data.ok) return res.status(400).json({ error: 'TonCenter error: ' + (data.error || 'unknown') });
+        const transactions = data.result || [];
+        let foundNew = false, totalAdded = 0;
+        for (const tx of transactions) {
+            if (!tx.in_msg) continue;
+            const msg = tx.in_msg;
+            if (!msg.value || Number(msg.value) <= 0) continue;
+            let comment = '';
+            if (msg.message) comment = String(msg.message).replace(/\u0000/g, '').trim();
+            if (!comment && msg.msg_data && msg.msg_data.text) {
+                try { comment = Buffer.from(msg.msg_data.text, 'base64').toString('utf-8').replace(/\u0000/g, '').trim(); } catch(e) {}
             }
-            if (!comment && md.body) {
-                try {
-                    const decoded = Buffer.from(md.body, 'base64').toString('utf-8');
-                    // Убираем первые 4 байта (opcode) и непечатаемые символы
-                    comment = decoded.replace(/[\x00-\x1F\x7F-\x9F]/g, '').trim();
-                } catch(e) {}
+            if (!comment && msg.msg_data && msg.msg_data.body) {
+                try { comment = Buffer.from(msg.msg_data.body, 'base64').slice(4).toString('utf-8').replace(/[^\x20-\x7E]/g, '').trim(); } catch(e) {}
             }
-        }
-
-        console.log(`[Deposit] tx comment="${comment}" userId="${userId}"`);
-        if (!comment || !comment.includes(userId)) continue;
-
-        const txHash = tx.transaction_id ? tx.transaction_id.hash : tx.hash;
-        if (!txHash) continue;
-        const amountTON = Number(tx.in_msg.value) / 1e9;
-        if (amountTON < 0.01) continue;
-
-        const exists = await Deposit.findOne({ hash: txHash });
-        if (exists) continue;
-
-        try {
+            if (!comment || !comment.includes(userId)) continue;
+            const txHash = tx.transaction_id ? tx.transaction_id.hash : tx.hash;
+            if (!txHash) continue;
+            const amountTON = Number(msg.value) / 1e9;
+            if (amountTON < 0.01) continue;
+            const exists = await Deposit.findOne({ hash: txHash });
+            if (exists) continue;
             await Deposit.create({ hash: txHash, userId: id, amount: amountTON, time: getMskTime() });
             const user = await User.findOne({ id });
             if (!user) continue;
@@ -1295,32 +1221,25 @@ app.post('/api/check_deposit', async (req, res) => {
             user.totalDeposited = Number(((user.totalDeposited || 0) + amountTON).toFixed(2));
             user.wagerRequired  = Number(((user.wagerRequired  || 0) + amountTON * wagerMult).toFixed(2));
             await user.save();
-            foundNew    = true;
-            totalAdded += amountTON;
-            console.log(`[Deposit] ✅ Зачислено ${amountTON} TON userId=${userId}`);
-            if (bot) bot.sendMessage(id, `📥 ✅ Баланс пополнен на *${amountTON} TON*!`, { parse_mode: 'Markdown' }).catch(() => {});
+            foundNew = true; totalAdded += amountTON;
+            console.log('[Deposit] +' + amountTON + ' TON userId=' + userId);
+            if (bot) bot.sendMessage(id, '📥 ✅ Баланс пополнен на *' + amountTON + ' TON*!', {parse_mode:'Markdown'}).catch(()=>{});
             if (user.referredBy) {
-                const referrer = await User.findOne({ id: user.referredBy });
-                if (referrer) {
-                    const refBonus = Number((amountTON * 0.10).toFixed(2));
-                    referrer.balance = Number((referrer.balance + refBonus).toFixed(2));
-                    referrer.referralEarnings = Number(((referrer.referralEarnings || 0) + refBonus).toFixed(2));
-                    await referrer.save();
-                    if (bot) bot.sendMessage(referrer.id, `🎉 Реферал пополнил! Вам *${refBonus} TON*`, { parse_mode: 'Markdown' }).catch(() => {});
+                const ref = await User.findOne({ id: user.referredBy });
+                if (ref) {
+                    const bonus = Number((amountTON * 0.10).toFixed(2));
+                    ref.balance = Number((ref.balance + bonus).toFixed(2));
+                    ref.referralEarnings = Number(((ref.referralEarnings||0) + bonus).toFixed(2));
+                    await ref.save();
                 }
             }
-        } catch(dbErr) {
-            console.error('[Deposit] DB error:', dbErr.message);
         }
+        if (foundNew) { const updUser = await User.findOne({id}); return res.json({ success: true, added: totalAdded, user: updUser }); }
+        return res.status(400).json({ error: 'Оплата не найдена. Укажи ID ' + userId + ' в комментарии перевода' });
+    } catch(e) {
+        console.error('[Deposit] Error:', e.message);
+        return res.status(500).json({ error: 'Ошибка при проверке. Попробуй позже.' });
     }
-
-    if (foundNew) {
-        const updUser = await User.findOne({ id });
-        return res.json({ success: true, added: totalAdded, user: updUser });
-    }
-    return res.status(400).json({
-        error: `Оплата не найдена. Убедись что в комментарии перевода указан ID: ${userId}`
-    });
 });
 
 app.post('/api/promo', async (req, res) => {
