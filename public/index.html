@@ -128,21 +128,28 @@
                 </div>
 
                 <div id="dep-manual">
-                    <h3 style="margin-bottom:15px; color:var(--neon); text-align:center;">Пополнение</h3>
+                    <h3 style="margin-bottom:15px; color:var(--neon); text-align:center;">Пополнение вручную</h3>
                     <div style="background:#0a0a0a; padding:15px; border-radius:12px; border:1px solid #222; margin-bottom:15px; text-align:center;">
-                        <p style="color:var(--sub); font-size:12px; font-weight:bold; margin-bottom:5px;">АДРЕС ДЛЯ ПЕРЕВОДА:</p>
-                        <b id="dep-wallet" onclick="copyText(this.innerText)">Загрузка...</b>
-                        <p style="color:var(--sub); font-size:12px; font-weight:bold; margin:15px 0 5px 0;">ОБЯЗАТЕЛЬНЫЙ MEMO (COMMENT):</p>
-                        <b id="dep-memo" onclick="copyText(this.innerText)">-</b>
+                        <p style="color:var(--sub); font-size:12px; font-weight:bold; margin-bottom:5px;">АДРЕС ДЛЯ ПЕРЕВОДА (нажми чтобы скопировать):</p>
+                        <b id="dep-wallet" onclick="copyText(this.innerText)" style="cursor:pointer; color:var(--neon); word-break:break-all; font-size:13px;">Загрузка...</b>
+                        <p style="color:var(--neon-red); font-size:12px; font-weight:bold; margin:15px 0 5px 0;">⚠️ ОБЯЗАТЕЛЬНЫЙ КОММЕНТАРИЙ (MEMO):</p>
+                        <b id="dep-memo" onclick="copyText(this.innerText)" style="cursor:pointer; font-size:22px; color:var(--neon);">-</b>
+                        <p style="color:#666; font-size:10px; margin-top:5px;">Без этого комментария депозит НЕ зачислится!</p>
                     </div>
-                    <p style="font-size:11px; color:var(--sub); text-align:center; margin-bottom:15px; font-weight:bold;">Нажмите на текст, чтобы скопировать. Переводите TON только в сети The Open Network.</p>
-                    <button class="btn" style="background:var(--neon-blue); box-shadow: 0 0 15px rgba(0,210,255,0.2);" onclick="checkRealDeposit(this)">ПРОВЕРИТЬ ОПЛАТУ</button>
+                    <p style="font-size:11px; color:var(--sub); text-align:center; margin-bottom:15px;">Переводите TON только в сети The Open Network. После перевода нажмите кнопку ниже.</p>
+                    <button class="btn" style="background:var(--neon-blue); box-shadow: 0 0 15px rgba(0,210,255,0.2);" onclick="checkRealDeposit(this)">🔍 ПРОВЕРИТЬ ОПЛАТУ</button>
+                    <p id="dep-manual-status" style="text-align:center; font-size:11px; color:#555; margin-top:8px;">Проверка обычно занимает 10-30 секунд после перевода</p>
                 </div>
 
                 <div id="dep-connect" style="display:none; text-align:center;">
-                    <h3 style="margin-bottom:15px; color:var(--neon);">Авто-Депозит</h3>
-                    <input type="number" id="tc-amount" class="input-box" placeholder="Сумма в TON (Мин 0.5)">
-                    <button class="btn btn-connect" onclick="payWithTonConnect()">ОПЛАТИТЬ ЧЕРЕЗ TON CONNECT</button>
+                    <h3 style="margin-bottom:10px; color:var(--neon);">Авто-оплата через TON Connect</h3>
+                    <p style="font-size:11px; color:var(--sub); margin-bottom:15px;">Подключи кошелёк и оплати в 1 клик. MEMO подставляется автоматически.</p>
+                    <input type="number" id="tc-amount" class="input-box" placeholder="Сумма в TON (мин. 0.5)" step="0.5" min="0.5">
+                    <button class="btn btn-connect" onclick="payWithTonConnect()" style="background:linear-gradient(135deg,#0088cc,#00b4ff);">💎 ОПЛАТИТЬ ЧЕРЕЗ TON CONNECT</button>
+                    <p style="font-size:11px; color:#555; margin-top:8px;">После оплаты баланс зачислится автоматически через 15-30 сек</p>
+                    <div style="margin-top:15px; padding-top:15px; border-top:1px solid #222;">
+                        <button class="btn" style="background:#1a1a1a; border:1px solid #333; font-size:12px;" onclick="checkRealDeposit(this, false)">🔍 Проверить вручную</button>
+                    </div>
                 </div>
             </div>
 
