@@ -181,6 +181,8 @@ body {
 .spin-cell::before { content: ''; position: absolute; inset: 0; border-radius: 8px; background: linear-gradient(135deg, rgba(255,255,255,0.04) 0%, transparent 60%); }
 .spin-cell.sym-L { color: var(--neon); text-shadow: 0 0 8px rgba(0,255,136,0.6); }
 .spin-cell.sym-X { color: #ffcc00; text-shadow: 0 0 8px rgba(255,204,0,0.6); }
+.spin-cell.sym-N { color: #333; }
+.spin-cell.sym-N { color: #333; }
 .spin-cell.sym-G { color: #ff0055; text-shadow: 0 0 10px rgba(255,0,85,0.7); }
 .spin-cell.win-cell { border-color: var(--neon); box-shadow: 0 0 12px rgba(0,255,136,0.5); animation: spinWin 0.5s ease; }
 .spin-cell.win-cell.sym-X { border-color: #ffcc00; box-shadow: 0 0 12px rgba(255,204,0,0.5); }
@@ -261,8 +263,6 @@ body {
   overflow: hidden;
   transition: background 0.12s;
   aspect-ratio: 1;
-  min-width: 0;
-  min-height: 0;
 }
 .inv-cell.inv-book { background: #5a3a80; }
 .inv-cell.inv-tnt { background: #aa2020; }
@@ -285,7 +285,7 @@ body {
   background: linear-gradient(180deg, #1c1008 0%, #080402 100%);
   border-left: 2px solid #2a1808;
   border-right: 2px solid #0e0802;
-  overflow: visible;
+  overflow: hidden;
 }
 
 /* ─── ШАХТА 6×5 ─── */
@@ -302,7 +302,7 @@ body {
   border-radius: 0 0 3px 3px;
   padding: 1px;
   position: relative;
-  overflow: visible;
+  overflow: hidden;
 }
 .mc-blk {
   width: 100%;
@@ -463,11 +463,11 @@ body {
   user-select: none;
 }
 /* All pickaxe/item images in inventory must match hotbar */
-.inv-cell img, .inv-pick-img {
-  width: 60% !important;
-  height: 60% !important;
-  max-width: 24px !important;
-  max-height: 24px !important;
+.inv-cell img {
+  width: 58% !important;
+  height: 58% !important;
+  max-width: 22px !important;
+  max-height: 22px !important;
   min-width: 14px !important;
   min-height: 14px !important;
   object-fit: contain !important;
@@ -520,7 +520,7 @@ body {
   border-radius: 2px;
   padding: 1px;
   flex-shrink: 0;
-  overflow: visible;
+  overflow: hidden;
   position: relative;
   z-index: 20;
 }
@@ -532,7 +532,7 @@ body {
   position: relative;
   image-rendering: pixelated;
   border-radius: 1px;
-  overflow: visible;
+  overflow: hidden;
 }
 .mc-chest::before, .mc-chest::after { display: none; }
 .mc-chest.open {
