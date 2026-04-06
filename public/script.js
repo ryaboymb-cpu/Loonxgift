@@ -397,17 +397,16 @@ function nav(pageId, el) {
     if(el) { document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active')); el.classList.add('active'); }
 }
 
-function navGame(game) {
-    let mKey = game;
-    if(game === 'coin') mKey = 'coinflip';
-    if (maintenance[mKey]) return showToast('Временно тех. перерыв');
-    // При уходе с Mine — убить все анимации кирок
-    if (game !== 'mine') killAllPickaxes();
+function navGame(game){
+    let mKey=game;if(game==='coin')mKey='coinflip';
+    if(game==='cases'){nav('cases');return;}// Cases всегда доступен
+    if(maintenance[mKey])return showToast('Временно тех. перерыв');
+    if(game!=='mine')killAllPickaxes();
     nav(game);
-    if(game === 'battle') renderBattleLobbies();
-    if(game === 'spin') initSpinPage();
-    if(game === 'mine') { mineIsActive = true; initMineGrid(); }
-    if(game === 'duck') initDuckPond();
+    if(game==='battle')renderBattleLobbies();
+    if(game==='spin')initSpinPage();
+    if(game==='mine'){mineIsActive=true;initMineGrid();}
+    if(game==='upgrade')setTimeout(initUpgradePage,60);
 }
 
 function setQuickBet(inputId, amount, btn) {
