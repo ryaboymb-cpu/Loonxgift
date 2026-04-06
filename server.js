@@ -677,10 +677,8 @@ function generateSpinGrid(userId, rtpTarget) {
     const grid=[];
     for(let r=0;r<3;r++){const row=[];
         for(let c=0;c<5;c++){const rand=Math.random();
-            if(rand<freqG)row.push('G');
-            else if(rand<freqG+freqX)row.push('X');
-            else if(rand<freqG+freqX+freqL)row.push('L');
-            else row.push('N');
+            if(rand<freqG)row.push('G');else if(rand<freqG+freqX)row.push('X');
+            else if(rand<freqG+freqX+freqL)row.push('L');else row.push('N');
         }grid.push(row);}
     return grid;
 }
@@ -799,7 +797,7 @@ app.post('/api/spin', async (req, res) => {
                 avatar: user.photo || 'https://cdn-icons-png.flaticon.com/512/149/149071.png',
                 game: 'Spin', amount: freeSpinsMode ? 0 : betAmount,
                 multiplier: betAmount > 0 ? (actualWin / betAmount) : 1,
-                result: freeSpinsMode ? actualWin : (actualWin - betAmount),
+                result: freeSpinsMode ? Number(actualWin.toFixed(2)) : Number((actualWin-betAmount).toFixed(2)),
                 mode: 'Real', balanceAfter: user[field], balance: user[field]
             });
             await betEntry.save();
@@ -954,33 +952,21 @@ app.post('/api/mine', async (req, res) => {
         for (let c = 0; c < 5; c++) chestMults.push(pickChestMult());
         const effectiveBet = isFreeAutoSpin ? 0.5 : betAmount;
 
-        // Win ТОЧНО за каждый сломанный блок по durability кирки
-        // Клиент видит монетку над каждым сломанным блоком
+        // Каждый сломанный блок даёт точный win (трава=0, земля=0.03×bet и т.д.)
         const SRV_DUR={wooden:1,stone:2,iron:3,golden:4,diamond:5};
-        const colPick={};  // лучшая кирка в каждой колонке
-        (hotbar||[]).forEach((slot,idx)=>{
-            const col=idx%5;  // col 0-4 для каждого слота хотбара
-            if(slot&&slot.type==='pickaxe'){
-                const pt=slot.pickaxeType||'wooden';
-                const rank={wooden:0,stone:1,iron:2,golden:3,diamond:4};
-                if(colPick[col]===undefined||rank[pt]>rank[colPick[col]])colPick[col]=pt;
-            }
+        const colPick={};
+        (hotbar||[]).forEach((slot,idx)=>{const col=idx%5;
+            if(slot&&slot.type==='pickaxe'){const pt=slot.pickaxeType||'wooden';const rank={wooden:0,stone:1,iron:2,golden:3,diamond:4};if(colPick[col]===undefined||rank[pt]>rank[colPick[col]])colPick[col]=pt;}
             if(slot&&slot.type==='tnt'&&colPick[col]===undefined)colPick[col]='tnt';
         });
-        const adjustedBlockWins=[];
-        for(let r=0;r<6;r++)adjustedBlockWins.push([0,0,0,0,0]);
+        const adjustedBlockWins=[];for(let r=0;r<6;r++)adjustedBlockWins.push([0,0,0,0,0]);
         let blockWinSum=0;
         for(const[colStr,pType]of Object.entries(colPick)){
-            const col=parseInt(colStr);
-            const maxB=pType==='tnt'?3:(SRV_DUR[pType]||1);
-            let broken=0;
+            const col=parseInt(colStr),maxB=pType==='tnt'?3:(SRV_DUR[pType]||1);let broken=0;
             for(let r=1;r<6&&broken<maxB;r++){
                 if(!grid[r][col])continue;
-                const mult=MINE_BLOCK_MULTS[grid[r][col]]||0;
-                const bw=parseFloat((effectiveBet*mult).toFixed(3));
-                adjustedBlockWins[r][col]=bw;
-                blockWinSum+=bw;
-                broken++;
+                const bw=parseFloat((effectiveBet*(MINE_BLOCK_MULTS[grid[r][col]]||0)).toFixed(3));
+                adjustedBlockWins[r][col]=bw;blockWinSum+=bw;broken++;
             }
         }
         let actualWin=Number(blockWinSum.toFixed(2));
@@ -1011,7 +997,7 @@ app.post('/api/mine', async (req, res) => {
                 avatar: user.photo || 'https://cdn-icons-png.flaticon.com/512/149/149071.png',
                 game: 'Mine', amount: betAmount,
                 multiplier: betAmount > 0 ? (actualWin / betAmount) : 0,
-                result: actualWin - betAmount, mode: 'Real', balanceAfter: user[field], balance: user[field]
+                result: Number((actualWin-betAmount).toFixed(2)), mode: 'Real', balanceAfter: user[field], balance: user[field]
             });
             await betEntry.save();
             pushToGlobalHistory(betEntry);
@@ -1049,11 +1035,11 @@ app.post('/api/upgrade', async (req, res) => {
         const mult=Math.max(1.01,Math.floor(96/chanceP*100)/100);
         const isWin=Math.random()*100<chanceP;
         const actualWin=isWin?Number((betAmount*mult).toFixed(2)):0;
-        const profit=isWin?Number((actualWin-betAmount).toFixed(2)):-betAmount;
+        const profit=Number((isWin?actualWin-betAmount:-betAmount).toFixed(2));
         if(actualWin>0){user[field]=Number((user[field]+actualWin).toFixed(2));if(!isDemo){user.stats.wins++;user.stats.plus+=profit;}}
         await user.save();
         if (!isDemo) {
-            const betEntry = new Bet({ userId: user.id, username: user.username, avatar: user.photo || '', game: 'Upgrade', amount: betAmount, multiplier: mult, result: actualWin - betAmount, mode: 'Real', balanceAfter: user[field], balance: user[field] });
+            const betEntry = new Bet({ userId: user.id, username: user.username, avatar: user.photo || '', game: 'Upgrade', amount: betAmount, multiplier: mult, result: Number((actualWin-betAmount).toFixed(2)), mode: 'Real', balanceAfter: user[field], balance: user[field] });
             await betEntry.save(); pushToGlobalHistory(betEntry);
         }
         res.json({ win: actualWin, profit, multiplier: Number(mult.toFixed(2)), isWin, user });
@@ -1103,7 +1089,7 @@ app.post('/api/plinko', async (req, res) => {
         if (actualWin > 0) { user[field] = Number((user[field] + actualWin).toFixed(2)); if (!isDemo && actualWin > betAmount) { user.stats.wins++; user.stats.plus += actualWin; } }
         await user.save();
         if (!isDemo) {
-            const betEntry = new Bet({ userId: user.id, username: user.username, avatar: user.photo || '', game: 'Plinko', amount: betAmount, multiplier: mult, result: actualWin - betAmount, mode: 'Real', balanceAfter: user[field], balance: user[field] });
+            const betEntry = new Bet({ userId: user.id, username: user.username, avatar: user.photo || '', game: 'Plinko', amount: betAmount, multiplier: mult, result: Number((actualWin-betAmount).toFixed(2)), mode: 'Real', balanceAfter: user[field], balance: user[field] });
             await betEntry.save(); pushToGlobalHistory(betEntry);
         }
         res.json({ path, bucket, multiplier: mult, win: actualWin, mults, user });
