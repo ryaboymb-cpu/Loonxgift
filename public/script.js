@@ -230,54 +230,6 @@ function flyToBalance(amount) {
     setTimeout(() => el.remove(), 850);
 }
 
-// ─── Share Win Window ──────────────────────────────
-function showShareWin(bet, mult, winAmt) {
-    const existing = document.getElementById('share-win-overlay');
-    if (existing) existing.remove();
-
-    const refLink = user ? 'https://t.me/LoonxGift_bot?start=ref'+user.id : 'https://t.me/LoonxGift_bot';
-    const overlay = document.createElement('div');
-    overlay.id = 'share-win-overlay';
-    overlay.style.cssText = 'position:fixed;inset:0;z-index:99990;background:rgba(0,0,0,0.85);display:flex;align-items:center;justify-content:center;backdrop-filter:blur(8px);';
-
-    overlay.innerHTML = `
-    <div style="background:linear-gradient(135deg,#0a0a1a,#111);border:2px solid var(--neon);border-radius:20px;padding:24px 20px;max-width:320px;width:90%;text-align:center;box-shadow:0 0 40px rgba(0,255,136,0.3);animation:sharePopIn 0.4s cubic-bezier(0.34,1.56,0.64,1);">
-        <div style="font-size:48px;margin-bottom:8px;">🏆</div>
-        <div style="font-size:22px;font-weight:900;color:var(--neon);text-shadow:0 0 20px rgba(0,255,136,0.5);margin-bottom:4px;">БОЛЬШАЯ ПОБЕДА!</div>
-        <div style="font-size:13px;color:#aaa;margin-bottom:16px;">LoonxGift Casino</div>
-        <div style="background:#111;border-radius:12px;padding:14px;margin-bottom:16px;border:1px solid #222;">
-            <div style="color:#888;font-size:11px;margin-bottom:6px;">Ставка → Множитель → Выигрыш</div>
-            <div style="font-size:20px;font-weight:900;">
-                <span style="color:#fff;">${parseFloat(bet).toFixed(2)} TON</span>
-                <span style="color:#555;margin:0 8px;">×</span>
-                <span style="color:var(--neon);">${parseFloat(mult).toFixed(2)}x</span>
-                <span style="color:#555;margin:0 8px;">=</span>
-                <span style="color:#00ff88;">+${parseFloat(winAmt).toFixed(2)} TON</span>
-            </div>
-        </div>
-        <div style="font-size:12px;color:#555;margin-bottom:14px;">Реферальная ссылка: <span style="color:var(--neon);font-size:11px;word-break:break-all;">${refLink}</span></div>
-        <div style="display:flex;gap:10px;">
-            <button onclick="shareWinToTg('${refLink}','${bet}','${mult}','${winAmt}')" style="flex:1;background:var(--neon);color:#000;border:none;border-radius:12px;padding:12px;font-weight:900;font-size:14px;cursor:pointer;">📤 Поделиться</button>
-            <button onclick="document.getElementById('share-win-overlay').remove()" style="flex:0 0 auto;background:#222;color:#fff;border:none;border-radius:12px;padding:12px 16px;cursor:pointer;font-size:18px;">✕</button>
-        </div>
-    </div>`;
-
-    document.body.appendChild(overlay);
-    overlay.addEventListener('click', e => { if(e.target===overlay) overlay.remove(); });
-}
-
-function shareWinToTg(refLink, bet, mult, winAmt) {
-    const text = `🏆 Я выиграл в LoonxGift Casino!\n\n💰 Ставка: ${bet} TON\n✖️ Множитель: ${mult}x\n🎉 Выигрыш: +${winAmt} TON\n\nПопробуй и ты! 👇\n${refLink}`;
-    if (window.Telegram && window.Telegram.WebApp) {
-        try { window.Telegram.WebApp.shareToStory(text, {}); } catch(e) {}
-        try { window.open('https://t.me/share/url?url='+encodeURIComponent(refLink)+'&text='+encodeURIComponent(text), '_blank'); } catch(e) {}
-    } else {
-        window.open('https://t.me/share/url?url='+encodeURIComponent(refLink)+'&text='+encodeURIComponent(text), '_blank');
-    }
-    document.getElementById('share-win-overlay')?.remove();
-}
-
-
 socket.on('global_alert', msg => { showToast(`📢 УВЕДОМЛЕНИЕ: ${msg}`, 6000); });
 function copyText(text) { if(!text) return; navigator.clipboard.writeText(text).then(() => showToast('Скопировано!')); }
 
@@ -485,7 +437,7 @@ function switchDepTab(type, el) {
 
 async function payWithTonConnect() {
     if (!tonConnectUI) return showToast('TON Connect не загружен. Перезагрузите страницу.');
-    if(!tonConnectUI.wallet){showToast('Подключи кошелёк кнопкой TON Connect!');try{await tonConnectUI.openModal();}catch(e){}return;}
+    if(!tonConnectUI.wallet){showToast('Подключи кошелёк!');try{await tonConnectUI.openModal();}catch(e){}return;}
     const amount = parseFloat($('tc-amount').value);
     if(isNaN(amount) || amount < 0.5) return showToast('Минимум 0.5 TON');
     if(!adminWalletAddress) return showToast('Кошелек получателя не настроен');
@@ -1725,9 +1677,9 @@ function initSpinPage() {
         for (let c = 0; c < 5; c++) {
             const cell = $(`sc-${r}-${c}`);
             if (cell) {
-                const sym = (symbols[r * 5 + c] || 'L');
+                const sym = symbols[r*5+c]||'L';
                 cell.className = `spin-cell sym-${sym}`;
-                cell.innerText = sym === 'G' ? '🎁' : sym;
+                cell.innerText = sym==='G'?'🎁':sym;
             }
         }
     }
@@ -2607,6 +2559,11 @@ function revealMineShaft(grid, blockWins, win, balanceBefore, chestMults, isAuto
             const balSpan = $('bal-val');
             if (balSpan) animateCounter(balSpan, balanceBefore, newBal, 900, '', '');
             flyToBalance(win);
+            // Sync running total with server win (includes chest bonuses)
+            const rtFinal=$('mine-running-total');
+            if(rtFinal&&win>0&&Math.abs(win-mineRunningTotal)>0.001){
+                animateCounter(rtFinal,mineRunningTotal,win,500,'','');
+            }
             showToast('💰 +'+win.toFixed(2)+' TON!');
         }
         updateUI();
@@ -2798,7 +2755,7 @@ async function stopSpinAnim(grid, hiddenGs) {
             for (let r = 0; r < 3; r++) {
                 for (let c = 0; c < 5; c++) {
                     const cell = $(`sc-${r}-${c}`);
-                    const sym = grid[r][c] || 'L';
+                    const sym = grid[r][c]||'L';
                     if (cell) {
                         cell.className = `spin-cell sym-${sym}`;
                         cell.style.borderColor = '';
@@ -2860,26 +2817,55 @@ function highlightSpinWins(winLines, grid) {
 
 // ===================== UPGRADE GAME =====================
 let isUpgrading=false,upgChance=50;
-function upgMult(c){return Math.max(1.01,Math.floor(92/c*100)/100);}
+
+// mult = 90/chance (90% RTP)
+function upgMult(c){return Math.max(1.01,Math.floor(90/c*100)/100);}
+
 function upgRefresh(){
-    const bet=parseFloat($('up-bet')?$('up-bet').value:0)||0,mult=upgMult(upgChance);
-    const color=upgChance<20?'#ff2255':upgChance<50?'#ff6600':'#00e676';
+    const bet=parseFloat($('up-bet')?$('up-bet').value:0)||0;
+    const c=Math.min(90,upgChance),mult=upgMult(c);
+    const color=c<20?'#ff2255':c<50?'#ff6600':'#00e676';
     const disk=document.querySelector('.upg-disk');
-    if(disk)disk.style.background='conic-gradient('+color+' 0% '+upgChance+'%,#1a1a2e '+upgChance+'% 100%)';
-    if($('upg-chance-pct'))$('upg-chance-pct').innerText=upgChance+'%';
-    if($('upg-slider-val'))$('upg-slider-val').innerText=upgChance+'%';
+    if(disk)disk.style.background='conic-gradient('+color+' 0% '+c+'%,#1a1a2e '+c+'% 100%)';
+    if($('upg-chance-pct'))$('upg-chance-pct').innerText=c+'%';
+    if($('upg-slider-val'))$('upg-slider-val').innerText=c+'%';
     if($('upg-mult-val'))$('upg-mult-val').innerText='x'+mult;
-    if($('upg-win-val'))$('upg-win-val').innerText=parseFloat((bet*mult).toFixed(2))+' TON';
+    // Показываем ПРИБЫЛЬ
+    if($('upg-win-val'))$('upg-win-val').innerText='+'+parseFloat((bet*(mult-1)).toFixed(2))+' TON';
 }
-function upgSetChance(v){if(isUpgrading)return;upgChance=Math.max(1,Math.min(95,parseInt(v)||50));if($('upg-slider'))$('upg-slider').value=upgChance;upgRefresh();playSound('click');}
+
+function upgSetChance(v){
+    if(isUpgrading)return;
+    // Максимум 90%
+    upgChance=Math.max(1,Math.min(90,parseInt(v)||50));
+    if($('upg-slider'))$('upg-slider').value=upgChance;
+    upgRefresh();playSound('click');
+}
 function upgSetBet(v){if($('up-bet'))$('up-bet').value=v;upgRefresh();playSound('click');}
 function initUpgradePage(){upgChance=50;if($('upg-slider'))$('upg-slider').value=50;upgRefresh();}
+
+// ИСПРАВЛЕННАЯ ЛОГИКА ВРАЩЕНИЯ:
+// CSS conic-gradient: зелёный 0..winA° от 12 часов по часовой
+// CSS rotate(R deg): диск вращается R° по часовой
+// Стрелка фиксирована сверху → после вращения R° стрелка указывает на (360-R)° от нач. диска
+// 
+// WIN: нужно (360-R) ∈ [0, winA] → R ∈ [360-winA, 360]
+// LOSE: нужно (360-R) ∈ [winA, 360] → R ∈ [0, 360-winA]
 function upgSpinDisk(winPct,isWin,onDone){
     const disk=document.querySelector('.upg-disk');if(!disk){if(onDone)onDone();return;}
-    const winA=(winPct/100)*360;
+    const winA=(Math.min(winPct,90)/100)*360; // макс 90%
     let targetR;
-    if(isWin){const mg=Math.max(4,winA*0.06);targetR=mg+Math.random()*(winA-2*mg);}
-    else{const dark=360-winA,mg=Math.max(4,dark*0.06);targetR=winA+mg+Math.random()*(dark-2*mg);}
+    if(isWin){
+        // R ∈ [360-winA+mg, 360-mg] → стрелка попадает в ЗЕЛЁНУЮ зону
+        const lo=360-winA,hi=360;
+        const mg=Math.max(4,winA*0.07);
+        targetR=(lo+mg)+Math.random()*((hi-mg)-(lo+mg));
+    }else{
+        // R ∈ [mg, 360-winA-mg] → стрелка попадает в ТЁМНУЮ зону
+        const lo=0,hi=360-winA;
+        const mg=Math.max(4,(360-winA)*0.07);
+        targetR=(lo+mg)+Math.random()*((hi-mg)-(lo+mg));
+    }
     const spinMs=3000+Math.random()*4000;
     const totalRot=(3+Math.floor(spinMs/1000))*360+targetR;
     disk.style.transition='none';disk.style.transform='rotate(0deg)';
@@ -2889,6 +2875,7 @@ function upgSpinDisk(winPct,isWin,onDone){
     }));
     setTimeout(()=>{disk.style.transition='none';disk.style.transform='rotate('+targetR+'deg)';if(onDone)onDone();},spinMs+80);
 }
+
 async function playUpgrade(){
     if(isUpgrading)return;
     const betVal=parseFloat($('up-bet')?.value);
@@ -2903,25 +2890,25 @@ async function playUpgrade(){
         const data=await r.json();if(!r.ok){showToast(data.error||'Ошибка');return;}
         upgSpinDisk(upgChance,data.win>0,()=>{
             user=data.user;updateUI();upgRefresh();
-            if(resEl){resEl.innerText=data.win>0?'+'+data.win.toFixed(2)+' TON (x'+data.multiplier+')':'-'+betVal.toFixed(2)+' TON';resEl.style.color=data.win>0?'#00ff88':'#ff0055';}
-            if(data.win>0){playSound('win');flyToBalance(data.win);showToast('✅ WIN! +'+data.win.toFixed(2)+' TON');
-                // Поделиться победой если x5+
-                if(data.multiplier>=5) showShareWin(betVal,data.multiplier,data.win);}
+            const profit=data.profit!==undefined?data.profit:(data.win>0?data.win-betVal:-betVal);
+            if(resEl){
+                resEl.innerText=data.win>0?'+'+profit.toFixed(2)+' TON (x'+data.multiplier+')':'-'+betVal.toFixed(2)+' TON';
+                resEl.style.color=data.win>0?'#00ff88':'#ff0055';
+            }
+            if(data.win>0){playSound('win');flyToBalance(profit);showToast('✅ WIN! +'+profit.toFixed(2)+' TON');}
             else showToast('❌ Проигрыш -'+betVal+' TON');
         });
     }catch(e){showToast('Ошибка соединения');}
-    finally{setTimeout(()=>{isUpgrading=false;if(btn){btn.disabled=false;btn.innerText='АПГРЕЙД ⬆️';}if(sldr)sldr.disabled=false;},8000);}
+    finally{setTimeout(()=>{isUpgrading=false;if(btn){btn.disabled=false;btn.innerText='Играть ⬆️';}if(sldr)sldr.disabled=false;},8000);}
 }
 // ===================== PLINKO GAME =====================
 let _plinkoEng=null;
-const PL_ROWS=8,PL_SLOTS=9;
-const PL_MULTS=[0,0.7,1.2,1.5,2.5,1.5,1.2,0.7,0];
+const PL_ROWS=8,PL_SLOTS=9,PL_MULTS=[0,0.7,1.2,1.5,2.5,1.5,1.2,0.7,0];
 
 function initPlinkoEngine(){
     const canvas=$('plinko-canvas');if(!canvas)return;
-    if(_plinkoEng){_plinkoEng.destroy();}
+    if(_plinkoEng){_plinkoEng.destroy();_plinkoEng=null;}
     _plinkoEng=new PlinkoEngine(canvas);
-    _plinkoEng.draw(); // Рисуем сразу при открытии
 }
 
 class PlinkoEngine{
@@ -2932,106 +2919,113 @@ class PlinkoEngine{
     }
     resize(){
         const W=this.canvas.parentElement?.offsetWidth||320;
-        this.canvas.width=W;this.canvas.height=Math.round(W*1.2);
+        this.canvas.width=W;this.canvas.height=Math.round(W*1.15);
         this.W=W;this.H=this.canvas.height;this.buildLayout();
     }
     buildLayout(){
         const W=this.W,H=this.H;
-        this.slotH=W*0.095;
+        this.slotH=W*0.088;
         const boardH=H-this.slotH;
-        this.pinR=Math.max(4,Math.min(6,W*0.023));
-        const padTop=W*0.04,padBot=W*0.03;
-        const rowH=(boardH-padTop-padBot)/(PL_ROWS+1);
+        this.pinR=Math.max(3,Math.min(6,W*0.021));
+        const padT=W*0.035,rowH=(boardH-padT-W*0.015)/(PL_ROWS+1);
+        this.rowH=rowH;
         this.pins=[];
         for(let r=0;r<PL_ROWS;r++){
-            const nP=r+3,span=W*0.65*(r/(PL_ROWS-1)*0.7+0.3);
+            const nP=r+3,spread=W*(0.28+0.44*(r/(PL_ROWS-1)));
             const row=[];
-            for(let p=0;p<nP;p++){row.push({x:W/2-span/2+p*span/(nP-1),y:padTop+(r+1)*rowH});}
+            for(let p=0;p<nP;p++) row.push({x:W/2-spread/2+p*(nP>1?spread/(nP-1):0),y:padT+(r+1)*rowH});
             this.pins.push(row);
         }
         const sw=W/PL_SLOTS;
         this.slots=PL_MULTS.map((m,i)=>({x:sw*i,cx:sw*(i+.5),y:H-this.slotH,w:sw,h:this.slotH,m}));
     }
-    easeInOut(t){return t<.5?4*t*t*t:(t-1)*(2*t-2)*(2*t-2)+1;}
+    easeInOut(t){return t<.5?2*t*t:-1+(4-2*t)*t;}
+
     spawnBall(path,bucket,bet,mult,onLand){
-        const bR=this.W*0.022;
-        const pts=[{x:this.W/2,y:this.pinR*2.5}];
+        const pts=[{x:this.W/2,y:this.pinR*1.5}];
         let rR=0;
         for(let r=0;r<PL_ROWS;r++){
             if(path[r])rR++;
-            const rowY=this.pins[r][0].y+(r<PL_ROWS-1?(this.pins[r+1][0].y-this.pins[r][0].y)*0.5:0);
+            const y=this.pins[r][0].y+(r<PL_ROWS-1?this.rowH*0.42:this.slotH*0.25);
             const t=rR/PL_ROWS;
-            const slotX=this.slots[0].cx+(this.slots[PL_SLOTS-1].cx-this.slots[0].cx)*t;
-            const jit=(Math.random()-0.5)*this.W*0.03;
-            pts.push({x:slotX+jit,y:rowY});
+            const x=this.slots[0].cx+(this.slots[PL_SLOTS-1].cx-this.slots[0].cx)*t;
+            pts.push({x,y});
         }
-        pts.push({x:this.slots[bucket].cx,y:this.slots[bucket].y+this.slots[bucket].h*0.5});
+        pts.push({x:this.slots[bucket].cx,y:this.slots[bucket].y+this.slots[bucket].h*0.55});
+        const bR=Math.max(5,this.W*0.019);
         this.balls.push({pts,frame:0,bucket,bet,mult,onLand,done:false,landed:false,bR,swing:0,swingV:0});
     }
+
     update(dt){
-        for(let i=0;i<PL_SLOTS;i++){if(this.slotFlash[i]>0)this.slotFlash[i]=Math.max(0,this.slotFlash[i]-dt*2.5);}
+        for(let i=0;i<PL_SLOTS;i++) if(this.slotFlash[i]>0) this.slotFlash[i]=Math.max(0,this.slotFlash[i]-dt*2.0);
         for(const b of this.balls){
             if(b.done)continue;
-            b.frame+=dt*3.2;
+            b.frame+=dt*3.0; // скорость шарика
             const tot=b.pts.length-1;
             const si=Math.min(Math.floor(b.frame),tot-1);
             const segT=this.easeInOut(Math.min(b.frame-si,1));
             const p0=b.pts[si],p1=b.pts[si+1]||p0;
-            // Физика маятника — отскок при каждом пине
-            const atPin=(b.frame%1)<0.15;
-            if(atPin&&si>0&&si<tot-1){b.swingV+=(Math.random()-0.5)*80;}
-            b.swingV*=0.88;
-            b.swing+=b.swingV*dt;
-            b.x=p0.x+(p1.x-p0.x)*segT+b.swing*0.012;
+            // Отскок: каждый раз когда переходим на новый сегмент
+            if(b.frame>0.5&&(b.frame%1)<dt*3.5){
+                b.swingV+=(Math.random()-0.5)*55;
+            }
+            b.swingV*=0.80;b.swing+=b.swingV*dt;
+            b.x=p0.x+(p1.x-p0.x)*segT+b.swing*0.018;
             b.y=p0.y+(p1.y-p0.y)*segT;
-            if(b.frame>=tot){b.done=true;b.landed=true;this.slotFlash[b.bucket]=1;if(b.onLand)b.onLand(b);}
+            if(b.frame>=tot){b.done=true;b.landed=true;this.slotFlash[b.bucket]=1.2;if(b.onLand)b.onLand(b);}
         }
         this.balls=this.balls.filter(b=>!b.done||b.landed);
     }
+
     draw(){
         const {ctx,W,H}=this;
         ctx.clearRect(0,0,W,H);
         ctx.fillStyle='#060606';ctx.fillRect(0,0,W,H);
         this.drawPins();this.drawSlots();
-        for(const b of this.balls)if(!b.landed)this.drawBall(b);
+        for(const b of this.balls) if(!b.landed) this.drawBall(b);
     }
+
     drawPins(){
         const {ctx}=this;
         for(let r=0;r<PL_ROWS;r++){
             const t=r/(PL_ROWS-1);
-            const cr=Math.round(255*(1-t)+68*t),cg=Math.round(238*(1-t)+221*t),cb=Math.round(68*(1-t)+255*t);
+            const cr=Math.round(255-187*t),cg=Math.round(238-17*t),cb=Math.round(68+187*t);
             ctx.fillStyle=`rgb(${cr},${cg},${cb})`;ctx.shadowColor=`rgb(${cr},${cg},${cb})`;ctx.shadowBlur=7;
             for(const p of this.pins[r]){ctx.beginPath();ctx.arc(p.x,p.y,this.pinR,0,Math.PI*2);ctx.fill();}
         }
         ctx.shadowBlur=0;
     }
+
     drawSlots(){
-        const {ctx,W}=this;
+        const {ctx}=this;
         for(let i=0;i<PL_SLOTS;i++){
-            const sl=this.slots[i],f=this.slotFlash[i],m=sl.m;
+            const sl=this.slots[i],f=Math.min(1,this.slotFlash[i]),m=sl.m;
             const isSkull=m===0,isTop=m>=2;
-            ctx.fillStyle=f>0?`rgba(0,255,136,${f*0.45})`:(isSkull?'#1a0004':(isTop?'#001a08':'#0d0d0d'));
-            ctx.beginPath();ctx.roundRect?ctx.roundRect(sl.x+1,sl.y+3,sl.w-2,sl.h-5,4):ctx.rect(sl.x+1,sl.y+3,sl.w-2,sl.h-5);ctx.fill();
-            ctx.strokeStyle=isSkull?'#ff2255':(isTop?'#00ff88':'#2a2a2a');ctx.lineWidth=1.5;
-            ctx.beginPath();ctx.roundRect?ctx.roundRect(sl.x+1,sl.y+3,sl.w-2,sl.h-5,4):ctx.rect(sl.x+1,sl.y+3,sl.w-2,sl.h-5);ctx.stroke();
-            const fs=Math.max(8,Math.floor(sl.w*0.26));
-            ctx.font=`bold ${fs}px Arial`;ctx.textAlign='center';ctx.textBaseline='middle';
-            ctx.fillStyle=isSkull?'#ff2255':(isTop?'#00ff88':'#aaa');
-            ctx.fillText(isSkull?'💀':('x'+m),sl.cx,sl.y+sl.h*0.5);
+            ctx.fillStyle=f>0?`rgba(0,255,136,${f*0.5})`:(isSkull?'#1a0005':(isTop?'#00180a':'#0d0d0d'));
+            const rx=3;
+            ctx.beginPath();ctx.roundRect?ctx.roundRect(sl.x+1,sl.y+3,sl.w-2,sl.h-4,rx):ctx.rect(sl.x+1,sl.y+3,sl.w-2,sl.h-4);ctx.fill();
+            ctx.strokeStyle=isSkull?'#ff2255':(isTop?'#00ff88':'#232323');ctx.lineWidth=1.5;
+            ctx.beginPath();ctx.roundRect?ctx.roundRect(sl.x+1,sl.y+3,sl.w-2,sl.h-4,rx):ctx.rect(sl.x+1,sl.y+3,sl.w-2,sl.h-4);ctx.stroke();
+            ctx.textAlign='center';ctx.textBaseline='middle';
+            const fs=Math.max(8,Math.floor(sl.w*0.25));ctx.font=`bold ${fs}px Arial`;
+            ctx.fillStyle=isSkull?'#ff2255':(isTop?'#00ff88':'#bbb');
+            ctx.shadowColor=isTop?'#00ff88':isSkull?'#ff2255':'none';ctx.shadowBlur=isTop||isSkull?6:0;
+            ctx.fillText(isSkull?'💀':('x'+m),sl.cx,sl.y+sl.h*0.5);ctx.shadowBlur=0;
         }
     }
+
     drawBall(b){
-        if(!b.x&&!b.y)return;
-        const {ctx}=this;
-        const x=b.x,y=b.y,R=b.bR;
-        const g=ctx.createRadialGradient(x,y,0,x,y,R*3);
-        g.addColorStop(0,'rgba(0,255,136,0.35)');g.addColorStop(1,'rgba(0,255,136,0)');
-        ctx.beginPath();ctx.arc(x,y,R*3,0,Math.PI*2);ctx.fillStyle=g;ctx.fill();
+        if(!b.x)return;
+        const {ctx}=this;const x=b.x,y=b.y,R=b.bR;
+        const g=ctx.createRadialGradient(x,y,0,x,y,R*3.2);
+        g.addColorStop(0,'rgba(0,255,136,0.28)');g.addColorStop(1,'rgba(0,255,136,0)');
+        ctx.beginPath();ctx.arc(x,y,R*3.2,0,Math.PI*2);ctx.fillStyle=g;ctx.fill();
         const b2=ctx.createRadialGradient(x-R*0.3,y-R*0.3,R*0.05,x,y,R);
-        b2.addColorStop(0,'#ddffd8');b2.addColorStop(0.5,'#00ff88');b2.addColorStop(1,'#009944');
+        b2.addColorStop(0,'#eefff4');b2.addColorStop(0.45,'#00ff88');b2.addColorStop(1,'#005530');
         ctx.beginPath();ctx.arc(x,y,R,0,Math.PI*2);
         ctx.fillStyle=b2;ctx.shadowColor='#00ff88';ctx.shadowBlur=12;ctx.fill();ctx.shadowBlur=0;
     }
+
     loop(){
         let last=performance.now();
         const tick=now=>{const dt=Math.min((now-last)/1000,0.05);last=now;this.update(dt);this.draw();this.raf=requestAnimationFrame(tick);};
@@ -3044,19 +3038,19 @@ function setPlinkoRisk(r,b){}
 async function playPlinko(){
     const betVal=parseFloat($('pl-bet')?.value);
     if(isNaN(betVal)||betVal<0.1||betVal>25)return showToast('Мин 0.1, Макс 25 TON');
-    const bal=mode==='demo'?user.demo_balance:user.balance;
-    if(betVal>bal)return showToast('Недостаточно средств');
+    if(betVal>(mode==='demo'?user.demo_balance:user.balance))return showToast('Недостаточно средств');
     playSound('click');
     if(!_plinkoEng)initPlinkoEngine();
+    // Нет задержки — сразу бросаем запрос
     try{
         const r=await fetch('/api/plinko',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:user.id,bet:betVal,mode})});
         const data=await r.json();if(!r.ok){showToast(data.error||'Ошибка');return;}
         _plinkoEng.spawnBall(data.path,data.bucket,betVal,data.multiplier,()=>{
             user=data.user;updateUI();
             const resEl=$('plinko-result');
-            if(resEl){resEl.innerText=data.win>0?'✅ +'+data.win.toFixed(2)+' TON (x'+data.multiplier+')':'❌ Череп (-'+betVal+' TON)';resEl.style.color=data.win>0?'#00ff88':'#ff2255';}
-            if(data.win>0){playSound('win');flyToBalance(data.win);showToast('💰 +'+data.win.toFixed(2)+' TON!');
-                if(data.multiplier>=5) showShareWin(betVal,data.multiplier,data.win);}
+            const profit=data.profit!==undefined?data.profit:(data.win-betVal);
+            if(resEl){resEl.innerText=data.win>0?'✅ +'+profit.toFixed(2)+' TON (x'+data.multiplier+')':'❌ Череп (-'+betVal+' TON)';resEl.style.color=data.win>0?'#00ff88':'#ff2255';}
+            if(data.win>0){playSound('win');flyToBalance(profit);showToast('💰 +'+profit.toFixed(2)+' TON!');}
         });
     }catch(e){showToast('Ошибка соединения');}
 }
