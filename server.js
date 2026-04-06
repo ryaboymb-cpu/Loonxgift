@@ -12,6 +12,21 @@ const server = http.createServer(app);
 const io = socketIo(server, { cors: { origin: "*" } });
 
 app.use(cors()); 
+
+// Конвертация TON адреса UQ.../EQ... → raw 0:hex (для TonCenter и TonConnect)
+function walletToRaw(a) {
+    if (!a) return null;
+    a = a.replace(/[^A-Za-z0-9\-_+=/]/g,'').trim();
+    if (/^-?[0-9]+:[0-9a-fA-F]{64}$/.test(a)) return a;
+    try {
+        let b64 = a.replace(/-/g,'+').replace(/_/g,'/');
+        while (b64.length%4) b64+='=';
+        const b = Buffer.from(b64,'base64');
+        if (b.length<34) return null;
+        const wc = b[1]===0xff?-1:b[1];
+        return wc+':'+b.slice(2,34).toString('hex');
+    } catch(e){ return null; }
+}
 app.use(express.json());
 
 // Защита от падения сервера
@@ -458,7 +473,9 @@ app.post('/api/auth', async (req, res) => {
 
     const wagerSett = await Settings.findOne({ key: 'wager_multiplier' });
     const wagerMult = wagerSett ? wagerSett.value : 2;
-    res.json({ user: userObj, adminWallet: (process.env.ADMIN_WALLET||'').replace(/[^A-Za-z0-9\-_+=/]/g,'').trim(), rtp: rtpData, maintenance: maintenanceData, wagerMultiplier: wagerMult });
+    const _raw = walletToRaw(process.env.ADMIN_WALLET);
+    console.log('[Auth] rawWallet='+(_raw?_raw.slice(0,15):'NULL'));
+    res.json({ user: userObj, adminWallet: (process.env.ADMIN_WALLET||'').trim(), rawAdminWallet: _raw||'', rtp: rtpData, maintenance: maintenanceData, wagerMultiplier: wagerMult });
 });
 
 app.post('/api/bet', async (req, res) => {
@@ -814,7 +831,7 @@ app.post('/api/spin', async (req, res) => {
 
 // === MINE GAME (Minecraft-style) ===
 const MINE_BLOCKS=['dirt','stone','redstone','gold_block','diamond_block','obsidian'];
-const MINE_BLOCK_MULTS={grass:0.00,dirt:0.05,stone:0.09,redstone:0.12,gold_block:0.15,diamond_block:0.20,obsidian:0.23,gold:0.15,diamond:0.20};
+const MINE_BLOCK_MULTS={grass:0.00,dirt:0.03,stone:0.06,redstone:0.09,gold_block:0.12,diamond_block:0.16,obsidian:0.20,gold:0.12,diamond:0.16};
 // 6 rows: row 0 = grass top layer, rows 1-5 = underground
 const MINE_ROW_WEIGHTS = [
     [1.00,0.00,0.00,0.00,0.00,0.00],
@@ -951,37 +968,31 @@ app.post('/api/mine', async (req, res) => {
         for (let c = 0; c < 5; c++) chestMults.push(pickChestMult());
         const effectiveBet = isFreeAutoSpin ? 0.5 : betAmount;
 
-        // Win считается ТОЛЬКО за блоки которые реально сломает кирка
-        // Durability: wooden=1, stone=2, iron=3, golden=4, diamond=5 блоков
+        // Win за РЕАЛЬНО сломанные блоки (по durability кирки)
         const SRV_DUR={wooden:1,stone:2,iron:3,golden:4,diamond:5};
-        // Определяем колонки с кирками и их тип
-        const colBestPick={};
+        const colPick={};
         (hotbar||[]).forEach((slot,idx)=>{
             const col=idx%5;
             if(slot&&slot.type==='pickaxe'){
                 const pt=slot.pickaxeType||'wooden';
                 const rank={wooden:0,stone:1,iron:2,golden:3,diamond:4};
-                if(colBestPick[col]===undefined||rank[pt]>rank[colBestPick[col]]) colBestPick[col]=pt;
+                if(colPick[col]===undefined||rank[pt]>rank[colPick[col]]) colPick[col]=pt;
             }
-            if(slot&&slot.type==='tnt'&&colBestPick[col]===undefined) colBestPick[col]='tnt';
+            if(slot&&slot.type==='tnt'&&colPick[col]===undefined) colPick[col]='tnt';
         });
-
-        // Считаем win только за сломанные блоки
         const adjustedBlockWins=[];
         for(let r=0;r<6;r++) adjustedBlockWins.push([0,0,0,0,0]);
-
-        for(const [colStr,pType] of Object.entries(colBestPick)){
+        for(const[colStr,pType]of Object.entries(colPick)){
             const col=parseInt(colStr);
-            const maxBlocks=pType==='tnt'?3:(SRV_DUR[pType]||1);
+            const maxB=pType==='tnt'?3:(SRV_DUR[pType]||1);
             let broken=0;
-            for(let r=1;r<6&&broken<maxBlocks;r++){
+            for(let r=1;r<6&&broken<maxB;r++){
                 if(!grid[r][col]) continue;
                 const mult=MINE_BLOCK_MULTS[grid[r][col]]||0;
                 adjustedBlockWins[r][col]=parseFloat((effectiveBet*mult).toFixed(3));
                 broken++;
             }
         }
-
         let blockWinSum=0;
         for(let r=0;r<6;r++) for(let c=0;c<5;c++) blockWinSum+=adjustedBlockWins[r][c];
         let actualWin=Number(blockWinSum.toFixed(2));
@@ -995,7 +1006,6 @@ app.post('/api/mine', async (req, res) => {
             chestActivated.push(Math.random() < 0.005);
         }
 
-        // Сундук = бонус к ставке (не к всему балансу)
         let chestBonusWin=0;
         for(let c=0;c<5;c++){if(chestActivated[c])chestBonusWin+=effectiveBet*(chestMults[c]-1);}
         actualWin=Number((actualWin+chestBonusWin).toFixed(2));
@@ -1059,7 +1069,7 @@ app.post('/api/upgrade', async (req, res) => {
             const betEntry = new Bet({ userId: user.id, username: user.username, avatar: user.photo || '', game: 'Upgrade', amount: betAmount, multiplier: mult, result: actualWin - betAmount, mode: 'Real', balanceAfter: user[field], balance: user[field] });
             await betEntry.save(); pushToGlobalHistory(betEntry);
         }
-        res.json({ win: actualWin, multiplier: Number(mult.toFixed(2)), profit: isWin?Number((actualWin-betAmount).toFixed(2)):-betAmount, user });
+        res.json({ win: actualWin, multiplier: Number(mult.toFixed(2)), isWin, profit: isWin?Number((actualWin-betAmount).toFixed(2)):-betAmount, user });
     } catch (err) { console.error('Upgrade error:', err); res.status(500).json({ error: 'Ошибка сервера' }); } finally { actionLocks.delete(id); }
 });
 
@@ -1177,24 +1187,12 @@ app.post('/api/check_deposit', async (req, res) => {
     const apiKey      = process.env.TON_API_KEY;
     if (!adminWallet) return res.status(500).json({error:'ADMIN_WALLET не задан в Render'});
     if (!apiKey)      return res.status(500).json({error:'TON_API_KEY не задан в Render'});
-    function toRaw(a) {
-        a=a.replace(/[^A-Za-z0-9\-_+=/]/g,'').trim();
-        if(/^-?[0-9]+:[0-9a-fA-F]{64}$/.test(a)) return a;
-        try{
-            let b64=a.replace(/-/g,'+').replace(/_/g,'/');
-            while(b64.length%4) b64+='=';
-            const b=Buffer.from(b64,'base64');
-            if(b.length<34) return null;
-            const wc=b[1]===0xff?-1:b[1];
-            return wc+':'+b.slice(2,34).toString('hex');
-        }catch(e){return null;}
-    }
-    const rawAddr=toRaw(adminWallet);
-    if(!rawAddr) return res.status(500).json({error:'Неверный ADMIN_WALLET: '+adminWallet.slice(0,20)});
-    const cleanKey=apiKey.trim().replace(/[\r\n\s]/g,'');
-    const userId=String(id).trim();
+    const rawAddr  = walletToRaw(adminWallet);
+    if (!rawAddr) return res.status(500).json({error:'Неверный ADMIN_WALLET: '+adminWallet.slice(0,20)});
+    const cleanKey = apiKey.trim().replace(/[\r\n\s]/g,'');
+    const userId   = String(id).trim();
     console.log('[Dep] raw='+rawAddr.slice(0,15)+'... user='+userId);
-    try{
+    try {
         const r=await fetch('https://toncenter.com/api/v2/getTransactions?address='+encodeURIComponent(rawAddr)+'&limit=50&api_key='+cleanKey);
         const txt=await r.text();
         if(!r.ok){console.error('[Dep]',r.status,txt.slice(0,100));return res.status(400).json({error:'TonCenter HTTP '+r.status});}
@@ -1229,13 +1227,13 @@ app.post('/api/check_deposit', async (req, res) => {
                 user.wagerRequired=Number(((user.wagerRequired||0)+amt*(ws?Number(ws.value):2)).toFixed(2));
                 await user.save();
                 foundNew=true;totalAdded+=amt;
-                console.log('[Dep] +'+amt+' TON user='+userId);
-                if(bot)bot.sendMessage(id,'📥 +*'+amt+' TON* зачислено!',{parse_mode:'Markdown'}).catch(()=>{});
+                console.log('[Dep] ✅ +'+amt+' TON user='+userId);
+                if(bot)bot.sendMessage(id,'📥 *+'+amt+' TON* зачислено!',{parse_mode:'Markdown'}).catch(()=>{});
                 if(user.referredBy){const ref=await User.findOne({id:user.referredBy});if(ref){const bon=Number((amt*0.1).toFixed(2));ref.balance=Number((ref.balance+bon).toFixed(2));ref.referralEarnings=Number(((ref.referralEarnings||0)+bon).toFixed(2));await ref.save();}}
             }catch(de){console.error('[Dep] DB:',de.message);}
         }
         if(foundNew){const u=await User.findOne({id});return res.json({success:true,added:totalAdded,user:u});}
-        return res.status(400).json({error:'Оплата не найдена. Укажи ID '+userId+' в комментарии.'});
+        return res.status(400).json({error:'Оплата не найдена. Укажи ID '+userId+' в комментарии перевода.'});
     }catch(e){console.error('[Dep]',e.message);return res.status(500).json({error:'Ошибка. Попробуй позже.'});}
 });
 
