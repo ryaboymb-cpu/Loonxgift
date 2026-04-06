@@ -221,13 +221,9 @@ body {
   padding: 6px 8px 0;
 }
 .mine-card {
-  /* Адаптивная ширина: блок = высота/9, ширина = блок×5 */
-  /* На телефоне: доступная высота ≈ 100vh - 75px(hotbar) - 176px(back+bets) = ~350px */
-  /* Блок ≈ 350/9 ≈ 38px, ширина = 38×5 = 190px */
-  /* На большом экране (740px): (740-75-176)/9 = 54px, ширина = 270px */
   flex: 0 0 auto !important;
-  width: min(calc((100vh - 251px) * 5 / 9), 90vw) !important;
-  max-width: 300px;
+  width: 100%;
+  max-width: 190px;
   padding: 2px 2px;
   display: flex !important;
   flex-direction: column;
@@ -262,7 +258,7 @@ body {
   justify-content: center;
   font-size: 12px;
   position: relative;
-  overflow: hidden; /* квадрат, без выхода за границы */
+  overflow: visible;
   transition: background 0.12s;
   aspect-ratio: 1;
 }
@@ -282,7 +278,7 @@ body {
 /* ─── ЗОНА ПОЛЁТА (пространство между инвентарём и шахтой) ─── */
 .mine-flight-zone {
   flex-shrink: 0;
-  height: 6px;
+  height: 4px;
   position: relative;
   background: linear-gradient(180deg, #1c1008 0%, #080402 100%);
   border-left: 2px solid #2a1808;
@@ -466,17 +462,13 @@ body {
 }
 /* All pickaxe/item images in inventory must match hotbar */
 .inv-cell img {
-  width: 58% !important;
-  height: 58% !important;
-  /* Нет max-width в пикселях — пусть масштабируется с ячейкой */
-  max-width: 24px !important;
-  max-height: 24px !important;
-  min-width: 10px !important;
-  min-height: 10px !important;
+  width: 70% !important;
+  height: 70% !important;
+  max-width: 28px !important;
+  max-height: 28px !important;
   object-fit: contain !important;
   image-rendering: pixelated !important;
   display: block;
-  flex-shrink: 0;
 }
 
 /* ─── КНИГА СТАТУС ─── */
@@ -745,29 +737,23 @@ body {
   text-align: right;
 }
 
-/* ═══ FINAL FIXES ═══ */
+/* ══ LoonxGift Final ══ */
 .spin-cell.sym-N { color: #ff2255 !important; opacity: 0.65; font-weight: 700; }
+.inv-cell { overflow: hidden !important; }
+.inv-cell img {
+  width: 56% !important; height: 56% !important;
+  max-width: 22px !important; max-height: 22px !important;
+  min-width: 10px !important; min-height: 10px !important;
+  object-fit: contain !important; image-rendering: pixelated !important;
+  display: block; flex-shrink: 0;
+}
+.mine-flight-zone { height: 8px !important; }
+/* Mine card: квадратные блоки — max-width определяет размер блоков (190/5=38px) */
+/* НЕ ДОБАВЛЯЕМ display:flex на #page-mine без .active — это ломает page switching! */
 .upg-disk { border-radius:50%; transform-origin:center; will-change:transform; }
 #upg-slider::-webkit-slider-thumb {
   -webkit-appearance:none; width:22px; height:22px; border-radius:50%;
   background:#fff; border:3px solid #00e5ff; box-shadow:0 0 8px rgba(0,229,255,0.5); cursor:pointer;
 }
-/* page-mine без скролла: layout через flex */
-#page-mine {
-  display: flex;
-  flex-direction: column;
-  height: calc(100vh - 75px); /* hotbar */
-  overflow: hidden;
-}
-#page-mine .game-back-btn { flex-shrink: 0; }
-#page-mine .mine-card { flex: 1 1 0; overflow: hidden; }
-#page-mine .mine-bet-row { flex-shrink: 0; }
-#page-mine .mine-card .mc-shaft {
-  flex: 6;    /* shaft занимает 6 из 9 частей */
-}
-#page-mine .mine-card .mc-inventory {
-  flex: 3;    /* инвентарь занимает 3 из 9 частей */
-}
-#page-mine .mine-card .mc-chests-row {
-  flex-shrink: 0;
-}
+/* Mine bet row sticky — прилипает к низу экрана чтобы всегда была видна */
+.mine-bet-row { position: sticky; bottom: 0; background: rgba(10,10,10,0.96); z-index: 10; }
