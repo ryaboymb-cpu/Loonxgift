@@ -737,100 +737,21 @@ body {
   text-align: right;
 }
 
-/* ═══════════════════════════════════════════
-   LOONXGIFT — GRAND UPDATE CSS
-═══════════════════════════════════════════ */
-
-/* ─── N символ (красный, не платит) ─── */
-.spin-cell.sym-N { color:#ff2255 !important; opacity:0.65; font-weight:700; }
-
-/* ─── Overflow mine ─── */
+/* ═══════════════════════════ LoonxGift ═══════════════════════════ */
+.spin-cell.sym-N { color: #ff2255 !important; opacity: 0.65; font-weight: 700; }
 .inv-cell { overflow: hidden !important; }
 .inv-cell img {
-  width:56% !important; height:56% !important;
-  max-width:20px !important; max-height:20px !important;
-  min-width:12px !important; min-height:12px !important;
-  object-fit:contain !important; image-rendering:pixelated !important;
-  display:block; flex-shrink:0;
+  width:56%!important;height:56%!important;max-width:20px!important;max-height:20px!important;
+  min-width:12px!important;min-height:12px!important;object-fit:contain!important;
+  image-rendering:pixelated!important;display:block;flex-shrink:0;
 }
-.mine-flight-zone { height:10px !important; }
-
-/* ─── Upgrade disk ─── */
+.mine-flight-zone { height: 10px !important; }
+.mine-card { max-width: 210px !important; }
+/* Upgrade disk */
 .upg-disk { border-radius:50%; transform-origin:center; will-change:transform; }
 #upg-slider::-webkit-slider-thumb {
   -webkit-appearance:none; width:22px; height:22px; border-radius:50%;
   background:#fff; border:3px solid #00e5ff; box-shadow:0 0 8px rgba(0,229,255,0.5); cursor:pointer;
 }
-
-/* ─── GAMES GRID 3-col ─── */
-.games-grid-3 {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
-  margin-bottom: 8px;
-}
-.gc3 {
-  background: linear-gradient(145deg, rgba(var(--gc),0.12), rgba(var(--gc),0.04));
-  border: 1px solid rgba(var(--gc),0.35);
-  border-radius: 14px;
-  padding: 12px 6px 10px;
-  text-align: center;
-  cursor: pointer;
-  transition: transform 0.15s, box-shadow 0.15s;
-  position: relative;
-  overflow: hidden;
-}
-.gc3::before {
-  content:'';position:absolute;inset:0;border-radius:14px;
-  background:radial-gradient(circle at 50% 0%, rgba(var(--gc),0.15) 0%, transparent 70%);
-}
-.gc3:active { transform:scale(0.94); }
-.gc3-i { font-size:28px; margin-bottom:4px; display:block; }
-.gc3-n { font-size:11px; font-weight:800; color:#fff; letter-spacing:0.5px; }
-
-/* ─── Share Win Overlay ─── */
-@keyframes sharePopIn {
-  0% { transform:scale(0.5); opacity:0; }
-  70% { transform:scale(1.05); opacity:1; }
-  100% { transform:scale(1); }
-}
-@keyframes pulse { 0%,100%{transform:scale(1);} 50%{transform:scale(1.06);} }
-@keyframes floatIn { from{transform:translateY(20px);opacity:0;} to{transform:translateY(0);opacity:1;} }
-
-/* ─── Page transitions ─── */
-.page { animation: floatIn 0.25s ease; }
-
-/* ─── Mine card larger ─── */
-.mine-card { max-width:200px !important; }
-
-/* ─── Button hover glow ─── */
-.btn { transition: transform 0.15s, box-shadow 0.15s !important; }
-.btn:active { transform:scale(0.96) !important; }
-
-/* ─── Game back button ─── */
-.game-back-btn {
-  background: rgba(255,255,255,0.06) !important;
-  border: 1px solid rgba(255,255,255,0.1) !important;
-  border-radius: 10px !important;
-  color: #ccc !important;
-  padding: 6px 14px !important;
-  font-size: 13px !important;
-  cursor: pointer;
-  margin-bottom: 8px !important;
-  transition: background 0.15s;
-}
-.game-back-btn:active { background: rgba(255,255,255,0.1) !important; }
-
-/* ─── Spin layout compact ─── */
-.spin-screen { padding: 10px !important; }
-.spin-grid { gap: 4px !important; }
-.spin-cell { font-size: 16px !important; height: 44px !important; }
-
-/* ─── QBet buttons ─── */
-.qb-btn { font-size:12px !important; padding:5px 8px !important; min-width:36px !important; }
-
-/* ─── Input boxes compact ─── */
-.input-box { height: 38px !important; font-size: 14px !important; }
-
-/* ─── Hotbar ─── */
-.hotbar { z-index:100 !important; }
+/* Plinko back btn compact */
+#page-plinko .game-back-btn { margin-bottom:5px !important; }
