@@ -399,7 +399,7 @@ function nav(pageId, el) {
 
 function navGame(game){
     let mKey=game;if(game==='coin')mKey='coinflip';
-    if(game==='cases'){nav('cases');return;}// Cases всегда доступен
+    if(game==='cases'){nav('cases');return;}
     if(maintenance[mKey])return showToast('Временно тех. перерыв');
     if(game!=='mine')killAllPickaxes();
     nav(game);
@@ -1398,8 +1398,8 @@ function renderAdminContent(tab) {
             <div><b>🎰 Spin RTP (%):</b> <input type="number" id="rtp-spin" value="${adData.rtp.spin||40}" class="input-box" style="padding:5px; width:70px; display:inline-block;"> <button class="btn" style="padding:5px; width:auto; display:inline-block; background:linear-gradient(90deg,#ff6b00,#ff0055);" onclick="adminRTP('spin')">OK</button></div>
             <div><b>⛏️ Mine RTP (%):</b> <input type="number" id="rtp-mine" value="${adData.rtp.mine||40}" class="input-box" style="padding:5px; width:70px; display:inline-block;"> <button class="btn" style="padding:5px; width:auto; display:inline-block; background:linear-gradient(90deg,#7a4920,#c07030);" onclick="adminRTP('mine')">OK</button></div>
             <div><b>⬆️ Upgrade RTP (%):</b> <input type="number" id="rtp-upgrade" value="${adData.rtp.upgrade||85}" class="input-box" style="padding:5px; width:70px; display:inline-block;"> <button class="btn" style="padding:5px; width:auto; display:inline-block; background:linear-gradient(90deg,#0097a7,#00e5ff);" onclick="adminRTP('upgrade')">OK</button></div>
-            <div><b>📍 Plinko RTP (%):</b> <input type="number" id="rtp-plinko" value="${adData.rtp.plinko||88}" class="input-box" style="padding:5px; width:70px; display:inline-block;"> <button class="btn" style="padding:5px; width:auto; display:inline-block; background:linear-gradient(90deg,#9c27b0,#e040fb);" onclick="adminRTP('plinko')">OK</button></div>
-            <div><b>🦆 Duck RTP (%):</b> <input type="number" id="rtp-duck" value="${adData.rtp.duck||87}" class="input-box" style="padding:5px; width:70px; display:inline-block;"> <button class="btn" style="padding:5px; width:auto; display:inline-block; background:linear-gradient(90deg,#f9a825,#ffd600); color:#000;" onclick="adminRTP('duck')">OK</button></div>
+            <div><b>🎁 Cases RTP (%):</b> <input type="number" id="rtp-cases" value="${adData.rtp.cases||90}" class="input-box" style="padding:5px; width:70px; display:inline-block;"> <button class="btn" style="padding:5px; width:auto; display:inline-block; background:linear-gradient(90deg,#6a1b9a,#ce93d8);" onclick="adminRTP('cases')">OK</button></div>
+
             <hr>
             <h4 style="color:var(--neon); margin-bottom:10px;">ОТЫГРЫШ (ВЕЙДЖЕР)</h4>
             <div><b>Множитель отыгрыша (x):</b> <input type="number" id="wager-mult" value="${adData.wagerMultiplier || 2}" class="input-box" style="padding:5px; width:70px; display:inline-block;" step="0.5" min="1" max="20"> <button class="btn" style="padding:5px; width:auto; display:inline-block; background:#ffcc00; color:#000;" onclick="adminSetWager()">OK</button></div>
@@ -2011,25 +2011,35 @@ function spawnPickaxeWorker(blockQueue, pickaxeType, workerIdx, onWorkerDone, on
         remainDur -= hitsCanDo;
 
         const shaft = $('mc-shaft');
-        const bx = blkEl.offsetLeft + blkEl.offsetWidth / 2;
-        const blockTop = blkEl.offsetTop;
-        const startY = blockTop - 26;
-        const hoverY = blockTop - 12;
-        const hitY   = blockTop + 2;
-
-        const pUrl=getPickaxeImg(pickaxeType);const el=document.createElement('img');el.src=pUrl;
-        const _br=blkEl.getBoundingClientRect();const _cx=_br.left+_br.width/2;
-        const _sy=_br.top-26,_hy=_br.top-8,_hity=_br.top+2;
-        el.style.cssText=`position:fixed;width:22px;height:22px;z-index:99999;pointer-events:none;image-rendering:pixelated;left:${_cx}px;top:${_sy}px;transform:translate(-50%,-100%);`;
+        // Кирка стартует из слота инвентаря (hotbar), падает на блок
+        const _blkBR=blkEl.getBoundingClientRect();
+        const _bxFixed=_blkBR.left+_blkBR.width/2;
+        const _hitYFixed=_blkBR.top+2;
+        const _hoverYFixed=_blkBR.top-10;
+        // Ищем слот хотбара для этой кирки (по колонке блока)
+        const _blockCol=blk.c; // колонка блока 0-4
+        let _slotStartX=_bxFixed, _slotStartY=_blkBR.top-60;
+        const _slotEl=document.getElementById(`inv-${Math.floor(_blockCol/1)}-${_blockCol%5}`)||
+                      document.querySelector(`[id^="inv-"][id$="-${_blockCol}"]`);
+        if(_slotEl){const _sBR=_slotEl.getBoundingClientRect();_slotStartX=_sBR.left+_sBR.width/2;_slotStartY=_sBR.top+_sBR.height/2;}
+        const pUrl = getPickaxeImg(pickaxeType);
+        const el = document.createElement('img');
+        el.src = pUrl;
+        el.style.cssText = `position:fixed;width:24px;height:24px;z-index:99999;pointer-events:none;image-rendering:pixelated;left:${_slotStartX}px;top:${_slotStartY}px;transform:translate(-50%,-50%) rotate(-30deg);transition:none;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.7));`;
         document.body.appendChild(el);
         _pickaxeEls.add(el);
+        // Прячем иконку в слоте во время полёта кирки
+        if(_slotEl){_slotEl.style.opacity='0.3';}
 
         function removeEl() {
             _pickaxeEls.delete(el);
             if (el.parentNode) el.parentNode.removeChild(el);
+            // Возвращаем opacity слота
+            if(typeof _slotEl!=='undefined'&&_slotEl) _slotEl.style.opacity='';
         }
 
-        _animProp(el,'top',_sy,_hy,180,t=>t*t,()=>{
+        // Фаза 1: летим из слота к блоку (дугой через left)
+        _animPropXY(el, _slotStartX, _slotStartY, _bxFixed, _hoverYFixed, 320, t=>{const e=t<.5?2*t*t:-1+(4-2*t)*t;return e;}, () => {
             if (!mineIsActive) { removeEl(); return; }
             blkEl.classList.add('cracking-1');
             doHits(hitsCanDo, 0);
@@ -2040,7 +2050,7 @@ function spawnPickaxeWorker(blockQueue, pickaxeType, workerIdx, onWorkerDone, on
             const swingAngle = hitNum % 2 === 0 ? -25 : 25;
             el.style.transform = `translate(-50%,-100%) rotate(${swingAngle}deg)`;
 
-            _animProp(el,'top',_hy,_hity,120,t=>t*t,()=>{
+            _animProp(el, 'top', hoverY, hitY, 120, t => t*t, () => {
                 if (!mineIsActive) { removeEl(); return; }
                 el.style.transform = `translate(-50%,-100%) rotate(0deg)`;
                 playSound('hit');
@@ -2059,13 +2069,13 @@ function spawnPickaxeWorker(blockQueue, pickaxeType, workerIdx, onWorkerDone, on
                         doBreakBlock(blkEl, blk, null, () => {
                             if (onBlockBroken) onBlockBroken(blk.r, blk.c);
                         });
-                        _animProp(el,'top',_hity,_sy,200,t=>1-(1-t)*(1-t),()=>{
+                        _animProp(el, 'top', hitY, startY, 200, t => 1-(1-t)*(1-t), () => {
                             removeEl();
                             setTimeout(processNext, 100);
                         });
                     } else {
                         blkEl.classList.add('cracking-2');
-                        _animProp(el,'top',_hity,_hy,100,t=>1-(1-t)*(1-t),()=>{
+                        _animProp(el, 'top', hitY, hoverY, 100, t => 1-(1-t)*(1-t), () => {
                             if (!mineIsActive) { removeEl(); return; }
                             doPickaxeBreak(null, () => { removeEl(); if (onWorkerDone) onWorkerDone(); }, true, el, bx, hoverY);
                         });
@@ -2127,11 +2137,11 @@ function spawnPickaxeWorker(blockQueue, pickaxeType, workerIdx, onWorkerDone, on
         el = document.createElement('img');
         el.src = pUrl;
         const _br2=blkEl.getBoundingClientRect();const _cx2=_br2.left+_br2.width/2,_sy2=_br2.top-28,_hy2=_br2.top-8;
-        el.style.cssText=`position:fixed;width:22px;height:22px;z-index:99999;pointer-events:none;image-rendering:pixelated;transform:translate(-50%,-100%);left:${_cx2}px;top:${_sy2}px;`;
+        el.style.cssText=`position:fixed;width:24px;height:24px;z-index:99999;pointer-events:none;image-rendering:pixelated;transform:translate(-50%,-100%);left:${_cx2}px;top:${_sy2}px;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.7));`;
         document.body.appendChild(el);
         _pickaxeEls.add(el);
 
-        _animProp(el,'top',_sy2,_hy2,140,t=>t*t,()=>{
+        _animProp(el,'top',_sy2,_hy2,160,t=>t<.5?2*t*t:-1+(4-2*t)*t,()=>{
             if (!mineIsActive) { removeEl(); if(cb)cb(); return; }
             shakeAndBreak(el);
         });
@@ -2496,7 +2506,7 @@ function revealMineShaft(grid, blockWins, win, balanceBefore, chestMults, isAuto
             const bw = blkEl.offsetWidth || 36;
             const bh = blkEl.offsetHeight || 36;
             const _tbr=blkEl.getBoundingClientRect();
-            tntEl.style.cssText=`position:fixed;width:${bw}px;height:${bh}px;z-index:99999;pointer-events:none;image-rendering:pixelated;left:${_tbr.left}px;top:${_tbr.top-bh-5}px;transition:top 0.35s cubic-bezier(0.55,0,1,0.45);`;
+            tntEl.style.cssText=`position:fixed;width:${bw}px;height:${bh}px;z-index:99999;pointer-events:none;image-rendering:pixelated;left:${_tbr.left}px;top:${_tbr.top-bh-5}px;transition:top 0.4s cubic-bezier(0.34,1.56,0.64,1);`;
             document.body.appendChild(tntEl);
             requestAnimationFrame(()=>requestAnimationFrame(()=>{tntEl.style.top=_tbr.top+'px';}));
 
@@ -2827,17 +2837,18 @@ function upgRefresh(){
 function upgSetChance(v){if(isUpgrading)return;upgChance=Math.max(1,Math.min(90,parseInt(v)||50));if($('upg-slider'))$('upg-slider').value=upgChance;upgRefresh();playSound('click');}
 function upgSetBet(v){if($('up-bet'))$('up-bet').value=v;upgRefresh();playSound('click');}
 function initUpgradePage(){upgChance=50;if($('upg-slider'))$('upg-slider').value=50;upgRefresh();}
+// ИСПРАВЛЕННЫЙ угол: WIN=зелёная зона [360-winA, 360], LOSE=тёмная [0, 360-winA]
 function upgSpinDisk(winPct,isWin,onDone){
     const disk=document.querySelector('.upg-disk');if(!disk){if(onDone)onDone();return;}
     const winA=(Math.min(winPct,90)/100)*360;
     let targetR;
     if(isWin){const lo=360-winA,hi=360,mg=Math.max(4,winA*0.07);targetR=(lo+mg)+Math.random()*((hi-mg)-(lo+mg));}
     else{const lo=0,hi=360-winA,mg=Math.max(4,(360-winA)*0.07);targetR=(lo+mg)+Math.random()*((hi-mg)-(lo+mg));}
-    const spinMs=2500+Math.random()*3500;
+    const spinMs=2500+Math.random()*3000;
     const totalRot=(3+Math.floor(spinMs/1000))*360+targetR;
     disk.style.transition='none';disk.style.transform='rotate(0deg)';
     requestAnimationFrame(()=>requestAnimationFrame(()=>{
-        disk.style.transition='transform '+spinMs+'ms cubic-bezier(0.15,0.0,0.1,1.0)';
+        disk.style.transition='transform '+spinMs+'ms cubic-bezier(0.15,0.0,0.08,1.0)';
         disk.style.transform='rotate('+totalRot+'deg)';
     }));
     setTimeout(()=>{disk.style.transition='none';disk.style.transform='rotate('+targetR+'deg)';if(onDone)onDone();},spinMs+80);
