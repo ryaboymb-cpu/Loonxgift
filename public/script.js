@@ -230,6 +230,54 @@ function flyToBalance(amount) {
     setTimeout(() => el.remove(), 850);
 }
 
+// ─── Share Win Window ──────────────────────────────
+function showShareWin(bet, mult, winAmt) {
+    const existing = document.getElementById('share-win-overlay');
+    if (existing) existing.remove();
+
+    const refLink = user ? 'https://t.me/LoonxGift_bot?start=ref'+user.id : 'https://t.me/LoonxGift_bot';
+    const overlay = document.createElement('div');
+    overlay.id = 'share-win-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:99990;background:rgba(0,0,0,0.85);display:flex;align-items:center;justify-content:center;backdrop-filter:blur(8px);';
+
+    overlay.innerHTML = `
+    <div style="background:linear-gradient(135deg,#0a0a1a,#111);border:2px solid var(--neon);border-radius:20px;padding:24px 20px;max-width:320px;width:90%;text-align:center;box-shadow:0 0 40px rgba(0,255,136,0.3);animation:sharePopIn 0.4s cubic-bezier(0.34,1.56,0.64,1);">
+        <div style="font-size:48px;margin-bottom:8px;">🏆</div>
+        <div style="font-size:22px;font-weight:900;color:var(--neon);text-shadow:0 0 20px rgba(0,255,136,0.5);margin-bottom:4px;">БОЛЬШАЯ ПОБЕДА!</div>
+        <div style="font-size:13px;color:#aaa;margin-bottom:16px;">LoonxGift Casino</div>
+        <div style="background:#111;border-radius:12px;padding:14px;margin-bottom:16px;border:1px solid #222;">
+            <div style="color:#888;font-size:11px;margin-bottom:6px;">Ставка → Множитель → Выигрыш</div>
+            <div style="font-size:20px;font-weight:900;">
+                <span style="color:#fff;">${parseFloat(bet).toFixed(2)} TON</span>
+                <span style="color:#555;margin:0 8px;">×</span>
+                <span style="color:var(--neon);">${parseFloat(mult).toFixed(2)}x</span>
+                <span style="color:#555;margin:0 8px;">=</span>
+                <span style="color:#00ff88;">+${parseFloat(winAmt).toFixed(2)} TON</span>
+            </div>
+        </div>
+        <div style="font-size:12px;color:#555;margin-bottom:14px;">Реферальная ссылка: <span style="color:var(--neon);font-size:11px;word-break:break-all;">${refLink}</span></div>
+        <div style="display:flex;gap:10px;">
+            <button onclick="shareWinToTg('${refLink}','${bet}','${mult}','${winAmt}')" style="flex:1;background:var(--neon);color:#000;border:none;border-radius:12px;padding:12px;font-weight:900;font-size:14px;cursor:pointer;">📤 Поделиться</button>
+            <button onclick="document.getElementById('share-win-overlay').remove()" style="flex:0 0 auto;background:#222;color:#fff;border:none;border-radius:12px;padding:12px 16px;cursor:pointer;font-size:18px;">✕</button>
+        </div>
+    </div>`;
+
+    document.body.appendChild(overlay);
+    overlay.addEventListener('click', e => { if(e.target===overlay) overlay.remove(); });
+}
+
+function shareWinToTg(refLink, bet, mult, winAmt) {
+    const text = `🏆 Я выиграл в LoonxGift Casino!\n\n💰 Ставка: ${bet} TON\n✖️ Множитель: ${mult}x\n🎉 Выигрыш: +${winAmt} TON\n\nПопробуй и ты! 👇\n${refLink}`;
+    if (window.Telegram && window.Telegram.WebApp) {
+        try { window.Telegram.WebApp.shareToStory(text, {}); } catch(e) {}
+        try { window.open('https://t.me/share/url?url='+encodeURIComponent(refLink)+'&text='+encodeURIComponent(text), '_blank'); } catch(e) {}
+    } else {
+        window.open('https://t.me/share/url?url='+encodeURIComponent(refLink)+'&text='+encodeURIComponent(text), '_blank');
+    }
+    document.getElementById('share-win-overlay')?.remove();
+}
+
+
 socket.on('global_alert', msg => { showToast(`📢 УВЕДОМЛЕНИЕ: ${msg}`, 6000); });
 function copyText(text) { if(!text) return; navigator.clipboard.writeText(text).then(() => showToast('Скопировано!')); }
 
@@ -1126,7 +1174,7 @@ async function checkRealDeposit(btn,silent){
     try{const r=await fetch('/api/check_deposit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:user.id})});
         const d=await r.json();
         if(r.ok&&d.success){user=d.user;updateUI();renderWithdrawHistory();if(d.added>0){playSound('win');showToast('+'+d.added+' TON зачислено!');flyToBalance(d.added);}}
-        else if(!silent) showToast(d.error||'Оплата не найдена');}
+        else if(!silent)showToast(d.error||'Оплата не найдена');}
     catch(e){if(!silent)showToast('Ошибка соединения');}
     if(btn){btn.innerText='ПРОВЕРИТЬ ОПЛАТУ';btn.disabled=false;}
 }
@@ -1627,7 +1675,7 @@ let spinProgressValue = 0;
 let spinIsSpinning = false;
 let spinAnimInterval = null;
 
-const SPIN_SYMS_ANIM=['N','L','X','N','G','N','X','L','N','L','N'];
+const SPIN_SYMS_ANIM=['N','L','X','L','G','L','X','N','L','L','X','L'];
 
 const SPIN_PAYLINES_FE = [
     [1,1,1,1,1],  // 0: средний ряд
@@ -1672,12 +1720,12 @@ function initSpinPage() {
         spBetInput._hasChangeListener = true;
     }
     // Pre-fill idle grid with nice pattern
-    const symbols=['N','L','X','N','G','N','X','L','N','L','N','X','N','L'];
+    const symbols = ['L','N','X','L','G','X','N','L','X','L','L','X','L','N','L'];
     for (let r = 0; r < 3; r++) {
         for (let c = 0; c < 5; c++) {
             const cell = $(`sc-${r}-${c}`);
             if (cell) {
-                const sym = symbols[r * 5 + c];
+                const sym = (symbols[r * 5 + c] || 'L');
                 cell.className = `spin-cell sym-${sym}`;
                 cell.innerText = sym === 'G' ? '🎁' : sym;
             }
@@ -2750,7 +2798,7 @@ async function stopSpinAnim(grid, hiddenGs) {
             for (let r = 0; r < 3; r++) {
                 for (let c = 0; c < 5; c++) {
                     const cell = $(`sc-${r}-${c}`);
-                    const sym = grid[r][c];
+                    const sym = grid[r][c] || 'L';
                     if (cell) {
                         cell.className = `spin-cell sym-${sym}`;
                         cell.style.borderColor = '';
@@ -2829,16 +2877,17 @@ function initUpgradePage(){upgChance=50;if($('upg-slider'))$('upg-slider').value
 function upgSpinDisk(winPct,isWin,onDone){
     const disk=document.querySelector('.upg-disk');if(!disk){if(onDone)onDone();return;}
     const winA=(winPct/100)*360;
-    const targetR=isWin?(Math.max(5,winA*0.07)+Math.random()*(winA*0.86)):(winA+Math.max(5,(360-winA)*0.07)+Math.random()*(360-winA)*0.86);
+    let targetR;
+    if(isWin){const mg=Math.max(4,winA*0.06);targetR=mg+Math.random()*(winA-2*mg);}
+    else{const dark=360-winA,mg=Math.max(4,dark*0.06);targetR=winA+mg+Math.random()*(dark-2*mg);}
     const spinMs=3000+Math.random()*4000;
-    const fullRots=3+Math.floor(spinMs/1200);
-    const totalRot=fullRots*360+targetR;
+    const totalRot=(3+Math.floor(spinMs/1000))*360+targetR;
     disk.style.transition='none';disk.style.transform='rotate(0deg)';
     requestAnimationFrame(()=>requestAnimationFrame(()=>{
-        disk.style.transition='transform '+spinMs+'ms cubic-bezier(0.2,0.0,0.1,1.0)';
+        disk.style.transition='transform '+spinMs+'ms cubic-bezier(0.15,0.0,0.1,1.0)';
         disk.style.transform='rotate('+totalRot+'deg)';
     }));
-    setTimeout(()=>{disk.style.transition='none';disk.style.transform='rotate('+targetR+'deg)';if(onDone)onDone();},spinMs+100);
+    setTimeout(()=>{disk.style.transition='none';disk.style.transform='rotate('+targetR+'deg)';if(onDone)onDone();},spinMs+80);
 }
 async function playUpgrade(){
     if(isUpgrading)return;
@@ -2855,194 +2904,143 @@ async function playUpgrade(){
         upgSpinDisk(upgChance,data.win>0,()=>{
             user=data.user;updateUI();upgRefresh();
             if(resEl){resEl.innerText=data.win>0?'+'+data.win.toFixed(2)+' TON (x'+data.multiplier+')':'-'+betVal.toFixed(2)+' TON';resEl.style.color=data.win>0?'#00ff88':'#ff0055';}
-            if(data.win>0){playSound('win');flyToBalance(data.win);showToast('✅ WIN! +'+data.win.toFixed(2)+' TON');}
+            if(data.win>0){playSound('win');flyToBalance(data.win);showToast('✅ WIN! +'+data.win.toFixed(2)+' TON');
+                // Поделиться победой если x5+
+                if(data.multiplier>=5) showShareWin(betVal,data.multiplier,data.win);}
             else showToast('❌ Проигрыш -'+betVal+' TON');
         });
     }catch(e){showToast('Ошибка соединения');}
     finally{setTimeout(()=>{isUpgrading=false;if(btn){btn.disabled=false;btn.innerText='АПГРЕЙД ⬆️';}if(sldr)sldr.disabled=false;},8000);}
 }
 // ===================== PLINKO GAME =====================
-// ─── Plinko Canvas Engine ───────────────────────────────────
 let _plinkoEng=null;
-const PLINKO_ROWS=8, PLINKO_SLOTS=9;
-const PLINKO_MULTS=[0,0.7,1.2,1.5,2.5,1.5,1.2,0.7,0];
+const PL_ROWS=8,PL_SLOTS=9;
+const PL_MULTS=[0,0.7,1.2,1.5,2.5,1.5,1.2,0.7,0];
 
 function initPlinkoEngine(){
-    const canvas=$('plinko-canvas');
-    if(!canvas)return;
-    if(_plinkoEng){_plinkoEng.destroy();_plinkoEng=null;}
+    const canvas=$('plinko-canvas');if(!canvas)return;
+    if(_plinkoEng){_plinkoEng.destroy();}
     _plinkoEng=new PlinkoEngine(canvas);
+    _plinkoEng.draw(); // Рисуем сразу при открытии
 }
 
 class PlinkoEngine{
     constructor(canvas){
         this.canvas=canvas;this.ctx=canvas.getContext('2d');
-        this.balls=[];this.pipeX=0.5;this.pipeDir=1;
-        this.slotFlash=new Array(PLINKO_SLOTS).fill(0);
-        this.raf=null;this.resize();this.loop();
+        this.balls=[];this.slotFlash=new Array(PL_SLOTS).fill(0);this.raf=null;
+        this.resize();this.loop();
     }
     resize(){
         const W=this.canvas.parentElement?.offsetWidth||320;
-        this.canvas.width=W;this.canvas.height=Math.round(W*1.35);
-        this.W=W;this.H=this.canvas.height;this.layout();
+        this.canvas.width=W;this.canvas.height=Math.round(W*1.2);
+        this.W=W;this.H=this.canvas.height;this.buildLayout();
     }
-    layout(){
+    buildLayout(){
         const W=this.W,H=this.H;
-        this.pipeAreaH=W*0.13;this.slotH=W*0.11;
-        this.boardH=H-this.pipeAreaH-this.slotH;
-        this.colW=W/(PLINKO_ROWS+1);this.rowH=this.boardH/(PLINKO_ROWS+1);
-        this.pinR=Math.max(4,Math.min(7,this.colW*0.13));
-        // Pin positions: row r → r+3 pins
+        this.slotH=W*0.095;
+        const boardH=H-this.slotH;
+        this.pinR=Math.max(4,Math.min(6,W*0.023));
+        const padTop=W*0.04,padBot=W*0.03;
+        const rowH=(boardH-padTop-padBot)/(PL_ROWS+1);
         this.pins=[];
-        for(let r=0;r<PLINKO_ROWS;r++){
-            const row=[],nP=r+3,span=r*this.colW;
-            for(let p=0;p<nP;p++){
-                row.push({x:W/2-span/2+p*this.colW,y:this.pipeAreaH+(r+1)*this.rowH});
-            }
+        for(let r=0;r<PL_ROWS;r++){
+            const nP=r+3,span=W*0.65*(r/(PL_ROWS-1)*0.7+0.3);
+            const row=[];
+            for(let p=0;p<nP;p++){row.push({x:W/2-span/2+p*span/(nP-1),y:padTop+(r+1)*rowH});}
             this.pins.push(row);
         }
-        // Slot positions
-        const slotW=W/PLINKO_SLOTS;
-        this.slots=PLINKO_MULTS.map((m,i)=>({x:slotW*i,cx:slotW*(i+.5),y:H-this.slotH,w:slotW,h:this.slotH,m}));
+        const sw=W/PL_SLOTS;
+        this.slots=PL_MULTS.map((m,i)=>({x:sw*i,cx:sw*(i+.5),y:H-this.slotH,w:sw,h:this.slotH,m}));
     }
-    lerp(a,b,t){return a+(b-a)*t;}
-    ease(t){return t<.5?2*t*t:-1+(4-2*t)*t;}
-    lerpC(c1,c2,t){
-        const h=h=>parseInt(h,16);
-        const r=h(c1.slice(1,3)),g=h(c1.slice(3,5)),b=h(c1.slice(5,7));
-        const r2=h(c2.slice(1,3)),g2=h(c2.slice(3,5)),b2=h(c2.slice(5,7));
-        return `rgb(${Math.round(r+(r2-r)*t)},${Math.round(g+(g2-g)*t)},${Math.round(b+(b2-b)*t)})`;
-    }
-
-    // Spawn ball from pipe → follows path → lands in bucket
+    easeInOut(t){return t<.5?4*t*t*t:(t-1)*(2*t-2)*(2*t-2)+1;}
     spawnBall(path,bucket,bet,mult,onLand){
-        // Compute waypoints
-        const wp=[{x:this.pipeX*this.W,y:this.pipeAreaH*0.7}];
+        const bR=this.W*0.022;
+        const pts=[{x:this.W/2,y:this.pinR*2.5}];
         let rR=0;
-        for(let r=0;r<PLINKO_ROWS;r++){
+        for(let r=0;r<PL_ROWS;r++){
             if(path[r])rR++;
-            const nP=r+3,span=r*this.colW;
-            // Ball between pins r → r+1
-            const pinX=this.W/2-span/2+rR*this.colW;
-            // Slight horizontal jitter based on direction
-            const jit=(path[r]?0.3:-0.3)*this.colW;
-            wp.push({x:pinX+jit*0.5,y:this.pipeAreaH+(r+1)*this.rowH+this.rowH*0.3});
+            const rowY=this.pins[r][0].y+(r<PL_ROWS-1?(this.pins[r+1][0].y-this.pins[r][0].y)*0.5:0);
+            const t=rR/PL_ROWS;
+            const slotX=this.slots[0].cx+(this.slots[PL_SLOTS-1].cx-this.slots[0].cx)*t;
+            const jit=(Math.random()-0.5)*this.W*0.03;
+            pts.push({x:slotX+jit,y:rowY});
         }
-        wp.push({x:this.slots[bucket].cx,y:this.H-this.slotH*0.5});
-        const ball={wp,step:0,t:0,bucket,bet,mult,onLand,done:false,removeAt:0,R:this.W*0.032};
-        this.balls.push(ball);
+        pts.push({x:this.slots[bucket].cx,y:this.slots[bucket].y+this.slots[bucket].h*0.5});
+        this.balls.push({pts,frame:0,bucket,bet,mult,onLand,done:false,landed:false,bR,swing:0,swingV:0});
     }
-
     update(dt){
-        // Pipe oscillation (slow, ~4s period)
-        this.pipeX+=this.pipeDir*dt*0.12;
-        if(this.pipeX>0.82){this.pipeX=0.82;this.pipeDir=-1;}
-        if(this.pipeX<0.18){this.pipeX=0.18;this.pipeDir=1;}
-        // Balls
-        const spd=2.8;
+        for(let i=0;i<PL_SLOTS;i++){if(this.slotFlash[i]>0)this.slotFlash[i]=Math.max(0,this.slotFlash[i]-dt*2.5);}
         for(const b of this.balls){
-            if(b.done){b.removeAt--;continue;}
-            b.t+=dt*spd;
-            if(b.t>=1){b.t-=1;b.step++;
-                if(b.step>=b.wp.length-1){b.done=true;b.removeAt=90;this.slotFlash[b.bucket]=1;if(b.onLand)b.onLand(b);}
-            }
+            if(b.done)continue;
+            b.frame+=dt*3.2;
+            const tot=b.pts.length-1;
+            const si=Math.min(Math.floor(b.frame),tot-1);
+            const segT=this.easeInOut(Math.min(b.frame-si,1));
+            const p0=b.pts[si],p1=b.pts[si+1]||p0;
+            // Физика маятника — отскок при каждом пине
+            const atPin=(b.frame%1)<0.15;
+            if(atPin&&si>0&&si<tot-1){b.swingV+=(Math.random()-0.5)*80;}
+            b.swingV*=0.88;
+            b.swing+=b.swingV*dt;
+            b.x=p0.x+(p1.x-p0.x)*segT+b.swing*0.012;
+            b.y=p0.y+(p1.y-p0.y)*segT;
+            if(b.frame>=tot){b.done=true;b.landed=true;this.slotFlash[b.bucket]=1;if(b.onLand)b.onLand(b);}
         }
-        this.balls=this.balls.filter(b=>!b.done||b.removeAt>0);
-        for(let i=0;i<PLINKO_SLOTS;i++){if(this.slotFlash[i]>0)this.slotFlash[i]-=dt*2;}
+        this.balls=this.balls.filter(b=>!b.done||b.landed);
     }
-
     draw(){
         const {ctx,W,H}=this;
         ctx.clearRect(0,0,W,H);
-        ctx.fillStyle='#080808';ctx.fillRect(0,0,W,H);
-        this.drawPipe();this.drawPins();this.drawSlots();
-        for(const b of this.balls)if(!b.done||b.removeAt>45)this.drawBall(b);
+        ctx.fillStyle='#060606';ctx.fillRect(0,0,W,H);
+        this.drawPins();this.drawSlots();
+        for(const b of this.balls)if(!b.landed)this.drawBall(b);
     }
-
-    drawPipe(){
-        const {ctx,W}=this;
-        const px=this.pipeX*W,pw=W*0.11,ph=this.pipeAreaH*0.72;
-        // Shadow
-        ctx.shadowColor='#00ff88';ctx.shadowBlur=14;
-        // Body
-        ctx.fillStyle='#00cc66';
-        ctx.beginPath();ctx.roundRect(px-pw/2,2,pw,ph-14,6);ctx.fill();
-        // Highlight
-        ctx.fillStyle='#00ff88';
-        ctx.beginPath();ctx.roundRect(px-pw/2+4,4,pw*0.3,ph-20,3);ctx.fill();
-        // Opening flange
-        ctx.fillStyle='#007744';
-        ctx.beginPath();ctx.roundRect(px-pw/2-5,ph-16,pw+10,16,3);ctx.fill();
-        ctx.shadowBlur=0;
-    }
-
     drawPins(){
         const {ctx}=this;
-        for(let r=0;r<PLINKO_ROWS;r++){
-            const t=r/(PLINKO_ROWS-1);
-            const color=this.lerpC('#ffee44','#44ddff',t);
-            for(const pin of this.pins[r]){
-                ctx.beginPath();ctx.arc(pin.x,pin.y,this.pinR,0,Math.PI*2);
-                ctx.fillStyle=color;ctx.shadowColor=color;ctx.shadowBlur=8;ctx.fill();
-            }
+        for(let r=0;r<PL_ROWS;r++){
+            const t=r/(PL_ROWS-1);
+            const cr=Math.round(255*(1-t)+68*t),cg=Math.round(238*(1-t)+221*t),cb=Math.round(68*(1-t)+255*t);
+            ctx.fillStyle=`rgb(${cr},${cg},${cb})`;ctx.shadowColor=`rgb(${cr},${cg},${cb})`;ctx.shadowBlur=7;
+            for(const p of this.pins[r]){ctx.beginPath();ctx.arc(p.x,p.y,this.pinR,0,Math.PI*2);ctx.fill();}
         }
         ctx.shadowBlur=0;
     }
-
     drawSlots(){
-        const {ctx}=this;
-        for(let i=0;i<PLINKO_SLOTS;i++){
+        const {ctx,W}=this;
+        for(let i=0;i<PL_SLOTS;i++){
             const sl=this.slots[i],f=this.slotFlash[i],m=sl.m;
             const isSkull=m===0,isTop=m>=2;
-            // BG
-            ctx.fillStyle=f>0?`rgba(0,255,136,${f*0.4})`:(isSkull?'#2a0008':(isTop?'#002a15':'#111'));
-            ctx.fillRect(sl.x+1,sl.y+2,sl.w-2,sl.h-4);
-            // Border
-            ctx.strokeStyle=isSkull?'#ff2255':(isTop?'#00ff88':'#334');
-            ctx.lineWidth=1.5;ctx.strokeRect(sl.x+1,sl.y+2,sl.w-2,sl.h-4);
-            // Text
-            ctx.textAlign='center';ctx.textBaseline='middle';
-            const fs=Math.max(8,Math.floor(sl.w*0.27));
-            ctx.font=`bold ${fs}px Arial`;
-            ctx.fillStyle=isSkull?'#ff2255':(isTop?'#00ff88':'#ddd');
+            ctx.fillStyle=f>0?`rgba(0,255,136,${f*0.45})`:(isSkull?'#1a0004':(isTop?'#001a08':'#0d0d0d'));
+            ctx.beginPath();ctx.roundRect?ctx.roundRect(sl.x+1,sl.y+3,sl.w-2,sl.h-5,4):ctx.rect(sl.x+1,sl.y+3,sl.w-2,sl.h-5);ctx.fill();
+            ctx.strokeStyle=isSkull?'#ff2255':(isTop?'#00ff88':'#2a2a2a');ctx.lineWidth=1.5;
+            ctx.beginPath();ctx.roundRect?ctx.roundRect(sl.x+1,sl.y+3,sl.w-2,sl.h-5,4):ctx.rect(sl.x+1,sl.y+3,sl.w-2,sl.h-5);ctx.stroke();
+            const fs=Math.max(8,Math.floor(sl.w*0.26));
+            ctx.font=`bold ${fs}px Arial`;ctx.textAlign='center';ctx.textBaseline='middle';
+            ctx.fillStyle=isSkull?'#ff2255':(isTop?'#00ff88':'#aaa');
             ctx.fillText(isSkull?'💀':('x'+m),sl.cx,sl.y+sl.h*0.5);
         }
     }
-
     drawBall(b){
-        if(b.step>=b.wp.length-1)return;
+        if(!b.x&&!b.y)return;
         const {ctx}=this;
-        const a=b.wp[b.step],bb=b.wp[b.step+1];
-        const t=this.ease(b.t);
-        const x=a.x+(bb.x-a.x)*t,y=a.y+(bb.y-a.y)*t;
-        const R=b.R;
-        // Glow
-        const grd=ctx.createRadialGradient(x,y,0,x,y,R*2.5);
-        grd.addColorStop(0,'rgba(0,255,136,0.6)');grd.addColorStop(1,'rgba(0,255,136,0)');
-        ctx.beginPath();ctx.arc(x,y,R*2.5,0,Math.PI*2);ctx.fillStyle=grd;ctx.fill();
-        // Ball
+        const x=b.x,y=b.y,R=b.bR;
+        const g=ctx.createRadialGradient(x,y,0,x,y,R*3);
+        g.addColorStop(0,'rgba(0,255,136,0.35)');g.addColorStop(1,'rgba(0,255,136,0)');
+        ctx.beginPath();ctx.arc(x,y,R*3,0,Math.PI*2);ctx.fillStyle=g;ctx.fill();
+        const b2=ctx.createRadialGradient(x-R*0.3,y-R*0.3,R*0.05,x,y,R);
+        b2.addColorStop(0,'#ddffd8');b2.addColorStop(0.5,'#00ff88');b2.addColorStop(1,'#009944');
         ctx.beginPath();ctx.arc(x,y,R,0,Math.PI*2);
-        ctx.fillStyle='#00ff88';ctx.shadowColor='#00ff88';ctx.shadowBlur=20;ctx.fill();
-        // Highlight
-        ctx.beginPath();ctx.arc(x-R*0.25,y-R*0.25,R*0.35,0,Math.PI*2);
-        ctx.fillStyle='rgba(255,255,255,0.6)';ctx.shadowBlur=0;ctx.fill();
+        ctx.fillStyle=b2;ctx.shadowColor='#00ff88';ctx.shadowBlur=12;ctx.fill();ctx.shadowBlur=0;
     }
-
     loop(){
         let last=performance.now();
-        const tick=now=>{
-            const dt=Math.min((now-last)/1000,0.05);last=now;
-            this.update(dt);this.draw();this.raf=requestAnimationFrame(tick);
-        };
+        const tick=now=>{const dt=Math.min((now-last)/1000,0.05);last=now;this.update(dt);this.draw();this.raf=requestAnimationFrame(tick);};
         this.raf=requestAnimationFrame(tick);
     }
-    destroy(){if(this.raf)cancelAnimationFrame(this.raf);}
+    destroy(){if(this.raf)cancelAnimationFrame(this.raf);this.raf=null;}
 }
 
-// ─── Plinko UI ────────────────────────────────────────────
-let isPlinkoing=false;
-function setPlinkoRisk(risk,btn){/* no-op, kept for compat */}
-
+function setPlinkoRisk(r,b){}
 async function playPlinko(){
     const betVal=parseFloat($('pl-bet')?.value);
     if(isNaN(betVal)||betVal<0.1||betVal>25)return showToast('Мин 0.1, Макс 25 TON');
@@ -3052,22 +3050,16 @@ async function playPlinko(){
     if(!_plinkoEng)initPlinkoEngine();
     try{
         const r=await fetch('/api/plinko',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:user.id,bet:betVal,mode})});
-        const data=await r.json();
-        if(!r.ok){showToast(data.error||'Ошибка');return;}
-        // Спавним шарик — несколько шариков одновременно разрешено!
+        const data=await r.json();if(!r.ok){showToast(data.error||'Ошибка');return;}
         _plinkoEng.spawnBall(data.path,data.bucket,betVal,data.multiplier,()=>{
             user=data.user;updateUI();
             const resEl=$('plinko-result');
-            if(resEl){
-                const win=data.win;
-                resEl.innerText=win>0?'✅ +'+win.toFixed(2)+' TON (x'+data.multiplier+')':'❌ Череп (-'+betVal+' TON)';
-                resEl.style.color=win>0?'#00ff88':'#ff2255';
-                if(win>0){playSound('win');flyToBalance(win);showToast('💰 +'+win.toFixed(2)+' TON!');}
-            }
+            if(resEl){resEl.innerText=data.win>0?'✅ +'+data.win.toFixed(2)+' TON (x'+data.multiplier+')':'❌ Череп (-'+betVal+' TON)';resEl.style.color=data.win>0?'#00ff88':'#ff2255';}
+            if(data.win>0){playSound('win');flyToBalance(data.win);showToast('💰 +'+data.win.toFixed(2)+' TON!');
+                if(data.multiplier>=5) showShareWin(betVal,data.multiplier,data.win);}
         });
     }catch(e){showToast('Ошибка соединения');}
 }
-
 // ===================== DUCK GAME =====================
 let isDuckPlaying = false;
 function initDuckPond() {
