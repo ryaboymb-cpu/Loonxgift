@@ -184,7 +184,7 @@ async function initSettings() {
     
     // Note: RTP values are now admin-configurable, no forced override
     
-    const lastBets = await Bet.find().sort({createdAt: -1}).limit(10);
+    const lastBets = await Bet.find().sort({createdAt: -1}).limit(50);
     globalBetHistory = lastBets.map(b => {
         const obj = b.toObject();
         obj.timeMsk = new Date(b.createdAt).toLocaleTimeString("ru-RU", {timeZone: "Europe/Moscow"});
@@ -314,7 +314,7 @@ function pushToGlobalHistory(betObj) {
     };
     
     globalBetHistory.unshift(betWithTime);
-    if(globalBetHistory.length > 10) globalBetHistory.pop();
+    if(globalBetHistory.length > 50) globalBetHistory.pop();
     io.emit('newHistoryEntry', betWithTime);
 }
 
@@ -954,17 +954,34 @@ app.post('/api/mine', async (req, res) => {
         for (let c = 0; c < 5; c++) chestMults.push(pickChestMult());
         const effectiveBet = isFreeAutoSpin ? 0.5 : betAmount;
 
+        // Win ТОЧНО за каждый сломанный блок по durability кирки
+        // Клиент видит монетку над каждым сломанным блоком
         const SRV_DUR={wooden:1,stone:2,iron:3,golden:4,diamond:5};
-        const colPick={};
-        (hotbar||[]).forEach((slot,idx)=>{const col=idx%5;
-            if(slot&&slot.type==='pickaxe'){const pt=slot.pickaxeType||'wooden';const rank={wooden:0,stone:1,iron:2,golden:3,diamond:4};if(colPick[col]===undefined||rank[pt]>rank[colPick[col]])colPick[col]=pt;}
+        const colPick={};  // лучшая кирка в каждой колонке
+        (hotbar||[]).forEach((slot,idx)=>{
+            const col=idx%5;  // col 0-4 для каждого слота хотбара
+            if(slot&&slot.type==='pickaxe'){
+                const pt=slot.pickaxeType||'wooden';
+                const rank={wooden:0,stone:1,iron:2,golden:3,diamond:4};
+                if(colPick[col]===undefined||rank[pt]>rank[colPick[col]])colPick[col]=pt;
+            }
             if(slot&&slot.type==='tnt'&&colPick[col]===undefined)colPick[col]='tnt';
         });
-        const adjustedBlockWins=[];for(let r=0;r<6;r++)adjustedBlockWins.push([0,0,0,0,0]);
+        const adjustedBlockWins=[];
+        for(let r=0;r<6;r++)adjustedBlockWins.push([0,0,0,0,0]);
         let blockWinSum=0;
         for(const[colStr,pType]of Object.entries(colPick)){
-            const col=parseInt(colStr),maxB=pType==='tnt'?3:(SRV_DUR[pType]||1);let broken=0;
-            for(let r=1;r<6&&broken<maxB;r++){if(!grid[r][col])continue;const bw=parseFloat((effectiveBet*(MINE_BLOCK_MULTS[grid[r][col]]||0)).toFixed(3));adjustedBlockWins[r][col]=bw;blockWinSum+=bw;broken++;}
+            const col=parseInt(colStr);
+            const maxB=pType==='tnt'?3:(SRV_DUR[pType]||1);
+            let broken=0;
+            for(let r=1;r<6&&broken<maxB;r++){
+                if(!grid[r][col])continue;
+                const mult=MINE_BLOCK_MULTS[grid[r][col]]||0;
+                const bw=parseFloat((effectiveBet*mult).toFixed(3));
+                adjustedBlockWins[r][col]=bw;
+                blockWinSum+=bw;
+                broken++;
+            }
         }
         let actualWin=Number(blockWinSum.toFixed(2));
 
@@ -1028,9 +1045,8 @@ app.post('/api/upgrade', async (req, res) => {
         const rtpTarget = rtpSetting ? Number(rtpSetting.value) : 85;
         user[field] = Number((user[field] - betAmount).toFixed(2));
         if (!isDemo) { user.stats.bets++; user.stats.minus += betAmount; user.totalWagered = Number(((user.totalWagered || 0) + betAmount).toFixed(2)); user.wagerCompleted = Number(((user.wagerCompleted || 0) + betAmount).toFixed(2)); }
-        // MAX 90%, mult = 90/chance (честные иксы по шансу)
         const chanceP=Math.max(1,Math.min(90,parseFloat(chance)||50));
-        const mult=Math.max(1.01,Math.floor(90/chanceP*100)/100);
+        const mult=Math.max(1.01,Math.floor(96/chanceP*100)/100);
         const isWin=Math.random()*100<chanceP;
         const actualWin=isWin?Number((betAmount*mult).toFixed(2)):0;
         const profit=isWin?Number((actualWin-betAmount).toFixed(2)):-betAmount;
@@ -1046,7 +1062,7 @@ app.post('/api/upgrade', async (req, res) => {
 
 // === PLINKO GAME ===
 app.post('/api/plinko', async (req, res) => {
-    const { id, bet, mode } = req.body;
+    const { id, bet, mode, risk } = req.body;
     if (actionLocks.has(id)) return res.status(429).json({ error: 'Подождите...' });
     actionLocks.add(id);
     try {
@@ -1063,19 +1079,34 @@ app.post('/api/plinko', async (req, res) => {
         const rtpTarget = rtpSetting ? Number(rtpSetting.value) : 88;
         user[field] = Number((user[field] - betAmount).toFixed(2));
         if (!isDemo) { user.stats.bets++; user.stats.minus += betAmount; user.totalWagered = Number(((user.totalWagered || 0) + betAmount).toFixed(2)); user.wagerCompleted = Number(((user.wagerCompleted || 0) + betAmount).toFixed(2)); }
-        const PMULTS=[0,0.7,1.2,1.5,2.5,1.5,1.2,0.7,0];
-        const path=[];let rR=0;
-        for(let row=0;row<8;row++){const goR=Math.random()<0.5;path.push(goR?1:0);if(goR)rR++;}
-        let bucket=rR,mult=PMULTS[bucket];
-        if(mult>0&&Math.random()>(rtpTarget/100)){bucket=Math.random()<0.5?0:8;mult=0;const t=bucket;let r2=0;for(let i=0;i<8;i++){path[i]=(r2<t&&(Math.random()<0.7||(8-i)<=(t-r2)))?1:0;if(path[i])r2++;}}
-        const actualWin=Number((betAmount*mult).toFixed(2));
-        if(actualWin>0){user[field]=Number((user[field]+actualWin).toFixed(2));if(!isDemo){user.stats.wins++;user.stats.plus+=Number((actualWin-betAmount).toFixed(2));}}
+        // Plinko: ball drops through 12 rows of pegs, landing in one of 13 buckets
+        const riskLevel = risk || 'medium';
+        const lowMults =    [1.2, 1.1, 1.0, 0.7, 0.5, 0.3, 0.2, 0.3, 0.5, 0.7, 1.0, 1.1, 1.2];
+        const medMults =    [2.0, 1.5, 1.2, 0.8, 0.5, 0.3, 0.2, 0.3, 0.5, 0.8, 1.2, 1.5, 2.0];
+        const highMults =   [5.0, 2.5, 1.5, 0.8, 0.4, 0.2, 0.1, 0.2, 0.4, 0.8, 1.5, 2.5, 5.0];
+        const mults = riskLevel === 'low' ? lowMults : riskLevel === 'high' ? highMults : medMults;
+        // Simulate ball path through 12 rows
+        const path = [];
+        let pos = 6; // start center
+        for (let row = 0; row < 12; row++) {
+            const goRight = Math.random() < 0.5;
+            pos = Math.max(0, Math.min(12, pos + (goRight ? 1 : -1)));
+            path.push(pos);
+        }
+        // RTP adjustment
+        let bucket = path[path.length - 1];
+        let mult = mults[bucket];
+        // RTP: chance to force low-value bucket
+        const loseChance = 1 - (rtpTarget / 150);
+        if (Math.random() < loseChance && mult >= 0.8) { bucket = 6; mult = mults[6]; path[path.length - 1] = 6; }
+        const actualWin = Number((betAmount * mult).toFixed(2));
+        if (actualWin > 0) { user[field] = Number((user[field] + actualWin).toFixed(2)); if (!isDemo && actualWin > betAmount) { user.stats.wins++; user.stats.plus += actualWin; } }
         await user.save();
         if (!isDemo) {
             const betEntry = new Bet({ userId: user.id, username: user.username, avatar: user.photo || '', game: 'Plinko', amount: betAmount, multiplier: mult, result: actualWin - betAmount, mode: 'Real', balanceAfter: user[field], balance: user[field] });
             await betEntry.save(); pushToGlobalHistory(betEntry);
         }
-        res.json({ path, bucket, multiplier: mult, win: actualWin, profit: actualWin-betAmount, mults:[0,0.7,1.2,1.5,2.5,1.5,1.2,0.7,0], user });
+        res.json({ path, bucket, multiplier: mult, win: actualWin, mults, user });
     } catch (err) { console.error('Plinko error:', err); res.status(500).json({ error: 'Ошибка сервера' }); } finally { actionLocks.delete(id); }
 });
 
@@ -1147,8 +1178,7 @@ app.post('/api/check_deposit', async (req, res) => {
     const cleanKey=apiKey.trim().replace(/[\r\n\s]/g,''), userId=String(id).trim();
     try{
         const r=await fetch('https://toncenter.com/api/v2/getTransactions?address='+encodeURIComponent(rawAddr)+'&limit=50&api_key='+cleanKey);
-        const txt=await r.text();
-        if(!r.ok)return res.status(400).json({error:'TonCenter HTTP '+r.status});
+        const txt=await r.text();if(!r.ok)return res.status(400).json({error:'TonCenter HTTP '+r.status});
         let data;try{data=JSON.parse(txt);}catch(e){return res.status(500).json({error:'TonCenter не JSON'});}
         if(!data.ok)return res.status(400).json({error:'TonCenter: '+data.error});
         let foundNew=false,totalAdded=0;
@@ -1160,8 +1190,7 @@ app.post('/api/check_deposit', async (req, res) => {
                 if(md.text)try{comment=Buffer.from(md.text,'base64').toString('utf-8').replace(/\u0000/g,'').trim();}catch(e){}
                 if(!comment&&md.body)try{comment=Buffer.from(md.body,'base64').slice(4).toString('utf-8').replace(/[^\x20-\x7E\u0400-\u04FF]/g,'').trim();}catch(e){}}
             if(!comment||!comment.includes(userId))continue;
-            const txHash=tx.transaction_id?tx.transaction_id.hash:tx.hash;
-            if(!txHash)continue;
+            const txHash=tx.transaction_id?tx.transaction_id.hash:tx.hash;if(!txHash)continue;
             const amt=Number(tx.in_msg.value)/1e9;if(amt<0.01)continue;
             const exists=await Deposit.findOne({hash:txHash});if(exists)continue;
             try{
@@ -1547,7 +1576,7 @@ app.post('/api/admin/user_action', checkAdmin, async (req, res) => {
 
 app.post('/api/admin/game_stats', checkAdmin, async (req, res) => {
     try {
-        const games = ['Crash', 'Mines', 'Coinflip', 'Battle', 'Spin', 'Mine', 'Upgrade', 'Plinko'];
+        const games = ['Crash', 'Mines', 'Coinflip', 'Battle', 'Spin', 'Mine', 'Upgrade'];
         const stats = {};
         for (const game of games) {
             const agg = await Bet.aggregate([
