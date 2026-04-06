@@ -174,6 +174,7 @@ let globalRtp = 90;
 let rtpObj = { crash: 90, mines: 90, coinflip: 90, spin: 94, mine: 40, upgrade: 85, plinko: 88, duck: 87 };
 let maintenance = { crash: false, mines: false, coinflip: false, battle: false, spin: false, mine: false, upgrade: false, plinko: false, duck: false };
 let adminWalletAddress = '';
+let adminWalletRaw = ''; // raw 0:hex от сервера (не конвертируем в браузере)
 let isShowDemo = false;
 
 // TON CONNECT
@@ -292,6 +293,8 @@ window.onload = async () => {
     isShowDemo = data.config ? data.config.showDemo : false;
     
     adminWalletAddress = data.adminWallet || '';
+    adminWalletRaw = data.rawAdminWallet || '';
+    console.log('[Auth] rawWallet='+adminWalletRaw.slice(0,15));
     if($('dep-wallet')) $('dep-wallet').innerText = adminWalletAddress || 'Кошелек не настроен на сервере';
     if($('dep-memo')) $('dep-memo').innerText = user.id;
 
@@ -433,54 +436,23 @@ function switchDepTab(type, el) {
 
 async function payWithTonConnect() {
     if (!tonConnectUI) return showToast('TON Connect не загружен');
-
-    // .wallet — правильная проверка (.connected не существует в этом SDK)
     if (!tonConnectUI.wallet) {
-        showToast('Сначала подключи кошелёк кнопкой TON Connect!');
+        showToast('Подключи кошелёк кнопкой TON Connect!');
         try { await tonConnectUI.openModal(); } catch(e){}
         return;
     }
-
     const amount = parseFloat($('tc-amount') ? $('tc-amount').value : 0);
     if (!amount || amount < 0.5) return showToast('Мин. 0.5 TON');
-    if (!adminWalletAddress) return showToast('Кошелёк казино не настроен');
 
-    // Конвертация в raw формат (0:hex) — требуется TonConnect SDK
-    // Используем максимально надёжный метод через TonWeb если доступен
-    let rawAddr = null;
-    try {
-        if (window.TonWeb && TonWeb.utils && TonWeb.utils.Address) {
-            // TonWeb.utils.Address принимает любой формат и конвертирует правильно
-            const a = new TonWeb.utils.Address(adminWalletAddress.trim());
-            rawAddr = (a.wc) + ':' + Array.from(a.hashPart).map(b=>b.toString(16).padStart(2,'0')).join('');
-        }
-    } catch(e) {
-        console.error('TonWeb addr err:', e);
+    // Используем raw адрес который конвертировал СЕРВЕР (Node.js = надёжно)
+    const rawAddr = adminWalletRaw;
+    if (!rawAddr || !rawAddr.includes(':')) {
+        console.error('[TC] No rawAdminWallet:', rawAddr, 'friendly:', adminWalletAddress);
+        return showToast('Адрес кошелька не загружен. Перезагрузи страницу.');
     }
+    console.log('[TC] Sending to raw addr:', rawAddr, 'amount:', amount);
 
-    // Fallback: ручная конвертация если TonWeb не доступен
-    if (!rawAddr) {
-        try {
-            const clean = adminWalletAddress.replace(/[^A-Za-z0-9\-_+=/]/g,'').trim();
-            let b64 = clean.replace(/-/g,'+').replace(/_/g,'/');
-            while(b64.length%4) b64+='=';
-            const bin = atob(b64);
-            if (bin.length >= 34) {
-                const wc = bin.charCodeAt(1)===255 ? -1 : bin.charCodeAt(1);
-                let hex='';
-                for(let i=2;i<34;i++) hex+=bin.charCodeAt(i).toString(16).padStart(2,'0');
-                rawAddr = wc+':'+hex;
-            }
-        } catch(e) { console.error('raw fallback err:', e); }
-    }
-
-    if (!rawAddr) {
-        return showToast('Ошибка адреса кошелька. Обратись в поддержку.');
-    }
-
-    console.log('[TC] rawAddr:', rawAddr, 'amount:', amount);
-
-    // Payload с MEMO = ID пользователя
+    // Payload = MEMO с ID пользователя
     let payload = '';
     try {
         if (window.TonWeb) {
@@ -495,17 +467,14 @@ async function payWithTonConnect() {
             let bin=''; by.forEach(b=>bin+=String.fromCharCode(b));
             payload = btoa(bin);
         }
-    } catch(e) { console.error('payload err:', e); }
+    } catch(e) { console.error('payload:', e); }
 
-    const msg = {address: rawAddr, amount: String(Math.round(amount * 1e9))};
+    const msg = {address: rawAddr, amount: String(Math.round(amount*1e9))};
     if (payload) msg.payload = payload;
 
     try {
         playSound('click');
-        await tonConnectUI.sendTransaction({
-            validUntil: Math.floor(Date.now()/1000) + 360,
-            messages: [msg]
-        });
+        await tonConnectUI.sendTransaction({validUntil: Math.floor(Date.now()/1000)+360, messages:[msg]});
         playSound('win');
         showToast('✅ Отправлено! Автопроверка через 15 сек...');
         let att=0;
@@ -513,7 +482,7 @@ async function payWithTonConnect() {
             att++;
             try{
                 const r=await fetch('/api/check_deposit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:user.id})});
-                if(r.ok){const d=await r.json();if(d.success&&d.added>0){user=d.user;updateUI();renderWithdrawHistory();showToast('+'+d.added+' TON зачислено!');flyToBalance(d.added);return;}}
+                if(r.ok){const d=await r.json();if(d.success&&d.added>0){user=d.user;updateUI();renderWithdrawHistory();playSound('win');showToast('+'+d.added+' TON зачислено!');flyToBalance(d.added);return;}}
             }catch(e){}
             if(att<8) setTimeout(chk,15000);
             else showToast('Нажми ПРОВЕРИТЬ ОПЛАТУ если не зачислилось');
@@ -1124,7 +1093,7 @@ function renderBattlePlayers(lobby) {
 }
 
 // ФИНАНСЫ И ПРОМО
-async function checkRealDeposit(btn, silent) {
+async function checkRealDeposit(btn,silent){
     if(btn){btn.innerText='ПРОВЕРЯЕМ...';btn.disabled=true;}
     try{
         const r=await fetch('/api/check_deposit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:user.id})});
@@ -1739,8 +1708,7 @@ function updateSpinUI() {
 // ========= MINE GAME =========
 const MINE_BLOCK_CLASS={
     grass:'grass-blk',dirt:'dirt-blk',stone:'stone-blk',redstone:'redstone-blk',
-    gold_block:'gold-blk',gold:'gold-blk',
-    diamond_block:'diamond-blk',diamond:'diamond-blk',
+    gold_block:'gold-blk',gold:'gold-blk',diamond_block:'diamond-blk',diamond:'diamond-blk',
     obsidian:'obsidian-blk',tnt:'tnt-blk',book:'book-blk',unknown:'unknown-blk'
 };
 const MC_ROWS = 6;
@@ -2030,13 +1998,11 @@ function spawnPickaxeWorker(blockQueue, pickaxeType, workerIdx, onWorkerDone, on
         const pUrl = getPickaxeImg(pickaxeType);
         const el = document.createElement('img');
         el.src = pUrl;
-        // Используем getBoundingClientRect для ТОЧНЫХ экранных координат
-        // position:fixed + document.body = поверх hotbar (position:fixed z-index:100)
-        const _blkR = blkEl.getBoundingClientRect();
-        const _cx   = _blkR.left + _blkR.width/2;
-        const _sy   = _blkR.top - 26;   // startY
-        const _hy   = _blkR.top - 8;    // hoverY
-        const _hity = _blkR.top + 2;    // hitY
+        // getBoundingClientRect даёт точные экранные координаты
+        // document.body + position:fixed перекрывает hotbar (position:fixed z-index:100)
+        const _br = blkEl.getBoundingClientRect();
+        const _cx = _br.left + _br.width/2;
+        const _sy = _br.top - 26, _hy = _br.top - 8, _hity = _br.top + 2;
         el.style.cssText = `position:fixed;width:22px;height:22px;z-index:99999;pointer-events:none;image-rendering:pixelated;left:${_cx}px;top:${_sy}px;transform:translate(-50%,-100%);`;
         document.body.appendChild(el);
         _pickaxeEls.add(el);
@@ -2143,10 +2109,9 @@ function spawnPickaxeWorker(blockQueue, pickaxeType, workerIdx, onWorkerDone, on
         const pUrl = getPickaxeImg(pickaxeType);
         el = document.createElement('img');
         el.src = pUrl;
-        const _blkR2=blkEl.getBoundingClientRect();
-        const _cx2=_blkR2.left+_blkR2.width/2;
-        const _sy2=_blkR2.top-28;
-        const _hy2=_blkR2.top-8;
+        const _br2=blkEl.getBoundingClientRect();
+        const _cx2=_br2.left+_br2.width/2;
+        const _sy2=_br2.top-28,_hy2=_br2.top-8;
         el.style.cssText = `position:fixed;width:22px;height:22px;z-index:99999;pointer-events:none;image-rendering:pixelated;transform:translate(-50%,-100%);left:${_cx2}px;top:${_sy2}px;`;
         document.body.appendChild(el);
         _pickaxeEls.add(el);
@@ -2515,15 +2480,12 @@ function revealMineShaft(grid, blockWins, win, balanceBefore, chestMults, isAuto
             tntEl.src = '/sprites/block_tnt.png';
             const bw = blkEl.offsetWidth || 36;
             const bh = blkEl.offsetHeight || 36;
-            const _tblkR=blkEl.getBoundingClientRect();
-            tntEl.style.cssText = `position:fixed;width:${bw}px;height:${bh}px;z-index:99999;pointer-events:none;image-rendering:pixelated;left:${_tblkR.left}px;top:${_tblkR.top-bh-5}px;transition:top 0.35s cubic-bezier(0.55,0,1,0.45);`;
+            const _tbr=blkEl.getBoundingClientRect();
+            tntEl.style.cssText = `position:fixed;width:${bw}px;height:${bh}px;z-index:99999;pointer-events:none;image-rendering:pixelated;left:${_tbr.left}px;top:${_tbr.top-bh-5}px;transition:top 0.35s cubic-bezier(0.55,0,1,0.45);`;
             document.body.appendChild(tntEl);
-
-            requestAnimationFrame(() => {
-                requestAnimationFrame(() => {
-                    tntEl.style.top = _tblkR.top + 'px';
-                });
-            });
+            requestAnimationFrame(() => requestAnimationFrame(() => {
+                tntEl.style.top = _tbr.top + 'px';
+            }));
 
             setTimeout(() => {
                 tntEl.remove();
@@ -2839,13 +2801,17 @@ let isUpgrading=false, upgChance=50;
 
 function upgMult(c){ return Math.max(1.01,Math.floor(92/c*100)/100); }
 
+function upgGetColor(c){
+    return c<20?'#ff2255':c<50?'#ff6600':'#00e676';
+}
+
+// Обновляем CSS колесо (диск в исходном положении)
 function upgRefresh(){
     const bet=parseFloat($('up-bet')?$('up-bet').value:0)||0;
     const mult=upgMult(upgChance);
-    // Обновляем CSS колесо через custom property
-    const wheel=document.querySelector('.upg-wheel');
+    const color=upgGetColor(upgChance);
+    const wheel=document.querySelector('.upg-disk');
     if(wheel){
-        const color=upgChance<20?'#ff2255':upgChance<50?'#ff6600':'#00e676';
         wheel.style.background='conic-gradient('+color+' 0% '+upgChance+'%, #1a1a2e '+upgChance+'% 100%)';
     }
     if($('upg-chance-pct')) $('upg-chance-pct').innerText=upgChance+'%';
@@ -2856,38 +2822,70 @@ function upgRefresh(){
 }
 
 function upgSetChance(v){
+    if(isUpgrading) return; // нельзя менять во время вращения
     upgChance=Math.max(1,Math.min(95,parseInt(v)||50));
     if($('upg-slider')) $('upg-slider').value=upgChance;
-    upgRefresh(); playSound('click');
+    upgRefresh();
+    playSound('click');
 }
 
-function upgSetBet(v){ if($('up-bet'))$('up-bet').value=v; upgRefresh(); playSound('click'); }
+function upgSetBet(v){
+    if($('up-bet')) $('up-bet').value=v;
+    upgRefresh();
+    playSound('click');
+}
 
-function initUpgradePage(){ upgChance=50;if($('upg-slider'))$('upg-slider').value=50;upgRefresh(); }
+function initUpgradePage(){
+    upgChance=50;
+    if($('upg-slider')) $('upg-slider').value=50;
+    upgRefresh();
+}
 
-// Анимация: стрелка вращается, потом останавливается в нужной зоне
-function upgSpinArrow(winPct, isWin, onDone){
-    const arrow=document.querySelector('.upg-arrow-spin');
-    if(!arrow){onDone();return;}
-    // Определяем итоговый угол
+// Анимация: ДИСК крутится, стрелка сверху фиксирована
+// Стрелка указывает на 0° (верх диска = начало зелёного сектора)
+// Чтобы стрелка попала в зелёный сектор при победе:
+//   нужно повернуть диск так, чтобы зелёный оказался под стрелкой (сверху)
+//   Зелёный занимает 0..winAngle° от верха диска
+//   Если диск повернуть на X° против часовой: 
+//     стрелка указывает на X° от исходного положения диска
+//   Для WIN: X должен быть в [0, winAngle] → зелёный сектор под стрелкой
+//   Для LOSE: X должен быть в [winAngle, 360] → тёмный под стрелкой
+function upgSpinDisk(winPct, isWin, onDone){
+    const disk=document.querySelector('.upg-disk');
+    if(!disk){if(onDone)onDone();return;}
+
     const winAngle=(winPct/100)*360;
-    let finalAngle;
+    let finalLocalAngle; // угол на который повернуть диск (против часовой = clockwise в CSS rotate)
+
     if(isWin){
-        // В пределах зелёного сектора (0..winAngle)
-        finalAngle=winAngle*0.1+Math.random()*(winAngle*0.8);
+        // Зелёный сектор [0..winAngle] должен быть под стрелкой (top)
+        // Крутим диск на finalLocalAngle против часовой
+        // Стрелка попадает в winAngle*[0.1..0.9]
+        finalLocalAngle = winAngle*0.1 + Math.random()*winAngle*0.8;
     } else {
-        // В пределах тёмного сектора (winAngle..360)
-        finalAngle=winAngle+(Math.random()*(360-winAngle)*0.8+(360-winAngle)*0.1);
+        // Тёмный сектор [winAngle..360] должен быть под стрелкой
+        finalLocalAngle = winAngle + 5 + Math.random()*(360-winAngle-10);
     }
-    // 3 полных оборота + итоговая позиция
-    const totalRot=1080+finalAngle;
-    arrow.style.transition='transform 2s cubic-bezier(0.25,0.46,0.45,0.94)';
-    arrow.style.transform='rotate('+totalRot+'deg)';
+
+    // 3 полных оборота + финальный угол
+    const totalRot = 1080 + finalLocalAngle;
+
+    // Сбрасываем без анимации
+    disk.style.transition='none';
+    disk.style.transform='rotate(0deg)';
+
+    // Запускаем вращение
+    requestAnimationFrame(()=>requestAnimationFrame(()=>{
+        disk.style.transition='transform 2s cubic-bezier(0.25,0.46,0.45,0.94)';
+        disk.style.transform='rotate('+totalRot+'deg)';
+    }));
+
     setTimeout(()=>{
-        arrow.style.transition='none';
-        arrow.style.transform='rotate('+finalAngle+'deg)';
-        onDone();
-    },2100);
+        // Сбрасываем в финальную позицию без лишних оборотов
+        disk.style.transition='none';
+        disk.style.transform='rotate('+finalLocalAngle+'deg)';
+        if(onDone) onDone();
+    },2150);
 }
 
 async function playUpgrade(){
@@ -2901,6 +2899,9 @@ async function playUpgrade(){
     if(btn){btn.disabled=true;btn.innerText='...';}
     const resEl=$('upgrade-result');
     if(resEl){resEl.innerText='';resEl.style.color='';}
+    // Блокируем слайдер
+    const sldr=$('upg-slider');
+    if(sldr) sldr.disabled=true;
     playSound('click');
 
     try{
@@ -2908,18 +2909,24 @@ async function playUpgrade(){
         const data=await r.json();
         if(!r.ok){showToast(data.error||'Ошибка');return;}
 
-        // Запускаем анимацию стрелки с известным результатом
-        upgSpinArrow(upgChance, data.win>0, ()=>{
+        // Запускаем анимацию, результат показываем после остановки
+        upgSpinDisk(upgChance, data.win>0, ()=>{
             user=data.user; updateUI(); upgRefresh();
             if(resEl){
                 resEl.innerText=data.win>0?'+'+data.win.toFixed(2)+' TON (x'+data.multiplier+')':'-'+betVal.toFixed(2)+' TON';
                 resEl.style.color=data.win>0?'#00ff88':'#ff0055';
             }
             if(data.win>0){playSound('win');flyToBalance(data.win);showToast('✅ WIN! +'+data.win.toFixed(2)+' TON');}
-            else{playSound('lose');showToast('❌ Проигрыш -'+betVal+' TON');}
+            else{showToast('❌ Проигрыш -'+betVal+' TON');}
         });
     }catch(e){showToast('Ошибка соединения');}
-    finally{setTimeout(()=>{isUpgrading=false;if(btn){btn.disabled=false;btn.innerText='АПГРЕЙД ⬆️';}},2200);}
+    finally{
+        setTimeout(()=>{
+            isUpgrading=false;
+            if(btn){btn.disabled=false;btn.innerText='АПГРЕЙД ⬆️';}
+            if(sldr) sldr.disabled=false;
+        },2300);
+    }
 }
 
 // ===================== PLINKO GAME =====================
