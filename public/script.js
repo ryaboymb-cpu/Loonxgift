@@ -2559,11 +2559,8 @@ function revealMineShaft(grid, blockWins, win, balanceBefore, chestMults, isAuto
             const balSpan = $('bal-val');
             if (balSpan) animateCounter(balSpan, balanceBefore, newBal, 900, '', '');
             flyToBalance(win);
-            // Sync running total with server win (includes chest bonuses)
             const rtFinal=$('mine-running-total');
-            if(rtFinal&&win>0&&Math.abs(win-mineRunningTotal)>0.001){
-                animateCounter(rtFinal,mineRunningTotal,win,500,'','');
-            }
+            if(rtFinal&&win>0&&Math.abs(win-mineRunningTotal)>0.001){animateCounter(rtFinal,mineRunningTotal,win,500,'','');}
             showToast('💰 +'+win.toFixed(2)+' TON!');
         }
         updateUI();
@@ -2817,56 +2814,27 @@ function highlightSpinWins(winLines, grid) {
 
 // ===================== UPGRADE GAME =====================
 let isUpgrading=false,upgChance=50;
-
-// mult = 90/chance (90% RTP)
-function upgMult(c){return Math.max(1.01,Math.floor(90/c*100)/100);}
-
+function upgMult(c){return Math.max(1.01,Math.floor(96/c*100)/100);}
 function upgRefresh(){
-    const bet=parseFloat($('up-bet')?$('up-bet').value:0)||0;
-    const c=Math.min(90,upgChance),mult=upgMult(c);
+    const bet=parseFloat($('up-bet')?$('up-bet').value:0)||0,c=Math.min(90,upgChance),mult=upgMult(c);
     const color=c<20?'#ff2255':c<50?'#ff6600':'#00e676';
     const disk=document.querySelector('.upg-disk');
     if(disk)disk.style.background='conic-gradient('+color+' 0% '+c+'%,#1a1a2e '+c+'% 100%)';
     if($('upg-chance-pct'))$('upg-chance-pct').innerText=c+'%';
     if($('upg-slider-val'))$('upg-slider-val').innerText=c+'%';
     if($('upg-mult-val'))$('upg-mult-val').innerText='x'+mult;
-    // Показываем ПРИБЫЛЬ
     if($('upg-win-val'))$('upg-win-val').innerText='+'+parseFloat((bet*(mult-1)).toFixed(2))+' TON';
 }
-
-function upgSetChance(v){
-    if(isUpgrading)return;
-    // Максимум 90%
-    upgChance=Math.max(1,Math.min(90,parseInt(v)||50));
-    if($('upg-slider'))$('upg-slider').value=upgChance;
-    upgRefresh();playSound('click');
-}
+function upgSetChance(v){if(isUpgrading)return;upgChance=Math.max(1,Math.min(90,parseInt(v)||50));if($('upg-slider'))$('upg-slider').value=upgChance;upgRefresh();playSound('click');}
 function upgSetBet(v){if($('up-bet'))$('up-bet').value=v;upgRefresh();playSound('click');}
 function initUpgradePage(){upgChance=50;if($('upg-slider'))$('upg-slider').value=50;upgRefresh();}
-
-// ИСПРАВЛЕННАЯ ЛОГИКА ВРАЩЕНИЯ:
-// CSS conic-gradient: зелёный 0..winA° от 12 часов по часовой
-// CSS rotate(R deg): диск вращается R° по часовой
-// Стрелка фиксирована сверху → после вращения R° стрелка указывает на (360-R)° от нач. диска
-// 
-// WIN: нужно (360-R) ∈ [0, winA] → R ∈ [360-winA, 360]
-// LOSE: нужно (360-R) ∈ [winA, 360] → R ∈ [0, 360-winA]
 function upgSpinDisk(winPct,isWin,onDone){
     const disk=document.querySelector('.upg-disk');if(!disk){if(onDone)onDone();return;}
-    const winA=(Math.min(winPct,90)/100)*360; // макс 90%
+    const winA=(Math.min(winPct,90)/100)*360;
     let targetR;
-    if(isWin){
-        // R ∈ [360-winA+mg, 360-mg] → стрелка попадает в ЗЕЛЁНУЮ зону
-        const lo=360-winA,hi=360;
-        const mg=Math.max(4,winA*0.07);
-        targetR=(lo+mg)+Math.random()*((hi-mg)-(lo+mg));
-    }else{
-        // R ∈ [mg, 360-winA-mg] → стрелка попадает в ТЁМНУЮ зону
-        const lo=0,hi=360-winA;
-        const mg=Math.max(4,(360-winA)*0.07);
-        targetR=(lo+mg)+Math.random()*((hi-mg)-(lo+mg));
-    }
-    const spinMs=3000+Math.random()*4000;
+    if(isWin){const lo=360-winA,hi=360,mg=Math.max(4,winA*0.07);targetR=(lo+mg)+Math.random()*((hi-mg)-(lo+mg));}
+    else{const lo=0,hi=360-winA,mg=Math.max(4,(360-winA)*0.07);targetR=(lo+mg)+Math.random()*((hi-mg)-(lo+mg));}
+    const spinMs=2500+Math.random()*3500;
     const totalRot=(3+Math.floor(spinMs/1000))*360+targetR;
     disk.style.transition='none';disk.style.transform='rotate(0deg)';
     requestAnimationFrame(()=>requestAnimationFrame(()=>{
@@ -2875,7 +2843,6 @@ function upgSpinDisk(winPct,isWin,onDone){
     }));
     setTimeout(()=>{disk.style.transition='none';disk.style.transform='rotate('+targetR+'deg)';if(onDone)onDone();},spinMs+80);
 }
-
 async function playUpgrade(){
     if(isUpgrading)return;
     const betVal=parseFloat($('up-bet')?.value);
@@ -2891,169 +2858,152 @@ async function playUpgrade(){
         upgSpinDisk(upgChance,data.win>0,()=>{
             user=data.user;updateUI();upgRefresh();
             const profit=data.profit!==undefined?data.profit:(data.win>0?data.win-betVal:-betVal);
-            if(resEl){
-                resEl.innerText=data.win>0?'+'+profit.toFixed(2)+' TON (x'+data.multiplier+')':'-'+betVal.toFixed(2)+' TON';
-                resEl.style.color=data.win>0?'#00ff88':'#ff0055';
-            }
+            if(resEl){resEl.innerText=data.win>0?'+'+profit.toFixed(2)+' TON (x'+data.multiplier+')':'-'+betVal.toFixed(2)+' TON';resEl.style.color=data.win>0?'#00ff88':'#ff0055';}
             if(data.win>0){playSound('win');flyToBalance(profit);showToast('✅ WIN! +'+profit.toFixed(2)+' TON');}
             else showToast('❌ Проигрыш -'+betVal+' TON');
         });
     }catch(e){showToast('Ошибка соединения');}
-    finally{setTimeout(()=>{isUpgrading=false;if(btn){btn.disabled=false;btn.innerText='Играть ⬆️';}if(sldr)sldr.disabled=false;},8000);}
+    finally{setTimeout(()=>{isUpgrading=false;if(btn){btn.disabled=false;btn.innerText='Играть ⬆️';}if(sldr)sldr.disabled=false;},7000);}
 }
 // ===================== PLINKO GAME =====================
-let _plinkoEng=null;
-const PL_ROWS=8,PL_SLOTS=9,PL_MULTS=[0,0.7,1.2,1.5,2.5,1.5,1.2,0.7,0];
-
-function initPlinkoEngine(){
-    const canvas=$('plinko-canvas');if(!canvas)return;
-    if(_plinkoEng){_plinkoEng.destroy();_plinkoEng=null;}
-    _plinkoEng=new PlinkoEngine(canvas);
+let plinkoRisk = 'medium';
+let isPlinkoing = false;
+function setPlinkoRisk(risk, btn) {
+    plinkoRisk = risk;
+    if (btn) {
+        const parent = btn.closest('div');
+        if (parent) parent.querySelectorAll('.qb-btn').forEach(b => b.classList.remove('qb-sel'));
+        btn.classList.add('qb-sel');
+    }
 }
 
-class PlinkoEngine{
-    constructor(canvas){
-        this.canvas=canvas;this.ctx=canvas.getContext('2d');
-        this.balls=[];this.slotFlash=new Array(PL_SLOTS).fill(0);this.raf=null;
-        this.resize();this.loop();
-    }
-    resize(){
-        const W=this.canvas.parentElement?.offsetWidth||320;
-        this.canvas.width=W;this.canvas.height=Math.round(W*1.15);
-        this.W=W;this.H=this.canvas.height;this.buildLayout();
-    }
-    buildLayout(){
-        const W=this.W,H=this.H;
-        this.slotH=W*0.088;
-        const boardH=H-this.slotH;
-        this.pinR=Math.max(3,Math.min(6,W*0.021));
-        const padT=W*0.035,rowH=(boardH-padT-W*0.015)/(PL_ROWS+1);
-        this.rowH=rowH;
-        this.pins=[];
-        for(let r=0;r<PL_ROWS;r++){
-            const nP=r+3,spread=W*(0.28+0.44*(r/(PL_ROWS-1)));
-            const row=[];
-            for(let p=0;p<nP;p++) row.push({x:W/2-spread/2+p*(nP>1?spread/(nP-1):0),y:padT+(r+1)*rowH});
-            this.pins.push(row);
-        }
-        const sw=W/PL_SLOTS;
-        this.slots=PL_MULTS.map((m,i)=>({x:sw*i,cx:sw*(i+.5),y:H-this.slotH,w:sw,h:this.slotH,m}));
-    }
-    easeInOut(t){return t<.5?2*t*t:-1+(4-2*t)*t;}
-
-    spawnBall(path,bucket,bet,mult,onLand){
-        const pts=[{x:this.W/2,y:this.pinR*1.5}];
-        let rR=0;
-        for(let r=0;r<PL_ROWS;r++){
-            if(path[r])rR++;
-            const y=this.pins[r][0].y+(r<PL_ROWS-1?this.rowH*0.42:this.slotH*0.25);
-            const t=rR/PL_ROWS;
-            const x=this.slots[0].cx+(this.slots[PL_SLOTS-1].cx-this.slots[0].cx)*t;
-            pts.push({x,y});
-        }
-        pts.push({x:this.slots[bucket].cx,y:this.slots[bucket].y+this.slots[bucket].h*0.55});
-        const bR=Math.max(5,this.W*0.019);
-        this.balls.push({pts,frame:0,bucket,bet,mult,onLand,done:false,landed:false,bR,swing:0,swingV:0});
-    }
-
-    update(dt){
-        for(let i=0;i<PL_SLOTS;i++) if(this.slotFlash[i]>0) this.slotFlash[i]=Math.max(0,this.slotFlash[i]-dt*2.0);
-        for(const b of this.balls){
-            if(b.done)continue;
-            b.frame+=dt*3.0; // скорость шарика
-            const tot=b.pts.length-1;
-            const si=Math.min(Math.floor(b.frame),tot-1);
-            const segT=this.easeInOut(Math.min(b.frame-si,1));
-            const p0=b.pts[si],p1=b.pts[si+1]||p0;
-            // Отскок: каждый раз когда переходим на новый сегмент
-            if(b.frame>0.5&&(b.frame%1)<dt*3.5){
-                b.swingV+=(Math.random()-0.5)*55;
-            }
-            b.swingV*=0.80;b.swing+=b.swingV*dt;
-            b.x=p0.x+(p1.x-p0.x)*segT+b.swing*0.018;
-            b.y=p0.y+(p1.y-p0.y)*segT;
-            if(b.frame>=tot){b.done=true;b.landed=true;this.slotFlash[b.bucket]=1.2;if(b.onLand)b.onLand(b);}
-        }
-        this.balls=this.balls.filter(b=>!b.done||b.landed);
-    }
-
-    draw(){
-        const {ctx,W,H}=this;
-        ctx.clearRect(0,0,W,H);
-        ctx.fillStyle='#060606';ctx.fillRect(0,0,W,H);
-        this.drawPins();this.drawSlots();
-        for(const b of this.balls) if(!b.landed) this.drawBall(b);
-    }
-
-    drawPins(){
-        const {ctx}=this;
-        for(let r=0;r<PL_ROWS;r++){
-            const t=r/(PL_ROWS-1);
-            const cr=Math.round(255-187*t),cg=Math.round(238-17*t),cb=Math.round(68+187*t);
-            ctx.fillStyle=`rgb(${cr},${cg},${cb})`;ctx.shadowColor=`rgb(${cr},${cg},${cb})`;ctx.shadowBlur=7;
-            for(const p of this.pins[r]){ctx.beginPath();ctx.arc(p.x,p.y,this.pinR,0,Math.PI*2);ctx.fill();}
-        }
-        ctx.shadowBlur=0;
-    }
-
-    drawSlots(){
-        const {ctx}=this;
-        for(let i=0;i<PL_SLOTS;i++){
-            const sl=this.slots[i],f=Math.min(1,this.slotFlash[i]),m=sl.m;
-            const isSkull=m===0,isTop=m>=2;
-            ctx.fillStyle=f>0?`rgba(0,255,136,${f*0.5})`:(isSkull?'#1a0005':(isTop?'#00180a':'#0d0d0d'));
-            const rx=3;
-            ctx.beginPath();ctx.roundRect?ctx.roundRect(sl.x+1,sl.y+3,sl.w-2,sl.h-4,rx):ctx.rect(sl.x+1,sl.y+3,sl.w-2,sl.h-4);ctx.fill();
-            ctx.strokeStyle=isSkull?'#ff2255':(isTop?'#00ff88':'#232323');ctx.lineWidth=1.5;
-            ctx.beginPath();ctx.roundRect?ctx.roundRect(sl.x+1,sl.y+3,sl.w-2,sl.h-4,rx):ctx.rect(sl.x+1,sl.y+3,sl.w-2,sl.h-4);ctx.stroke();
-            ctx.textAlign='center';ctx.textBaseline='middle';
-            const fs=Math.max(8,Math.floor(sl.w*0.25));ctx.font=`bold ${fs}px Arial`;
-            ctx.fillStyle=isSkull?'#ff2255':(isTop?'#00ff88':'#bbb');
-            ctx.shadowColor=isTop?'#00ff88':isSkull?'#ff2255':'none';ctx.shadowBlur=isTop||isSkull?6:0;
-            ctx.fillText(isSkull?'💀':('x'+m),sl.cx,sl.y+sl.h*0.5);ctx.shadowBlur=0;
-        }
-    }
-
-    drawBall(b){
-        if(!b.x)return;
-        const {ctx}=this;const x=b.x,y=b.y,R=b.bR;
-        const g=ctx.createRadialGradient(x,y,0,x,y,R*3.2);
-        g.addColorStop(0,'rgba(0,255,136,0.28)');g.addColorStop(1,'rgba(0,255,136,0)');
-        ctx.beginPath();ctx.arc(x,y,R*3.2,0,Math.PI*2);ctx.fillStyle=g;ctx.fill();
-        const b2=ctx.createRadialGradient(x-R*0.3,y-R*0.3,R*0.05,x,y,R);
-        b2.addColorStop(0,'#eefff4');b2.addColorStop(0.45,'#00ff88');b2.addColorStop(1,'#005530');
-        ctx.beginPath();ctx.arc(x,y,R,0,Math.PI*2);
-        ctx.fillStyle=b2;ctx.shadowColor='#00ff88';ctx.shadowBlur=12;ctx.fill();ctx.shadowBlur=0;
-    }
-
-    loop(){
-        let last=performance.now();
-        const tick=now=>{const dt=Math.min((now-last)/1000,0.05);last=now;this.update(dt);this.draw();this.raf=requestAnimationFrame(tick);};
-        this.raf=requestAnimationFrame(tick);
-    }
-    destroy(){if(this.raf)cancelAnimationFrame(this.raf);this.raf=null;}
-}
-
-function setPlinkoRisk(r,b){}
-async function playPlinko(){
-    const betVal=parseFloat($('pl-bet')?.value);
-    if(isNaN(betVal)||betVal<0.1||betVal>25)return showToast('Мин 0.1, Макс 25 TON');
-    if(betVal>(mode==='demo'?user.demo_balance:user.balance))return showToast('Недостаточно средств');
+async function playPlinko() {
+    if (isPlinkoing) return;
+    const betVal = parseFloat($('pl-bet')?.value);
+    if (isNaN(betVal) || betVal < 0.1 || betVal > 25) return showToast('Мин 0.1, Макс 25 TON');
+    const bal = mode === 'demo' ? user.demo_balance : user.balance;
+    if (betVal > bal) return showToast('Недостаточно средств');
+    isPlinkoing = true;
+    const btn = $('pl-btn');
+    if (btn) btn.disabled = true;
     playSound('click');
-    if(!_plinkoEng)initPlinkoEngine();
-    // Нет задержки — сразу бросаем запрос
-    try{
-        const r=await fetch('/api/plinko',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:user.id,bet:betVal,mode})});
-        const data=await r.json();if(!r.ok){showToast(data.error||'Ошибка');return;}
-        _plinkoEng.spawnBall(data.path,data.bucket,betVal,data.multiplier,()=>{
-            user=data.user;updateUI();
-            const resEl=$('plinko-result');
-            const profit=data.profit!==undefined?data.profit:(data.win-betVal);
-            if(resEl){resEl.innerText=data.win>0?'✅ +'+profit.toFixed(2)+' TON (x'+data.multiplier+')':'❌ Череп (-'+betVal+' TON)';resEl.style.color=data.win>0?'#00ff88':'#ff2255';}
-            if(data.win>0){playSound('win');flyToBalance(profit);showToast('💰 +'+profit.toFixed(2)+' TON!');}
-        });
-    }catch(e){showToast('Ошибка соединения');}
+    try {
+        const r = await fetch('/api/plinko', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: user.id, bet: betVal, mode, risk: plinkoRisk }) });
+        const data = await r.json();
+        if (!r.ok) { showToast(data.error || 'Ошибка'); return; }
+        user = data.user; updateUI();
+        // Animate plinko ball on canvas
+        animatePlinkoBall(data.path, data.slotIndex, data.multiplier, data.win, betVal);
+    } catch (e) { showToast('Ошибка соединения'); } finally { isPlinkoing = false; if (btn) btn.disabled = false; }
 }
+
+function animatePlinkoBall(path, slotIndex, mult, win, bet) {
+    const canvas = $('plinko-canvas');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const W = canvas.width, H = canvas.height;
+    const rows = 12;
+    const slotCount = 13;
+    const pinR = 3;
+    const ballR = 6;
+    const padTop = 30, padBot = 40;
+    const rowH = (H - padTop - padBot) / rows;
+
+    // Draw background pins
+    ctx.clearRect(0, 0, W, H);
+    for (let r = 0; r < rows; r++) {
+        const pinsInRow = r + 3;
+        const rowW = (pinsInRow - 1) * (W / (slotCount + 1));
+        const startX = (W - rowW) / 2;
+        for (let p = 0; p < pinsInRow; p++) {
+            ctx.beginPath();
+            ctx.arc(startX + p * (rowW / (pinsInRow - 1 || 1)), padTop + r * rowH, pinR, 0, Math.PI * 2);
+            ctx.fillStyle = '#444';
+            ctx.fill();
+        }
+    }
+
+    // Draw slot multipliers at bottom
+    const mults = plinkoRisk === 'high' ? [10, 3, 1.5, 0.5, 0.3, 0.2, 0.3, 0.5, 1.5, 3, 10, 3, 1.5] :
+                  plinkoRisk === 'low' ? [1.2, 1.1, 1.0, 0.7, 0.5, 0.3, 0.2, 0.3, 0.5, 0.7, 1.0, 1.1, 1.2] :
+                  [2.0, 1.5, 1.2, 0.8, 0.5, 0.3, 0.2, 0.3, 0.5, 0.8, 1.2, 1.5, 2.0];
+
+    for (let i = 0; i < slotCount; i++) {
+        const x = (i + 0.5) * (W / slotCount);
+        ctx.fillStyle = i === slotIndex ? '#e040fb' : '#222';
+        ctx.fillRect(x - 10, H - padBot + 5, 20, 25);
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 8px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(mults[i] + 'x', x, H - padBot + 22);
+    }
+
+    // Animate ball falling
+    const ballPath = [];
+    let bx = W / 2;
+    for (let r = 0; r < rows; r++) {
+        const dir = (path && path[r] !== undefined) ? path[r] : (Math.random() > 0.5 ? 1 : -1);
+        bx += dir * (W / (slotCount + 1)) * 0.4;
+        bx = Math.max(ballR, Math.min(W - ballR, bx));
+        ballPath.push({ x: bx, y: padTop + r * rowH });
+    }
+    const finalX = (slotIndex + 0.5) * (W / slotCount);
+    ballPath.push({ x: finalX, y: H - padBot });
+
+    let frame = 0;
+    const totalFrames = ballPath.length * 6;
+    const drawFrame = () => {
+        const idx = Math.min(Math.floor(frame / 6), ballPath.length - 1);
+        const pos = ballPath[idx];
+
+        // Redraw pins
+        ctx.clearRect(0, 0, W, H);
+        for (let r = 0; r < rows; r++) {
+            const pinsInRow = r + 3;
+            const rowW2 = (pinsInRow - 1) * (W / (slotCount + 1));
+            const startX = (W - rowW2) / 2;
+            for (let p = 0; p < pinsInRow; p++) {
+                ctx.beginPath();
+                ctx.arc(startX + p * (rowW2 / (pinsInRow - 1 || 1)), padTop + r * rowH, pinR, 0, Math.PI * 2);
+                ctx.fillStyle = '#444';
+                ctx.fill();
+            }
+        }
+        // Slot labels
+        for (let i = 0; i < slotCount; i++) {
+            const sx = (i + 0.5) * (W / slotCount);
+            ctx.fillStyle = i === slotIndex ? '#e040fb' : '#222';
+            ctx.fillRect(sx - 10, H - padBot + 5, 20, 25);
+            ctx.fillStyle = '#fff';
+            ctx.font = 'bold 8px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(mults[i] + 'x', sx, H - padBot + 22);
+        }
+        // Ball
+        ctx.beginPath();
+        ctx.arc(pos.x, pos.y, ballR, 0, Math.PI * 2);
+        ctx.fillStyle = '#e040fb';
+        ctx.shadowColor = '#e040fb';
+        ctx.shadowBlur = 10;
+        ctx.fill();
+        ctx.shadowBlur = 0;
+
+        frame++;
+        if (frame < totalFrames) {
+            requestAnimationFrame(drawFrame);
+        } else {
+            // Done
+            const result = $('plinko-result');
+            if (result) {
+                result.innerText = win > 0 ? `${mult}x = +${win.toFixed(2)} TON` : `${mult}x = -${bet.toFixed(2)} TON`;
+                result.style.color = win >= bet ? '#00ff88' : '#ff0055';
+            }
+            if (win > 0) { playSound('win'); flyToBalance(win); }
+        }
+    };
+    requestAnimationFrame(drawFrame);
+}
+
 // ===================== DUCK GAME =====================
 let isDuckPlaying = false;
 function initDuckPond() {
