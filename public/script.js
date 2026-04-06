@@ -432,112 +432,100 @@ function switchDepTab(type, el) {
 }
 
 async function payWithTonConnect() {
-    if (!tonConnectUI) return showToast('TON Connect не загружен. Перезагрузите страницу.');
-    // .wallet — правильная проверка (.connected нет в SDK)
+    if (!tonConnectUI) return showToast('TON Connect не загружен');
+
+    // .wallet — правильная проверка (.connected не существует в этом SDK)
     if (!tonConnectUI.wallet) {
-        showToast('Подключи кошелёк кнопкой TON Connect!');
+        showToast('Сначала подключи кошелёк кнопкой TON Connect!');
         try { await tonConnectUI.openModal(); } catch(e){}
         return;
     }
-    const amount = parseFloat($('tc-amount').value);
-    if(isNaN(amount) || amount < 0.5) return showToast('Минимум 0.5 TON');
-    if(!adminWalletAddress) return showToast('Кошелек получателя не настроен');
 
-    const _raw = (function(a){
-        try{
-            a=a.trim().replace(/[\r\n\s]/g,'');
-            if(/^-?[0-9]+:[0-9a-fA-F]{64}$/.test(a))return a;
-            let b64=a.replace(/-/g,'+').replace(/_/g,'/');
-            while(b64.length%4)b64+='=';
-            const bin=atob(b64);
-            if(bin.length<34)return null;
-            const wc=bin.charCodeAt(1)===255?-1:bin.charCodeAt(1);
-            let hex='';
-            for(let i=2;i<34;i++)hex+=bin.charCodeAt(i).toString(16).padStart(2,'0');
-            return wc+':'+hex;
-        }catch(e){return null;}
-    })(adminWalletAddress);
-    if(!_raw){return showToast('Неверный адрес кошелька казино. Обратись к admin.');}
-    const addr = _raw;
+    const amount = parseFloat($('tc-amount') ? $('tc-amount').value : 0);
+    if (!amount || amount < 0.5) return showToast('Мин. 0.5 TON');
+    if (!adminWalletAddress) return showToast('Кошелёк казино не настроен');
 
-    // Build comment payload (BOC cell) with user ID for TON Connect
-    let payloadBoc = "";
+    // Конвертация в raw формат (0:hex) — требуется TonConnect SDK
+    // Используем максимально надёжный метод через TonWeb если доступен
+    let rawAddr = null;
     try {
-        if (!window.TonWeb) {
-            showToast('Загрузка модуля оплаты...');
-            await new Promise((resolve, reject) => {
-                let tries = 0;
-                const check = setInterval(() => {
-                    tries++;
-                    if (window.TonWeb) { clearInterval(check); resolve(); }
-                    else if (tries > 50) { clearInterval(check); reject(new Error('TonWeb timeout')); }
-                }, 200);
-            });
+        if (window.TonWeb && TonWeb.utils && TonWeb.utils.Address) {
+            // TonWeb.utils.Address принимает любой формат и конвертирует правильно
+            const a = new TonWeb.utils.Address(adminWalletAddress.trim());
+            rawAddr = (a.wc) + ':' + Array.from(a.hashPart).map(b=>b.toString(16).padStart(2,'0')).join('');
         }
-        const cell = new TonWeb.boc.Cell();
-        cell.bits.writeUint(0, 32); // text comment op code
-        cell.bits.writeString(String(user.id));
-        const boc = await cell.toBoc();
-        payloadBoc = TonWeb.utils.bytesToBase64(boc);
     } catch(e) {
-        console.error('Payload error:', e);
+        console.error('TonWeb addr err:', e);
     }
 
-    const transaction = {
-        validUntil: Math.floor(Date.now() / 1000) + 600,
-        messages: [{
-            address: addr,
-            amount: (amount * 1e9).toString(),
-            ...(payloadBoc ? { payload: payloadBoc } : {})
-        }]
-    };
+    // Fallback: ручная конвертация если TonWeb не доступен
+    if (!rawAddr) {
+        try {
+            const clean = adminWalletAddress.replace(/[^A-Za-z0-9\-_+=/]/g,'').trim();
+            let b64 = clean.replace(/-/g,'+').replace(/_/g,'/');
+            while(b64.length%4) b64+='=';
+            const bin = atob(b64);
+            if (bin.length >= 34) {
+                const wc = bin.charCodeAt(1)===255 ? -1 : bin.charCodeAt(1);
+                let hex='';
+                for(let i=2;i<34;i++) hex+=bin.charCodeAt(i).toString(16).padStart(2,'0');
+                rawAddr = wc+':'+hex;
+            }
+        } catch(e) { console.error('raw fallback err:', e); }
+    }
+
+    if (!rawAddr) {
+        return showToast('Ошибка адреса кошелька. Обратись в поддержку.');
+    }
+
+    console.log('[TC] rawAddr:', rawAddr, 'amount:', amount);
+
+    // Payload с MEMO = ID пользователя
+    let payload = '';
+    try {
+        if (window.TonWeb) {
+            const cell = new TonWeb.boc.Cell();
+            cell.bits.writeUint(0, 32);
+            cell.bits.writeString(String(user.id));
+            const boc = await cell.toBoc(false);
+            payload = TonWeb.utils.bytesToBase64(boc);
+        } else {
+            const tb = new TextEncoder().encode(String(user.id));
+            const by = new Uint8Array(4+tb.length); by.set(tb,4);
+            let bin=''; by.forEach(b=>bin+=String.fromCharCode(b));
+            payload = btoa(bin);
+        }
+    } catch(e) { console.error('payload err:', e); }
+
+    const msg = {address: rawAddr, amount: String(Math.round(amount * 1e9))};
+    if (payload) msg.payload = payload;
 
     try {
-        await tonConnectUI.sendTransaction(transaction);
-        showToast('Транзакция отправлена! Проверка через 20 сек...');
-
-        // Auto-check deposit after delay (blockchain confirmation takes time)
-        let checkAttempts = 0;
-        const maxAttempts = 6;
-        const autoCheck = async () => {
-            checkAttempts++;
-            try {
-                const r = await fetch('/api/check_deposit', {
-                    method: 'POST',
-                    headers: {'Content-Type':'application/json'},
-                    body: JSON.stringify({id: user.id})
-                });
-                if (r.ok) {
-                    const d = await r.json();
-                    if (d.success && d.added > 0) {
-                        user = d.user;
-                        updateUI();
-                        renderWithdrawHistory();
-                        showToast(`+${d.added.toFixed(2)} TON зачислено!`);
-                        flyToBalance(d.added);
-                        return;
-                    }
-                }
-            } catch(e) {}
-
-            if (checkAttempts < maxAttempts) {
-                showToast(`Проверка ${checkAttempts}/${maxAttempts}... Ожидание подтверждения.`);
-                setTimeout(autoCheck, 20000);
-            } else {
-                showToast('Автопроверка завершена. Нажмите "ПРОВЕРИТЬ ОПЛАТУ" вручную.');
-            }
+        playSound('click');
+        await tonConnectUI.sendTransaction({
+            validUntil: Math.floor(Date.now()/1000) + 360,
+            messages: [msg]
+        });
+        playSound('win');
+        showToast('✅ Отправлено! Автопроверка через 15 сек...');
+        let att=0;
+        const chk=async()=>{
+            att++;
+            try{
+                const r=await fetch('/api/check_deposit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:user.id})});
+                if(r.ok){const d=await r.json();if(d.success&&d.added>0){user=d.user;updateUI();renderWithdrawHistory();showToast('+'+d.added+' TON зачислено!');flyToBalance(d.added);return;}}
+            }catch(e){}
+            if(att<8) setTimeout(chk,15000);
+            else showToast('Нажми ПРОВЕРИТЬ ОПЛАТУ если не зачислилось');
         };
-        setTimeout(autoCheck, 20000);
-    } catch (e) {
-        console.error('TON Connect error:', e);
-        const msg = e?.message || String(e);
-        if (msg.includes('reject') || msg.includes('cancel') || msg.includes('Cancelled')) {
-            showToast('Транзакция отменена');
-        } else {
-            showToast('Ошибка транзакции: ' + msg.slice(0, 80));
-        }
+        setTimeout(chk,15000);
+    } catch(e){
+        const m=(e&&e.message)?e.message.toLowerCase():'';
+        if(m.includes('reject')||m.includes('cancel')||m.includes('user')) showToast('Транзакция отменена');
+        else{console.error('TC err:',e);showToast('Ошибка TC: '+(e.message||'').slice(0,80));}
     }
 }
+
 
 function renderWithdrawHistory() {
     const list = $('w-history-list');
@@ -1141,7 +1129,7 @@ async function checkRealDeposit(btn, silent) {
     try{
         const r=await fetch('/api/check_deposit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:user.id})});
         const d=await r.json();
-        if(r.ok&&d.success){user=d.user;updateUI();renderWithdrawHistory();if(d.added>0){showToast('+'+d.added+' TON зачислено!');flyToBalance(d.added);}}
+        if(r.ok&&d.success){user=d.user;updateUI();renderWithdrawHistory();if(d.added>0){playSound('win');showToast('+'+d.added+' TON зачислено!');flyToBalance(d.added);}}
         else if(!silent) showToast(d.error||'Оплата не найдена. Укажи ID в комментарии.');
     }catch(e){if(!silent)showToast('Ошибка соединения');}
     if(btn){btn.innerText='ПРОВЕРИТЬ ОПЛАТУ';btn.disabled=false;}
@@ -2042,13 +2030,14 @@ function spawnPickaxeWorker(blockQueue, pickaxeType, workerIdx, onWorkerDone, on
         const pUrl = getPickaxeImg(pickaxeType);
         const el = document.createElement('img');
         el.src = pUrl;
-        // position:fixed + document.body чтобы перекрывать hotbar (position:fixed z-index:100)
-        const _sr = shaft.getBoundingClientRect();
-        const _absX = _sr.left + bx;
-        const _absStartY = _sr.top + startY;
-        const _absHoverY = _sr.top + hoverY;
-        const _absHitY   = _sr.top + hitY;
-        el.style.cssText = `position:fixed;width:22px;height:22px;z-index:99999;pointer-events:none;image-rendering:crisp-edges;image-rendering:pixelated;left:${_absX}px;top:${_absStartY}px;transform:translate(-50%,-100%);`;
+        // Используем getBoundingClientRect для ТОЧНЫХ экранных координат
+        // position:fixed + document.body = поверх hotbar (position:fixed z-index:100)
+        const _blkR = blkEl.getBoundingClientRect();
+        const _cx   = _blkR.left + _blkR.width/2;
+        const _sy   = _blkR.top - 26;   // startY
+        const _hy   = _blkR.top - 8;    // hoverY
+        const _hity = _blkR.top + 2;    // hitY
+        el.style.cssText = `position:fixed;width:22px;height:22px;z-index:99999;pointer-events:none;image-rendering:pixelated;left:${_cx}px;top:${_sy}px;transform:translate(-50%,-100%);`;
         document.body.appendChild(el);
         _pickaxeEls.add(el);
 
@@ -2057,7 +2046,7 @@ function spawnPickaxeWorker(blockQueue, pickaxeType, workerIdx, onWorkerDone, on
             if (el.parentNode) el.parentNode.removeChild(el);
         }
 
-        _animProp(el, 'top', _absStartY, _absHoverY, 180, t => t*t, () => {
+        _animProp(el, 'top', _sy, _hy, 180, t => t*t, () => {
             if (!mineIsActive) { removeEl(); return; }
             blkEl.classList.add('cracking-1');
             doHits(hitsCanDo, 0);
@@ -2068,7 +2057,7 @@ function spawnPickaxeWorker(blockQueue, pickaxeType, workerIdx, onWorkerDone, on
             const swingAngle = hitNum % 2 === 0 ? -25 : 25;
             el.style.transform = `translate(-50%,-100%) rotate(${swingAngle}deg)`;
 
-            _animProp(el, 'top', _absHoverY, _absHitY, 120, t => t*t, () => {
+            _animProp(el, 'top', _hy, _hity, 120, t => t*t, () => {
                 if (!mineIsActive) { removeEl(); return; }
                 el.style.transform = `translate(-50%,-100%) rotate(0deg)`;
                 playSound('hit');
@@ -2087,13 +2076,13 @@ function spawnPickaxeWorker(blockQueue, pickaxeType, workerIdx, onWorkerDone, on
                         doBreakBlock(blkEl, blk, null, () => {
                             if (onBlockBroken) onBlockBroken(blk.r, blk.c);
                         });
-                        _animProp(el, 'top', _absHitY, _absStartY, 200, t => 1-(1-t)*(1-t), () => {
+                        _animProp(el, 'top', _hity, _sy, 200, t => 1-(1-t)*(1-t), () => {
                             removeEl();
                             setTimeout(processNext, 100);
                         });
                     } else {
                         blkEl.classList.add('cracking-2');
-                        _animProp(el, 'top', _absHitY, _absHoverY, 100, t => 1-(1-t)*(1-t), () => {
+                        _animProp(el, 'top', _hity, _hy, 100, t => 1-(1-t)*(1-t), () => {
                             if (!mineIsActive) { removeEl(); return; }
                             doPickaxeBreak(null, () => { removeEl(); if (onWorkerDone) onWorkerDone(); }, true, el, bx, hoverY);
                         });
@@ -2154,15 +2143,15 @@ function spawnPickaxeWorker(blockQueue, pickaxeType, workerIdx, onWorkerDone, on
         const pUrl = getPickaxeImg(pickaxeType);
         el = document.createElement('img');
         el.src = pUrl;
-        const _sr2 = shaft.getBoundingClientRect();
-        const _ax2 = _sr2.left + bxx;
-        const _sy2 = _sr2.top + sY;
-        const _hov2 = _sr2.top + hov;
-        el.style.cssText = `position:fixed;width:22px;height:22px;z-index:99999;pointer-events:none;image-rendering:crisp-edges;image-rendering:pixelated;transform:translate(-50%,-100%);left:${_ax2}px;top:${_sy2}px;`;
+        const _blkR2=blkEl.getBoundingClientRect();
+        const _cx2=_blkR2.left+_blkR2.width/2;
+        const _sy2=_blkR2.top-28;
+        const _hy2=_blkR2.top-8;
+        el.style.cssText = `position:fixed;width:22px;height:22px;z-index:99999;pointer-events:none;image-rendering:pixelated;transform:translate(-50%,-100%);left:${_cx2}px;top:${_sy2}px;`;
         document.body.appendChild(el);
         _pickaxeEls.add(el);
 
-        _animProp(el, 'top', _sy2, _hov2, 140, t => t*t, () => {
+        _animProp(el, 'top', _sy2, _hy2, 140, t => t*t, () => {
             if (!mineIsActive) { removeEl(); if(cb)cb(); return; }
             shakeAndBreak(el);
         });
@@ -2526,16 +2515,13 @@ function revealMineShaft(grid, blockWins, win, balanceBefore, chestMults, isAuto
             tntEl.src = '/sprites/block_tnt.png';
             const bw = blkEl.offsetWidth || 36;
             const bh = blkEl.offsetHeight || 36;
-            const _tsr = shaft.getBoundingClientRect();
-            const _tbl = blkEl.getBoundingClientRect();
-            const _tStartY = _tbl.top - bh - 10; // стартовая позиция выше блока
-            const _tEndY   = _tbl.top;
-            tntEl.style.cssText = `position:fixed;width:${bw}px;height:${bh}px;z-index:99999;pointer-events:none;image-rendering:crisp-edges;image-rendering:pixelated;left:${_tbl.left}px;top:${_tStartY}px;transition:top 0.35s cubic-bezier(0.55,0,1,0.45);`;
+            const _tblkR=blkEl.getBoundingClientRect();
+            tntEl.style.cssText = `position:fixed;width:${bw}px;height:${bh}px;z-index:99999;pointer-events:none;image-rendering:pixelated;left:${_tblkR.left}px;top:${_tblkR.top-bh-5}px;transition:top 0.35s cubic-bezier(0.55,0,1,0.45);`;
             document.body.appendChild(tntEl);
 
             requestAnimationFrame(() => {
                 requestAnimationFrame(() => {
-                    tntEl.style.top = _tEndY + 'px';
+                    tntEl.style.top = _tblkR.top + 'px';
                 });
             });
 
@@ -2597,9 +2583,7 @@ function revealMineShaft(grid, blockWins, win, balanceBefore, chestMults, isAuto
             const balSpan = $('bal-val');
             if (balSpan) animateCounter(balSpan, balanceBefore, newBal, 900, '', '');
             flyToBalance(win);
-            showToast('💰 +' + win.toFixed(2) + ' TON!'); // всегда показываем
-        } else if (mode==='real') {
-            showToast('Нет выигрыша');
+            showToast('💰 +'+win.toFixed(2)+' TON!');
         }
         updateUI();
 
@@ -2851,127 +2835,91 @@ function highlightSpinWins(winLines, grid) {
 }
 
 // ===================== UPGRADE GAME =====================
-let isUpgrading = false;
-let upgChance   = 50;
+let isUpgrading=false, upgChance=50;
 
-function upgGetMult(c) { return Math.max(1.01, Math.floor(92/c*100)/100); }
+function upgMult(c){ return Math.max(1.01,Math.floor(92/c*100)/100); }
 
-function upgUpdateInfo() {
-    const bet  = parseFloat($('up-bet') ? $('up-bet').value : 0) || 0;
-    const mult = upgGetMult(upgChance);
-    const win  = parseFloat((bet * mult).toFixed(2));
-    if($('upg-chance-pct')) $('upg-chance-pct').innerText = upgChance + '%';
-    if($('upg-slider-val')) $('upg-slider-val').innerText = upgChance + '%';
-    if($('upg-mult-show'))  $('upg-mult-show').innerText  = 'x' + mult;
-    if($('upg-win-preview'))$('upg-win-preview').innerText = win + ' TON';
-    upgDraw(upgChance);
+function upgRefresh(){
+    const bet=parseFloat($('up-bet')?$('up-bet').value:0)||0;
+    const mult=upgMult(upgChance);
+    // Обновляем CSS колесо через custom property
+    const wheel=document.querySelector('.upg-wheel');
+    if(wheel){
+        const color=upgChance<20?'#ff2255':upgChance<50?'#ff6600':'#00e676';
+        wheel.style.background='conic-gradient('+color+' 0% '+upgChance+'%, #1a1a2e '+upgChance+'% 100%)';
+    }
+    if($('upg-chance-pct')) $('upg-chance-pct').innerText=upgChance+'%';
+    if($('upg-slider-val')) $('upg-slider-val').innerText=upgChance+'%';
+    if($('upg-mult-val'))   $('upg-mult-val').innerText='x'+mult;
+    if($('upg-win-val'))    $('upg-win-val').innerText=parseFloat((bet*mult).toFixed(2))+' TON';
+    if($('upg-lose-pct'))   $('upg-lose-pct').innerText=(100-upgChance)+'%';
 }
 
-function upgSetChance(v) {
-    upgChance = Math.max(1, Math.min(95, parseInt(v)||50));
-    if($('upg-slider')) $('upg-slider').value = upgChance;
-    upgUpdateInfo();
+function upgSetChance(v){
+    upgChance=Math.max(1,Math.min(95,parseInt(v)||50));
+    if($('upg-slider')) $('upg-slider').value=upgChance;
+    upgRefresh(); playSound('click');
 }
 
-function upgSetBet(v) {
-    if($('up-bet')) $('up-bet').value = v;
-    upgUpdateInfo();
+function upgSetBet(v){ if($('up-bet'))$('up-bet').value=v; upgRefresh(); playSound('click'); }
+
+function initUpgradePage(){ upgChance=50;if($('upg-slider'))$('upg-slider').value=50;upgRefresh(); }
+
+// Анимация: стрелка вращается, потом останавливается в нужной зоне
+function upgSpinArrow(winPct, isWin, onDone){
+    const arrow=document.querySelector('.upg-arrow-spin');
+    if(!arrow){onDone();return;}
+    // Определяем итоговый угол
+    const winAngle=(winPct/100)*360;
+    let finalAngle;
+    if(isWin){
+        // В пределах зелёного сектора (0..winAngle)
+        finalAngle=winAngle*0.1+Math.random()*(winAngle*0.8);
+    } else {
+        // В пределах тёмного сектора (winAngle..360)
+        finalAngle=winAngle+(Math.random()*(360-winAngle)*0.8+(360-winAngle)*0.1);
+    }
+    // 3 полных оборота + итоговая позиция
+    const totalRot=1080+finalAngle;
+    arrow.style.transition='transform 2s cubic-bezier(0.25,0.46,0.45,0.94)';
+    arrow.style.transform='rotate('+totalRot+'deg)';
+    setTimeout(()=>{
+        arrow.style.transition='none';
+        arrow.style.transform='rotate('+finalAngle+'deg)';
+        onDone();
+    },2100);
 }
 
-function upgDraw(chance) {
-    const canvas = $('upg-canvas');
-    if (!canvas) return;
-    const dpr = window.devicePixelRatio || 1;
-    const W = canvas.offsetWidth || 260;
-    // Устанавливаем физический размер = логический * dpr для чёткости
-    canvas.width  = W * dpr;
-    canvas.height = W * dpr;
-    canvas.style.width  = W + 'px';
-    canvas.style.height = W + 'px';
-    const ctx = canvas.getContext('2d');
-    ctx.scale(dpr, dpr);
-    const cx = W/2, cy = W/2, R = W/2 - 3, rIn = W * 0.16;
-    ctx.clearRect(0, 0, W, W);
-
-    // Фон
-    ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI*2);
-    ctx.fillStyle = '#1a1a2e'; ctx.fill();
-    ctx.strokeStyle = '#333'; ctx.lineWidth = 2; ctx.stroke();
-
-    // Победный сектор
-    const color = chance < 20 ? '#ff0055' : chance < 50 ? '#ff6600' : '#00e676';
-    const angle = (chance / 100) * Math.PI * 2;
-    ctx.beginPath();
-    ctx.moveTo(cx, cy);
-    ctx.arc(cx, cy, R, -Math.PI/2, -Math.PI/2 + angle);
-    ctx.closePath();
-    ctx.fillStyle = color; ctx.fill();
-
-    // Внутренний круг
-    ctx.beginPath(); ctx.arc(cx, cy, rIn, 0, Math.PI*2);
-    ctx.fillStyle = '#0a0a1a'; ctx.fill();
-
-    // Текст
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillStyle = '#fff';
-    ctx.font = `bold ${Math.round(W*0.11)}px Arial`;
-    ctx.fillText(chance + '%', cx, cy - W*0.04);
-    ctx.fillStyle = '#888';
-    ctx.font = `${Math.round(W*0.07)}px Arial`;
-    ctx.fillText('шанс', cx, cy + W*0.07);
-}
-
-let _upgSpinId = null;
-function upgSpin(realChance, cb) {
-    if (_upgSpinId) clearInterval(_upgSpinId);
-    let fr = 0;
-    _upgSpinId = setInterval(() => {
-        fr++;
-        upgDraw(Math.random() * 94 + 1);
-        if (fr >= 22) {
-            clearInterval(_upgSpinId); _upgSpinId = null;
-            upgDraw(realChance);
-            if (cb) cb();
-        }
-    }, 55);
-}
-
-function initUpgradePage() { upgChance=50; if($('upg-slider'))$('upg-slider').value=50; upgUpdateInfo(); }
-
-async function playUpgrade() {
-    if (isUpgrading) return;
-    const betVal = parseFloat($('up-bet')?.value);
-    if (isNaN(betVal)||betVal<0.1||betVal>25) return showToast('Мин 0.1, Макс 25 TON');
-    const bal = mode==='demo' ? user.demo_balance : user.balance;
-    if (betVal>bal) return showToast('Недостаточно средств');
-    isUpgrading = true;
-    const btn = $('up-btn');
-    if (btn) { btn.disabled=true; btn.innerText='...'; }
-    const resEl = $('upgrade-result');
-    if (resEl) resEl.innerText = '';
+async function playUpgrade(){
+    if(isUpgrading) return;
+    const betVal=parseFloat($('up-bet')?.value);
+    if(isNaN(betVal)||betVal<0.1||betVal>25) return showToast('Мин 0.1, Макс 25 TON');
+    const bal=mode==='demo'?user.demo_balance:user.balance;
+    if(betVal>bal) return showToast('Недостаточно средств');
+    isUpgrading=true;
+    const btn=$('up-btn');
+    if(btn){btn.disabled=true;btn.innerText='...';}
+    const resEl=$('upgrade-result');
+    if(resEl){resEl.innerText='';resEl.style.color='';}
     playSound('click');
 
-    upgSpin(upgChance, null); // запускаем анимацию сразу
+    try{
+        const r=await fetch('/api/upgrade',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:user.id,bet:betVal,chance:upgChance,mode})});
+        const data=await r.json();
+        if(!r.ok){showToast(data.error||'Ошибка');return;}
 
-    try {
-        const r = await fetch('/api/upgrade', {
-            method:'POST', headers:{'Content-Type':'application/json'},
-            body: JSON.stringify({ id:user.id, bet:betVal, chance:upgChance, mode })
-        });
-        const data = await r.json();
-        if (!r.ok) { showToast(data.error||'Ошибка'); return; }
-
-        setTimeout(() => {
-            user = data.user; updateUI(); upgUpdateInfo();
-            if (resEl) {
-                resEl.innerText = data.win>0 ? '+'+data.win.toFixed(2)+' TON (x'+data.multiplier+')' : '-'+betVal.toFixed(2)+' TON';
-                resEl.style.color = data.win>0 ? '#00ff88' : '#ff0055';
+        // Запускаем анимацию стрелки с известным результатом
+        upgSpinArrow(upgChance, data.win>0, ()=>{
+            user=data.user; updateUI(); upgRefresh();
+            if(resEl){
+                resEl.innerText=data.win>0?'+'+data.win.toFixed(2)+' TON (x'+data.multiplier+')':'-'+betVal.toFixed(2)+' TON';
+                resEl.style.color=data.win>0?'#00ff88':'#ff0055';
             }
-            if (data.win>0) { playSound('win'); flyToBalance(data.win); showToast('✅ WIN! +'+data.win.toFixed(2)+' TON'); }
-            else showToast('❌ Проигрыш');
-        }, 1300);
-    } catch(e) { showToast('Ошибка соединения'); }
-    finally { setTimeout(()=>{ isUpgrading=false; if(btn){btn.disabled=false;btn.innerText='АПГРЕЙД ⬆️';} }, 1350); }
+            if(data.win>0){playSound('win');flyToBalance(data.win);showToast('✅ WIN! +'+data.win.toFixed(2)+' TON');}
+            else{playSound('lose');showToast('❌ Проигрыш -'+betVal+' TON');}
+        });
+    }catch(e){showToast('Ошибка соединения');}
+    finally{setTimeout(()=>{isUpgrading=false;if(btn){btn.disabled=false;btn.innerText='АПГРЕЙД ⬆️';}},2200);}
 }
 
 // ===================== PLINKO GAME =====================
