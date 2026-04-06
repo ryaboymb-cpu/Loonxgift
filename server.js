@@ -13,19 +13,51 @@ const io = socketIo(server, { cors: { origin: "*" } });
 
 app.use(cors()); 
 
-// Конвертация TON адреса UQ.../EQ... → raw 0:hex (для TonCenter и TonConnect)
-function walletToRaw(a) {
-    if (!a) return null;
-    a = a.replace(/[^A-Za-z0-9\-_+=/]/g,'').trim();
-    if (/^-?[0-9]+:[0-9a-fA-F]{64}$/.test(a)) return a;
-    try {
-        let b64 = a.replace(/-/g,'+').replace(/_/g,'/');
-        while (b64.length%4) b64+='=';
-        const b = Buffer.from(b64,'base64');
-        if (b.length<34) return null;
-        const wc = b[1]===0xff?-1:b[1];
-        return wc+':'+b.slice(2,34).toString('hex');
-    } catch(e){ return null; }
+// ─── TON Wallet Address helpers ──────────────────────────────
+function _crc16ton(buf){
+    let c=0;
+    for(let i=0;i<buf.length;i++){c^=buf[i]<<8;for(let j=0;j<8;j++)c=(c&0x8000)?(c<<1)^0x1021:c<<1;}
+    return c&0xffff;
+}
+// Canonical 48-char base64url TON address WITH CRC (for TonConnect SDK)
+function walletToFriendly48(a){
+    if(!a)return null;
+    a=a.replace(/[^A-Za-z0-9\-_+=/]/g,'').trim();
+    try{
+        const raw=a.match(/^(-?[0-9]+):([0-9a-fA-F]{64})$/);
+        if(raw){
+            const buf=Buffer.alloc(36);
+            buf[0]=0x11;buf[1]=parseInt(raw[1])&0xff;
+            Buffer.from(raw[2],'hex').copy(buf,2);
+            const crc=_crc16ton(buf.slice(0,34));
+            buf[34]=(crc>>8)&0xff;buf[35]=crc&0xff;
+            return buf.toString('base64url').replace(/=+$/,'');
+        }
+        let b64=a.replace(/-/g,'+').replace(/_/g,'/');
+        while(b64.length%4)b64+='=';
+        const bytes=Buffer.from(b64,'base64');
+        if(bytes.length===36){return bytes.toString('base64url').replace(/=+$/,'');}
+        if(bytes.length===34){
+            const buf=Buffer.alloc(36);bytes.copy(buf);
+            const crc=_crc16ton(buf.slice(0,34));
+            buf[34]=(crc>>8)&0xff;buf[35]=crc&0xff;
+            return buf.toString('base64url').replace(/=+$/,'');
+        }
+        return null;
+    }catch(e){console.error('walletToFriendly48:',e);return null;}
+}
+// Raw 0:hex for TonCenter API
+function walletToRaw(a){
+    if(!a)return null;
+    a=a.replace(/[^A-Za-z0-9\-_+=/]/g,'').trim();
+    if(/^-?[0-9]+:[0-9a-fA-F]{64}$/.test(a))return a;
+    try{
+        let b64=a.replace(/-/g,'+').replace(/_/g,'/');
+        while(b64.length%4)b64+='=';
+        const b=Buffer.from(b64,'base64');
+        if(b.length<34)return null;
+        return (b[1]===0xff?-1:b[1])+':'+b.slice(2,34).toString('hex');
+    }catch(e){return null;}
 }
 app.use(express.json());
 
@@ -473,9 +505,11 @@ app.post('/api/auth', async (req, res) => {
 
     const wagerSett = await Settings.findOne({ key: 'wager_multiplier' });
     const wagerMult = wagerSett ? wagerSett.value : 2;
-    const _raw = walletToRaw(process.env.ADMIN_WALLET);
-    console.log('[Auth] rawWallet='+(_raw?_raw.slice(0,15):'NULL'));
-    res.json({ user: userObj, adminWallet: (process.env.ADMIN_WALLET||'').trim(), rawAdminWallet: _raw||'', rtp: rtpData, maintenance: maintenanceData, wagerMultiplier: wagerMult });
+    const _aw=process.env.ADMIN_WALLET||'';
+    const _w48=walletToFriendly48(_aw);
+    const _wraw=walletToRaw(_aw);
+    console.log('[Auth] wallet48='+(_w48?_w48.slice(0,12):'NULL')+' raw='+(_wraw?_wraw.slice(0,12):'NULL'));
+    res.json({ user: userObj, adminWallet: _aw.trim(), wallet48: _w48||'', walletRaw: _wraw||'', rtp: rtpData, maintenance: maintenanceData, wagerMultiplier: wagerMult });
 });
 
 app.post('/api/bet', async (req, res) => {
@@ -691,9 +725,9 @@ function generateSpinGrid(userId, rtpTarget) {
     const grid=[];
     for(let r=0;r<3;r++){const row=[];
         for(let c=0;c<5;c++){const rand=Math.random();
-            if(rand<freqG) row.push('G');
-            else if(rand<freqG+freqX) row.push('X');
-            else if(rand<freqG+freqX+freqL) row.push('L');
+            if(rand<freqG)row.push('G');
+            else if(rand<freqG+freqX)row.push('X');
+            else if(rand<freqG+freqX+freqL)row.push('L');
             else row.push('N');
         }grid.push(row);}
     return grid;
@@ -968,7 +1002,7 @@ app.post('/api/mine', async (req, res) => {
         for (let c = 0; c < 5; c++) chestMults.push(pickChestMult());
         const effectiveBet = isFreeAutoSpin ? 0.5 : betAmount;
 
-        // Win за РЕАЛЬНО сломанные блоки (по durability кирки)
+        // Win ТОЛЬКО за блоки под кирками (по durability)
         const SRV_DUR={wooden:1,stone:2,iron:3,golden:4,diamond:5};
         const colPick={};
         (hotbar||[]).forEach((slot,idx)=>{
@@ -976,25 +1010,25 @@ app.post('/api/mine', async (req, res) => {
             if(slot&&slot.type==='pickaxe'){
                 const pt=slot.pickaxeType||'wooden';
                 const rank={wooden:0,stone:1,iron:2,golden:3,diamond:4};
-                if(colPick[col]===undefined||rank[pt]>rank[colPick[col]]) colPick[col]=pt;
+                if(colPick[col]===undefined||rank[pt]>rank[colPick[col]])colPick[col]=pt;
             }
-            if(slot&&slot.type==='tnt'&&colPick[col]===undefined) colPick[col]='tnt';
+            if(slot&&slot.type==='tnt'&&colPick[col]===undefined)colPick[col]='tnt';
         });
         const adjustedBlockWins=[];
-        for(let r=0;r<6;r++) adjustedBlockWins.push([0,0,0,0,0]);
+        for(let r=0;r<6;r++)adjustedBlockWins.push([0,0,0,0,0]);
         for(const[colStr,pType]of Object.entries(colPick)){
             const col=parseInt(colStr);
             const maxB=pType==='tnt'?3:(SRV_DUR[pType]||1);
             let broken=0;
             for(let r=1;r<6&&broken<maxB;r++){
-                if(!grid[r][col]) continue;
+                if(!grid[r][col])continue;
                 const mult=MINE_BLOCK_MULTS[grid[r][col]]||0;
                 adjustedBlockWins[r][col]=parseFloat((effectiveBet*mult).toFixed(3));
                 broken++;
             }
         }
         let blockWinSum=0;
-        for(let r=0;r<6;r++) for(let c=0;c<5;c++) blockWinSum+=adjustedBlockWins[r][c];
+        for(let r=0;r<6;r++)for(let c=0;c<5;c++)blockWinSum+=adjustedBlockWins[r][c];
         let actualWin=Number(blockWinSum.toFixed(2));
 
         // CHESTS: multiply ENTIRE user balance (not just block wins)
@@ -1187,7 +1221,7 @@ app.post('/api/check_deposit', async (req, res) => {
     const apiKey      = process.env.TON_API_KEY;
     if (!adminWallet) return res.status(500).json({error:'ADMIN_WALLET не задан в Render'});
     if (!apiKey)      return res.status(500).json({error:'TON_API_KEY не задан в Render'});
-    const rawAddr  = walletToRaw(adminWallet);
+    const rawAddr = walletToRaw(adminWallet);
     if (!rawAddr) return res.status(500).json({error:'Неверный ADMIN_WALLET: '+adminWallet.slice(0,20)});
     const cleanKey = apiKey.trim().replace(/[\r\n\s]/g,'');
     const userId   = String(id).trim();
@@ -1205,8 +1239,8 @@ app.post('/api/check_deposit', async (req, res) => {
             if(tx.in_msg.message) comment=String(tx.in_msg.message).replace(/\u0000/g,'').trim();
             if(!comment&&tx.in_msg.msg_data){
                 const md=tx.in_msg.msg_data;
-                if(md.text) try{comment=Buffer.from(md.text,'base64').toString('utf-8').replace(/\u0000/g,'').trim();}catch(e){}
-                if(!comment&&md.body) try{comment=Buffer.from(md.body,'base64').slice(4).toString('utf-8').replace(/[^\x20-\x7E\u0400-\u04FF]/g,'').trim();}catch(e){}
+                if(md.text)try{comment=Buffer.from(md.text,'base64').toString('utf-8').replace(/\u0000/g,'').trim();}catch(e){}
+                if(!comment&&md.body)try{comment=Buffer.from(md.body,'base64').slice(4).toString('utf-8').replace(/[^\x20-\x7E\u0400-\u04FF]/g,'').trim();}catch(e){}
             }
             if(!comment||!comment.includes(userId)) continue;
             const txHash=tx.transaction_id?tx.transaction_id.hash:tx.hash;
