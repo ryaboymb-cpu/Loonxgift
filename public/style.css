@@ -181,7 +181,7 @@ body {
 .spin-cell::before { content: ''; position: absolute; inset: 0; border-radius: 8px; background: linear-gradient(135deg, rgba(255,255,255,0.04) 0%, transparent 60%); }
 .spin-cell.sym-L { color: var(--neon); text-shadow: 0 0 8px rgba(0,255,136,0.6); }
 .spin-cell.sym-X { color: #ffcc00; text-shadow: 0 0 8px rgba(255,204,0,0.6); }
-.spin-cell.sym-N { color: #ff0055; opacity:0.55; }
+.spin-cell.sym-N { color: #ff2255; opacity:0.55; }
 .spin-cell.sym-G { color: #ff0055; text-shadow: 0 0 10px rgba(255,0,85,0.7); }
 .spin-cell.win-cell { border-color: var(--neon); box-shadow: 0 0 12px rgba(0,255,136,0.5); animation: spinWin 0.5s ease; }
 .spin-cell.win-cell.sym-X { border-color: #ffcc00; box-shadow: 0 0 12px rgba(255,204,0,0.5); }
@@ -741,13 +741,32 @@ body {
   text-align: right;
 }
 
-/* upgrade slider thumb */
+/* ─── UPGRADE CSS WHEEL ─── */
+.upg-wheel {
+    border-radius: 50%;
+    width: 220px; max-width: 90vw;
+    aspect-ratio: 1;
+    margin: 0 auto;
+    display: block;
+    box-shadow: 0 0 20px rgba(0,0,0,0.5);
+}
+.upg-arrow-spin {
+    position: absolute;
+    top: 50%; left: 50%;
+    width: 4px; height: 46%;
+    background: linear-gradient(to bottom, #fff, rgba(255,255,255,0.3));
+    border-radius: 2px;
+    transform-origin: bottom center;
+    transform: translateX(-50%) rotate(0deg);
+    box-shadow: 0 0 6px rgba(255,255,255,0.8);
+}
+/* Slider thumb */
 #upg-slider::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  width: 24px; height: 24px;
-  border-radius: 50%;
-  background: #fff;
-  border: 3px solid #00e5ff;
-  box-shadow: 0 0 8px rgba(0,229,255,0.5);
-  cursor: pointer;
+    -webkit-appearance: none;
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    background: #fff;
+    border: 3px solid #00e5ff;
+    box-shadow: 0 0 8px rgba(0,229,255,0.5);
+    cursor: pointer;
 }
