@@ -674,13 +674,12 @@ function generateSpinGrid(userId, rtpTarget) {
     // rtp 90 → 30% chance of winning spin, rtp 50 → 16%, rtp 10 → 3%
     const rtpF=Math.max(0.1,Math.min(1.0,rtpTarget/100));
     const freqG=0.004,freqX=0.05+rtpF*0.08,freqL=0.25+rtpF*0.10;
-    // N = нейтральный (красный), не платит
     const grid=[];
     for(let r=0;r<3;r++){const row=[];
         for(let c=0;c<5;c++){const rand=Math.random();
-            if(rand<freqG) row.push('G');
-            else if(rand<freqG+freqX) row.push('X');
-            else if(rand<freqG+freqX+freqL) row.push('L');
+            if(rand<freqG)row.push('G');
+            else if(rand<freqG+freqX)row.push('X');
+            else if(rand<freqG+freqX+freqL)row.push('L');
             else row.push('N');
         }grid.push(row);}
     return grid;
@@ -1053,66 +1052,31 @@ app.post('/api/plinko', async (req, res) => {
     try {
         const user = await User.findOne({ id });
         if (!user || user.isBlocked) return res.status(403).send();
-        const isDemo = mode === 'demo', field = isDemo ? 'demo_balance' : 'balance';
+        const isDemo = mode === 'demo';
+        const field = isDemo ? 'demo_balance' : 'balance';
         const betAmount = parseFloat(bet) || 0;
-        if (betAmount < 0.1 || betAmount > 25) return res.status(400).json({ error: 'Ставка 0.1–25 TON' });
+        if (betAmount < 0.1 || betAmount > 25) return res.status(400).json({ error: 'Ставка от 0.1 до 25 TON' });
         if (user[field] < betAmount) return res.status(400).json({ error: 'Недостаточно средств' });
         const maintSetting = await Settings.findOne({ key: 'maintenance_plinko' });
-        if (maintSetting && maintSetting.value === true) return res.status(400).json({ error: 'Игра на обслуживании' });
+        if (maintSetting && maintSetting.value === true) return res.status(400).json({ error: 'Игра на техническом обслуживании' });
         const rtpSetting = await Settings.findOne({ key: 'rtp_plinko' });
         const rtpTarget = rtpSetting ? Number(rtpSetting.value) : 88;
-
-        // 8 рядов, 9 слотов. Мульты: черепа=0, края=0.7, 1.2, 1.5, центр=2.5
-        const ROWS = 8;
-        const MULTS = [0, 0.7, 1.2, 1.5, 2.5, 1.5, 1.2, 0.7, 0]; // 9 слотов
-
-        // Генерируем путь: 8 шагов L(0)/R(1)
-        // Слот = количество шагов R (0-8)
-        // RTP контроль: при низком RTP чаще попадаем в черепа
-        const path = [];
-        let rR = 0; // count of Right steps
-        for (let row = 0; row < ROWS; row++) {
-            // Базовая вероятность 50%, корректируем по RTP
-            const rtpBias = (rtpTarget - 88) / 100; // -0.12..+0.07
-            const pRight = 0.5 + rtpBias * 0.1; // чуть смещаем центр
-            const goRight = Math.random() < pRight;
-            path.push(goRight ? 1 : 0);
-            if (goRight) rR++;
-        }
-        let bucket = rR; // 0-8
-        let mult = MULTS[bucket];
-
-        // RTP принудительная коррекция: при высокой прибыли иногда толкаем к черепу
-        if (mult > 0 && Math.random() > rtpTarget/100 * 1.1) {
-            bucket = Math.random() < 0.5 ? 0 : 8; // череп
-            mult = 0;
-            // Пересчитываем путь для этого слота
-            const target = bucket; let r2=0;
-            for(let i=0;i<ROWS;i++){path[i]=(r2<target&&(Math.random()<0.7||(ROWS-i)<=(target-r2)))?1:0;if(path[i])r2++;}
-        }
-
         user[field] = Number((user[field] - betAmount).toFixed(2));
-        if (!isDemo) {
-            user.stats.bets++; user.stats.minus += betAmount;
-            user.totalWagered = Number(((user.totalWagered||0)+betAmount).toFixed(2));
-            user.wagerCompleted = Number(((user.wagerCompleted||0)+betAmount).toFixed(2));
-        }
-
-        const actualWin = Number((betAmount * mult).toFixed(2));
-        if (actualWin > 0) {
-            user[field] = Number((user[field] + actualWin).toFixed(2));
-            if (!isDemo) { user.stats.wins++; user.stats.plus += Number((actualWin-betAmount).toFixed(2)); }
-        }
+        if (!isDemo) { user.stats.bets++; user.stats.minus += betAmount; user.totalWagered = Number(((user.totalWagered || 0) + betAmount).toFixed(2)); user.wagerCompleted = Number(((user.wagerCompleted || 0) + betAmount).toFixed(2)); }
+        const PMULTS=[0,0.7,1.2,1.5,2.5,1.5,1.2,0.7,0];
+        const path=[];let rR=0;
+        for(let row=0;row<8;row++){const goR=Math.random()<0.5;path.push(goR?1:0);if(goR)rR++;}
+        let bucket=rR,mult=PMULTS[bucket];
+        if(mult>0 && Math.random()>(rtpTarget/100)){bucket=Math.random()<0.5?0:8;mult=0;const t=bucket;let r2=0;for(let i=0;i<8;i++){path[i]=(r2<t&&(Math.random()<0.7||(8-i)<=(t-r2)))?1:0;if(path[i])r2++;}}
+        const actualWin=Number((betAmount*mult).toFixed(2));
+        if(actualWin>0){user[field]=Number((user[field]+actualWin).toFixed(2));if(!isDemo){user.stats.wins++;user.stats.plus+=Number((actualWin-betAmount).toFixed(2));}}
         await user.save();
-
         if (!isDemo) {
-            const e = new Bet({ userId:user.id, username:user.username, avatar:user.photo||'', game:'Plinko',
-                amount:betAmount, multiplier:mult, result:actualWin-betAmount, mode:'Real' });
-            await e.save(); pushToGlobalHistory(e);
+            const betEntry = new Bet({ userId: user.id, username: user.username, avatar: user.photo || '', game: 'Plinko', amount: betAmount, multiplier: mult, result: actualWin - betAmount, mode: 'Real', balanceAfter: user[field], balance: user[field] });
+            await betEntry.save(); pushToGlobalHistory(betEntry);
         }
-        res.json({ path, bucket, multiplier: mult, win: actualWin, mults: MULTS, user });
-    } catch (err) { console.error('Plinko:', err); res.status(500).json({ error: 'Ошибка сервера' }); }
-    finally { actionLocks.delete(id); }
+        res.json({ path, bucket, multiplier: mult, win: actualWin, mults:[0,0.7,1.2,1.5,2.5,1.5,1.2,0.7,0], user });
+    } catch (err) { console.error('Plinko error:', err); res.status(500).json({ error: 'Ошибка сервера' }); } finally { actionLocks.delete(id); }
 });
 
 // === DUCK GAME ===
@@ -1198,10 +1162,8 @@ app.post('/api/check_deposit', async (req, res) => {
             if(!comment||!comment.includes(userId))continue;
             const txHash=tx.transaction_id?tx.transaction_id.hash:tx.hash;
             if(!txHash)continue;
-            const amt=Number(tx.in_msg.value)/1e9;
-            if(amt<0.01)continue;
-            const exists=await Deposit.findOne({hash:txHash});
-            if(exists)continue;
+            const amt=Number(tx.in_msg.value)/1e9;if(amt<0.01)continue;
+            const exists=await Deposit.findOne({hash:txHash});if(exists)continue;
             try{
                 await Deposit.create({hash:txHash,userId:id,amount:amt,time:getMskTime()});
                 const user=await User.findOne({id});if(!user)continue;
@@ -1585,7 +1547,7 @@ app.post('/api/admin/user_action', checkAdmin, async (req, res) => {
 
 app.post('/api/admin/game_stats', checkAdmin, async (req, res) => {
     try {
-        const games = ['Crash', 'Mines', 'Coinflip', 'Battle', 'Spin', 'Mine'];
+        const games = ['Crash', 'Mines', 'Coinflip', 'Battle', 'Spin', 'Mine', 'Upgrade', 'Plinko'];
         const stats = {};
         for (const game of games) {
             const agg = await Bet.aggregate([
