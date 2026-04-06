@@ -960,14 +960,12 @@ app.post('/api/mine', async (req, res) => {
             if(slot&&slot.type==='pickaxe'){const pt=slot.pickaxeType||'wooden';const rank={wooden:0,stone:1,iron:2,golden:3,diamond:4};if(colPick[col]===undefined||rank[pt]>rank[colPick[col]])colPick[col]=pt;}
             if(slot&&slot.type==='tnt'&&colPick[col]===undefined)colPick[col]='tnt';
         });
-        const adjustedBlockWins=[];
-        for(let r=0;r<6;r++)adjustedBlockWins.push([0,0,0,0,0]);
+        const adjustedBlockWins=[];for(let r=0;r<6;r++)adjustedBlockWins.push([0,0,0,0,0]);
+        let blockWinSum=0;
         for(const[colStr,pType]of Object.entries(colPick)){
             const col=parseInt(colStr),maxB=pType==='tnt'?3:(SRV_DUR[pType]||1);let broken=0;
-            for(let r=1;r<6&&broken<maxB;r++){if(!grid[r][col])continue;adjustedBlockWins[r][col]=parseFloat((effectiveBet*(MINE_BLOCK_MULTS[grid[r][col]]||0)).toFixed(3));broken++;}
+            for(let r=1;r<6&&broken<maxB;r++){if(!grid[r][col])continue;const bw=parseFloat((effectiveBet*(MINE_BLOCK_MULTS[grid[r][col]]||0)).toFixed(3));adjustedBlockWins[r][col]=bw;blockWinSum+=bw;broken++;}
         }
-        let blockWinSum=0;
-        for(let r=0;r<6;r++)for(let c=0;c<5;c++)blockWinSum+=adjustedBlockWins[r][c];
         let actualWin=Number(blockWinSum.toFixed(2));
 
         // CHESTS: multiply ENTIRE user balance (not just block wins)
@@ -1030,17 +1028,19 @@ app.post('/api/upgrade', async (req, res) => {
         const rtpTarget = rtpSetting ? Number(rtpSetting.value) : 85;
         user[field] = Number((user[field] - betAmount).toFixed(2));
         if (!isDemo) { user.stats.bets++; user.stats.minus += betAmount; user.totalWagered = Number(((user.totalWagered || 0) + betAmount).toFixed(2)); user.wagerCompleted = Number(((user.wagerCompleted || 0) + betAmount).toFixed(2)); }
-        const chanceP=Math.max(1,Math.min(95,parseFloat(chance)||50));
-        const mult=Math.max(1.01,Math.floor(92/chanceP*100)/100);
+        // MAX 90%, mult = 90/chance (честные иксы по шансу)
+        const chanceP=Math.max(1,Math.min(90,parseFloat(chance)||50));
+        const mult=Math.max(1.01,Math.floor(90/chanceP*100)/100);
         const isWin=Math.random()*100<chanceP;
         const actualWin=isWin?Number((betAmount*mult).toFixed(2)):0;
-        if(actualWin>0){user[field]=Number((user[field]+actualWin).toFixed(2));if(!isDemo){user.stats.wins++;user.stats.plus+=Number((actualWin-betAmount).toFixed(2));}}
+        const profit=isWin?Number((actualWin-betAmount).toFixed(2)):-betAmount;
+        if(actualWin>0){user[field]=Number((user[field]+actualWin).toFixed(2));if(!isDemo){user.stats.wins++;user.stats.plus+=profit;}}
         await user.save();
         if (!isDemo) {
             const betEntry = new Bet({ userId: user.id, username: user.username, avatar: user.photo || '', game: 'Upgrade', amount: betAmount, multiplier: mult, result: actualWin - betAmount, mode: 'Real', balanceAfter: user[field], balance: user[field] });
             await betEntry.save(); pushToGlobalHistory(betEntry);
         }
-        res.json({ win: actualWin, multiplier: Number(mult.toFixed(2)), isWin, user });
+        res.json({ win: actualWin, profit, multiplier: Number(mult.toFixed(2)), isWin, user });
     } catch (err) { console.error('Upgrade error:', err); res.status(500).json({ error: 'Ошибка сервера' }); } finally { actionLocks.delete(id); }
 });
 
@@ -1067,7 +1067,7 @@ app.post('/api/plinko', async (req, res) => {
         const path=[];let rR=0;
         for(let row=0;row<8;row++){const goR=Math.random()<0.5;path.push(goR?1:0);if(goR)rR++;}
         let bucket=rR,mult=PMULTS[bucket];
-        if(mult>0 && Math.random()>(rtpTarget/100)){bucket=Math.random()<0.5?0:8;mult=0;const t=bucket;let r2=0;for(let i=0;i<8;i++){path[i]=(r2<t&&(Math.random()<0.7||(8-i)<=(t-r2)))?1:0;if(path[i])r2++;}}
+        if(mult>0&&Math.random()>(rtpTarget/100)){bucket=Math.random()<0.5?0:8;mult=0;const t=bucket;let r2=0;for(let i=0;i<8;i++){path[i]=(r2<t&&(Math.random()<0.7||(8-i)<=(t-r2)))?1:0;if(path[i])r2++;}}
         const actualWin=Number((betAmount*mult).toFixed(2));
         if(actualWin>0){user[field]=Number((user[field]+actualWin).toFixed(2));if(!isDemo){user.stats.wins++;user.stats.plus+=Number((actualWin-betAmount).toFixed(2));}}
         await user.save();
@@ -1075,7 +1075,7 @@ app.post('/api/plinko', async (req, res) => {
             const betEntry = new Bet({ userId: user.id, username: user.username, avatar: user.photo || '', game: 'Plinko', amount: betAmount, multiplier: mult, result: actualWin - betAmount, mode: 'Real', balanceAfter: user[field], balance: user[field] });
             await betEntry.save(); pushToGlobalHistory(betEntry);
         }
-        res.json({ path, bucket, multiplier: mult, win: actualWin, mults:[0,0.7,1.2,1.5,2.5,1.5,1.2,0.7,0], user });
+        res.json({ path, bucket, multiplier: mult, win: actualWin, profit: actualWin-betAmount, mults:[0,0.7,1.2,1.5,2.5,1.5,1.2,0.7,0], user });
     } catch (err) { console.error('Plinko error:', err); res.status(500).json({ error: 'Ошибка сервера' }); } finally { actionLocks.delete(id); }
 });
 
@@ -1176,7 +1176,7 @@ app.post('/api/check_deposit', async (req, res) => {
                 await user.save();foundNew=true;totalAdded+=amt;
                 if(bot)bot.sendMessage(id,'📥 *+'+amt+' TON* зачислено!',{parse_mode:'Markdown'}).catch(()=>{});
                 if(user.referredBy){const ref=await User.findOne({id:user.referredBy});if(ref){const bon=Number((amt*0.1).toFixed(2));ref.balance=Number((ref.balance+bon).toFixed(2));ref.referralEarnings=Number(((ref.referralEarnings||0)+bon).toFixed(2));await ref.save();}}
-            }catch(de){console.error('[Dep] DB:',de.message);}
+            }catch(de){console.error('[Dep]:',de.message);}
         }
         if(foundNew){const u=await User.findOne({id});return res.json({success:true,added:totalAdded,user:u});}
         return res.status(400).json({error:'Оплата не найдена. Укажи ID '+userId+' в комментарии.'});
