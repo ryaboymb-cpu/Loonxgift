@@ -181,7 +181,7 @@ body {
 .spin-cell::before { content: ''; position: absolute; inset: 0; border-radius: 8px; background: linear-gradient(135deg, rgba(255,255,255,0.04) 0%, transparent 60%); }
 .spin-cell.sym-L { color: var(--neon); text-shadow: 0 0 8px rgba(0,255,136,0.6); }
 .spin-cell.sym-X { color: #ffcc00; text-shadow: 0 0 8px rgba(255,204,0,0.6); }
-.spin-cell.sym-N { color: #ff2255; opacity:0.55; }
+  .spin-cell.sym-N { color:#ff2255;opacity:0.55; }
 .spin-cell.sym-G { color: #ff0055; text-shadow: 0 0 10px rgba(255,0,85,0.7); }
 .spin-cell.win-cell { border-color: var(--neon); box-shadow: 0 0 12px rgba(0,255,136,0.5); animation: spinWin 0.5s ease; }
 .spin-cell.win-cell.sym-X { border-color: #ffcc00; box-shadow: 0 0 12px rgba(255,204,0,0.5); }
@@ -463,16 +463,15 @@ body {
 }
 /* All pickaxe/item images in inventory must match hotbar */
 .inv-cell img {
-  width: 58% !important;
-  height: 58% !important;
-  max-width: 22px !important;
-  max-height: 22px !important;
+  width: 56% !important;
+  height: 56% !important;
+  max-width: 20px !important;
+  max-height: 20px !important;
   min-width: 12px !important;
   min-height: 12px !important;
   object-fit: contain !important;
   image-rendering: pixelated !important;
   display: block;
-  flex-shrink: 0;
 }
 
 /* ─── КНИГА СТАТУС ─── */
@@ -741,15 +740,5 @@ body {
   text-align: right;
 }
 
-/* ─── UPGRADE CSS disk ─── */
-.upg-disk {
-    border-radius: 50%;
-    transform-origin: center center;
-    will-change: transform;
-}
-#upg-slider::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    width: 22px; height: 22px; border-radius: 50%;
-    background: #fff; border: 3px solid #00e5ff;
-    box-shadow: 0 0 8px rgba(0,229,255,0.5); cursor: pointer;
-}
+.upg-disk{border-radius:50%;transform-origin:center;will-change:transform;}
+#upg-slider::-webkit-slider-thumb{-webkit-appearance:none;width:22px;height:22px;border-radius:50%;background:#fff;border:3px solid #00e5ff;box-shadow:0 0 8px rgba(0,229,255,0.5);cursor:pointer;}
