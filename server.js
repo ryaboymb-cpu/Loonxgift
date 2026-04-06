@@ -814,8 +814,8 @@ app.post('/api/spin', async (req, res) => {
 });
 
 // === MINE GAME (Minecraft-style) ===
-const MINE_BLOCKS=['dirt','stone','redstone','gold_block','diamond_block','obsidian'];
-const MINE_BLOCK_MULTS={grass:0.00,dirt:0.03,stone:0.06,redstone:0.09,gold_block:0.12,diamond_block:0.16,obsidian:0.20,gold:0.12,diamond:0.16};
+const MINE_BLOCKS=['grass','dirt','stone','redstone','gold_block','diamond_block','obsidian'];
+const MINE_BLOCK_MULTS={grass:0.01,dirt:0.03,stone:0.06,redstone:0.09,gold_block:0.12,diamond_block:0.16,obsidian:0.20,gold:0.12,diamond:0.16};
 // 6 rows: row 0 = grass top layer, rows 1-5 = underground
 const MINE_ROW_WEIGHTS = [
     [1.00,0.00,0.00,0.00,0.00,0.00],
@@ -952,7 +952,8 @@ app.post('/api/mine', async (req, res) => {
         for (let c = 0; c < 5; c++) chestMults.push(pickChestMult());
         const effectiveBet = isFreeAutoSpin ? 0.5 : betAmount;
 
-        // Каждый сломанный блок даёт точный win (трава=0, земля=0.03×bet и т.д.)
+        // Каждый сломанный блок = effectiveBet × mult
+        // grass=0.01 (травка), dirt=0.03 (земля), stone=0.06, ...
         const SRV_DUR={wooden:1,stone:2,iron:3,golden:4,diamond:5};
         const colPick={};
         (hotbar||[]).forEach((slot,idx)=>{const col=idx%5;
@@ -963,7 +964,8 @@ app.post('/api/mine', async (req, res) => {
         let blockWinSum=0;
         for(const[colStr,pType]of Object.entries(colPick)){
             const col=parseInt(colStr),maxB=pType==='tnt'?3:(SRV_DUR[pType]||1);let broken=0;
-            for(let r=1;r<6&&broken<maxB;r++){
+            // ВАЖНО: начинаем с r=0 чтобы трава тоже считалась!
+            for(let r=0;r<6&&broken<maxB;r++){
                 if(!grid[r][col])continue;
                 const bw=parseFloat((effectiveBet*(MINE_BLOCK_MULTS[grid[r][col]]||0)).toFixed(3));
                 adjustedBlockWins[r][col]=bw;blockWinSum+=bw;broken++;
