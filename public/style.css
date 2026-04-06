@@ -741,32 +741,15 @@ body {
   text-align: right;
 }
 
-/* ─── UPGRADE CSS WHEEL ─── */
-.upg-wheel {
+/* ─── UPGRADE CSS disk ─── */
+.upg-disk {
     border-radius: 50%;
-    width: 220px; max-width: 90vw;
-    aspect-ratio: 1;
-    margin: 0 auto;
-    display: block;
-    box-shadow: 0 0 20px rgba(0,0,0,0.5);
+    transform-origin: center center;
+    will-change: transform;
 }
-.upg-arrow-spin {
-    position: absolute;
-    top: 50%; left: 50%;
-    width: 4px; height: 46%;
-    background: linear-gradient(to bottom, #fff, rgba(255,255,255,0.3));
-    border-radius: 2px;
-    transform-origin: bottom center;
-    transform: translateX(-50%) rotate(0deg);
-    box-shadow: 0 0 6px rgba(255,255,255,0.8);
-}
-/* Slider thumb */
 #upg-slider::-webkit-slider-thumb {
     -webkit-appearance: none;
-    width: 22px; height: 22px;
-    border-radius: 50%;
-    background: #fff;
-    border: 3px solid #00e5ff;
-    box-shadow: 0 0 8px rgba(0,229,255,0.5);
-    cursor: pointer;
+    width: 22px; height: 22px; border-radius: 50%;
+    background: #fff; border: 3px solid #00e5ff;
+    box-shadow: 0 0 8px rgba(0,229,255,0.5); cursor: pointer;
 }
