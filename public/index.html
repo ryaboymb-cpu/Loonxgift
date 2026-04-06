@@ -43,20 +43,54 @@
 
     <div class="content">
         <div id="page-games" class="page active">
-            <!-- 3 колонки — всё влезает в 1 экран -->
-            <div class="games-grid-3">
-                <div class="gc3" onclick="navGame('crash')" style="--gc:255,0,85;"><div class="gc3-i">🚀</div><div class="gc3-n">Crash</div></div>
-                <div class="gc3" onclick="navGame('mines')" style="--gc:0,255,136;"><div class="gc3-i">💎</div><div class="gc3-n">Mines</div></div>
-                <div class="gc3" onclick="navGame('coinflip')" style="--gc:255,204,0;"><div class="gc3-i">🪙</div><div class="gc3-n">Coinflip</div></div>
-                <div class="gc3" onclick="navGame('spin')" style="--gc:255,107,0;"><div class="gc3-i">🎰</div><div class="gc3-n">Spin</div></div>
-                <div class="gc3" onclick="navGame('mine')" style="--gc:200,112,32;"><div class="gc3-i">⛏️</div><div class="gc3-n">Mine</div></div>
-                <div class="gc3" onclick="navGame('upgrade')" style="--gc:0,229,255;"><div class="gc3-i">⬆️</div><div class="gc3-n">Upgrade</div></div>
-                <div class="gc3" onclick="navGame('plinko')" style="--gc:224,64,251;"><div class="gc3-i">🎯</div><div class="gc3-n">Plinko</div></div>
-                <div class="gc3" onclick="navGame('battle')" style="--gc:138,43,226;"><div class="gc3-i">⚔️</div><div class="gc3-n">Battle</div></div>
-                <div class="gc3" onclick="navGame('cases')" style="--gc:156,39,176;"><div class="gc3-i">🎁</div><div class="gc3-n">Cases</div></div>
+            <h2 style="margin-bottom:15px; font-weight:900; letter-spacing:1px; text-transform:uppercase;">Игры</h2>
+            
+            <div class="game-card" onclick="navGame('crash')" style="border-color: #ff0055;">
+                <div class="g-icon cr">🚀</div>
+                <div><h3 style="margin-bottom:5px;">Crash</h3><p style="color:var(--sub); font-size:12px; font-weight:600;">Успей забрать множитель</p></div>
             </div>
-            <!-- Лайв -->
-            <div style="color:var(--sub);font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;margin:8px 0 4px;">🔴 Live</div>
+
+            <div class="game-card" onclick="navGame('mines')" style="border-color: #00ff88;">
+                <div class="g-icon mi">💣</div>
+                <div><h3 style="margin-bottom:5px;">Mines</h3><p style="color:var(--sub); font-size:12px; font-weight:600;">Ищи кристаллы</p></div>
+            </div>
+
+            <div class="game-card" onclick="navGame('coinflip')" style="border-color: #ffcc00;">
+                <div class="g-icon co">🪙</div>
+                <div><h3 style="margin-bottom:5px;">Coinflip</h3><p style="color:var(--sub); font-size:12px; font-weight:600;">Выбери свою сторону</p></div>
+            </div>
+
+            <div class="game-card" onclick="navGame('battle')" style="border-color: #8a2be2;">
+                <div class="g-icon" style="background: linear-gradient(135deg, #8a2be2, #4b0082); box-shadow: 0 0 15px rgba(138,43,226,0.3);">⚔️</div>
+                <div><h3 style="margin-bottom:5px;">Battle Roulette</h3><p style="color:var(--sub); font-size:12px; font-weight:600;">Сразись за TON</p></div>
+            </div>
+
+            <div class="game-card" onclick="navGame('spin')" style="border-color: #ff6b00;">
+                <div class="g-icon sp">🎰</div>
+                <div><h3 style="margin-bottom:5px;">Spin</h3><p style="color:var(--sub); font-size:12px; font-weight:600;">Слот 5×3 с фриспинами</p></div>
+            </div>
+
+            <div class="game-card" onclick="navGame('mine')" style="border-color: #c87020;">
+                <div class="g-icon" style="background: linear-gradient(135deg, #8B5A2B, #c87020); box-shadow: 0 0 15px rgba(200,112,32,0.3); font-size:22px;">⛏️</div>
+                <div><h3 style="margin-bottom:5px;">Mine</h3><p style="color:var(--sub); font-size:12px; font-weight:600;">Добывай блоки и выигрывай</p></div>
+            </div>
+
+            <div class="game-card" onclick="navGame('upgrade')" style="border-color: #00e5ff;">
+                <div class="g-icon" style="background: linear-gradient(135deg, #0097a7, #00e5ff); box-shadow: 0 0 15px rgba(0,229,255,0.3); font-size:22px;">⬆️</div>
+                <div><h3 style="margin-bottom:5px;">Upgrade</h3><p style="color:var(--sub); font-size:12px; font-weight:600;">Удвой свою ставку</p></div>
+            </div>
+
+            <div class="game-card" onclick="navGame('plinko')" style="border-color: #e040fb;">
+                <div class="g-icon" style="background: linear-gradient(135deg, #9c27b0, #e040fb); box-shadow: 0 0 15px rgba(224,64,251,0.3); font-size:22px;">📍</div>
+                <div><h3 style="margin-bottom:5px;">Plinko</h3><p style="color:var(--sub); font-size:12px; font-weight:600;">Шарик падает - ты выигрываешь</p></div>
+            </div>
+
+            <div class="game-card" onclick="navGame('cases')" style="border-color: #9c27b0;">
+                <div class="g-icon" style="background: linear-gradient(135deg, #6a1b9a, #ce93d8); box-shadow: 0 0 15px rgba(156,39,176,0.3); font-size:22px;">🎁</div>
+                <div><h3 style="margin-bottom:5px;">Cases</h3><p style="color:var(--sub); font-size:12px; font-weight:600;">Открой кейс с призами</p></div>
+            </div>
+
+            <h3 style="margin:20px 0 10px 0; color:var(--sub); font-size:14px; text-transform:uppercase;">Лайв Ставки</h3>
             <div class="live-bets-container" id="feed-list"></div>
         </div>
 
@@ -205,7 +239,7 @@
                     <input type="number" id="sp-bet" class="input-box" placeholder="Ставка (0.1–25 TON)" step="0.1" min="0.1" max="25" style="margin-bottom:8px;">
                     <div id="sp-bet-lock" style="display:none; position:absolute; inset:0; border-radius:14px; background:rgba(0,0,0,0.5); cursor:not-allowed; z-index:2;"></div>
                 </div>
-                <button id="sp-btn" class="btn sp-btn-style" onclick="playSpin()">КРУТИТЬ 🎰</button>
+                <button id="sp-btn" class="btn sp-btn-style" onclick="playSpin()">Играть 🎰</button>
             </div>
         </div>
 
@@ -249,7 +283,7 @@
                 </div>
                 <div class="mine-bet-row" style="gap:6px;">
                     <input type="number" id="mn-bet" class="input-box" placeholder="0.1–25 TON" step="0.1" min="0.1" max="25" style="flex:1;margin:0;">
-                    <button id="mn-btn" class="btn mine-btn" onclick="playMine()" style="flex:0 0 auto;width:120px;margin:0;">⛏ Крутить</button>
+                    <button id="mn-btn" class="btn mine-btn" onclick="playMine()" style="flex:0 0 auto;width:120px;margin:0;">Играть ⛏</button>
                 </div>
             </div>
         </div>
@@ -257,33 +291,36 @@
         <div id="page-upgrade" class="page">
             <button class="game-back-btn" onclick="nav('games', document.querySelector('.nav-item'))">← Назад</button>
             <div class="card" style="padding:12px;">
-                <!-- Шанс/Мульт/Выигрыш -->
+                <!-- Шанс/Мульт/Прибыль -->
                 <div style="display:flex;justify-content:space-between;align-items:center;background:#111;border-radius:10px;padding:8px 12px;margin-bottom:10px;border:1px solid #222;">
                     <div style="text-align:center;"><div style="color:var(--neon);font-weight:900;font-size:15px;" id="upg-chance-pct">50%</div><div style="color:var(--sub);font-size:9px;">шанс</div></div>
-                    <div style="color:#444;">→</div>
-                    <div style="text-align:center;"><div style="color:#fff;font-weight:900;font-size:15px;" id="upg-mult-val">x1.84</div><div style="color:var(--sub);font-size:9px;">множитель</div></div>
-                    <div style="color:#444;">→</div>
-                    <div style="text-align:center;"><div style="color:var(--neon);font-weight:900;font-size:15px;" id="upg-win-val">0 TON</div><div style="color:var(--sub);font-size:9px;">выигрыш</div></div>
+                    <div style="color:#444;font-size:12px;">→</div>
+                    <div style="text-align:center;"><div style="color:#fff;font-weight:900;font-size:15px;" id="upg-mult-val">x1.80</div><div style="color:var(--sub);font-size:9px;">множитель</div></div>
+                    <div style="color:#444;font-size:12px;">→</div>
+                    <div style="text-align:center;"><div style="color:var(--neon);font-weight:900;font-size:15px;" id="upg-win-val">+0 TON</div><div style="color:var(--sub);font-size:9px;">прибыль</div></div>
                 </div>
-                <!-- Колесо -->
-                <div style="position:relative;width:200px;max-width:80vw;margin:0 auto 8px;aspect-ratio:1;">
-                    <div style="position:absolute;top:-11px;left:50%;transform:translateX(-50%);z-index:10;width:0;height:0;border-left:9px solid transparent;border-right:9px solid transparent;border-top:16px solid #fff;filter:drop-shadow(0 0 4px rgba(255,255,255,0.8));"></div>
-                    <div class="upg-disk" style="width:100%;height:100%;border-radius:50%;background:conic-gradient(#00e676 0% 50%,#1a1a2e 50% 100%);transform:rotate(0deg);will-change:transform;box-shadow:0 0 20px rgba(0,230,118,0.2);"></div>
-                    <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:34%;height:34%;background:#0a0a1a;border-radius:50%;display:flex;align-items:center;justify-content:center;z-index:5;border:2px solid #1a1a2e;">
+                <!-- Колесо: ДИСК крутится, стрелка фиксирована сверху -->
+                <div style="position:relative;width:200px;max-width:78vw;margin:0 auto 8px;aspect-ratio:1;">
+                    <!-- Стрелка фиксирована -->
+                    <div style="position:absolute;top:-10px;left:50%;transform:translateX(-50%);z-index:10;width:0;height:0;border-left:9px solid transparent;border-right:9px solid transparent;border-top:16px solid #fff;filter:drop-shadow(0 0 4px rgba(255,255,255,0.8));"></div>
+                    <!-- Диск — вращается -->
+                    <div class="upg-disk" style="width:100%;height:100%;border-radius:50%;background:conic-gradient(#00e676 0% 50%,#1a1a2e 50% 100%);transform:rotate(0deg);will-change:transform;box-shadow:0 0 15px rgba(0,230,118,0.15);"></div>
+                    <!-- Центр -->
+                    <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:33%;height:33%;background:#0a0a1a;border-radius:50%;display:flex;align-items:center;justify-content:center;z-index:5;border:2px solid #111;">
                         <span id="upg-slider-val" style="font-size:10px;font-weight:bold;color:#fff;">50%</span>
                     </div>
                 </div>
-                <!-- Слайдер -->
-                <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--sub);margin-bottom:2px;"><span>1%</span><span style="color:#fff;font-weight:bold;">Шанс победы</span><span>95%</span></div>
-                <input type="range" id="upg-slider" min="1" max="95" value="50" oninput="upgSetChance(this.value)" style="width:100%;-webkit-appearance:none;height:6px;border-radius:3px;background:linear-gradient(to right,#ff2255,#ff6600,#ffcc00,#00e676);margin-bottom:7px;cursor:pointer;">
+                <!-- Слайдер 1-90% -->
+                <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--sub);margin-bottom:2px;"><span>1%</span><span style="color:#fff;font-weight:700;">Шанс победы</span><span>90%</span></div>
+                <input type="range" id="upg-slider" min="1" max="90" value="50" oninput="upgSetChance(this.value)" style="width:100%;-webkit-appearance:none;height:6px;border-radius:3px;background:linear-gradient(to right,#ff2255,#ff6600,#ffcc00,#00e676);margin-bottom:7px;cursor:pointer;">
                 <!-- Пресеты -->
                 <div style="display:flex;gap:4px;justify-content:center;flex-wrap:wrap;margin-bottom:7px;">
-                    <button class="qb-btn" style="font-size:10px;padding:4px 8px;" onclick="upgSetChance(5)">5%</button>
-                    <button class="qb-btn" style="font-size:10px;padding:4px 8px;" onclick="upgSetChance(15)">15%</button>
-                    <button class="qb-btn" style="font-size:10px;padding:4px 8px;" onclick="upgSetChance(33)">33%</button>
-                    <button class="qb-btn" style="font-size:10px;padding:4px 8px;" onclick="upgSetChance(50)">50%</button>
-                    <button class="qb-btn" style="font-size:10px;padding:4px 8px;" onclick="upgSetChance(75)">75%</button>
-                    <button class="qb-btn" style="font-size:10px;padding:4px 8px;" onclick="upgSetChance(90)">90%</button>
+                    <button class="qb-btn" style="font-size:10px;" onclick="upgSetChance(5)">5%</button>
+                    <button class="qb-btn" style="font-size:10px;" onclick="upgSetChance(15)">15%</button>
+                    <button class="qb-btn" style="font-size:10px;" onclick="upgSetChance(33)">33%</button>
+                    <button class="qb-btn" style="font-size:10px;" onclick="upgSetChance(50)">50%</button>
+                    <button class="qb-btn" style="font-size:10px;" onclick="upgSetChance(75)">75%</button>
+                    <button class="qb-btn" style="font-size:10px;" onclick="upgSetChance(90)">90%</button>
                 </div>
                 <!-- Ставка -->
                 <div class="quick-bets" style="margin-bottom:5px;">
@@ -291,37 +328,40 @@
                     <div class="qb-btn" onclick="upgSetBet(5)">5</div><div class="qb-btn" onclick="upgSetBet(10)">10</div>
                     <div class="qb-btn" onclick="upgSetBet(25)">25</div>
                 </div>
-                <input type="number" id="up-bet" class="input-box" placeholder="Ставка (0.1–25 TON)" oninput="upgRefresh()" style="margin-bottom:5px;">
+                <input type="number" id="up-bet" class="input-box" placeholder="Ставка TON" oninput="upgRefresh()" style="margin-bottom:5px;">
                 <div id="upgrade-result" style="text-align:center;font-size:14px;font-weight:bold;min-height:18px;margin-bottom:5px;"></div>
-                <button id="up-btn" class="btn" onclick="playUpgrade()" style="background:linear-gradient(135deg,#0097a7,#00e5ff);color:#fff;padding:12px;">АПГРЕЙД ⬆️</button>
+                <button id="up-btn" class="btn" onclick="playUpgrade()" style="background:linear-gradient(135deg,#0097a7,#00e5ff);color:#fff;font-weight:900;">Играть ⬆️</button>
             </div>
         </div>
 
         <div id="page-plinko" class="page">
-            <button class="game-back-btn" onclick="nav('games', document.querySelector('.nav-item'))">← Назад</button>
-            <!-- Canvas сразу показывается с пинами и слотами -->
-            <div style="background:#060606;border-radius:12px;overflow:hidden;margin-bottom:7px;box-shadow:0 0 20px rgba(0,255,136,0.05);">
+            <button class="game-back-btn" style="margin-bottom:5px;" onclick="nav('games', document.querySelector('.nav-item'))">← Назад</button>
+            <!-- Максимум места под canvas -->
+            <div style="background:#060606;border-radius:12px;overflow:hidden;margin-bottom:5px;box-shadow:0 0 15px rgba(0,255,136,0.06);">
                 <canvas id="plinko-canvas" style="width:100%;display:block;"></canvas>
             </div>
-            <div id="plinko-result" style="text-align:center;font-size:14px;font-weight:bold;min-height:18px;margin-bottom:7px;transition:all 0.3s;"></div>
-            <div class="quick-bets" style="margin-bottom:6px;">
-                <div class="qb-btn" onclick="if($('pl-bet'))$('pl-bet').value=0.1;">0.1</div>
-                <div class="qb-btn" onclick="if($('pl-bet'))$('pl-bet').value=0.5;">0.5</div>
-                <div class="qb-btn" onclick="if($('pl-bet'))$('pl-bet').value=1;">1</div>
-                <div class="qb-btn" onclick="if($('pl-bet'))$('pl-bet').value=5;">5</div>
-                <div class="qb-btn" onclick="if($('pl-bet'))$('pl-bet').value=10;">10</div>
-                <div class="qb-btn" onclick="if($('pl-bet'))$('pl-bet').value=25;">25</div>
+            <div id="plinko-result" style="text-align:center;font-size:13px;font-weight:bold;min-height:16px;margin-bottom:5px;"></div>
+            <!-- Ставки + кнопка в одну строку -->
+            <div style="display:flex;gap:5px;align-items:center;">
+                <div class="quick-bets" style="flex:1;margin:0;flex-wrap:nowrap;overflow-x:auto;">
+                    <div class="qb-btn" onclick="if($('pl-bet'))$('pl-bet').value=0.1;">0.1</div>
+                    <div class="qb-btn" onclick="if($('pl-bet'))$('pl-bet').value=0.5;">0.5</div>
+                    <div class="qb-btn" onclick="if($('pl-bet'))$('pl-bet').value=1;">1</div>
+                    <div class="qb-btn" onclick="if($('pl-bet'))$('pl-bet').value=5;">5</div>
+                    <div class="qb-btn" onclick="if($('pl-bet'))$('pl-bet').value=10;">10</div>
+                    <div class="qb-btn" onclick="if($('pl-bet'))$('pl-bet').value=25;">25</div>
+                </div>
+                <input type="number" id="pl-bet" class="input-box" placeholder="TON" style="width:70px;flex:0 0 70px;margin:0;font-size:13px;">
             </div>
-            <input type="number" id="pl-bet" class="input-box" placeholder="Ставка (0.1–25 TON)" style="margin-bottom:7px;">
-            <button class="btn" onclick="playPlinko()" style="background:linear-gradient(135deg,var(--neon),#00ccff);color:#000;font-weight:900;padding:13px;">ИГРАТЬ 🎯</button>
+            <button class="btn" onclick="playPlinko()" style="background:linear-gradient(135deg,var(--neon),#00ccff);color:#000;font-weight:900;margin-top:5px;padding:11px;">Играть 🎯</button>
         </div>
 
         <div id="page-cases" class="page">
             <button class="game-back-btn" onclick="nav('games', document.querySelector('.nav-item'))">← Назад</button>
             <div class="card" style="text-align:center;padding:30px;">
-                <div style="font-size:64px;margin-bottom:16px;animation:pulse 2s infinite;">🎁</div>
-                <h2 style="color:#ce93d8;margin-bottom:8px;">CASES</h2>
-                <p style="color:var(--sub);font-size:13px;">Скоро! Следи за обновлениями.</p>
+                <div style="font-size:64px;margin-bottom:16px;">🎁</div>
+                <h2 style="color:#ce93d8;margin-bottom:8px;">CASE</h2>
+                <p style="color:var(--sub);font-size:13px;">Лоникс скинь 50к</p>
             </div>
         </div>
 
@@ -412,7 +452,5 @@
     </div>
 
     <script src="script.js"></script>
-    <!-- Share win overlay animated by JS -->
-    <div id="share-win-overlay" style="display:none;"></div>
 </body>
 </html>
