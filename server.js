@@ -814,7 +814,7 @@ app.post('/api/spin', async (req, res) => {
 });
 
 // === MINE GAME (Minecraft-style) ===
-const MINE_BLOCKS=['grass','dirt','stone','redstone','gold_block','diamond_block','obsidian'];
+const MINE_BLOCKS=['dirt','stone','redstone','gold_block','diamond_block','obsidian'];
 const MINE_BLOCK_MULTS={grass:0.01,dirt:0.03,stone:0.06,redstone:0.09,gold_block:0.12,diamond_block:0.16,obsidian:0.20,gold:0.12,diamond:0.16};
 // 6 rows: row 0 = grass top layer, rows 1-5 = underground
 const MINE_ROW_WEIGHTS = [
@@ -952,8 +952,6 @@ app.post('/api/mine', async (req, res) => {
         for (let c = 0; c < 5; c++) chestMults.push(pickChestMult());
         const effectiveBet = isFreeAutoSpin ? 0.5 : betAmount;
 
-        // Каждый сломанный блок = effectiveBet × mult
-        // grass=0.01 (травка), dirt=0.03 (земля), stone=0.06, ...
         const SRV_DUR={wooden:1,stone:2,iron:3,golden:4,diamond:5};
         const colPick={};
         (hotbar||[]).forEach((slot,idx)=>{const col=idx%5;
@@ -963,13 +961,10 @@ app.post('/api/mine', async (req, res) => {
         const adjustedBlockWins=[];for(let r=0;r<6;r++)adjustedBlockWins.push([0,0,0,0,0]);
         let blockWinSum=0;
         for(const[colStr,pType]of Object.entries(colPick)){
-            const col=parseInt(colStr),maxB=pType==='tnt'?3:(SRV_DUR[pType]||1);let broken=0;
-            // ВАЖНО: начинаем с r=0 чтобы трава тоже считалась!
-            for(let r=0;r<6&&broken<maxB;r++){
-                if(!grid[r][col])continue;
-                const bw=parseFloat((effectiveBet*(MINE_BLOCK_MULTS[grid[r][col]]||0)).toFixed(3));
-                adjustedBlockWins[r][col]=bw;blockWinSum+=bw;broken++;
-            }
+            const col=parseInt(colStr);
+            if(grid[0][col]==='grass'){const bwG=parseFloat((effectiveBet*0.01).toFixed(3));adjustedBlockWins[0][col]=bwG;blockWinSum+=bwG;}
+            const maxB=pType==='tnt'?3:(SRV_DUR[pType]||1);let broken=0;
+            for(let r=1;r<6&&broken<maxB;r++){if(!grid[r][col])continue;const bw=parseFloat((effectiveBet*(MINE_BLOCK_MULTS[grid[r][col]]||0)).toFixed(3));adjustedBlockWins[r][col]=bw;blockWinSum+=bw;broken++;}
         }
         let actualWin=Number(blockWinSum.toFixed(2));
 
@@ -1034,7 +1029,10 @@ app.post('/api/upgrade', async (req, res) => {
         user[field] = Number((user[field] - betAmount).toFixed(2));
         if (!isDemo) { user.stats.bets++; user.stats.minus += betAmount; user.totalWagered = Number(((user.totalWagered || 0) + betAmount).toFixed(2)); user.wagerCompleted = Number(((user.wagerCompleted || 0) + betAmount).toFixed(2)); }
         const chanceP=Math.max(1,Math.min(90,parseFloat(chance)||50));
-        const mult=Math.max(1.01,Math.floor(96/chanceP*100)/100);
+        // Кэф: 1%=20x, 5%≈15x, 50%=1.92x, 90%=1.06x
+        let mult;
+        if(chanceP<=10){ mult=Math.round((20+(9.6-20)*(chanceP-1)/9)*100)/100; }
+        else{ mult=Math.max(1.01,Math.floor(96/chanceP*100)/100); }
         const isWin=Math.random()*100<chanceP;
         const actualWin=isWin?Number((betAmount*mult).toFixed(2)):0;
         const profit=Number((isWin?actualWin-betAmount:-betAmount).toFixed(2));
