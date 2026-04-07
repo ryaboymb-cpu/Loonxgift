@@ -952,7 +952,6 @@ app.post('/api/mine', async (req, res) => {
         for (let c = 0; c < 5; c++) chestMults.push(pickChestMult());
         const effectiveBet = isFreeAutoSpin ? 0.5 : betAmount;
 
-        // ИСПРАВЛЕНО: grass всегда в r=0, счётчик broken стартует с 0 чтобы трава тоже считалась
         const SRV_DUR={wooden:1,stone:2,iron:3,golden:4,diamond:5};
         const colPick={};
         (hotbar||[]).forEach((slot,idx)=>{const col=idx%5;
@@ -965,15 +964,11 @@ app.post('/api/mine', async (req, res) => {
             const col=parseInt(colStr);
             const maxB=pType==='tnt'?3:(SRV_DUR[pType]||1);
             let broken=0;
-            // НАЧИНАЕМ С r=0 — трава (grass) тоже считается как один слом!
             for(let r=0;r<6&&broken<maxB;r++){
                 if(!grid[r][col])continue;
                 const mult=MINE_BLOCK_MULTS[grid[r][col]]||0;
-                // grass=0.01, dirt=0.03, stone=0.06 и т.д.
                 const bw=parseFloat((effectiveBet*mult).toFixed(3));
-                adjustedBlockWins[r][col]=bw;
-                blockWinSum+=bw;
-                broken++;
+                adjustedBlockWins[r][col]=bw;blockWinSum+=bw;broken++;
             }
         }
         let actualWin=Number(blockWinSum.toFixed(2));
@@ -1039,9 +1034,7 @@ app.post('/api/upgrade', async (req, res) => {
         user[field] = Number((user[field] - betAmount).toFixed(2));
         if (!isDemo) { user.stats.bets++; user.stats.minus += betAmount; user.totalWagered = Number(((user.totalWagered || 0) + betAmount).toFixed(2)); user.wagerCompleted = Number(((user.wagerCompleted || 0) + betAmount).toFixed(2)); }
         const chanceP=Math.max(1,Math.min(90,parseFloat(chance)||50));
-        let mult;
-        if(chanceP<=10){mult=Math.round((20+(9.6-20)*(chanceP-1)/9)*100)/100;}
-        else{mult=Math.max(1.01,Math.floor(96/chanceP*100)/100);}
+        let mult;if(chanceP<=10){mult=Math.round((20+(9.6-20)*(chanceP-1)/9)*100)/100;}else{mult=Math.max(1.01,Math.floor(96/chanceP*100)/100);}
         const isWin=Math.random()*100<chanceP;
         const actualWin=isWin?Number((betAmount*mult).toFixed(2)):0;
         const profit=Number((isWin?actualWin-betAmount:-betAmount).toFixed(2));
@@ -1209,27 +1202,20 @@ app.post('/api/check_deposit', async (req, res) => {
 
 app.post('/api/promo', async (req, res) => {
     const { id, code } = req.body;
-    // Case insensitive: ищем по любому регистру
-    const promo = await Promo.findOne({ code: { $regex: new RegExp('^'+String(code||'').trim()+'$', 'i') } });
+    const promo = await Promo.findOne({ code: { $regex: new RegExp('^'+String(code||'').trim()+'$','i') } });
     
     if(!promo) return res.status(400).json({error: 'Промокод не найден'});
     if(promo.usedBy.length >= promo.limit || promo.usedBy.includes(id)) return res.status(400).json({error: 'Промокод уже активирован'});
     
     const user = await User.findOne({ id });
-    if(!user) return res.status(404).json({error: 'Пользователь не найден'});
     user.balance = Number((user.balance + promo.amount).toFixed(2)); 
     user.stats.promo += promo.amount; 
     promo.usedBy.push(id);
     
     await user.save(); await promo.save();
 
-    // Уведомление с суммой
-    if(bot) {
-        bot.sendMessage(id, `🎁 Промокод активирован! +${promo.amount} TON зачислено на баланс.`, {parse_mode: 'Markdown'}).catch(()=>{});
-    }
-
-    // Возвращаем amount для клиента
-    res.json({ user, amount: promo.amount });
+    if(bot){bot.sendMessage(id,'🎁 Промокод активирован! +'+promo.amount+' TON зачислено.',{parse_mode:'Markdown'}).catch(()=>{});}
+    res.json({user,amount:promo.amount});
 });
 
 app.post('/api/withdraw', async (req, res) => {
@@ -1610,38 +1596,19 @@ app.post('/api/admin/reset_game_stats', checkAdmin, async (req, res) => {
     }
 });
 
-
-// Детальная стата по игре — список юзеров
 app.post('/api/admin/game_user_stats', checkAdmin, async (req, res) => {
     try {
         const { game } = req.body;
         if(!game) return res.status(400).json({error:'game required'});
         const agg = await Bet.aggregate([
             { $match: { game, mode: 'Real' } },
-            { $group: {
-                _id: '$userId',
-                username: { $last: '$username' },
-                playCount: { $sum: 1 },
-                totalBet: { $sum: '$amount' },
-                totalPayout: { $sum: { $cond: [{ $gt: ['$result', 0] }, { $add: ['$amount', '$result'] }, 0] } },
-                lastBet: { $max: '$createdAt' }
-            }},
-            { $sort: { totalBet: -1 } },
-            { $limit: 50 }
+            { $group: { _id: '$userId', username: { $last: '$username' }, playCount: { $sum: 1 }, totalBet: { $sum: '$amount' }, totalPayout: { $sum: { $cond: [{ $gt: ['$result', 0] }, { $add: ['$amount', '$result'] }, 0] } } } },
+            { $sort: { totalBet: -1 } }, { $limit: 50 }
         ]);
-        const users = agg.map(u=>({
-            userId: u._id,
-            username: u.username||u._id,
-            playCount: u.playCount,
-            totalBet: Number(u.totalBet.toFixed(2)),
-            totalPayout: Number(u.totalPayout.toFixed(2)),
-            profit: Number((u.totalBet-u.totalPayout).toFixed(2))
-        }));
+        const users = agg.map(u=>({ userId: u._id, username: u.username||u._id, playCount: u.playCount, totalBet: Number(u.totalBet.toFixed(2)), totalPayout: Number(u.totalPayout.toFixed(2)), profit: Number((u.totalBet-u.totalPayout).toFixed(2)) }));
         res.json({ users });
     } catch(err){ res.status(500).json({error:'Ошибка'}); }
 });
-
-// Удаление стат конкретного юзера из игры
 app.post('/api/admin/remove_user_game_stats', checkAdmin, async (req, res) => {
     try {
         const { game, userId } = req.body;
