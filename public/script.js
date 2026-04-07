@@ -1124,7 +1124,7 @@ async function checkRealDeposit(btn,silent){
     if(btn){btn.innerText='ПРОВЕРЯЕМ...';btn.disabled=true;}
     try{const r=await fetch('/api/check_deposit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:user.id})});
         const d=await r.json();
-        if(r.ok&&d.success){user=d.user;updateUI();renderWithdrawHistory();if(d.added>0){playSound('win');showToast('+'+d.added.toFixed(2)+' TON зачислено!');flyToBalance(d.added);}}
+        if(r.ok&&d.success){user=d.user;updateUI();renderWithdrawHistory();if(d.added>0){playSound('win');showToast('+'+d.added.toFixed(2)+' TON');flyToBalance(d.added);}}
         else if(!silent)showToast(d.error||'Оплата не найдена');}
     catch(e){if(!silent)showToast('Ошибка соединения');}
     if(btn){btn.innerText='ПРОВЕРИТЬ ОПЛАТУ';btn.disabled=false;}
@@ -1152,15 +1152,13 @@ async function activatePromo() {
     const r = await fetch('/api/promo', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id:user.id, code}) });
     if(r.ok) {
         const d = await r.json();
-        user = d.user || d;
-        updateUI();
+        user = d.user || d; updateUI();
         if(input) input.value = '';
         const amt = d.amount || 0;
         showToast('Промокод активирован' + (amt > 0 ? ' +' + amt + ' TON' : '') + '!');
         if(amt > 0){ playSound('win'); flyToBalance(amt); }
     } else {
-        const e = await r.json();
-        showToast(e.error || 'Ошибка промо');
+        const e = await r.json(); showToast(e.error || 'Ошибка промо');
     }
 }
 
@@ -1604,7 +1602,7 @@ async function loadAdminGameStats() {
                     </div>
                     <div style="text-align:right;">
                         <div style="font-size:16px; font-weight:900; color:${profit >= 0 ? 'var(--neon)' : 'var(--neon-red)'};">${profit >= 0 ? '+' : ''}${profit.toFixed(2)}</div>
-                        <button style="background:#0d2a33; color:#00e5ff; border:1px solid #00e5ff; padding:3px 8px; border-radius:4px; font-size:10px; margin-top:4px; margin-right:4px;" onclick="adminShowGameUsers('${game}')">Игроки</button>
+                        <button style="background:#0d2a33;color:#00e5ff;border:1px solid #00e5ff;padding:3px 8px;border-radius:4px;font-size:10px;margin-top:4px;margin-right:4px;" onclick="adminShowGameUsers('${game}')">Игроки</button>
                         <button style="background:#333; color:#ff4444; border:none; padding:3px 8px; border-radius:4px; font-size:10px; margin-top:4px;" onclick="adminResetGameStats('${game}')">СБРОС</button>
                     </div>
                 </div>
@@ -1619,52 +1617,47 @@ async function loadAdminGameStats() {
 
 
 async function adminShowGameUsers(game) {
-    const modal = document.getElementById('admin-modal');
-    // Показываем в overlay
     const overlay = document.createElement('div');
     overlay.id = 'game-users-overlay';
-    overlay.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,0.92);overflow-y:auto;padding:16px;';
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,0.93);overflow-y:auto;padding:16px;';
     overlay.innerHTML = '<div style="max-width:480px;margin:0 auto;"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;"><h3 style="color:#00e5ff;margin:0;">Игроки: '+game+'</h3><button onclick="document.getElementById(\'game-users-overlay\').remove()" style="background:#333;border:1px solid #555;color:#fff;border-radius:8px;padding:6px 12px;cursor:pointer;">✕</button></div><div id="game-users-list" style="color:#aaa;font-size:13px;">Загружаем...</div></div>';
     document.body.appendChild(overlay);
-
-    try {
-        const r = await fetch('/api/admin/game_user_stats', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pass:adminPass,game})});
-        const data = await r.json();
+    try{
+        const r=await fetch('/api/admin/game_user_stats',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pass:adminPass,game})});
+        const data=await r.json();
         if(!r.ok){document.getElementById('game-users-list').innerText=data.error||'Ошибка';return;}
-        const users = data.users || [];
+        const users=data.users||[];
         if(!users.length){document.getElementById('game-users-list').innerText='Нет данных';return;}
         let html='';
         users.forEach(u=>{
-            const profColor=u.profit>=0?'#ff2255':'#00ff88';
+            const pColor=u.profit>=0?'#ff2255':'#00ff88';
             html+=`<div style="background:#111;border:1px solid #222;border-radius:10px;padding:10px;margin-bottom:8px;">
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
-                    <b style="color:#fff;">${u.username}</b>
-                    <span style="color:#888;font-size:11px;">${u.userId}</span>
+                    <b style="color:#fff;">${u.username}</b><span style="color:#888;font-size:11px;">${u.userId}</span>
                 </div>
                 <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;font-size:11px;color:#aaa;margin-bottom:6px;">
                     <div>Игр: <b style="color:#fff;">${u.playCount}</b></div>
-                    <div>Ставки: <b style="color:#fff;">${u.totalBet} T</b></div>
-                    <div>Выплаты: <b style="color:#fff;">${u.totalPayout} T</b></div>
+                    <div>Ставки: <b style="color:#fff;">${u.totalBet}T</b></div>
+                    <div>Выплаты: <b style="color:#fff;">${u.totalPayout}T</b></div>
                 </div>
                 <div style="display:flex;justify-content:space-between;align-items:center;">
-                    <div>Профит казино: <b style="color:${profColor};">${u.profit>=0?'+':''}${u.profit} TON</b></div>
+                    <div>Профит: <b style="color:${pColor};">${u.profit>=0?'+':''}${u.profit} TON</b></div>
                     <button onclick="adminRemoveUserGame('${game}','${u.userId}',this)" style="padding:4px 10px;font-size:10px;background:#2a0808;border:1px solid #ff2255;color:#ff2255;border-radius:6px;cursor:pointer;">Убрать</button>
                 </div>
             </div>`;
         });
         document.getElementById('game-users-list').innerHTML=html;
-    } catch(e){ document.getElementById('game-users-list').innerText='Ошибка: '+e.message; }
+    }catch(e){document.getElementById('game-users-list').innerText='Ошибка: '+e.message;}
 }
-
-async function adminRemoveUserGame(game, userId, btn) {
-    if(!confirm('Удалить стату юзера '+userId+' из '+game+'?')) return;
+async function adminRemoveUserGame(game,userId,btn){
+    if(!confirm('Удалить стату юзера из '+game+'?'))return;
     btn.disabled=true;btn.innerText='...';
-    try {
-        const r = await fetch('/api/admin/remove_user_game_stats',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pass:adminPass,game,userId})});
-        const d = await r.json();
-        if(r.ok){btn.closest('div[style]').style.opacity='0.4';btn.innerText='Удалено ('+d.deleted+')';}
+    try{
+        const r=await fetch('/api/admin/remove_user_game_stats',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pass:adminPass,game,userId})});
+        const d=await r.json();
+        if(r.ok){btn.closest('div[style]').style.opacity='0.4';btn.innerText='Удалено('+d.deleted+')';}
         else{btn.innerText='Ошибка';btn.disabled=false;}
-    } catch(e){btn.innerText='Ошибка';btn.disabled=false;}
+    }catch(e){btn.innerText='Ошибка';btn.disabled=false;}
 }
 async function adminResetGameStats(game) {
     if (!confirm(game ? `Сбросить статистику ${game}?` : 'Сбросить ВСЮ статистику?')) return;
@@ -1993,7 +1986,8 @@ function tntExplode(r, c) {
             if (nr < 0 || nr >= MC_ROWS || nc < 0 || nc >= MC_COLS) continue;
             const adjEl = $(`mc-blk-${nr}-${nc}`);
             if (!adjEl || adjEl.dataset.revealed === '1') continue;
-            adjEl.dataset.tntDmg = (parseInt(adjEl.dataset.tntDmg||'0') + 3).toString();
+            // TNT 2×2 зона: урон по прочности 2 единицы (реалистично)
+            adjEl.dataset.tntDmg = (parseInt(adjEl.dataset.tntDmg||'0') + 2).toString();
             adjEl.classList.add('crack-hit');
             spawnBreakParticles(adjEl, adjEl.dataset.blockType || 'stone');
             setTimeout(() => adjEl.classList.remove('crack-hit'), 150);
@@ -2011,7 +2005,11 @@ function doBreakBlock(blkEl, blk, onDone, onBlockFullyGone) {
         spawnBlockWinPopup(blkEl, blk.win);
         mineRunningTotal += blk.win;
         const rt = $('mine-running-total');
-        if (rt) { rt.classList.add('has-win'); animateCounter(rt, mineRunningTotal - blk.win, mineRunningTotal, 350, '', ' TON'); }
+        if (rt) {
+            rt.classList.add('has-win');
+            // Плавный счётчик для каждого сломанного блока
+            animateCounter(rt, mineRunningTotal - blk.win, mineRunningTotal, 500, '', ' TON');
+        }
     }
     spawnBreakParticles(blkEl, blk.type);
 
@@ -2066,56 +2064,35 @@ function spawnPickaxeWorker(blockQueue, pickaxeType, workerIdx, onWorkerDone, on
         remainDur -= hitsCanDo;
 
         const shaft = $('mc-shaft');
-
-        // ─── Слот хотбара: убираем кирку (не трогаем книги) ───
         const _col = blk.c;
         let _invSlot = null;
         for(let ir = 0; ir < 3; ir++){
-            const _cell = document.getElementById('inv-' + ir + '-' + _col);
+            const _cell = document.getElementById('inv-'+ir+'-'+_col);
             if(_cell && _cell.dataset.slotType === 'pickaxe'){ _invSlot = _cell; break; }
         }
-        if(_invSlot){
-            _invSlot.innerHTML = '';
-            delete _invSlot.dataset.slotType;
-            delete _invSlot.dataset.pickType;
-        }
-
-        // ─── Координаты в fixed ───
+        if(_invSlot){_invSlot.innerHTML='';delete _invSlot.dataset.slotType;delete _invSlot.dataset.pickType;}
         const _blkBR = blkEl.getBoundingClientRect();
-        const bxF   = _blkBR.left + _blkBR.width / 2;
+        const bxF = _blkBR.left + _blkBR.width/2;
         const hoverY = _blkBR.top - 10;
-        const hitY   = _blkBR.top + 1;
-
-        // Стартуем из слота (прямо над блоком по X)
+        const hitY = _blkBR.top + 1;
         let _startY = _blkBR.top - 70;
-        if(_invSlot){
-            const _sBR = _invSlot.getBoundingClientRect();
-            _startY = _sBR.top + _sBR.height / 2;
-        }
-
+        if(_invSlot){const _sBR=_invSlot.getBoundingClientRect();_startY=_sBR.top+_sBR.height/2;}
         const pUrl = getPickaxeImg(pickaxeType);
         const el = document.createElement('img');
         el.src = pUrl;
-        el.style.cssText = 'position:fixed;width:22px;height:22px;z-index:99999;pointer-events:none;image-rendering:pixelated;left:'+bxF+'px;top:'+_startY+'px;transform:translate(-50%,-50%);filter:drop-shadow(0 2px 6px rgba(100,60,10,0.9));';
+        el.style.cssText='position:fixed;width:22px;height:22px;z-index:99999;pointer-events:none;image-rendering:pixelated;left:'+bxF+'px;top:'+_startY+'px;transform:translate(-50%,-50%);filter:drop-shadow(0 2px 6px rgba(100,60,10,0.9));';
         document.body.appendChild(el);
         _pickaxeEls.add(el);
-
-        function removeEl() {
-            _pickaxeEls.delete(el);
-            if(el.parentNode) el.parentNode.removeChild(el);
-        }
-
-        // ─── Прямое падение вниз (без дуги) ───
-        _animProp(el, 'top', _startY, hoverY, 200, t => t*t, () => {
-            el.style.left = bxF + 'px';
-            el.style.transform = 'translate(-50%,-100%) rotate(0deg)';
-            if(!mineIsActive){ removeEl(); return; }
+        function removeEl(){_pickaxeEls.delete(el);if(el.parentNode)el.parentNode.removeChild(el);}
+        // Падение вниз
+        _animProp(el,'top',_startY,hoverY,220,t=>t*t,()=>{
+            el.style.left=bxF+'px';
+            el.style.transform='translate(-50%,-100%) rotate(0deg)';
+            if(!mineIsActive){removeEl();return;}
             blkEl.classList.add('cracking-1');
-            doHits(hitsCanDo, 0);
+            doHits(hitsCanDo,0);
         });
-
-        const bx = bxF;
-        const startY = _startY;
+        const bx=bxF;const startY=_startY;
 
         function doHits(hitsLeft, hitNum) {
             if (!mineIsActive) { removeEl(); return; }
@@ -2141,13 +2118,10 @@ function spawnPickaxeWorker(blockQueue, pickaxeType, workerIdx, onWorkerDone, on
                         doBreakBlock(blkEl, blk, null, () => {
                             if (onBlockBroken) onBlockBroken(blk.r, blk.c);
                         });
-                        // Реалистичный отскок: 1 блок вверх, fade out
-                        const _bH = blkEl.offsetHeight || 38;
-                        const _topAfterBounce = hitY - _bH * 1.1;
-                        _animProp(el, 'top', hitY, _topAfterBounce, 160, t => 1-Math.pow(1-t,2), () => {
-                            el.style.transition = 'opacity 0.08s';
-                            el.style.opacity = '0';
-                            setTimeout(() => { removeEl(); setTimeout(processNext, 80); }, 90);
+                        const _bH=blkEl.offsetHeight||38,_bounceTop=hitY-_bH*1.1;
+                        _animProp(el,'top',hitY,_bounceTop,160,t=>1-Math.pow(1-t,2),()=>{
+                            el.style.transition='opacity 0.08s';el.style.opacity='0';
+                            setTimeout(()=>{removeEl();setTimeout(processNext,80);},90);
                         });
                     } else {
                         blkEl.classList.add('cracking-2');
@@ -2203,24 +2177,16 @@ function spawnPickaxeWorker(blockQueue, pickaxeType, workerIdx, onWorkerDone, on
         }
 
         if (!blkEl) { if (cb) cb(); return; }
-        const _b2BR = blkEl.getBoundingClientRect();
-        const _bx2 = _b2BR.left + _b2BR.width/2;
-        const _sY2 = _b2BR.top - 30;
-        const _hov2 = _b2BR.top - 10;
-        const pUrl = getPickaxeImg(pickaxeType);
-        el = document.createElement('img');
-        el.src = pUrl;
-        el.style.cssText = 'position:fixed;width:22px;height:22px;z-index:99999;pointer-events:none;image-rendering:pixelated;transform:translate(-50%,-100%);left:'+_bx2+'px;top:'+_sY2+'px;filter:drop-shadow(0 2px 6px rgba(100,60,10,0.9));';
-        document.body.appendChild(el);
-        _pickaxeEls.add(el);
-        _animProp(el, 'top', _sY2, _hov2, 140, t => t*t, () => {
-            if(!mineIsActive){ removeEl(); if(cb)cb(); return; }
-            shakeAndBreak(el);
-        });
+        const _b2BR=blkEl.getBoundingClientRect();
+        const _bx2=_b2BR.left+_b2BR.width/2,_sY2=_b2BR.top-30,_hov2=_b2BR.top-10;
+        const pUrl=getPickaxeImg(pickaxeType);
+        el=document.createElement('img');el.src=pUrl;
+        el.style.cssText='position:fixed;width:22px;height:22px;z-index:99999;pointer-events:none;image-rendering:pixelated;transform:translate(-50%,-100%);left:'+_bx2+'px;top:'+_sY2+'px;filter:drop-shadow(0 2px 6px rgba(100,60,10,0.9));';
+        document.body.appendChild(el);_pickaxeEls.add(el);
+        _animProp(el,'top',_sY2,_hov2,140,t=>t*t,()=>{if(!mineIsActive){removeEl();if(cb)cb();return;}shakeAndBreak(el);});
     }
 
-    // Задержка: каждая кирка запускается на 120мс позже предыдущей (разные колонки не сливаются)
-    setTimeout(processNext, workerIdx * 120);
+    setTimeout(processNext, workerIdx * 200);
 }
 
 
@@ -2578,10 +2544,10 @@ function revealMineShaft(grid, blockWins, win, balanceBefore, chestMults, isAuto
             tntEl.src = '/sprites/block_tnt.png';
             const bw = blkEl.offsetWidth || 36;
             const bh = blkEl.offsetHeight || 36;
-            const _tBR = blkEl.getBoundingClientRect();
-            tntEl.style.cssText = 'position:fixed;width:'+bw+'px;height:'+bh+'px;z-index:99999;pointer-events:none;image-rendering:pixelated;left:'+_tBR.left+'px;top:'+(_tBR.top-bh-10)+'px;transition:top 0.4s cubic-bezier(0.34,1.56,0.64,1);';
+            const _tBR=blkEl.getBoundingClientRect();
+            tntEl.style.cssText='position:fixed;width:'+bw+'px;height:'+bh+'px;z-index:99999;pointer-events:none;image-rendering:pixelated;left:'+_tBR.left+'px;top:'+(_tBR.top-bh-10)+'px;transition:top 0.4s cubic-bezier(0.34,1.56,0.64,1);';
             document.body.appendChild(tntEl);
-            requestAnimationFrame(() => requestAnimationFrame(() => { tntEl.style.top = _tBR.top + 'px'; }));
+            requestAnimationFrame(()=>requestAnimationFrame(()=>{tntEl.style.top=_tBR.top+'px';}));
 
             setTimeout(() => {
                 tntEl.remove();
@@ -2629,7 +2595,7 @@ function revealMineShaft(grid, blockWins, win, balanceBefore, chestMults, isAuto
                     delete invCell.dataset.hasPick;
                 }
                 spawnPickaxeWorker(colBlocks[ps.col] || [], ps.pType, wi, null, onBlockBroken, dur);
-            }, wi * 150);
+            }, wi * 200);
         });
     }, tntPhaseTime);
 
@@ -2642,7 +2608,7 @@ function revealMineShaft(grid, blockWins, win, balanceBefore, chestMults, isAuto
             if (balSpan) animateCounter(balSpan, balanceBefore, newBal, 900, '', '');
             flyToBalance(win);
             const rtFinal=$('mine-running-total');
-            if(rtFinal&&win>0&&Math.abs(win-mineRunningTotal)>0.001){animateCounter(rtFinal,mineRunningTotal,win,500,'','');}
+            if(rtFinal&&win>0){animateCounter(rtFinal,mineRunningTotal,win,600,'','');mineRunningTotal=win;}
             showToast('+'+win.toFixed(2)+' TON');
         }
         updateUI();
@@ -2912,12 +2878,10 @@ function upgSetBet(v){if($('up-bet'))$('up-bet').value=v;upgRefresh();playSound(
 function initUpgradePage(){upgChance=50;if($('upg-slider'))$('upg-slider').value=50;upgRefresh();}
 function upgSpinDisk(winPct,isWin,onDone){
     const disk=document.querySelector('.upg-disk');if(!disk){if(onDone)onDone();return;}
-    const winA=(Math.min(winPct,90)/100)*360;
-    let targetR;
+    const winA=(Math.min(winPct,90)/100)*360;let targetR;
     if(isWin){const lo=360-winA,hi=360,mg=Math.max(4,winA*0.07);targetR=(lo+mg)+Math.random()*((hi-mg)-(lo+mg));}
     else{const lo=0,hi=360-winA,mg=Math.max(4,(360-winA)*0.07);targetR=(lo+mg)+Math.random()*((hi-mg)-(lo+mg));}
-    const spinMs=2500+Math.random()*3000;
-    const totalRot=(3+Math.floor(spinMs/1000))*360+targetR;
+    const spinMs=2500+Math.random()*3000,totalRot=(3+Math.floor(spinMs/1000))*360+targetR;
     disk.style.transition='none';disk.style.transform='rotate(0deg)';
     requestAnimationFrame(()=>requestAnimationFrame(()=>{disk.style.transition='transform '+spinMs+'ms cubic-bezier(0.15,0.0,0.08,1.0)';disk.style.transform='rotate('+totalRot+'deg)';}));
     setTimeout(()=>{disk.style.transition='none';disk.style.transform='rotate('+targetR+'deg)';if(onDone)onDone();},spinMs+80);
