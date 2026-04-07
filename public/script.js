@@ -2011,39 +2011,60 @@ function spawnPickaxeWorker(blockQueue, pickaxeType, workerIdx, onWorkerDone, on
         remainDur -= hitsCanDo;
 
         const shaft = $('mc-shaft');
-        // Кирка стартует из слота инвентаря (hotbar), падает на блок
-        const _blkBR=blkEl.getBoundingClientRect();
-        const _bxFixed=_blkBR.left+_blkBR.width/2;
-        const _hitYFixed=_blkBR.top+2;
-        const _hoverYFixed=_blkBR.top-10;
-        // Ищем слот хотбара для этой кирки (по колонке блока)
-        const _blockCol=blk.c; // колонка блока 0-4
-        let _slotStartX=_bxFixed, _slotStartY=_blkBR.top-60;
-        const _slotEl=document.getElementById(`inv-${Math.floor(_blockCol/1)}-${_blockCol%5}`)||
-                      document.querySelector(`[id^="inv-"][id$="-${_blockCol}"]`);
-        if(_slotEl){const _sBR=_slotEl.getBoundingClientRect();_slotStartX=_sBR.left+_sBR.width/2;_slotStartY=_sBR.top+_sBR.height/2;}
+
+        // ─── Слот хотбара: убираем кирку (не трогаем книги) ───
+        const _col = blk.c;
+        let _invSlot = null;
+        for(let ir = 0; ir < 3; ir++){
+            const _cell = document.getElementById('inv-' + ir + '-' + _col);
+            if(_cell && _cell.dataset.slotType === 'pickaxe'){ _invSlot = _cell; break; }
+        }
+        if(_invSlot){
+            _invSlot.innerHTML = '';
+            delete _invSlot.dataset.slotType;
+            delete _invSlot.dataset.pickType;
+        }
+
+        // ─── Координаты блока в fixed ───
+        const _blkBR = blkEl.getBoundingClientRect();
+        const bxF   = _blkBR.left + _blkBR.width / 2;
+        const hoverY = _blkBR.top - 10;
+        const hitY   = _blkBR.top + 1;
+
+        // ─── Стартуем из слота (прямо сверху, та же X-координата что и блок) ───
+        let _startY = _blkBR.top - 80; // выше блока если слот не найден
+        if(_invSlot){
+            const _sBR = _invSlot.getBoundingClientRect();
+            _startY = _sBR.top + _sBR.height / 2;
+            // X совпадает с центром блока (падение прямо вниз)
+        }
+
         const pUrl = getPickaxeImg(pickaxeType);
         const el = document.createElement('img');
         el.src = pUrl;
-        el.style.cssText = `position:fixed;width:24px;height:24px;z-index:99999;pointer-events:none;image-rendering:pixelated;left:${_slotStartX}px;top:${_slotStartY}px;transform:translate(-50%,-50%) rotate(-30deg);transition:none;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.7));`;
+        // Стартуем над блоком (та же X что и блок)
+        el.style.cssText = 'position:fixed;width:22px;height:22px;z-index:99999;pointer-events:none;image-rendering:pixelated;left:'+bxF+'px;top:'+_startY+'px;transform:translate(-50%,-50%);filter:drop-shadow(0 2px 6px rgba(100,60,10,0.9));';
         document.body.appendChild(el);
         _pickaxeEls.add(el);
-        // Прячем иконку в слоте во время полёта кирки
-        if(_slotEl){_slotEl.style.opacity='0.3';}
 
         function removeEl() {
             _pickaxeEls.delete(el);
-            if (el.parentNode) el.parentNode.removeChild(el);
-            // Возвращаем opacity слота
-            if(typeof _slotEl!=='undefined'&&_slotEl) _slotEl.style.opacity='';
+            if(el.parentNode) el.parentNode.removeChild(el);
         }
 
-        // Фаза 1: летим из слота к блоку (дугой через left)
-        _animPropXY(el, _slotStartX, _slotStartY, _bxFixed, _hoverYFixed, 320, t=>{const e=t<.5?2*t*t:-1+(4-2*t)*t;return e;}, () => {
-            if (!mineIsActive) { removeEl(); return; }
+        // ─── Прямое падение вниз (без дуги) ───
+        _animProp(el, 'top', _startY, hoverY, 200, t => t*t, () => {
+            // Кирка долетела до позиции над блоком
+            el.style.left = bxF + 'px';
+            el.style.transform = 'translate(-50%,-100%) rotate(0deg)';
+            if(!mineIsActive){ removeEl(); return; }
             blkEl.classList.add('cracking-1');
             doHits(hitsCanDo, 0);
         });
+
+        // bx для doPickaxeBreak
+        const bx = bxF;
+        const startY = _startY;
 
         function doHits(hitsLeft, hitNum) {
             if (!mineIsActive) { removeEl(); return; }
@@ -2069,9 +2090,13 @@ function spawnPickaxeWorker(blockQueue, pickaxeType, workerIdx, onWorkerDone, on
                         doBreakBlock(blkEl, blk, null, () => {
                             if (onBlockBroken) onBlockBroken(blk.r, blk.c);
                         });
-                        _animProp(el, 'top', hitY, startY, 200, t => 1-(1-t)*(1-t), () => {
-                            removeEl();
-                            setTimeout(processNext, 100);
+                        // Отскок вверх на ~2 блока, затем fade out
+                        const _bH = blkEl.offsetHeight || 40;
+                        const _bounceTop = hitY - _bH * 2.0;
+                        _animProp(el, 'top', hitY, _bounceTop, 200, t => 1-Math.pow(1-t,2), () => {
+                            el.style.transition = 'opacity 0.1s';
+                            el.style.opacity = '0';
+                            setTimeout(() => { removeEl(); setTimeout(processNext, 60); }, 110);
                         });
                     } else {
                         blkEl.classList.add('cracking-2');
@@ -2127,22 +2152,18 @@ function spawnPickaxeWorker(blockQueue, pickaxeType, workerIdx, onWorkerDone, on
         }
 
         if (!blkEl) { if (cb) cb(); return; }
-        const shaft = $('mc-shaft');
-        const bxx   = blkEl.offsetLeft + blkEl.offsetWidth / 2;
-        const byy   = blkEl.offsetTop;
-        const sY    = byy - 30;
-        const hov   = byy - 12;
-
+        const _b2BR = blkEl.getBoundingClientRect();
+        const _bx2 = _b2BR.left + _b2BR.width/2;
+        const _sY2 = _b2BR.top - 30;
+        const _hov2 = _b2BR.top - 10;
         const pUrl = getPickaxeImg(pickaxeType);
         el = document.createElement('img');
         el.src = pUrl;
-        const _br2=blkEl.getBoundingClientRect();const _cx2=_br2.left+_br2.width/2,_sy2=_br2.top-28,_hy2=_br2.top-8;
-        el.style.cssText=`position:fixed;width:24px;height:24px;z-index:99999;pointer-events:none;image-rendering:pixelated;transform:translate(-50%,-100%);left:${_cx2}px;top:${_sy2}px;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.7));`;
+        el.style.cssText = 'position:fixed;width:22px;height:22px;z-index:99999;pointer-events:none;image-rendering:pixelated;transform:translate(-50%,-100%);left:'+_bx2+'px;top:'+_sY2+'px;filter:drop-shadow(0 2px 6px rgba(100,60,10,0.9));';
         document.body.appendChild(el);
         _pickaxeEls.add(el);
-
-        _animProp(el,'top',_sy2,_hy2,160,t=>t<.5?2*t*t:-1+(4-2*t)*t,()=>{
-            if (!mineIsActive) { removeEl(); if(cb)cb(); return; }
+        _animProp(el, 'top', _sY2, _hov2, 140, t => t*t, () => {
+            if(!mineIsActive){ removeEl(); if(cb)cb(); return; }
             shakeAndBreak(el);
         });
     }
@@ -2505,10 +2526,10 @@ function revealMineShaft(grid, blockWins, win, balanceBefore, chestMults, isAuto
             tntEl.src = '/sprites/block_tnt.png';
             const bw = blkEl.offsetWidth || 36;
             const bh = blkEl.offsetHeight || 36;
-            const _tbr=blkEl.getBoundingClientRect();
-            tntEl.style.cssText=`position:fixed;width:${bw}px;height:${bh}px;z-index:99999;pointer-events:none;image-rendering:pixelated;left:${_tbr.left}px;top:${_tbr.top-bh-5}px;transition:top 0.4s cubic-bezier(0.34,1.56,0.64,1);`;
+            const _tBR = blkEl.getBoundingClientRect();
+            tntEl.style.cssText = 'position:fixed;width:'+bw+'px;height:'+bh+'px;z-index:99999;pointer-events:none;image-rendering:pixelated;left:'+_tBR.left+'px;top:'+(_tBR.top-bh-10)+'px;transition:top 0.4s cubic-bezier(0.34,1.56,0.64,1);';
             document.body.appendChild(tntEl);
-            requestAnimationFrame(()=>requestAnimationFrame(()=>{tntEl.style.top=_tbr.top+'px';}));
+            requestAnimationFrame(() => requestAnimationFrame(() => { tntEl.style.top = _tBR.top + 'px'; }));
 
             setTimeout(() => {
                 tntEl.remove();
@@ -2823,13 +2844,28 @@ function highlightSpinWins(winLines, grid) {
 
 // ===================== UPGRADE GAME =====================
 let isUpgrading=false,upgChance=50;
-function upgMult(c){return Math.max(1.01,Math.floor(96/c*100)/100);}
+
+// Кэф: 1-10% линейно (1%=20x, 10%=9.6x), 10-90%: 96/chance
+function upgMult(c){
+    if(c<=10) return Math.round((20+(9.6-20)*(c-1)/9)*100)/100;
+    return Math.max(1.01,Math.floor(96/c*100)/100);
+}
+
+// Плавный RGB цвет: красный → оранжевый → жёлтый → зелёный
+function upgColor(c){
+    const t=c/90;
+    let r,g,b;
+    if(t<0.55){const s=t/0.55;r=255;g=Math.round(34+(200-34)*s);b=Math.round(85*(1-s));}
+    else{const s=(t-0.55)/0.45;r=Math.round(255*(1-s));g=Math.round(200+(230-200)*s);b=Math.round(118*s);}
+    return 'rgb('+r+','+g+','+b+')';
+}
+
 function upgRefresh(){
-    const bet=parseFloat($('up-bet')?$('up-bet').value:0)||0,c=Math.min(90,upgChance),mult=upgMult(c);
-    const color=c<20?'#ff2255':c<50?'#ff6600':'#00e676';
+    const bet=parseFloat($('up-bet')?$('up-bet').value:0)||0;
+    const c=Math.min(90,upgChance),mult=upgMult(c),color=upgColor(c);
     const disk=document.querySelector('.upg-disk');
     if(disk)disk.style.background='conic-gradient('+color+' 0% '+c+'%,#1a1a2e '+c+'% 100%)';
-    if($('upg-chance-pct'))$('upg-chance-pct').innerText=c+'%';
+    if($('upg-chance-pct')){$('upg-chance-pct').innerText=c+'%';$('upg-chance-pct').style.color=color;}
     if($('upg-slider-val'))$('upg-slider-val').innerText=c+'%';
     if($('upg-mult-val'))$('upg-mult-val').innerText='x'+mult;
     if($('upg-win-val'))$('upg-win-val').innerText='+'+parseFloat((bet*(mult-1)).toFixed(2))+' TON';
@@ -2837,7 +2873,7 @@ function upgRefresh(){
 function upgSetChance(v){if(isUpgrading)return;upgChance=Math.max(1,Math.min(90,parseInt(v)||50));if($('upg-slider'))$('upg-slider').value=upgChance;upgRefresh();playSound('click');}
 function upgSetBet(v){if($('up-bet'))$('up-bet').value=v;upgRefresh();playSound('click');}
 function initUpgradePage(){upgChance=50;if($('upg-slider'))$('upg-slider').value=50;upgRefresh();}
-// ИСПРАВЛЕННЫЙ угол: WIN=зелёная зона [360-winA, 360], LOSE=тёмная [0, 360-winA]
+
 function upgSpinDisk(winPct,isWin,onDone){
     const disk=document.querySelector('.upg-disk');if(!disk){if(onDone)onDone();return;}
     const winA=(Math.min(winPct,90)/100)*360;
