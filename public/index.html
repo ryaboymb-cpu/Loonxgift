@@ -43,52 +43,98 @@
 
     <div class="content">
         <div id="page-games" class="page active">
-            <h2 style="margin-bottom:15px; font-weight:900; letter-spacing:1px; text-transform:uppercase;">Игры</h2>
+            <h2 class="games-title">ИГРЫ</h2>
             
-            <div class="game-card" onclick="navGame('crash')" style="border-color: #ff0055;">
-                <div class="g-icon cr">🚀</div>
-                <div><h3 style="margin-bottom:5px;">Crash</h3><p style="color:var(--sub); font-size:12px; font-weight:600;">Успей забрать множитель</p></div>
+            <div class="games-grid">
+                <!-- CRASH -->
+                <div class="gc" onclick="navGame('crash')">
+                    <div class="gc-bg" style="background:linear-gradient(135deg,#1a0010,#4a0025,#200030);"></div>
+                    <div class="gc-icon-wrap" style="background:radial-gradient(circle,rgba(255,0,85,0.3) 0%,transparent 70%);">
+                        <span class="gc-emoji">🚀</span>
+                    </div>
+                    <div class="gc-info">
+                        <div class="gc-name">Crash</div>
+                        <div class="gc-desc">Успей забрать множитель</div>
+                    </div>
+                </div>
+                <!-- MINES -->
+                <div class="gc" onclick="navGame('mines')">
+                    <div class="gc-bg" style="background:linear-gradient(135deg,#001a10,#003d20,#001a30);"></div>
+                    <div class="gc-icon-wrap" style="background:radial-gradient(circle,rgba(0,255,136,0.3) 0%,transparent 70%);">
+                        <span class="gc-emoji">💣</span>
+                    </div>
+                    <div class="gc-info">
+                        <div class="gc-name">Mines</div>
+                        <div class="gc-desc">Ищи кристаллы</div>
+                    </div>
+                </div>
+                <!-- COINFLIP -->
+                <div class="gc" onclick="navGame('coinflip')">
+                    <div class="gc-bg" style="background:linear-gradient(135deg,#1a1000,#3d2800,#1a0a00);"></div>
+                    <div class="gc-icon-wrap" style="background:radial-gradient(circle,rgba(255,204,0,0.3) 0%,transparent 70%);">
+                        <span class="gc-emoji">🪙</span>
+                    </div>
+                    <div class="gc-info">
+                        <div class="gc-name">Coinflip</div>
+                        <div class="gc-desc">Выбери свою сторону</div>
+                    </div>
+                </div>
+                <!-- CASES -->
+                <div class="gc" onclick="navGame('cases')">
+                    <div class="gc-bg" style="background:linear-gradient(135deg,#100020,#2d0050,#180030);"></div>
+                    <div class="gc-icon-wrap" style="background:radial-gradient(circle,rgba(206,147,216,0.3) 0%,transparent 70%);">
+                        <span class="gc-emoji">🎁</span>
+                    </div>
+                    <div class="gc-info">
+                        <div class="gc-name">Cases</div>
+                        <div class="gc-desc">Открой кейс с призами</div>
+                    </div>
+                </div>
+                <!-- BATTLE -->
+                <div class="gc" onclick="navGame('battle')">
+                    <div class="gc-bg" style="background:linear-gradient(135deg,#0d001a,#2a0045,#150028);"></div>
+                    <div class="gc-icon-wrap" style="background:radial-gradient(circle,rgba(138,43,226,0.3) 0%,transparent 70%);">
+                        <span class="gc-emoji">⚔️</span>
+                    </div>
+                    <div class="gc-info">
+                        <div class="gc-name">Battle Roulette</div>
+                        <div class="gc-desc">Сразись за TON</div>
+                    </div>
+                </div>
+                <!-- SPIN -->
+                <div class="gc" onclick="navGame('spin')">
+                    <div class="gc-bg" style="background:linear-gradient(135deg,#1a0800,#3d1500,#200500);"></div>
+                    <div class="gc-icon-wrap" style="background:radial-gradient(circle,rgba(255,107,0,0.3) 0%,transparent 70%);">
+                        <span class="gc-emoji">🎰</span>
+                    </div>
+                    <div class="gc-info">
+                        <div class="gc-name">Spin</div>
+                        <div class="gc-desc">Слот 5×3 с фриспинами</div>
+                    </div>
+                </div>
+                <!-- MINE -->
+                <div class="gc" onclick="navGame('mine')">
+                    <div class="gc-bg" style="background:linear-gradient(135deg,#0a0500,#2a1400,#150800);"></div>
+                    <div class="gc-icon-wrap" style="background:radial-gradient(circle,rgba(200,112,32,0.3) 0%,transparent 70%);">
+                        <span class="gc-emoji">⛏️</span>
+                    </div>
+                    <div class="gc-info">
+                        <div class="gc-name">Mine</div>
+                        <div class="gc-desc">Копай и побеждай</div>
+                    </div>
+                </div>
+                <!-- UPGRADE -->
+                <div class="gc" onclick="navGame('upgrade')">
+                    <div class="gc-bg" style="background:linear-gradient(135deg,#001020,#002040,#001530);"></div>
+                    <div class="gc-icon-wrap" style="background:radial-gradient(circle,rgba(0,229,255,0.3) 0%,transparent 70%);">
+                        <span class="gc-emoji">⬆️</span>
+                    </div>
+                    <div class="gc-info">
+                        <div class="gc-name">Upgrade</div>
+                        <div class="gc-desc">Удвой свою ставку</div>
+                    </div>
+                </div>
             </div>
-
-            <div class="game-card" onclick="navGame('mines')" style="border-color: #00ff88;">
-                <div class="g-icon mi">💣</div>
-                <div><h3 style="margin-bottom:5px;">Mines</h3><p style="color:var(--sub); font-size:12px; font-weight:600;">Ищи кристаллы</p></div>
-            </div>
-
-            <div class="game-card" onclick="navGame('coinflip')" style="border-color: #ffcc00;">
-                <div class="g-icon co">🪙</div>
-                <div><h3 style="margin-bottom:5px;">Coinflip</h3><p style="color:var(--sub); font-size:12px; font-weight:600;">Выбери свою сторону</p></div>
-            </div>
-
-            <div class="game-card" onclick="navGame('cases')" style="border-color: #9c27b0;">
-                <div class="g-icon" style="background: linear-gradient(135deg, #6a1b9a, #ce93d8); box-shadow: 0 0 15px rgba(156,39,176,0.3); font-size:22px;">🎁</div>
-                <div><h3 style="margin-bottom:5px;">Cases</h3><p style="color:var(--sub); font-size:12px; font-weight:600;">Открой кейс с призами</p></div>
-            </div>
-
-            <div class="game-card" onclick="navGame('battle')" style="border-color: #8a2be2;">
-                <div class="g-icon" style="background: linear-gradient(135deg, #8a2be2, #4b0082); box-shadow: 0 0 15px rgba(138,43,226,0.3);">⚔️</div>
-                <div><h3 style="margin-bottom:5px;">Battle Roulette</h3><p style="color:var(--sub); font-size:12px; font-weight:600;">Сразись за TON</p></div>
-            </div>
-
-            <div class="game-card" onclick="navGame('spin')" style="border-color: #ff6b00;">
-                <div class="g-icon sp">🎰</div>
-                <div><h3 style="margin-bottom:5px;">Spin</h3><p style="color:var(--sub); font-size:12px; font-weight:600;">Слот 5×3 с фриспинами</p></div>
-            </div>
-
-            <div class="game-card" onclick="navGame('mine')" style="border-color: #c87020;">
-                <div class="g-icon" style="background: linear-gradient(135deg, #8B5A2B, #c87020); box-shadow: 0 0 15px rgba(200,112,32,0.3); font-size:22px;">⛏️</div>
-                <div><h3 style="margin-bottom:5px;">Mine</h3><p style="color:var(--sub); font-size:12px; font-weight:600;">Добывай блоки и выигрывай</p></div>
-            </div>
-
-            <div class="game-card" onclick="navGame('upgrade')" style="border-color: #00e5ff;">
-                <div class="g-icon" style="background: linear-gradient(135deg, #0097a7, #00e5ff); box-shadow: 0 0 15px rgba(0,229,255,0.3); font-size:22px;">⬆️</div>
-                <div><h3 style="margin-bottom:5px;">Upgrade</h3><p style="color:var(--sub); font-size:12px; font-weight:600;">Удвой свою ставку</p></div>
-            </div>
-
-
-
-
-
             <h3 style="margin:20px 0 10px 0; color:var(--sub); font-size:14px; text-transform:uppercase;">Лайв Ставки</h3>
             <div class="live-bets-container" id="feed-list"></div>
         </div>
