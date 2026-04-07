@@ -733,7 +733,7 @@ body {
   text-align: right;
 }
 
-/* ═══ Final ═══ */
+/* ═══ Final CSS ═══ */
 .spin-cell.sym-N{color:#ff2255!important;opacity:.65;font-weight:700;}
 .upg-disk{border-radius:50%;transform-origin:center;will-change:transform;}
 #upg-slider::-webkit-slider-thumb{-webkit-appearance:none;width:22px;height:22px;border-radius:50%;background:#fff;border:3px solid #00e5ff;box-shadow:0 0 8px rgba(0,229,255,.5);cursor:pointer;}
