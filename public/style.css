@@ -462,16 +462,9 @@ body {
 }
 /* All pickaxe/item images in inventory must match hotbar */
 .inv-cell img {
-  width: 56% !important;
-  height: 56% !important;
-  max-width: 22px !important;
-  max-height: 22px !important;
-  min-width: 10px !important;
-  min-height: 10px !important;
-  object-fit: contain !important;
-  image-rendering: pixelated !important;
-  display: block;
-  flex-shrink: 0;
+  width:56%!important;height:56%!important;max-width:22px!important;max-height:22px!important;
+  min-width:10px!important;min-height:10px!important;object-fit:contain!important;
+  image-rendering:pixelated!important;display:block;flex-shrink:0;
 }
 
 /* ─── КНИГА СТАТУС ─── */
@@ -740,25 +733,9 @@ body {
   text-align: right;
 }
 
-/* ═══ LoonxGift Final CSS ═══ */
-.spin-cell.sym-N { color: #ff2255 !important; opacity: 0.65; font-weight: 700; }
-
-/* Upgrade disk */
-.upg-disk { border-radius:50%; transform-origin:center; will-change:transform; }
-#upg-slider::-webkit-slider-thumb {
-  -webkit-appearance:none; width:22px; height:22px; border-radius:50%;
-  background:#fff; border:3px solid #00e5ff; box-shadow:0 0 8px rgba(0,229,255,0.5); cursor:pointer;
-}
-
-/* Mine bet row sticky */
-.mine-bet-row { position: sticky; bottom: 0; background: rgba(10,10,10,0.97); z-index: 20; padding: 3px 0; }
-
-/* Pickaxe animation glow */
-body > img[style*="z-index:99999"] {
-  filter: drop-shadow(0 2px 6px rgba(139,90,43,0.9)) !important;
-}
-
-/* Smoother block transitions */
-.mc-blk { transition: transform 0.1s, filter 0.1s !important; }
-.mc-blk.crack-hit { filter: brightness(1.5); }
-.mc-blk.breaking { animation: mcBreak 0.25s ease-out forwards; }
+/* ═══ Final ═══ */
+.spin-cell.sym-N{color:#ff2255!important;opacity:.65;font-weight:700;}
+.upg-disk{border-radius:50%;transform-origin:center;will-change:transform;}
+#upg-slider::-webkit-slider-thumb{-webkit-appearance:none;width:22px;height:22px;border-radius:50%;background:#fff;border:3px solid #00e5ff;box-shadow:0 0 8px rgba(0,229,255,.5);cursor:pointer;}
+.mine-bet-row{position:sticky;bottom:0;background:rgba(10,10,10,.97);z-index:20;padding:3px 0;}
+#upg-chance-pct{transition:color 0.3s;}
