@@ -1586,17 +1586,26 @@ app.post('/api/admin/reset_game_stats', checkAdmin, async (req, res) => {
     }
 });
 
+app.get('/api/banner', async (req, res) => {
+    try{const b=await Settings.findOne({key:'banner'});res.json({banner:b?b.value:null});}catch(e){res.json({banner:null});}
+});
+app.post('/api/admin/set_banner', checkAdmin, async (req, res) => {
+    try{const {imageUrl,linkUrl,text,active}=req.body;
+        await Settings.findOneAndUpdate({key:'banner'},{key:'banner',value:{imageUrl:imageUrl||'',linkUrl:linkUrl||'',text:text||'',active:active!==false}},{upsert:true});
+        res.json({ok:true});
+    }catch(e){res.status(500).json({error:'Ошибка'});}
+});
 app.post('/api/admin/game_user_stats', checkAdmin, async (req, res) => {
-    try {const { game } = req.body;if(!game) return res.status(400).json({error:'required'});
-        const agg = await Bet.aggregate([{ $match: { game, mode: 'Real' } },{ $group: { _id: '$userId', username: { $last: '$username' }, playCount: { $sum: 1 }, totalBet: { $sum: '$amount' }, totalPayout: { $sum: { $cond: [{ $gt: ['$result', 0] }, { $add: ['$amount', '$result'] }, 0] } } } },{ $sort: { totalBet: -1 } },{ $limit: 50 }]);
-        res.json({ users: agg.map(u=>({ userId: u._id, username: u.username||u._id, playCount: u.playCount, totalBet: Number(u.totalBet.toFixed(2)), totalPayout: Number(u.totalPayout.toFixed(2)), profit: Number((u.totalBet-u.totalPayout).toFixed(2)) })) });
-    } catch(err){ res.status(500).json({error:'Ошибка'}); }
+    try{const { game } = req.body;if(!game)return res.status(400).json({error:'required'});
+        const agg=await Bet.aggregate([{$match:{game,mode:'Real'}},{$group:{_id:'$userId',username:{$last:'$username'},playCount:{$sum:1},totalBet:{$sum:'$amount'},totalPayout:{$sum:{$cond:[{$gt:['$result',0]},{$add:['$amount','$result']},0]}}}},{$sort:{totalBet:-1}},{$limit:50}]);
+        res.json({users:agg.map(u=>({userId:u._id,username:u.username||u._id,playCount:u.playCount,totalBet:Number(u.totalBet.toFixed(2)),totalPayout:Number(u.totalPayout.toFixed(2)),profit:Number((u.totalBet-u.totalPayout).toFixed(2))}))});
+    }catch(err){res.status(500).json({error:'Ошибка'});}
 });
 app.post('/api/admin/remove_user_game_stats', checkAdmin, async (req, res) => {
-    try {const { game, userId } = req.body;if(!game||!userId) return res.status(400).json({error:'required'});
-        const r = await Bet.deleteMany({ game, userId: String(userId), mode: 'Real' });
-        res.json({ ok: true, deleted: r.deletedCount });
-    } catch(err){ res.status(500).json({error:'Ошибка'}); }
+    try{const {game,userId}=req.body;if(!game||!userId)return res.status(400).json({error:'required'});
+        const r=await Bet.deleteMany({game,userId:String(userId),mode:'Real'});
+        res.json({ok:true,deleted:r.deletedCount});
+    }catch(err){res.status(500).json({error:'Ошибка'});}
 });
 
 app.post('/api/admin/logs', checkAdmin, async (req, res) => {
