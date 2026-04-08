@@ -279,28 +279,24 @@ window.onload = async () => {
     if(tg.setHeaderColor) tg.setHeaderColor('#050508');
     if(tg.setBackgroundColor) tg.setBackgroundColor('#050508');
     if(tg.setBottomBarColor) tg.setBottomBarColor('#050508');
-
-    // Применяем safe area — топбар НИЖЕ нативного TG заголовка
+    // Safe area: учитываем высоту TG header и phone status bar
     function applySafeArea(){
-        const top = Math.max(
-            tg.contentSafeAreaInset ? (tg.contentSafeAreaInset.top||0) : 0,
-            tg.safeAreaInset ? (tg.safeAreaInset.top||0) : 0
-        );
-        const bottom = tg.safeAreaInset ? (tg.safeAreaInset.bottom||0) : 0;
-        document.documentElement.style.setProperty('--sa-top',  top + 'px');
-        document.documentElement.style.setProperty('--sa-bot', bottom + 'px');
+        const c = tg.contentSafeAreaInset ? (tg.contentSafeAreaInset.top||0) : 0;
+        const sa = tg.safeAreaInset ? (tg.safeAreaInset.top||0) : 0;
+        const top = Math.max(c, sa);
+        const bot = tg.safeAreaInset ? (tg.safeAreaInset.bottom||0) : 0;
+        document.documentElement.style.setProperty('--sa-top', top+'px');
+        document.documentElement.style.setProperty('--sa-bot', bot+'px');
     }
     applySafeArea();
-    // Повторяем через 200мс — значения могут прийти позже
-    setTimeout(applySafeArea, 200);
-    setTimeout(applySafeArea, 800);
+    setTimeout(applySafeArea, 300);
+    setTimeout(applySafeArea, 1000);
     try{tg.onEvent('safeAreaChanged', applySafeArea);}catch(e){}
     try{tg.onEvent('contentSafeAreaChanged', applySafeArea);}catch(e){}
-
-    // Загружаем баннер
+    // Баннер только на странице игр
     loadBanner();
-    renderQuickBets(); 
-    
+    renderQuickBets();
+    loadBanner();
     const res = await fetch('/api/auth', {
         method: 'POST', headers: {'Content-Type': 'application/json'},
         body: JSON.stringify(tg.initDataUnsafe.user || {id: "1", first_name: "Dev", username: "DevUser", photo_url: ""})
@@ -430,7 +426,6 @@ try{if(tg&&tg.BackButton){tg.BackButton.onClick(function(){
     if(gn){document.querySelectorAll('.nav-item').forEach(i=>i.classList.remove('active'));gn.classList.add('active');}
     tg.BackButton.hide();
 });}}catch(e){}
-
 function navGame(game){
     let mKey=game;if(game==='coin')mKey='coinflip';
     if(game==='cases'){nav('cases');return;}
@@ -1391,7 +1386,7 @@ function renderAdminContent(tab) {
                 <div style="padding:8px; border-bottom:1px solid #333;">
                     <a href="tg://user?id=${d.userId}" style="color:var(--neon); text-decoration:none;"><b>@${d.username}</b></a>
                     (ID: ${d.userId}) <br>
-                    Пополнил: <b style="color:#fff;">${d.amount} TON</b> <span style="font-size:10px; color:#888;">[${d.time}]</span>
+                    Пополнил: <b style="color:#fff;">${d.amount} TON</b> <span style="font-size:10px; color:#888;">${d.time || ''}</span>
                 </div>
             `).join('') || '<div style="color:#555;">Нет депозитов</div>'}
         `;
@@ -1637,40 +1632,126 @@ async function loadAdminGameStats() {
         }
         html += `<button class="btn" style="background:red; margin-top:15px; padding:10px;" onclick="adminResetGameStats('')">СБРОСИТЬ ВСЮ СТАТИСТИКУ</button>`;
         c.innerHTML = html;
-        const bBn=document.createElement('button');bBn.className='btn';bBn.style.cssText='background:linear-gradient(135deg,#ff6b00,#ffcc00);color:#000;font-weight:900;margin-top:10px;';bBn.innerText='📢 Управление баннером';bBn.onclick=adminShowBannerMgr;c.appendChild(bBn);
+        const bBn=document.createElement('button');bBn.className='btn';bBn.style.cssText='background:linear-gradient(135deg,#ff6b00,#ffcc00);color:#000;font-weight:900;margin-top:10px;font-size:13px;';bBn.innerText='📢 Управление баннером';bBn.onclick=adminShowBannerMgr;c.appendChild(bBn);
     } catch (e) {
         c.innerHTML = '<div style="color:red;">Сбой сети</div>';
     }
 }
 
 
+// ════ BANNER ════
 async function loadBanner(){
+    const bw=$('banner-widget');if(!bw)return;
+    bw.style.display='none'; // по умолчанию скрыт
     try{
-        const r=await fetch('/api/banner');const d=await r.json();
-        const bw=$('banner-widget');if(!bw)return;
-        if(!d.banner||!d.banner.active){bw.classList.add('banner-hidden');return;}
+        const r=await fetch('/api/banner');if(!r.ok)return;
+        const d=await r.json();
+        if(!d.banner||!d.banner.active)return;
         const b=d.banner;
         if(b.imageUrl){
-            bw.classList.remove('banner-hidden');
-            bw.innerHTML='<a href="'+(b.linkUrl||'#')+'" target="_blank" style="display:block;"><img src="'+b.imageUrl+'" style="width:100%;height:100%;object-fit:cover;border-radius:10px;"><\/a>';
+            bw.style.display='block';
+            // Ссылка только если задана
+            if(b.linkUrl){
+                bw.innerHTML='<a href="'+b.linkUrl+'" target="_blank" style="display:block;height:100%;"><img src="'+b.imageUrl+'" style="width:100%;height:100%;object-fit:cover;border-radius:10px;" onerror="document.getElementById(\'banner-widget\').style.display=\'none\'"><\/a>';
+            } else {
+                bw.innerHTML='<img src="'+b.imageUrl+'" style="width:100%;height:100%;object-fit:cover;border-radius:10px;" onerror="this.parentElement.style.display=\'none\'">';
+            }
         }else if(b.text){
-            bw.classList.remove('banner-hidden');
+            bw.style.display='flex';
             bw.innerHTML='<span style="color:#fff;font-size:12px;text-align:center;padding:0 12px;">'+b.text+'<\/span>';
-        }else{bw.classList.add('banner-hidden');}
-    }catch(e){}
+        }
+    }catch(e){ /* тихо падаем */ }
 }
+
 function adminShowBannerMgr(){
     const ov=document.createElement('div');ov.id='banner-overlay';
-    ov.style.cssText='position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,0.93);overflow-y:auto;padding:16px;';
-    ov.innerHTML='<div style="max-width:460px;margin:0 auto;"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;"><h3 style="color:#00e5ff;margin:0;">📢 Баннер</h3><button onclick="document.getElementById(\'banner-overlay\').remove()" style="background:#333;border:1px solid #555;color:#fff;border-radius:8px;padding:6px 12px;cursor:pointer;">✕</button></div><div style="background:#111;border-radius:12px;padding:14px;border:1px solid #222;"><div style="margin-bottom:10px;"><label style="color:#aaa;font-size:11px;">URL картинки:</label><input id="bnr-img" class="input-box" style="margin-top:4px;" placeholder="https://...jpg"></div><div style="margin-bottom:10px;"><label style="color:#aaa;font-size:11px;">Ссылка при нажатии:</label><input id="bnr-link" class="input-box" style="margin-top:4px;" placeholder="https://..."></div><div style="margin-bottom:10px;"><label style="color:#aaa;font-size:11px;">Текст (если нет картинки):</label><input id="bnr-text" class="input-box" style="margin-top:4px;" placeholder="Акция!"></div><label style="display:flex;align-items:center;gap:8px;cursor:pointer;color:#ccc;margin-bottom:12px;"><input type="checkbox" id="bnr-active" checked> Показывать</label><button class="btn" style="background:linear-gradient(135deg,#00e5ff,#0097a7);font-weight:800;" onclick="adminSaveBanner()">Сохранить</button><div id="bnr-status" style="margin-top:8px;font-size:12px;color:#aaa;"></div></div></div>';
+    ov.style.cssText='position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,0.95);overflow-y:auto;padding:16px;padding-top:calc(16px + var(--sa-top,0px));';
+    ov.innerHTML=`<div style="max-width:460px;margin:0 auto;">
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+    <h3 style="color:#00e5ff;margin:0;font-size:18px;">📢 Баннер</h3>
+    <button onclick="document.getElementById('banner-overlay').remove()" style="background:#333;border:1px solid #555;color:#fff;border-radius:8px;padding:8px 14px;cursor:pointer;font-size:14px;">✕</button>
+</div>
+<div style="background:#111;border-radius:14px;padding:16px;border:1px solid #222;">
+
+    <div style="margin-bottom:12px;">
+        <label style="color:#aaa;font-size:12px;display:block;margin-bottom:6px;">📷 Загрузить фото с телефона:</label>
+        <label style="display:flex;align-items:center;gap:10px;background:#1a1a2e;border:2px dashed #444;border-radius:10px;padding:12px;cursor:pointer;">
+            <span style="font-size:28px;">📁</span>
+            <div><div style="color:#fff;font-size:13px;font-weight:700;">Выбрать фото</div><div style="color:#888;font-size:11px;">JPG, PNG, GIF</div></div>
+            <input type="file" id="bnr-file" accept="image/*" style="display:none;" onchange="bannerFileSelected(this)">
+        </label>
+        <div id="bnr-preview" style="margin-top:8px;display:none;"><img id="bnr-preview-img" style="width:100%;height:64px;object-fit:cover;border-radius:8px;"></div>
+    </div>
+
+    <div style="text-align:center;color:#666;font-size:11px;margin:8px 0;">— или ввести URL —</div>
+
+    <div style="margin-bottom:12px;">
+        <label style="color:#aaa;font-size:12px;display:block;margin-bottom:4px;">🔗 URL изображения:</label>
+        <input id="bnr-img" class="input-box" placeholder="https://...jpg" style="font-size:13px;">
+    </div>
+    <div style="margin-bottom:12px;">
+        <label style="color:#aaa;font-size:12px;display:block;margin-bottom:4px;">↗️ Ссылка при нажатии (необязательно):</label>
+        <input id="bnr-link" class="input-box" placeholder="https://... (оставь пустым если не нужно)" style="font-size:13px;">
+    </div>
+    <div style="margin-bottom:12px;">
+        <label style="color:#aaa;font-size:12px;display:block;margin-bottom:4px;">📝 Текст (если нет картинки):</label>
+        <input id="bnr-text" class="input-box" placeholder="Акция! Бонус 50% на пополнение" style="font-size:13px;">
+    </div>
+    <label style="display:flex;align-items:center;gap:10px;cursor:pointer;color:#ccc;margin-bottom:14px;font-size:13px;">
+        <input type="checkbox" id="bnr-active" checked style="width:16px;height:16px;"> Показывать баннер
+    </label>
+
+    <button class="btn" style="background:linear-gradient(135deg,#00e5ff,#0097a7);font-weight:800;font-size:14px;" onclick="adminSaveBanner()">✅ Сохранить</button>
+    <button class="btn" style="background:#2a0808;border:1px solid #ff2255;color:#ff2255;margin-top:8px;font-size:13px;" onclick="adminClearBanner()">🗑 Скрыть баннер</button>
+    <div id="bnr-status" style="margin-top:10px;font-size:13px;color:#aaa;text-align:center;"></div>
+</div></div>`;
     document.body.appendChild(ov);
-    fetch('/api/banner').then(r=>r.json()).then(d=>{if(d.banner){const b=d.banner;if($('bnr-img'))$('bnr-img').value=b.imageUrl||'';if($('bnr-link'))$('bnr-link').value=b.linkUrl||'';if($('bnr-text'))$('bnr-text').value=b.text||'';if($('bnr-active'))$('bnr-active').checked=b.active!==false;}}).catch(()=>{});
+    // Загружаем текущее
+    fetch('/api/banner').then(r=>r.json()).then(d=>{
+        if(d.banner){const b=d.banner;
+            if($('bnr-img'))$('bnr-img').value=b.imageUrl&&!b.imageUrl.startsWith('data:')?b.imageUrl:'';
+            if($('bnr-link'))$('bnr-link').value=b.linkUrl||'';
+            if($('bnr-text'))$('bnr-text').value=b.text||'';
+            if($('bnr-active'))$('bnr-active').checked=b.active!==false;
+            if(b.imageUrl&&$('bnr-preview')){$('bnr-preview').style.display='block';$('bnr-preview-img').src=b.imageUrl;}
+        }
+    }).catch(()=>{});
 }
+
+function bannerFileSelected(input){
+    const file=input.files[0];if(!file)return;
+    const reader=new FileReader();
+    reader.onload=e=>{
+        const dataUrl=e.target.result;
+        if($('bnr-preview')){$('bnr-preview').style.display='block';$('bnr-preview-img').src=dataUrl;}
+        if($('bnr-img'))$('bnr-img').value=''; // очищаем URL поле
+        // Сохраняем base64 в скрытый атрибут
+        input.dataset.base64=dataUrl;
+    };
+    reader.readAsDataURL(file);
+}
+
 async function adminSaveBanner(){
-    const body={imageUrl:$('bnr-img')?.value||'',linkUrl:$('bnr-link')?.value||'',text:$('bnr-text')?.value||'',active:$('bnr-active')?.checked!==false};
-    try{const r=await fetch('/api/admin/set_banner',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pass:adminPass,...body})});
-        const d=await r.json();const st=$('bnr-status');if(st)st.innerText=r.ok?'✅ Сохранено!':('Ошибка: '+(d.error||'?'));if(r.ok)loadBanner();
-    }catch(e){const st=$('bnr-status');if(st)st.innerText='Ошибка';}
+    const fileInput=$('bnr-file');
+    const imageData=fileInput&&fileInput.dataset.base64?fileInput.dataset.base64:'';
+    const imageUrl=imageData||($('bnr-img')?$('bnr-img').value.trim():'');
+    const body={imageUrl,imageData:imageData,linkUrl:$('bnr-link')?.value.trim()||'',text:$('bnr-text')?.value.trim()||'',active:$('bnr-active')?.checked!==false};
+    const st=$('bnr-status');if(st){st.innerText='Сохраняем...';st.style.color='#aaa';}
+    try{
+        const r=await fetch('/api/admin/set_banner',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pass:adminPass,...body})});
+        const d=await r.json();
+        if(st){st.innerText=r.ok?'✅ Сохранено! Баннер обновлён.':'❌ Ошибка: '+(d.error||'?');st.style.color=r.ok?'#00ff88':'#ff2255';}
+        if(r.ok){loadBanner();}
+    }catch(e){if(st){st.innerText='❌ Ошибка соединения';st.style.color='#ff2255';}}
+}
+
+async function adminClearBanner(){
+    try{
+        await fetch('/api/admin/set_banner',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pass:adminPass,imageUrl:'',linkUrl:'',text:'',active:false})});
+        loadBanner();
+        const ov=$('banner-overlay');if(ov)ov.remove();
+        showToast('Баннер скрыт');
+    }catch(e){}
 }
 async function adminResetGameStats(game) {
     if (!confirm(game ? `Сбросить статистику ${game}?` : 'Сбросить ВСЮ статистику?')) return;
