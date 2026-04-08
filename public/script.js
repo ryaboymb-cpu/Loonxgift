@@ -413,7 +413,7 @@ function nav(pageId,el){
 
 try{if(tg&&tg.BackButton){tg.BackButton.onClick(function(){
     if(typeof killAllPickaxes==='function')killAllPickaxes();
-    document.querySelectorAll('.overlay-modal').forEach(o=>o.remove());
+    document.querySelectorAll('.gm-overlay').forEach(o=>o.remove());
     document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
     const gp=$('page-games');if(gp)gp.classList.add('active');
     const gn=document.querySelector('.nav-item');
@@ -1441,6 +1441,7 @@ function renderAdminContent(tab) {
             <hr>
             <h4 style="color:var(--neon); margin-bottom:10px;">ОТОБРАЖЕНИЕ В ИСТОРИИ</h4>
             <label><input type="checkbox" ${isShowDemo ? 'checked' : ''} onchange="adminDemoToggle(this.checked)"> Показывать Demo ставки</label><br>
+        <button class="btn" style="margin-top:12px;background:linear-gradient(135deg,#ff6b00,#ffcc00);color:#000;font-weight:900;" onclick="adminOpenSettingsPanel()">📢 Баннер + 🎵 Музыка</button>
         `;
     }
     if(tab === 'users') { 
@@ -1622,6 +1623,7 @@ async function loadAdminGameStats() {
                     </div>
                     <div style="text-align:right;">
                         <div style="font-size:16px; font-weight:900; color:${profit >= 0 ? 'var(--neon)' : 'var(--neon-red)'};">${profit >= 0 ? '+' : ''}${profit.toFixed(2)}</div>
+                        <button style="background:#0d2a33;color:#00e5ff;border:1px solid #00e5ff44;padding:3px 8px;border-radius:4px;font-size:10px;margin-top:4px;margin-right:4px;" onclick="adminShowGameUsers('${game}')">👥 Игроки</button>
                         <button style="background:#333; color:#ff4444; border:none; padding:3px 8px; border-radius:4px; font-size:10px; margin-top:4px;" onclick="adminResetGameStats('${game}')">СБРОС</button>
                     </div>
                 </div>
@@ -1629,18 +1631,8 @@ async function loadAdminGameStats() {
         }
         html += `<button class="btn" style="background:red; margin-top:15px; padding:10px;" onclick="adminResetGameStats('')">СБРОСИТЬ ВСЮ СТАТИСТИКУ</button>`;
         c.innerHTML = html;
-        // ════ КНОПКИ УПРАВЛЕНИЯ ════
-        const row1=document.createElement('div');row1.className='adm-btn-grid';
-        ['crash','mines','coinflip','spin','mine','upgrade','battle','cases'].forEach(g=>{
-            const b=document.createElement('button');b.className='adm-btn adm-btn-dark';
-            b.innerHTML='👥 '+g;b.onclick=()=>adminShowGameUsers(g);row1.appendChild(b);
-        });
-        c.appendChild(row1);
-        const btnS=document.createElement('button');btnS.className='adm-btn adm-btn-orange';
-        btnS.innerHTML='⚙️ Настройки казино (Баннер + Звук)';btnS.onclick=adminOpenSettings;
-        c.appendChild(btnS);
     } catch (e) {
-        c.innerHTML = '<div style="color:#ff2255;padding:12px;">Сбой сети</div>';
+        c.innerHTML = '<div style="color:red;">Сбой сети</div>';
     }
 }
 
@@ -1656,151 +1648,141 @@ async function loadBanner(){
             bw.style.display='block';
             bw.innerHTML=b.linkUrl?'<a href="'+b.linkUrl+'" target="_blank" style="display:block;height:100%;"><img src="'+b.imageUrl+'" style="width:100%;height:100%;object-fit:cover;border-radius:10px;"><\/a>':'<img src="'+b.imageUrl+'" style="width:100%;height:100%;object-fit:cover;border-radius:10px;">';
         }else if(b.text){bw.style.display='flex';bw.style.alignItems='center';bw.style.justifyContent='center';
-            bw.innerHTML='<span style="color:#fff;font-size:13px;padding:0 14px;text-align:center;">'+b.text+'<\/span>';}
+            bw.innerHTML='<span style="color:#fff;font-size:13px;padding:0 14px;">'+b.text+'<\/span>';}
     }catch(e){}
 }
 
-// ════ CASINO SOUND — поддержка загрузки с устройства ════
+// ════ CASINO SOUND — URL или blob от файла ════
 let casinoAudio=null;
 async function loadCasinoSound(){
     try{const r=await fetch('/api/casino_sound');if(!r.ok)return;
         const d=await r.json();if(!d.sound||!d.sound.enabled||!d.sound.soundUrl)return;
         if(casinoAudio){casinoAudio.pause();casinoAudio=null;}
-        casinoAudio=new Audio(d.sound.soundUrl);
-        casinoAudio.loop=true;
-        casinoAudio.volume=Math.min(1,Math.max(0,d.sound.volume||0.3));
-        casinoAudio.play().catch(()=>{
-            // Autoplay blocked — запустим при первом взаимодействии
-            const startAudio=()=>{casinoAudio.play().catch(()=>{});document.removeEventListener('click',startAudio);document.removeEventListener('touchstart',startAudio);};
-            document.addEventListener('click',startAudio,{once:true});
-            document.addEventListener('touchstart',startAudio,{once:true});
-        });
+        const audio=new Audio(d.sound.soundUrl);
+        audio.loop=true;
+        audio.volume=Math.min(1,Math.max(0,parseFloat(d.sound.volume)||0.3));
+        casinoAudio=audio;
+        const tryPlay=()=>{audio.play().catch(()=>{});};
+        tryPlay();
+        // Если autoplay заблокирован — запустим при первом касании
+        document.addEventListener('click',tryPlay,{once:true,passive:true});
+        document.addEventListener('touchstart',tryPlay,{once:true,passive:true});
+    }catch(e){console.warn('Sound load:',e);}
+}
+
+// ════ ADMIN BANNER SAVE ════
+async function adminSaveBanner(){
+    const body={imageUrl:($('bnr-img')?.value||'').trim(),linkUrl:($('bnr-link')?.value||'').trim(),text:($('bnr-text')?.value||'').trim(),active:$('bnr-active')?.checked!==false};
+    const st=$('bnr-st');if(st){st.innerText='Сохраняем...';st.style.color='#aaa';}
+    try{const r=await fetch('/api/admin/set_banner',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pass:adminPass,...body})});
+        const d=await r.json();if(st){st.innerText=r.ok?'✅ Сохранено!':'❌ '+(d.error||'Ошибка');st.style.color=r.ok?'#00ff88':'#ff2255';}
+        if(r.ok)loadBanner();
+    }catch(e){if(st){st.innerText='❌ Ошибка сети';st.style.color='#ff2255';}}
+}
+async function adminClearBanner(){
+    try{await fetch('/api/admin/set_banner',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pass:adminPass,imageUrl:'',linkUrl:'',text:'',active:false})});
+        loadBanner();showToast('Баннер скрыт');
     }catch(e){}
 }
-
-// ════ OVERLAY helper ════
-function createOverlay(id){
-    const ov=document.createElement('div');ov.id=id;ov.className='overlay-modal';
-    ov.style.cssText='position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,0.97);overflow-y:auto;';
-    return ov;
-}
-
-// ════ ADMIN SETTINGS (баннер + звук) ════
-function adminOpenSettings(){
-    const ov=createOverlay('admin-settings-ov');
-    ov.innerHTML=`<div style="max-width:500px;margin:0 auto;padding:14px;padding-top:calc(16px + var(--sa-top,0px));">
-<div class="adm-hdr"><div class="adm-title">⚙️ Настройки казино</div><button class="adm-close" onclick="this.closest('.overlay-modal').remove()">✕</button></div>
-
-<div class="adm-section">
-<div class="adm-sec-title">📢 Баннер (вверху раздела Игры)</div>
-<div class="adm-hint">Баннер статический — скроллируется вместе со страницей. Вставь URL картинки.</div>
-<label class="adm-label">🖼 URL картинки</label><input id="bnr-img" class="input-box" placeholder="https://i.imgur.com/...jpg" style="margin-bottom:8px;">
-<label class="adm-label">🔗 Ссылка при нажатии (пусто = без перехода)</label><input id="bnr-link" class="input-box" placeholder="https://t.me/..." style="margin-bottom:8px;">
-<label class="adm-label">📝 Текст (если нет картинки)</label><input id="bnr-text" class="input-box" placeholder="🎁 Акция! Бонус 50%" style="margin-bottom:8px;">
-<label class="adm-check"><input type="checkbox" id="bnr-active" checked> Показывать баннер</label>
-<div style="display:flex;gap:8px;margin-top:10px;">
-<button class="adm-btn adm-btn-cyan" onclick="adminSaveBanner()" style="flex:1;">✅ Сохранить</button>
-<button class="adm-btn adm-btn-red" onclick="adminClearBanner()" style="flex:1;">🗑 Скрыть</button>
+// Открыть менеджер баннера + звука в RTP tab
+function adminOpenSettingsPanel(){
+    const c=$('admin-content');if(!c)return;
+    c.innerHTML=`<div style="padding:8px;">
+<h4 style="color:#ffcc00;margin-bottom:10px;">📢 Баннер (вверху раздела Игры)</h4>
+<div style="background:#111;border-radius:10px;padding:12px;border:1px solid #222;margin-bottom:14px;">
+<p style="color:#888;font-size:11px;margin:0 0 10px;">Вставь URL картинки (jpeg/png/gif). Баннер показывается в разделе Игры.</p>
+<label style="color:#aaa;font-size:11px;">URL картинки</label><input id="bnr-img" class="input-box" placeholder="https://...jpg" style="margin-bottom:8px;">
+<label style="color:#aaa;font-size:11px;">Ссылка при нажатии (пусто = без перехода)</label><input id="bnr-link" class="input-box" placeholder="https://t.me/..." style="margin-bottom:8px;">
+<label style="color:#aaa;font-size:11px;">Текст (если нет картинки)</label><input id="bnr-text" class="input-box" placeholder="🎁 Акция!" style="margin-bottom:8px;">
+<label style="display:flex;align-items:center;gap:8px;cursor:pointer;color:#ccc;margin-bottom:10px;font-size:13px;"><input type="checkbox" id="bnr-active" checked style="width:16px;height:16px;"> Показывать</label>
+<div style="display:flex;gap:8px;">
+<button class="btn" style="flex:1;background:linear-gradient(135deg,#00e5ff,#0097a7);font-weight:800;" onclick="adminSaveBanner()">✅ Сохранить</button>
+<button class="btn" style="flex:1;background:#2a0808;border:1px solid #ff2255;color:#ff2255;" onclick="adminClearBanner()">🗑 Скрыть</button>
 </div>
-<div id="bnr-status" class="adm-status"></div>
+<div id="bnr-st" style="margin-top:8px;font-size:12px;text-align:center;min-height:16px;"></div>
 </div>
-
-<div class="adm-section">
-<div class="adm-sec-title">🎵 Фоновая музыка</div>
-<div class="adm-hint">Загрузи mp3/ogg файл прямо с устройства — ИЛИ вставь URL.</div>
-<label class="adm-label" style="display:block;margin-bottom:6px;">📁 Файл с устройства:</label>
-<label class="adm-file-btn"><span>📁 Выбрать аудиофайл</span><input type="file" id="snd-file" accept="audio/*" onchange="soundFileSelected(this)" style="display:none;"></label>
-<div id="snd-file-name" style="color:#888;font-size:11px;margin:4px 0 8px;"></div>
-<label class="adm-label">🔗 ИЛИ URL (mp3/ogg):</label><input id="snd-url" class="input-box" placeholder="https://...mp3" style="margin-bottom:8px;">
-<label class="adm-label">🔊 Громкость (0.0 - 1.0):</label>
-<input type="range" id="snd-vol-range" min="0" max="1" step="0.05" value="0.3" oninput="$('snd-vol-num').value=this.value" style="width:100%;margin-bottom:4px;">
-<input type="number" id="snd-vol-num" class="input-box" step="0.05" min="0" max="1" value="0.3" oninput="$('snd-vol-range').value=this.value" style="margin-bottom:8px;width:80px;">
-<label class="adm-check"><input type="checkbox" id="snd-enabled" checked> Включить музыку</label>
-<button class="adm-btn adm-btn-green" style="margin-top:10px;" onclick="adminSaveSound()">✅ Сохранить звук</button>
-<div id="snd-status" class="adm-status"></div>
+<h4 style="color:#00ff88;margin-bottom:10px;">🎵 Фоновая музыка казино</h4>
+<div style="background:#111;border-radius:10px;padding:12px;border:1px solid #222;">
+<p style="color:#888;font-size:11px;margin:0 0 10px;">Вставь URL mp3/ogg файла — он будет играть у всех. Или загрузи файл с устройства:</p>
+<label style="display:flex;align-items:center;gap:8px;background:#1a1a2e;border:1px dashed #0097a7;border-radius:8px;padding:10px;cursor:pointer;color:#00e5ff;font-size:13px;margin-bottom:8px;">
+📁 Загрузить mp3 с устройства<input type="file" id="snd-file" accept="audio/*" onchange="sndFileLoad(this)" style="display:none;"></label>
+<div id="snd-fname" style="color:#888;font-size:11px;margin-bottom:8px;"></div>
+<label style="color:#aaa;font-size:11px;">ИЛИ URL файла (mp3/ogg)</label><input id="snd-url" class="input-box" placeholder="https://...mp3" style="margin-bottom:8px;">
+<label style="color:#aaa;font-size:11px;">Громкость (0.0 - 1.0)</label>
+<input type="range" id="snd-rng" min="0" max="1" step="0.05" value="0.3" oninput="$('snd-num').value=parseFloat(this.value).toFixed(2)" style="width:100%;margin-bottom:4px;">
+<input type="number" id="snd-num" class="input-box" step="0.05" min="0" max="1" value="0.30" oninput="$('snd-rng').value=this.value" style="width:70px;display:inline-block;margin-bottom:8px;">
+<label style="display:flex;align-items:center;gap:8px;cursor:pointer;color:#ccc;margin-bottom:10px;font-size:13px;"><input type="checkbox" id="snd-on" checked style="width:16px;height:16px;"> Включить музыку</label>
+<button class="btn" style="background:linear-gradient(135deg,#00ff88,#00c060);color:#000;font-weight:800;" onclick="adminSaveSound()">✅ Сохранить звук</button>
+<div id="snd-st" style="margin-top:8px;font-size:12px;text-align:center;min-height:16px;"></div>
 </div>
 </div>`;
-    document.body.appendChild(ov);
     fetch('/api/banner').then(r=>r.json()).then(d=>{if(!d.banner)return;const b=d.banner;
         if($('bnr-img'))$('bnr-img').value=b.imageUrl||'';if($('bnr-link'))$('bnr-link').value=b.linkUrl||'';
         if($('bnr-text'))$('bnr-text').value=b.text||'';if($('bnr-active'))$('bnr-active').checked=b.active!==false;
     }).catch(()=>{});
-    fetch('/api/casino_sound').then(r=>r.json()).then(d=>{if(!d.sound)return;const s=d.sound;
-        if($('snd-url'))$('snd-url').value=(!s.soundUrl||s.soundUrl.startsWith('data:'))?'':s.soundUrl;
-        if($('snd-vol-range'))$('snd-vol-range').value=s.volume||0.3;
-        if($('snd-vol-num'))$('snd-vol-num').value=s.volume||0.3;
-        if($('snd-enabled'))$('snd-enabled').checked=s.enabled!==false;
+    fetch('/api/casino_sound').then(r=>r.json()).then(d=>{if(!d.sound)return;const snd=d.sound;
+        if($('snd-url'))$('snd-url').value=(!snd.soundUrl||snd.soundUrl.startsWith('data:'))?'':snd.soundUrl;
+        const v=snd.volume||0.3;if($('snd-rng'))$('snd-rng').value=v;if($('snd-num'))$('snd-num').value=v.toFixed(2);
+        if($('snd-on'))$('snd-on').checked=snd.enabled!==false;
     }).catch(()=>{});
 }
-async function adminSaveBanner(){
-    const body={imageUrl:($('bnr-img')?.value||'').trim(),linkUrl:($('bnr-link')?.value||'').trim(),text:($('bnr-text')?.value||'').trim(),active:$('bnr-active')?.checked!==false};
-    const st=$('bnr-status');if(st){st.innerText='Сохраняем...';st.className='adm-status adm-status-wait';}
-    try{const r=await fetch('/api/admin/set_banner',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pass:adminPass,...body})});
-        const d=await r.json();if(st){st.innerText=r.ok?'✅ Сохранено!':'❌ '+(d.error||'Ошибка');st.className='adm-status '+(r.ok?'adm-status-ok':'adm-status-err');}
-        if(r.ok)loadBanner();
-    }catch(e){if(st){st.innerText='❌ Ошибка сети';st.className='adm-status adm-status-err';}}
-}
-async function adminClearBanner(){
-    try{await fetch('/api/admin/set_banner',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pass:adminPass,imageUrl:'',linkUrl:'',text:'',active:false})});
-        loadBanner();const st=$('bnr-status');if(st){st.innerText='Скрыт';st.className='adm-status adm-status-wait';}
-    }catch(e){}
-}
-function soundFileSelected(input){
+function sndFileLoad(input){
     const file=input.files[0];if(!file)return;
-    const fname=$('snd-file-name');if(fname)fname.innerText='📄 '+file.name;
+    const fn=$('snd-fname');if(fn)fn.innerText='📄 '+file.name;
+    if($('snd-url'))$('snd-url').value='';
     const reader=new FileReader();
-    reader.onload=e=>{if($('snd-url'))$('snd-url').value='';input.dataset.b64=e.target.result;};
+    reader.onload=e=>{input.dataset.b64=e.target.result;};
     reader.readAsDataURL(file);
 }
 async function adminSaveSound(){
     const fi=$('snd-file');const b64=fi&&fi.dataset.b64?fi.dataset.b64:'';
-    const soundUrl=b64||($('snd-url')?.value.trim()||'');
-    const vol=parseFloat($('snd-vol-num')?.value||0.3);
-    const body={soundUrl,volume:vol,enabled:$('snd-enabled')?.checked!==false};
-    const st=$('snd-status');if(st){st.innerText='Сохраняем...';st.className='adm-status adm-status-wait';}
+    const url=b64||($('snd-url')?.value.trim()||'');
+    const vol=parseFloat($('snd-num')?.value||0.3);
+    const body={soundUrl:url,volume:vol,enabled:$('snd-on')?.checked!==false};
+    const st=$('snd-st');if(st){st.innerText='Сохраняем...';st.style.color='#aaa';}
     try{const r=await fetch('/api/admin/set_casino_sound',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pass:adminPass,...body})});
-        const d=await r.json();if(st){st.innerText=r.ok?'✅ Сохранено!':'❌ '+(d.error||'Ошибка');st.className='adm-status '+(r.ok?'adm-status-ok':'adm-status-err');}
+        const d=await r.json();if(st){st.innerText=r.ok?'✅ Сохранено!':'❌ '+(d.error||'Ошибка');st.style.color=r.ok?'#00ff88':'#ff2255';}
         if(r.ok)loadCasinoSound();
-    }catch(e){if(st){st.innerText='❌ Ошибка';st.className='adm-status adm-status-err';}}
+    }catch(e){if(st){st.innerText='❌ Ошибка';st.style.color='#ff2255';}}
 }
 
-// ════ ADMIN GAME PLAYERS STATS ════
+// ════ ADMIN GAME USERS ════
 async function adminShowGameUsers(game){
-    const ov=createOverlay('admin-gusers-ov');
     const icons={crash:'🚀',mines:'💣',coinflip:'🪙',spin:'🎰',mine:'⛏️',upgrade:'⬆️',battle:'⚔️',cases:'🎁'};
-    ov.innerHTML=`<div style="max-width:500px;margin:0 auto;padding:14px;padding-top:calc(16px + var(--sa-top,0px));">
-<div class="adm-hdr"><div class="adm-title">${icons[game]||'🎮'} ${game} — игроки</div><button class="adm-close" onclick="this.closest('.overlay-modal').remove()">✕</button></div>
-<div id="gul-content" style="color:#888;font-size:13px;text-align:center;padding:20px;">Загружаем...</div></div>`;
-    document.body.appendChild(ov);
+    const c=$('admin-content');if(!c)return;
+    c.innerHTML=`<div style="text-align:center;padding:20px;color:var(--neon);">Загрузка игроков ${game}...</div>`;
     try{const r=await fetch('/api/admin/game_user_stats',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pass:adminPass,game})});
-        const data=await r.json();if(!r.ok){$('gul-content').innerText=data.error||'Ошибка';return;}
-        const users=data.users||[];if(!users.length){$('gul-content').innerText='Нет данных';return;}
-        let html='';
+        const data=await r.json();if(!r.ok){c.innerHTML='<div style="color:red;">'+( data.error||'Ошибка')+'</div>';return;}
+        const users=data.users||[];
+        if(!users.length){c.innerHTML='<div style="color:#888;text-align:center;padding:20px;">Нет данных по игре '+game+'</div>';return;}
+        let html=`<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid #222;">
+<button class="btn" style="padding:6px 12px;width:auto;background:#1a1a2e;border:1px solid #00e5ff44;color:#00e5ff;font-size:12px;" onclick="loadAdminGameStats()">← Назад к статистике</button>
+<div style="font-weight:900;color:#fff;">${icons[game]||'🎮'} ${game} — игроки</div></div>`;
         users.forEach(u=>{
-            const isWin=u.profit<=0;const pColor=isWin?'#00ff88':'#ff2255';
-            html+=`<div class="adm-player-card">
-<div class="adm-player-head">
-<div><b class="adm-player-name">${u.username}</b><span class="adm-player-id">${u.userId}</span></div>
-<div class="adm-player-profit" style="color:${pColor};">${u.profit>=0?'+':''}${u.profit} TON</div>
+            const pColor=u.profit<=0?'#00ff88':'#ff2255';
+            html+=`<div style="background:#111;border:1px solid #1e1e1e;border-radius:10px;padding:12px;margin-bottom:8px;">
+<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;">
+<div><b style="color:#fff;font-size:14px;">${u.username}</b><br><span style="color:#555;font-size:10px;">${u.userId}</span></div>
+<div style="text-align:right;"><div style="font-size:16px;font-weight:900;color:${pColor};">${u.profit>=0?'+':''}${u.profit} TON</div></div>
 </div>
-<div class="adm-player-stats">
-<div class="adm-pstat"><span>Игр</span><b>${u.playCount}</b></div>
-<div class="adm-pstat"><span>Ставки</span><b>${u.totalBet}T</b></div>
-<div class="adm-pstat"><span>Выплаты</span><b>${u.totalPayout}T</b></div>
+<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;margin-bottom:10px;">
+<div style="background:#0a0a0a;border-radius:6px;padding:6px;text-align:center;"><div style="color:#888;font-size:10px;">Игр</div><b style="color:#fff;">${u.playCount}</b></div>
+<div style="background:#0a0a0a;border-radius:6px;padding:6px;text-align:center;"><div style="color:#888;font-size:10px;">Ставки</div><b style="color:#fff;">${u.totalBet}T</b></div>
+<div style="background:#0a0a0a;border-radius:6px;padding:6px;text-align:center;"><div style="color:#888;font-size:10px;">Выплаты</div><b style="color:#fff;">${u.totalPayout}T</b></div>
 </div>
-<button class="adm-btn adm-btn-red" style="width:100%;font-size:11px;padding:7px;" onclick="adminRemoveUserGame('${game}','${u.userId}',this)">🗑️ Очистить историю игрока</button>
+<button style="width:100%;background:#2a0808;border:1px solid #ff2255;color:#ff2255;border-radius:8px;padding:7px;cursor:pointer;font-size:12px;" onclick="adminRemoveUserGame('${game}','${u.userId}',this)">🗑️ Очистить историю</button>
 </div>`;
         });
-        $('gul-content').innerHTML=html;
-    }catch(e){$('gul-content').innerText='Ошибка соединения';}
+        c.innerHTML=html;
+    }catch(e){c.innerHTML='<div style="color:red;">Ошибка соединения</div>';}
 }
 async function adminRemoveUserGame(game,userId,btn){
-    if(!confirm('Удалить всю статистику '+userId+' по игре '+game+'?'))return;
+    if(!confirm('Удалить всю стату '+userId+' по игре '+game+'?'))return;
     btn.disabled=true;btn.innerText='...';
     try{const r=await fetch('/api/admin/remove_user_game_stats',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pass:adminPass,game,userId})});
-        const d=await r.json();if(r.ok){btn.closest('.adm-player-card').style.opacity='0.4';btn.innerText='✓ Удалено ('+d.deleted+')';}
-        else{btn.innerText='❌ Ошибка';btn.disabled=false;}
-    }catch(e){btn.innerText='❌ Ошибка';btn.disabled=false;}
+        const d=await r.json();if(r.ok){btn.closest('[style]').style.opacity='0.4';btn.innerText='✓ Удалено ('+d.deleted+')';}
+        else{btn.innerText='Ошибка';btn.disabled=false;}
+    }catch(e){btn.innerText='Ошибка';btn.disabled=false;}
 }
 async function adminResetGameStats(game) {
     if (!confirm(game ? `Сбросить статистику ${game}?` : 'Сбросить ВСЮ статистику?')) return;
@@ -2191,15 +2173,13 @@ function spawnPickaxeWorker(blockQueue, pickaxeType, workerIdx, onWorkerDone, on
         remainDur -= hitsCanDo;
 
         const _br=blkEl.getBoundingClientRect();
-        const bxF=_br.left+_br.width/2, hoverY=_br.top-10, hitY=_br.top+_br.height*0.4;
+        const bxF=_br.left+_br.width/2,hoverY=_br.top-10,hitY=_br.top+_br.height*0.4;
         let _invSlot=null;
         for(let ir=0;ir<3;ir++){const _c=document.getElementById('inv-'+ir+'-'+blk.c);if(_c&&_c.dataset.slotType==='pickaxe'){_invSlot=_c;break;}}
         if(_invSlot){_invSlot.innerHTML='';delete _invSlot.dataset.slotType;delete _invSlot.dataset.pickType;}
-        let startY=_br.top-80;
-        if(_invSlot){const _sr=_invSlot.getBoundingClientRect();startY=_sr.top+_sr.height/2;}
+        let startY=_br.top-80;if(_invSlot){const _sr=_invSlot.getBoundingClientRect();startY=_sr.top+_sr.height/2;}
         const bx=bxF;
-        const pUrl=getPickaxeImg(pickaxeType);
-        const el=document.createElement('img');el.src=pUrl;
+        const pUrl=getPickaxeImg(pickaxeType);const el=document.createElement('img');el.src=pUrl;
         el.style.cssText='position:fixed;width:24px;height:24px;z-index:99999;pointer-events:none;image-rendering:pixelated;left:'+bxF+'px;top:'+startY+'px;transform:translate(-50%,-50%);filter:drop-shadow(0 2px 8px rgba(100,50,0,.9));';
         document.body.appendChild(el);_pickaxeEls.add(el);
         function removeEl(){_pickaxeEls.delete(el);if(el.parentNode)el.parentNode.removeChild(el);}
@@ -2233,10 +2213,9 @@ function spawnPickaxeWorker(blockQueue, pickaxeType, workerIdx, onWorkerDone, on
                         doBreakBlock(blkEl, blk, null, () => {
                             if (onBlockBroken) onBlockBroken(blk.r, blk.c);
                         });
-                        const _flyY=hoverY-_br.height;
+                        const _flyY=hoverY-(_br&&_br.height||30);
                         _animProp(el,'top',hitY,_flyY,180,t=>1-Math.pow(1-t,2),()=>{
-                            el.style.opacity='0';
-                            setTimeout(()=>{removeEl();setTimeout(processNext,60);},100);
+                            el.style.opacity='0';setTimeout(()=>{removeEl();setTimeout(processNext,60);},100);
                         });
                     } else {
                         blkEl.classList.add('cracking-2');
@@ -2986,7 +2965,7 @@ function highlightSpinWins(winLines, grid) {
 // ===================== UPGRADE GAME =====================
 let isUpgrading=false,upgChance=50;
 function upgMult(c){if(c<=10)return Math.round((20+(9.6-20)*(c-1)/9)*100)/100;return Math.max(1.01,Math.floor(96/c*100)/100);}
-function upgColor(c){const t=c/90;let r,g,b;if(t<0.55){const s=t/0.55;r=255;g=Math.round(34+(200-34)*s);b=Math.round(85*(1-s));}else{const s=(t-0.55)/0.45;r=Math.round(255*(1-s));g=Math.round(200+(230-200)*s);b=Math.round(118*s);}return 'rgb('+r+','+g+','+b+')';}
+function upgColor(c){const t=c/90;let r,g,b;if(t<0.55){const ss=t/0.55;r=255;g=Math.round(34+(200-34)*ss);b=Math.round(85*(1-ss));}else{const ss=(t-0.55)/0.45;r=Math.round(255*(1-ss));g=Math.round(200+(230-200)*ss);b=Math.round(118*ss);}return 'rgb('+r+','+g+','+b+')';}
 function upgRefresh(){const bet=parseFloat($('up-bet')?$('up-bet').value:0)||0,c=Math.min(90,upgChance),mult=upgMult(c),color=upgColor(c);const disk=document.querySelector('.upg-disk');if(disk)disk.style.background='conic-gradient('+color+' 0% '+c+'%,#1a1a2e '+c+'% 100%)';if($('upg-chance-pct')){$('upg-chance-pct').innerText=c+'%';$('upg-chance-pct').style.color=color;}if($('upg-slider-val'))$('upg-slider-val').innerText=c+'%';if($('upg-mult-val'))$('upg-mult-val').innerText='x'+mult;if($('upg-win-val'))$('upg-win-val').innerText='+'+parseFloat((bet*(mult-1)).toFixed(2))+' TON';}
 function upgSetChance(v){if(isUpgrading)return;upgChance=Math.max(1,Math.min(90,parseInt(v)||50));if($('upg-slider'))$('upg-slider').value=upgChance;upgRefresh();playSound('click');}
 function upgSetBet(v){if($('up-bet'))$('up-bet').value=v;upgRefresh();playSound('click');}
