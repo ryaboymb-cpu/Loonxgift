@@ -732,98 +732,72 @@ body {
 }
 
 /* ════════════════════════════════════════
-   LOONXGIFT — ФИНАЛЬНЫЙ LAYOUT
-   🔴 Топбар (ava+logo+balance+wallet+online)
-   🟡 Баннер
-   🔵 Контент (игры)
-   ⬜ Лайв ставки
-   🟣 Хот бар
+   LOONXGIFT LAYOUT v5
 ════════════════════════════════════════ */
-:root {
-    --sa-top: 0px;
-    --sa-bot: 0px;
-}
+:root { --sa-top:0px; --sa-bot:0px; }
 html { margin:0; padding:0; background:#050508; }
 body {
-    margin: 0;
-    padding: 0;
+    margin: 0; padding: 0;
     background: #050508;
     display: flex;
     flex-direction: column;
-    /* Высота = экран минус safe areas */
     height: calc(100dvh - var(--sa-top) - var(--sa-bot));
     margin-top: var(--sa-top);
     overflow: hidden;
 }
 
-/* ════ 🔴 ТОПБАР ════
-   Одна строка: аватар + логотип + баланс слева,
-   TON Connect + онлайн справа */
+/* ════ ТОПБАР ════ */
 .app-topbar {
     flex-shrink: 0;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 8px 12px 7px;
-    background: rgba(5,5,12,0.97);
+    padding: 7px 12px;
+    background: rgba(5,5,12,0.98);
     backdrop-filter: blur(12px);
     border-bottom: 1px solid rgba(255,255,255,0.07);
     gap: 8px;
     z-index: 100;
+    min-height: 56px;
 }
-.tb-left { display:flex; align-items:center; gap:9px; flex:1; min-width:0; }
-.tb-info { display:flex; flex-direction:column; gap:2px; min-width:0; }
-
-/* Мини-логотип над балансом */
-.app-logo-mini { display:flex; align-items:baseline; line-height:1; }
+.tb-left { display:flex;align-items:center;gap:8px;flex:1;min-width:0; }
+.tb-info { display:flex;flex-direction:column;gap:1px;min-width:0; }
+.app-logo-mini { display:flex;align-items:baseline; }
 .logo-loonx {
-    font-size: 15px; font-weight: 900; letter-spacing: -0.3px;
-    background: linear-gradient(90deg, #00e5ff, #00ff88, #00e5ff);
-    background-size: 200% 100%;
-    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-    background-clip: text;
-    animation: loonxFlow 3s ease-in-out infinite;
+    font-size:15px;font-weight:900;letter-spacing:-.3px;
+    background:linear-gradient(90deg,#00e5ff,#00ff88,#00e5ff);
+    background-size:200% 100%;
+    -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+    animation:loonxFlow 3s ease-in-out infinite;
 }
-@keyframes loonxFlow { 0%{background-position:0%} 50%{background-position:100%} 100%{background-position:0%} }
-.logo-gift {
-    font-size: 15px; font-weight: 700; color: #fff;
-    letter-spacing: -0.2px;
-}
-
-/* Баланс */
-.tb-bal-row { display:flex; align-items:center; gap:5px; flex-wrap:wrap; }
-.bal-wrap { display:flex; align-items:center; gap:4px; font-size:18px; font-weight:900; color:#fff; }
-
-/* Правая часть */
-.tb-right { display:flex; align-items:center; gap:6px; flex-shrink:0; }
-.tb-tc { transform:scale(0.78); transform-origin:right center; }
+@keyframes loonxFlow{0%{background-position:0%}50%{background-position:100%}100%{background-position:0%}}
+.logo-gift { font-size:15px;font-weight:700;color:#fff;letter-spacing:-.2px; }
+.tb-bal-row { display:flex;align-items:center;gap:5px;flex-wrap:wrap; }
+.bal-wrap { display:flex;align-items:center;gap:4px;font-size:18px;font-weight:900;color:#fff; }
+.tb-right { display:flex;align-items:center;gap:5px;flex-shrink:0; }
+.tb-tc { transform:scale(0.78);transform-origin:right center; }
 .tb-online {
-    display:flex; align-items:center; gap:4px;
-    background:rgba(0,255,136,0.08); border:1px solid rgba(0,255,136,0.2);
-    border-radius:20px; padding:3px 8px;
-    font-size:12px; font-weight:700; color:#00ff88;
+    display:flex;align-items:center;gap:4px;
+    background:rgba(0,255,136,.08);border:1px solid rgba(0,255,136,.2);
+    border-radius:20px;padding:3px 8px;
+    font-size:12px;font-weight:700;color:#00ff88;
 }
 .online-dot-s {
-    width:6px; height:6px; border-radius:50%;
-    background:#00ff88; box-shadow:0 0 6px rgba(0,255,136,0.9);
-    animation:dotB 2s ease-in-out infinite; flex-shrink:0;
+    width:6px;height:6px;border-radius:50%;background:#00ff88;
+    box-shadow:0 0 6px rgba(0,255,136,.9);
+    animation:dotB 2s ease-in-out infinite;flex-shrink:0;
 }
 @keyframes dotB{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(.7)}}
 
-/* ════ 🟡 БАННЕР ════ */
+/* ════ БАННЕР ════ */
 .banner-bar {
     flex-shrink: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    height: 58px;
+    height: 60px;
     overflow: hidden;
-    background: rgba(255,255,255,0.03);
-    border-bottom: 1px solid rgba(255,255,255,0.05);
+    border-bottom: 1px solid rgba(255,255,255,0.04);
 }
-.banner-bar.banner-hidden { display: none; }
 
-/* ════ 🔵 КОНТЕНТ ════ */
+/* ════ КОНТЕНТ ════ */
 .content {
     flex: 1;
     overflow-y: auto;
@@ -832,25 +806,21 @@ body {
     -webkit-overflow-scrolling: touch;
 }
 
-/* Скрываем кастомные кнопки */
+/* Скрываем старые элементы */
 .game-back-btn { display:none !important; }
 .game-card { display:none !important; }
 header { display:none !important; }
 
-/* ════ СЕТКА ИГР ════ */
+/* ════ ИГРЫ ════ */
 .games-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    grid-auto-rows: minmax(82px, auto);
-    gap: 9px;
-    margin-bottom: 0;
+    display:grid;grid-template-columns:1fr 1fr;
+    grid-auto-rows:minmax(82px,auto);gap:9px;margin-bottom:0;
 }
 .gc {
-    position:relative; display:flex; align-items:center; gap:10px;
-    padding:13px 11px; border-radius:16px; overflow:hidden;
-    cursor:pointer; border:1px solid rgba(255,255,255,0.06);
-    transition:transform .12s; -webkit-tap-highlight-color:transparent;
-    user-select:none; min-height:82px;
+    position:relative;display:flex;align-items:center;gap:10px;
+    padding:13px 11px;border-radius:16px;overflow:hidden;cursor:pointer;
+    border:1px solid rgba(255,255,255,.06);transition:transform .12s;
+    -webkit-tap-highlight-color:transparent;user-select:none;min-height:82px;
 }
 .gc:active{transform:scale(.93);}
 .gc-bg{position:absolute;inset:0;z-index:0;border-radius:inherit;}
@@ -859,26 +829,18 @@ header { display:none !important; }
 .gc-info{position:relative;z-index:1;flex:1;min-width:0;}
 .gc-name{font-size:14px;font-weight:800;color:#fff;margin-bottom:3px;text-shadow:0 1px 6px rgba(0,0,0,.9);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .gc-desc{font-size:10px;color:rgba(255,255,255,.55);line-height:1.3;}
-
-/* ⬜ Лайв */
 .live-section-title{font-size:11px;letter-spacing:2px;text-transform:uppercase;color:rgba(255,255,255,.3);font-weight:700;margin:12px 0 7px;}
 
-/* ════ 🟣 ХОТБАР ════ */
+/* ════ ХОТБАР ════ */
 .hotbar {
-    flex-shrink: 0;
-    height: auto;
-    padding-top: 8px;
-    padding-bottom: calc(10px + var(--sa-bot, 0px));
-    background: rgba(5,5,10,0.98);
-    border-top: 1px solid rgba(255,255,255,0.08);
-    z-index: 50;
+    flex-shrink:0;height:auto;padding-top:8px;
+    padding-bottom:calc(10px + var(--sa-bot,0px));
+    background:rgba(5,5,10,.98);border-top:1px solid rgba(255,255,255,.08);z-index:50;
 }
 
-/* Mine */
+/* Mine/Upgrade/Spin */
 .mine-bet-row{position:sticky;bottom:0;background:rgba(10,10,10,.97);z-index:20;padding:3px 0;}
-/* Upgrade */
 .upg-disk{border-radius:50%;transform-origin:center;will-change:transform;}
 #upg-slider::-webkit-slider-thumb{-webkit-appearance:none;width:22px;height:22px;border-radius:50%;background:#fff;border:3px solid #00e5ff;box-shadow:0 0 8px rgba(0,229,255,.5);cursor:pointer;}
 #upg-chance-pct{transition:color .3s;}
-/* Spin */
 .spin-cell.sym-N{color:#ff2255!important;opacity:.65;font-weight:700;}
