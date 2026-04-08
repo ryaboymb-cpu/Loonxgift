@@ -15,7 +15,6 @@ app.use(cors());
 
 function _crc16ton(buf){let c=0;for(let i=0;i<buf.length;i++){c^=buf[i]<<8;for(let j=0;j<8;j++)c=(c&0x8000)?(c<<1)^0x1021:c<<1;}return c&0xffff;}
 function walletToFriendly48(a){if(!a)return null;a=a.replace(/[^A-Za-z0-9\-_+=/]/g,'').trim();try{const rm=a.match(/^(-?[0-9]+):([0-9a-fA-F]{64})$/);if(rm){const buf=Buffer.alloc(36);buf[0]=0x11;buf[1]=parseInt(rm[1])&0xff;Buffer.from(rm[2],'hex').copy(buf,2);const crc=_crc16ton(buf.slice(0,34));buf[34]=(crc>>8)&0xff;buf[35]=crc&0xff;return buf.toString('base64url').replace(/=+$/,'');}let b64=a.replace(/-/g,'+').replace(/_/g,'/');while(b64.length%4)b64+='=';const bytes=Buffer.from(b64,'base64');if(bytes.length===36)return bytes.toString('base64url').replace(/=+$/,'');if(bytes.length===34){const buf=Buffer.alloc(36);bytes.copy(buf);const crc=_crc16ton(buf.slice(0,34));buf[34]=(crc>>8)&0xff;buf[35]=crc&0xff;return buf.toString('base64url').replace(/=+$/,'');}return null;}catch(e){return null;}}
-function walletToRaw(a){if(!a)return null;a=a.replace(/[^A-Za-z0-9\-_+=/]/g,'').trim();if(/^-?[0-9]+:[0-9a-fA-F]{64}$/.test(a))return a;try{let b64=a.replace(/-/g,'+').replace(/_/g,'/');while(b64.length%4)b64+='=';const b=Buffer.from(b64,'base64');if(b.length<34)return null;return (b[1]===0xff?-1:b[1])+':'+b.slice(2,34).toString('hex');}catch(e){return null;}}
 app.use(express.json());
 
 // Защита от падения сервера
@@ -462,8 +461,8 @@ app.post('/api/auth', async (req, res) => {
 
     const wagerSett = await Settings.findOne({ key: 'wager_multiplier' });
     const wagerMult = wagerSett ? wagerSett.value : 2;
-    const _w48=walletToFriendly48(process.env.ADMIN_WALLET),_wraw=walletToRaw(process.env.ADMIN_WALLET);
-    res.json({ user: userObj, adminWallet: (process.env.ADMIN_WALLET||'').trim(), wallet48: _w48||'', walletRaw: _wraw||'', rtp: rtpData, maintenance: maintenanceData, wagerMultiplier: wagerMult });
+    const _w48=walletToFriendly48(process.env.ADMIN_WALLET)||process.env.ADMIN_WALLET||'';
+    res.json({ user: userObj, adminWallet: (process.env.ADMIN_WALLET||'').trim(), wallet48: _w48, rtp: rtpData, maintenance: maintenanceData, wagerMultiplier: wagerMult });
 });
 
 app.post('/api/bet', async (req, res) => {
@@ -1633,16 +1632,50 @@ app.post('/api/admin/reset_game_stats', checkAdmin, async (req, res) => {
     }
 });
 
+// === GAME SETTINGS API ===
+// Получить все настройки игры
+app.post('/api/admin/get_game_settings', checkAdmin, async (req, res) => {
+    try {
+        const settings = await Settings.find({key: /^game_/});
+        const result = {};
+        settings.forEach(s => { result[s.key] = s.value; });
+        res.json({ok:true, settings: result});
+    } catch(e) { res.status(500).json({error: e.message}); }
+});
+// Установить настройку игры
+app.post('/api/admin/set_game_setting', checkAdmin, async (req, res) => {
+    try {
+        const {key, value} = req.body;
+        if (!key || !key.startsWith('game_')) return res.status(400).json({error:'Ключ должен начинаться с game_'});
+        await Settings.findOneAndUpdate({key}, {key, value}, {upsert:true, new:true});
+        res.json({ok:true});
+    } catch(e) { res.status(500).json({error: e.message}); }
+});
+// Баннер
 app.get('/api/banner', async (req, res) => {
-    try{const b=await Settings.findOne({key:'banner'});res.json({banner:b?b.value:null});}catch(e){res.json({banner:null});}
+    try{ const b=await Settings.findOne({key:'banner'}); res.json({banner:b?b.value:null}); }
+    catch(e){ res.json({banner:null}); }
 });
 app.post('/api/admin/set_banner', checkAdmin, async (req, res) => {
-    try{const {imageData,imageUrl,linkUrl,text,active}=req.body;
-        const finalImg=imageData||imageUrl||'';
-        await Settings.findOneAndUpdate({key:'banner'},{key:'banner',value:{imageUrl:finalImg,linkUrl:linkUrl||'',text:text||'',active:active!==false}},{upsert:true});
+    try{
+        const {imageUrl, linkUrl, text, active} = req.body;
+        await Settings.findOneAndUpdate({key:'banner'},{key:'banner',value:{imageUrl:imageUrl||'',linkUrl:linkUrl||'',text:text||'',active:active!==false}},{upsert:true,new:true});
         res.json({ok:true});
-    }catch(e){res.status(500).json({error:'Ошибка '+(e.message||'')});}
+    }catch(e){ res.status(500).json({error:'Ошибка: '+(e.message||'')}); }
 });
+// Звук казино
+app.get('/api/casino_sound', async (req, res) => {
+    try{ const s=await Settings.findOne({key:'casino_sound'}); res.json({sound:s?s.value:null}); }
+    catch(e){ res.json({sound:null}); }
+});
+app.post('/api/admin/set_casino_sound', checkAdmin, async (req, res) => {
+    try{
+        const {soundUrl, volume, enabled} = req.body;
+        await Settings.findOneAndUpdate({key:'casino_sound'},{key:'casino_sound',value:{soundUrl:soundUrl||'',volume:volume||0.5,enabled:enabled!==false}},{upsert:true,new:true});
+        res.json({ok:true});
+    }catch(e){ res.status(500).json({error: e.message}); }
+});
+// Статистика игроков по игре
 app.post('/api/admin/game_user_stats', checkAdmin, async (req, res) => {
     try{const { game } = req.body;if(!game) return res.status(400).json({error:'required'});
         const agg=await Bet.aggregate([{$match:{game,mode:'Real'}},{$group:{_id:'$userId',username:{$last:'$username'},playCount:{$sum:1},totalBet:{$sum:'$amount'},totalPayout:{$sum:{$cond:[{$gt:['$result',0]},{$add:['$amount','$result']},0]}}}},{$sort:{totalBet:-1}},{$limit:50}]);
