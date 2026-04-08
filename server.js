@@ -28,7 +28,8 @@ function ensureTonAddr48(a){
     }catch(e){return a;}
 }
 function walletToFriendly48(a){return ensureTonAddr48(a);}
-app.use(express.json());
+app.use(express.json({ limit: '15mb' }));
+app.use(express.urlencoded({ limit: '15mb', extended: true }));
 
 // Защита от падения сервера
 process.on('uncaughtException', (err) => console.error('Критическая ошибка:', err));
