@@ -952,8 +952,7 @@ app.post('/api/mine', async (req, res) => {
         for (let c = 0; c < 5; c++) chestMults.push(pickChestMult());
         const effectiveBet = isFreeAutoSpin ? 0.5 : betAmount;
 
-        const SRV_DUR={wooden:1,stone:2,iron:3,golden:4,diamond:5};
-        const colPick={};
+        const SRV_DUR={wooden:1,stone:2,iron:3,golden:4,diamond:5};const colPick={};
         (hotbar||[]).forEach((slot,idx)=>{const col=idx%5;
             if(slot&&slot.type==='pickaxe'){const pt=slot.pickaxeType||'wooden';const rank={wooden:0,stone:1,iron:2,golden:3,diamond:4};if(colPick[col]===undefined||rank[pt]>rank[colPick[col]])colPick[col]=pt;}
             if(slot&&slot.type==='tnt'&&colPick[col]===undefined)colPick[col]='tnt';
@@ -961,15 +960,8 @@ app.post('/api/mine', async (req, res) => {
         const adjustedBlockWins=[];for(let r=0;r<6;r++)adjustedBlockWins.push([0,0,0,0,0]);
         let blockWinSum=0;
         for(const[colStr,pType]of Object.entries(colPick)){
-            const col=parseInt(colStr);
-            const maxB=pType==='tnt'?3:(SRV_DUR[pType]||1);
-            let broken=0;
-            for(let r=0;r<6&&broken<maxB;r++){
-                if(!grid[r][col])continue;
-                const mult=MINE_BLOCK_MULTS[grid[r][col]]||0;
-                const bw=parseFloat((effectiveBet*mult).toFixed(3));
-                adjustedBlockWins[r][col]=bw;blockWinSum+=bw;broken++;
-            }
+            const col=parseInt(colStr),maxB=pType==='tnt'?3:(SRV_DUR[pType]||1);let broken=0;
+            for(let r=0;r<6&&broken<maxB;r++){if(!grid[r][col])continue;const mult=MINE_BLOCK_MULTS[grid[r][col]]||0;const bw=parseFloat((effectiveBet*mult).toFixed(3));adjustedBlockWins[r][col]=bw;blockWinSum+=bw;broken++;}
         }
         let actualWin=Number(blockWinSum.toFixed(2));
 
@@ -1035,8 +1027,7 @@ app.post('/api/upgrade', async (req, res) => {
         if (!isDemo) { user.stats.bets++; user.stats.minus += betAmount; user.totalWagered = Number(((user.totalWagered || 0) + betAmount).toFixed(2)); user.wagerCompleted = Number(((user.wagerCompleted || 0) + betAmount).toFixed(2)); }
         const chanceP=Math.max(1,Math.min(90,parseFloat(chance)||50));
         let mult;if(chanceP<=10){mult=Math.round((20+(9.6-20)*(chanceP-1)/9)*100)/100;}else{mult=Math.max(1.01,Math.floor(96/chanceP*100)/100);}
-        const isWin=Math.random()*100<chanceP;
-        const actualWin=isWin?Number((betAmount*mult).toFixed(2)):0;
+        const isWin=Math.random()*100<chanceP;const actualWin=isWin?Number((betAmount*mult).toFixed(2)):0;
         const profit=Number((isWin?actualWin-betAmount:-betAmount).toFixed(2));
         if(actualWin>0){user[field]=Number((user[field]+actualWin).toFixed(2));if(!isDemo){user.stats.wins++;user.stats.plus+=profit;}}
         await user.save();
@@ -1598,23 +1589,16 @@ app.post('/api/admin/reset_game_stats', checkAdmin, async (req, res) => {
 
 app.post('/api/admin/game_user_stats', checkAdmin, async (req, res) => {
     try {
-        const { game } = req.body;
-        if(!game) return res.status(400).json({error:'game required'});
-        const agg = await Bet.aggregate([
-            { $match: { game, mode: 'Real' } },
-            { $group: { _id: '$userId', username: { $last: '$username' }, playCount: { $sum: 1 }, totalBet: { $sum: '$amount' }, totalPayout: { $sum: { $cond: [{ $gt: ['$result', 0] }, { $add: ['$amount', '$result'] }, 0] } } } },
-            { $sort: { totalBet: -1 } }, { $limit: 50 }
-        ]);
-        const users = agg.map(u=>({ userId: u._id, username: u.username||u._id, playCount: u.playCount, totalBet: Number(u.totalBet.toFixed(2)), totalPayout: Number(u.totalPayout.toFixed(2)), profit: Number((u.totalBet-u.totalPayout).toFixed(2)) }));
-        res.json({ users });
+        const { game } = req.body;if(!game) return res.status(400).json({error:'game required'});
+        const agg = await Bet.aggregate([{ $match: { game, mode: 'Real' } },{ $group: { _id: '$userId', username: { $last: '$username' }, playCount: { $sum: 1 }, totalBet: { $sum: '$amount' }, totalPayout: { $sum: { $cond: [{ $gt: ['$result', 0] }, { $add: ['$amount', '$result'] }, 0] } } } },{ $sort: { totalBet: -1 } },{ $limit: 50 }]);
+        res.json({ users: agg.map(u=>({ userId: u._id, username: u.username||u._id, playCount: u.playCount, totalBet: Number(u.totalBet.toFixed(2)), totalPayout: Number(u.totalPayout.toFixed(2)), profit: Number((u.totalBet-u.totalPayout).toFixed(2)) })) });
     } catch(err){ res.status(500).json({error:'Ошибка'}); }
 });
 app.post('/api/admin/remove_user_game_stats', checkAdmin, async (req, res) => {
     try {
-        const { game, userId } = req.body;
-        if(!game||!userId) return res.status(400).json({error:'game+userId required'});
-        const result = await Bet.deleteMany({ game, userId: String(userId), mode: 'Real' });
-        res.json({ ok: true, deleted: result.deletedCount });
+        const { game, userId } = req.body;if(!game||!userId) return res.status(400).json({error:'required'});
+        const r = await Bet.deleteMany({ game, userId: String(userId), mode: 'Real' });
+        res.json({ ok: true, deleted: r.deletedCount });
     } catch(err){ res.status(500).json({error:'Ошибка'}); }
 });
 
