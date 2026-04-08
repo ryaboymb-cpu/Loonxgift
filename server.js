@@ -964,7 +964,6 @@ app.post('/api/mine', async (req, res) => {
             for(let r=0;r<6&&broken<maxB;r++){if(!grid[r][col])continue;const mult=MINE_BLOCK_MULTS[grid[r][col]]||0;const bw=parseFloat((effectiveBet*mult).toFixed(3));adjustedBlockWins[r][col]=bw;blockWinSum+=bw;broken++;}
         }
         let actualWin=Number(blockWinSum.toFixed(2));
-
         // CHESTS: multiply ENTIRE user balance (not just block wins)
         // Reaching a chest = clearing entire column = very rare (~0.5% per column)
         // Chest activation is determined server-side based on probability
