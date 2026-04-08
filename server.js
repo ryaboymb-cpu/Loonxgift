@@ -1148,46 +1148,93 @@ app.post('/api/duck', async (req, res) => {
 
 app.post('/api/check_deposit', async (req, res) => {
     const { id } = req.body;
-    const adminWallet=process.env.ADMIN_WALLET, apiKey=process.env.TON_API_KEY;
-    if(!adminWallet)return res.status(500).json({error:'ADMIN_WALLET не задан'});
-    if(!apiKey)return res.status(500).json({error:'TON_API_KEY не задан'});
-    const rawAddr=walletToRaw(adminWallet);
-    if(!rawAddr)return res.status(500).json({error:'Неверный ADMIN_WALLET'});
-    const cleanKey=apiKey.trim().replace(/[\r\n\s]/g,''), userId=String(id).trim();
-    try{
-        const r=await fetch('https://toncenter.com/api/v2/getTransactions?address='+encodeURIComponent(rawAddr)+'&limit=50&api_key='+cleanKey);
-        const txt=await r.text();if(!r.ok)return res.status(400).json({error:'TonCenter HTTP '+r.status});
-        let data;try{data=JSON.parse(txt);}catch(e){return res.status(500).json({error:'TonCenter не JSON'});}
-        if(!data.ok)return res.status(400).json({error:'TonCenter: '+data.error});
-        let foundNew=false,totalAdded=0;
-        for(const tx of(data.result||[])){
-            if(!tx.in_msg||!tx.in_msg.value||Number(tx.in_msg.value)<=0)continue;
-            let comment='';
-            if(tx.in_msg.message)comment=String(tx.in_msg.message).replace(/\u0000/g,'').trim();
-            if(!comment&&tx.in_msg.msg_data){const md=tx.in_msg.msg_data;
-                if(md.text)try{comment=Buffer.from(md.text,'base64').toString('utf-8').replace(/\u0000/g,'').trim();}catch(e){}
-                if(!comment&&md.body)try{comment=Buffer.from(md.body,'base64').slice(4).toString('utf-8').replace(/[^\x20-\x7E\u0400-\u04FF]/g,'').trim();}catch(e){}}
-            if(!comment||!comment.includes(userId))continue;
-            const txHash=tx.transaction_id?tx.transaction_id.hash:tx.hash;if(!txHash)continue;
-            const amt=Number(tx.in_msg.value)/1e9;if(amt<0.01)continue;
-            const exists=await Deposit.findOne({hash:txHash});if(exists)continue;
-            try{
-                await Deposit.create({hash:txHash,userId:id,amount:amt,time:getMskTime()});
-                const user=await User.findOne({id});if(!user)continue;
-                user.balance=Number((user.balance+amt).toFixed(2));
-                user.depositHistory=user.depositHistory||[];
-                user.depositHistory.unshift({hash:txHash,amount:amt,status:'Успешно',time:getMskTime()});
-                const ws=await Settings.findOne({key:'wager_multiplier'});
-                user.totalDeposited=Number(((user.totalDeposited||0)+amt).toFixed(2));
-                user.wagerRequired=Number(((user.wagerRequired||0)+amt*(ws?Number(ws.value):2)).toFixed(2));
-                await user.save();foundNew=true;totalAdded+=amt;
-                if(bot)bot.sendMessage(id,'📥 *+'+amt+' TON* зачислено!',{parse_mode:'Markdown'}).catch(()=>{});
-                if(user.referredBy){const ref=await User.findOne({id:user.referredBy});if(ref){const bon=Number((amt*0.1).toFixed(2));ref.balance=Number((ref.balance+bon).toFixed(2));ref.referralEarnings=Number(((ref.referralEarnings||0)+bon).toFixed(2));await ref.save();}}
-            }catch(de){console.error('[Dep]:',de.message);}
+    const adminWallet = process.env.ADMIN_WALLET;
+    const apiKey = process.env.TON_API_KEY;
+
+    if (!adminWallet) return res.status(500).json({error: 'Адрес кошелька не настроен. Установите ADMIN_WALLET в .env'});
+    if (!apiKey) return res.status(500).json({error: 'TON_API_KEY не установлен в .env'});
+
+    try {
+        const cleanAddr = adminWallet.trim().replace(/[\r\n\s]/g, '');
+        const cleanKey = apiKey.trim().replace(/[\r\n\s]/g, '');
+        const tcUrl = `https://toncenter.com/api/v2/getTransactions?address=${cleanAddr}&limit=50`;
+        const tcRes = await fetch(tcUrl, {
+            headers: { 'X-API-Key': cleanKey }
+        });
+        if (!tcRes.ok) {
+            const errBody = await tcRes.text().catch(() => '');
+            console.error('TonCenter HTTP error:', tcRes.status, errBody);
+            return res.status(400).json({ error: `TonCenter HTTP ${tcRes.status}: ${errBody.slice(0, 100)}` });
         }
-        if(foundNew){const u=await User.findOne({id});return res.json({success:true,added:totalAdded,user:u});}
-        return res.status(400).json({error:'Оплата не найдена. Укажи ID '+userId+' в комментарии.'});
-    }catch(e){return res.status(500).json({error:'Ошибка. Попробуй позже.'});}
+        const data = await tcRes.json();
+        if (!data.ok) {
+            console.error('TonCenter error:', data.error);
+            return res.status(400).json({ error: `Ошибка TonCenter: ${data.error || 'нет ответа'}` });
+        }
+
+        let foundNew = false;
+        let totalAdded = 0;
+        const userId = String(id).trim();
+
+        for (const tx of (data.result || [])) {
+            if (!tx.in_msg || !tx.in_msg.value || Number(tx.in_msg.value) <= 0) continue;
+
+            // Check comment in multiple possible fields
+            let comment = '';
+            if (tx.in_msg.message) comment = String(tx.in_msg.message).trim();
+            if (!comment && tx.in_msg.msg_data && tx.in_msg.msg_data.text) {
+                try { comment = Buffer.from(tx.in_msg.msg_data.text, 'base64').toString('utf-8').trim(); } catch(e) {}
+            }
+
+            if (!comment.includes(userId) && comment !== userId) continue;
+
+            const txHash = tx.transaction_id ? tx.transaction_id.hash : tx.hash;
+            if (!txHash) continue;
+            const amountTON = Number(tx.in_msg.value) / 1e9;
+            if (amountTON < 0.01) continue;
+
+            const exists = await Deposit.findOne({ hash: txHash });
+            if (exists) continue;
+
+            await Deposit.create({ hash: txHash, userId: id, amount: amountTON, time: getMskTime() });
+            const user = await User.findOne({ id });
+            user.balance = Number((user.balance + amountTON).toFixed(2));
+            user.depositHistory.unshift({ hash: txHash, amount: amountTON, status: 'Успешно', time: getMskTime() });
+            // Wager requirement: add deposit * wager_multiplier to required wagering
+            const wagerSetting = await Settings.findOne({ key: 'wager_multiplier' });
+            const wagerMult = wagerSetting ? Number(wagerSetting.value) : 2;
+            user.totalDeposited = Number(((user.totalDeposited || 0) + amountTON).toFixed(2));
+            user.wagerRequired = Number(((user.wagerRequired || 0) + amountTON * wagerMult).toFixed(2));
+            await user.save();
+            foundNew = true;
+            totalAdded += amountTON;
+
+            if(bot) {
+                bot.sendMessage(id, `📥 ✅ Ваш баланс успешно пополнен на **${amountTON} TON**!`, {parse_mode: 'Markdown'}).catch(()=>{});
+            }
+
+            if (user.referredBy) {
+                const referrer = await User.findOne({ id: user.referredBy });
+                if (referrer) {
+                    const refBonus = Number((amountTON * 0.10).toFixed(2));
+                    referrer.balance = Number((referrer.balance + refBonus).toFixed(2));
+                    referrer.referralEarnings = Number((referrer.referralEarnings + refBonus).toFixed(2));
+                    await referrer.save();
+
+                    if (bot) {
+                        bot.sendMessage(referrer.id, `🎉 Ваш реферал пополнил баланс! Вам начислено **${refBonus} TON** (10%).`, {parse_mode: 'Markdown'}).catch(()=>{});
+                    }
+                }
+            }
+        }
+        if(foundNew) {
+            const updUser = await User.findOne({id});
+            res.json({ success: true, added: totalAdded, user: updUser });
+        } else res.status(400).json({ error: 'Новых оплат не найдено. Убедитесь что в комментарии указан ваш ID и прошло достаточно времени.' });
+    } catch (e) {
+        console.error('Deposit check error:', e);
+        res.status(500).json({error: 'Ошибка сети при проверке. Попробуйте позже.'});
+    }
 });
 
 app.post('/api/promo', async (req, res) => {
@@ -1590,13 +1637,14 @@ app.get('/api/banner', async (req, res) => {
     try{const b=await Settings.findOne({key:'banner'});res.json({banner:b?b.value:null});}catch(e){res.json({banner:null});}
 });
 app.post('/api/admin/set_banner', checkAdmin, async (req, res) => {
-    try{const {imageUrl,linkUrl,text,active}=req.body;
-        await Settings.findOneAndUpdate({key:'banner'},{key:'banner',value:{imageUrl:imageUrl||'',linkUrl:linkUrl||'',text:text||'',active:active!==false}},{upsert:true});
+    try{const {imageData,imageUrl,linkUrl,text,active}=req.body;
+        const finalImg=imageData||imageUrl||'';
+        await Settings.findOneAndUpdate({key:'banner'},{key:'banner',value:{imageUrl:finalImg,linkUrl:linkUrl||'',text:text||'',active:active!==false}},{upsert:true});
         res.json({ok:true});
-    }catch(e){res.status(500).json({error:'Ошибка'});}
+    }catch(e){res.status(500).json({error:'Ошибка '+(e.message||'')});}
 });
 app.post('/api/admin/game_user_stats', checkAdmin, async (req, res) => {
-    try{const { game } = req.body;if(!game)return res.status(400).json({error:'required'});
+    try{const { game } = req.body;if(!game) return res.status(400).json({error:'required'});
         const agg=await Bet.aggregate([{$match:{game,mode:'Real'}},{$group:{_id:'$userId',username:{$last:'$username'},playCount:{$sum:1},totalBet:{$sum:'$amount'},totalPayout:{$sum:{$cond:[{$gt:['$result',0]},{$add:['$amount','$result']},0]}}}},{$sort:{totalBet:-1}},{$limit:50}]);
         res.json({users:agg.map(u=>({userId:u._id,username:u.username||u._id,playCount:u.playCount,totalBet:Number(u.totalBet.toFixed(2)),totalPayout:Number(u.totalPayout.toFixed(2)),profit:Number((u.totalBet-u.totalPayout).toFixed(2))}))});
     }catch(err){res.status(500).json({error:'Ошибка'});}
