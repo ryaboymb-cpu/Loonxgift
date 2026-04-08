@@ -27,23 +27,37 @@
     <canvas id="stars-bg"></canvas>
     <div id="toast-container"></div>
 
-    <header>
-        <div class="h-left">
-            <img src="" id="user-ava" class="avatar" alt="ava">
-            <div>
-                <div class="bal-wrap"><span id="bal-val">0.00</span> <svg class="ton-icon" viewBox="0 0 24 24" style="width:16px;height:16px;fill:currentColor;"><path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm4.8 7.3l-3.9 9.3c-.2.5-.9.5-1.1 0l-1.5-3.6-3.6-1.5c-.5-.2-.5-.9 0-1.1l9.3-3.9c.4-.2.9.2.8.8z"/></svg></div>
-                <div id="bal-mode" class="mode-btn" onclick="toggleMode()">REAL TON</div>
+    <header class="app-header">
+        <!-- Логотип LoonxGift вверху -->
+        <div class="header-logo-row">
+            <div class="app-logo">
+                <span class="logo-loonx">Loonx</span><span class="logo-gift">Gift</span>
+                <span class="logo-gem">💎</span>
+            </div>
+            <div class="header-online">
+                <span class="online-dot"></span>
+                <span id="online-c" style="color:var(--neon);font-size:11px;font-weight:700;">0</span>
             </div>
         </div>
-        <div style="text-align:right;">
-            <div style="font-size:10px; color:var(--sub); font-weight:bold;">ОНЛАЙН: <span id="online-c" style="color:var(--neon)">0</span></div>
-            <div id="ton-connect-btn" style="transform: scale(0.8); transform-origin: right center; margin-top: 5px;"></div>
+        <!-- Баланс и кошелёк ниже -->
+        <div class="header-balance-row">
+            <div class="h-left">
+                <img src="" id="user-ava" class="avatar" alt="ava">
+                <div>
+                    <div class="bal-wrap">
+                        <span id="bal-val">0.00</span>
+                        <svg class="ton-icon" viewBox="0 0 24 24" style="width:16px;height:16px;fill:currentColor;"><path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm4.8 7.3l-3.9 9.3c-.2.5-.9.5-1.1 0l-1.5-3.6-3.6-1.5c-.5-.2-.5-.9 0-1.1l9.3-3.9c.4-.2.9.2.8.8z"/></svg>
+                    </div>
+                    <div id="bal-mode" class="mode-btn" onclick="toggleMode()">REAL TON</div>
+                </div>
+            </div>
+            <div id="ton-connect-btn" style="transform:scale(0.82);transform-origin:right center;"></div>
         </div>
     </header>
 
     <div class="content">
         <div id="page-games" class="page active">
-            <h2 class="games-title">ИГРЫ</h2>
+            
             
             <div class="games-grid">
                 <div class="gc" onclick="navGame('crash')">
@@ -87,7 +101,7 @@
                     <div class="gc-info"><div class="gc-name">Upgrade</div><div class="gc-desc">Удвой свою ставку</div></div>
                 </div>
             </div>
-            <h3 class="live-title">ЛАЙВ СТАВКИ</h3>
+            <div class="live-section-title">ЛАЙВ СТАВКИ</div>
             <div class="live-bets-container" id="feed-list"></div>
         </div>
 
@@ -319,43 +333,6 @@
                 <button id="up-btn" class="btn" onclick="playUpgrade()" style="background:linear-gradient(135deg,#0097a7,#00e5ff);color:#fff;font-weight:900;">Играть ⬆️</button>
             </div>
         </div>
-        <div id="page-plinko" class="page">
-            <div class="card" style="text-align:center; padding:15px;">
-                <h2 style="color:#e040fb; margin-bottom:10px;">📍 Plinko</h2>
-                <canvas id="plinko-canvas" width="320" height="400" style="width:100%; max-width:320px; background:#0a0a0a; border-radius:12px; border:1px solid #333;"></canvas>
-                <div id="plinko-result" style="margin:10px 0; font-size:18px; font-weight:bold;"></div>
-                <div style="display:flex; gap:5px; justify-content:center; margin-bottom:10px;">
-                    <button class="qb-btn" onclick="setPlinkoRisk('low', this)" style="flex:none; padding:8px 14px;">Low</button>
-                    <button class="qb-btn qb-sel" onclick="setPlinkoRisk('medium', this)" style="flex:none; padding:8px 14px;">Medium</button>
-                    <button class="qb-btn" onclick="setPlinkoRisk('high', this)" style="flex:none; padding:8px 14px;">High</button>
-                </div>
-                <div class="quick-bets" id="qb-plinko"></div>
-                <input type="number" id="pl-bet" class="input-box" placeholder="Ставка (0.1-25 TON)" step="0.1" min="0.1" max="25">
-                <button id="pl-btn" class="btn" style="background:linear-gradient(135deg, #9c27b0, #e040fb); color:#fff;" onclick="playPlinko()">DROP 📍</button>
-            </div>
-        </div>
-
-        <div id="page-duck" class="page">
-            <div class="card" style="text-align:center; padding:20px;">
-                <h2 style="color:#ffd600; margin-bottom:15px;">🦆 Duck Hunt</h2>
-                <div id="duck-pond" style="display:grid; grid-template-columns:repeat(5,1fr); gap:8px; margin-bottom:15px;"></div>
-                <div id="duck-result" style="margin-bottom:15px; font-size:18px; font-weight:bold;"></div>
-                <div class="quick-bets" id="qb-duck"></div>
-                <input type="number" id="dk-bet" class="input-box" placeholder="Ставка (0.1-25 TON)" step="0.1" min="0.1" max="25">
-                <button id="dk-btn" class="btn" style="background:linear-gradient(135deg, #f9a825, #ffd600); color:#000;" onclick="playDuck()">PLAY 🦆</button>
-            </div>
-        </div>
-
-        <!-- ФРИСПИН АКТИВАЦИЯ ОВЕРЛЕЙ -->
-        <div id="freespin-overlay" style="display:none; position:fixed; inset:0; z-index:9500; background:rgba(0,0,0,0.85); backdrop-filter:blur(8px); flex-direction:column; align-items:center; justify-content:center;">
-            <div style="text-align:center; animation: fsPopIn 0.5s cubic-bezier(0.34,1.56,0.64,1);">
-                <div style="font-size:64px; margin-bottom:10px;">🎰</div>
-                <div style="font-size:32px; font-weight:900; color:#ff6b00; text-shadow:0 0 30px rgba(255,107,0,0.8); letter-spacing:2px;">ФРИСПИНЫ!</div>
-                <div id="freespin-overlay-count" style="font-size:72px; font-weight:900; color:#fff; text-shadow:0 0 40px rgba(255,107,0,1); margin:5px 0;">0</div>
-                <div style="font-size:14px; color:var(--sub); font-weight:bold; letter-spacing:1px;">БЕСПЛАТНЫХ ВРАЩЕНИЙ</div>
-            </div>
-        </div>
-
         <div id="page-cases" class="page">
             <div class="card" style="text-align:center;padding:30px;">
                 <div style="font-size:64px;margin-bottom:16px;">🎁</div>
