@@ -833,3 +833,66 @@ svg.ton-icon { display:none !important; }
     .games-grid { grid-template-columns:1fr 1fr 1fr; }
 }
 @media (max-width:599px) { .app-wrapper { width:100%!important;height:100dvh!important;border:none!important; } }
+
+/* ════ SCROLL FIX ════
+   app-wrapper должен быть flex-колонкой на мобиле тоже,
+   иначе content { flex:1 } не работает и скролл ломается */
+
+/* Сбрасываем body flex - wrapper берёт на себя всю компоновку */
+body {
+    display: block !important;
+    height: 100dvh !important;
+    overflow: hidden !important;
+}
+
+/* app-wrapper = главный flex-контейнер на ВСЕХ экранах */
+.app-wrapper {
+    display: flex !important;
+    flex-direction: column !important;
+    height: 100dvh !important;
+    overflow: hidden !important;
+    width: 100% !important;
+    background: #050508;
+}
+
+/* На ПК - ограничиваем ширину и центрируем через body */
+@media (min-width: 600px) {
+    body {
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        background: #020206 !important;
+    }
+    .app-wrapper {
+        width: 420px !important;
+        max-width: 100vw !important;
+        border-left: 1px solid rgba(255,255,255,.06) !important;
+        border-right: 1px solid rgba(255,255,255,.06) !important;
+    }
+}
+
+/* content скроллируется внутри wrapper */
+.content {
+    flex: 1 !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    -webkit-overflow-scrolling: touch !important;
+    padding: 12px !important;
+    padding-bottom: 90px !important;
+    min-height: 0 !important; /* критично для flex scroll */
+}
+
+/* hotbar внутри wrapper - обычный элемент, не fixed */
+.hotbar {
+    flex-shrink: 0 !important;
+    position: relative !important;
+    width: 100% !important;
+    height: auto !important;
+    padding-top: 8px !important;
+    padding-bottom: calc(10px + var(--sa-bot, env(safe-area-inset-bottom, 0px))) !important;
+    background: rgba(5,5,10,.98) !important;
+    border-top: 1px solid rgba(255,255,255,.08) !important;
+    bottom: auto !important;
+    left: auto !important;
+    z-index: 50 !important;
+}
