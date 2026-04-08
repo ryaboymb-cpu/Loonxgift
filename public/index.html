@@ -27,18 +27,15 @@
     <canvas id="stars-bg"></canvas>
     <div id="toast-container"></div>
 
-    <!-- ТОПБАР: аватар + логотип + баланс + кошелёк + онлайн -->
     <div class="app-topbar">
         <div class="tb-left">
             <img src="" id="user-ava" class="avatar" alt="ava">
             <div class="tb-info">
-                <div class="app-logo-mini">
-                    <span class="logo-loonx">Loonx</span><span class="logo-gift">Gift</span>
-                </div>
+                <div class="app-logo-mini"><span class="logo-loonx">Loonx</span><span class="logo-gift">Gift</span></div>
                 <div class="tb-bal-row">
                     <div class="bal-wrap">
                         <span id="bal-val">0.00</span>
-                        <svg viewBox="0 0 24 24" style="width:13px;height:13px;fill:currentColor;flex-shrink:0;"><path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm4.8 7.3l-3.9 9.3c-.2.5-.9.5-1.1 0l-1.5-3.6-3.6-1.5c-.5-.2-.5-.9 0-1.1l9.3-3.9c.4-.2.9.2.8.8z"/></svg>
+                        <svg class="ton-icon" viewBox="0 0 24 24" style="width:15px;height:15px;fill:currentColor;flex-shrink:0;"><path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm4.8 7.3l-3.9 9.3c-.2.5-.9.5-1.1 0l-1.5-3.6-3.6-1.5c-.5-.2-.5-.9 0-1.1l9.3-3.9c.4-.2.9.2.8.8z"/></svg>
                     </div>
                     <div id="bal-mode" class="mode-btn" onclick="toggleMode()">REAL TON</div>
                 </div>
@@ -46,15 +43,11 @@
         </div>
         <div class="tb-right">
             <div id="ton-connect-btn" class="tb-tc"></div>
-            <div class="tb-online">
-                <span class="online-dot-s"></span>
-                <span id="online-c">0</span>
-            </div>
+            <div class="tb-online"><span class="online-dot-s"></span><span id="online-c">0</span></div>
         </div>
     </div>
-
-    <!-- БАННЕР (управляется из Admin) -->
-    <div id="banner-widget" class="banner-bar"></div>
+    <!-- БАННЕР только на странице игр -->
+    <div id="banner-widget" class="banner-bar" style="display:none;"></div>
 
     <div class="content">
         <div id="page-games" class="page active">
@@ -283,7 +276,7 @@
             </div>
         </div>
         <div id="page-cases" class="page">
-            <div class="card" style="text-align:center;padding:30px;"><div style="font-size:64px;margin-bottom:16px;">🎁</div><h2 style="color:#ce93d8;margin-bottom:8px;">CASES</h2><p style="color:var(--sub);font-size:13px;">Скоро!</p></div>
+            <div class="card" style="text-align:center;padding:30px;"><div style="font-size:64px;">🎁</div><h2 style="color:#ce93d8;">CASES</h2><p style="color:var(--sub);font-size:13px;">Скоро!</p></div>
         </div>
 
         <div id="page-battle"  class="page">
