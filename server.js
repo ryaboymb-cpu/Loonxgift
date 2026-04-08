@@ -14,7 +14,20 @@ const io = socketIo(server, { cors: { origin: "*" } });
 app.use(cors()); 
 
 function _crc16ton(buf){let c=0;for(let i=0;i<buf.length;i++){c^=buf[i]<<8;for(let j=0;j<8;j++)c=(c&0x8000)?(c<<1)^0x1021:c<<1;}return c&0xffff;}
-function walletToFriendly48(a){if(!a)return null;a=a.replace(/[^A-Za-z0-9\-_+=/]/g,'').trim();try{const rm=a.match(/^(-?[0-9]+):([0-9a-fA-F]{64})$/);if(rm){const buf=Buffer.alloc(36);buf[0]=0x11;buf[1]=parseInt(rm[1])&0xff;Buffer.from(rm[2],'hex').copy(buf,2);const crc=_crc16ton(buf.slice(0,34));buf[34]=(crc>>8)&0xff;buf[35]=crc&0xff;return buf.toString('base64url').replace(/=+$/,'');}let b64=a.replace(/-/g,'+').replace(/_/g,'/');while(b64.length%4)b64+='=';const bytes=Buffer.from(b64,'base64');if(bytes.length===36)return bytes.toString('base64url').replace(/=+$/,'');if(bytes.length===34){const buf=Buffer.alloc(36);bytes.copy(buf);const crc=_crc16ton(buf.slice(0,34));buf[34]=(crc>>8)&0xff;buf[35]=crc&0xff;return buf.toString('base64url').replace(/=+$/,'');}return null;}catch(e){return null;}}
+function ensureTonAddr48(a){
+    if(!a)return null;
+    a=a.replace(/[\r\n\s]/g,'').trim();
+    try{
+        const rm=a.match(/^(-?[0-9]+):([0-9a-fA-F]{64})$/);
+        if(rm){const buf=Buffer.alloc(36);const neg=parseInt(rm[1])<0;buf[0]=neg?0x51:0x11;buf[1]=parseInt(rm[1])&0xff;Buffer.from(rm[2],'hex').copy(buf,2);const crc=_crc16ton(buf.slice(0,34));buf[34]=(crc>>8)&0xff;buf[35]=crc&0xff;return buf.toString('base64url').replace(/=+$/,'');}
+        let b64=a.replace(/-/g,'+').replace(/_/g,'/');while(b64.length%4)b64+='=';
+        const bytes=Buffer.from(b64,'base64');
+        if(bytes.length===36)return Buffer.from(bytes).toString('base64url').replace(/=+$/,'');
+        if(bytes.length===34){const buf=Buffer.alloc(36);bytes.copy(buf);const crc=_crc16ton(bytes);buf[34]=(crc>>8)&0xff;buf[35]=crc&0xff;return buf.toString('base64url').replace(/=+$/,'');}
+        return a;
+    }catch(e){return a;}
+}
+function walletToFriendly48(a){return ensureTonAddr48(a);}
 app.use(express.json());
 
 // Защита от падения сервера
@@ -169,6 +182,7 @@ async function initSettings() {
         { key: 'rtp_mine', value: 90 },
         { key: 'maintenance_mine', value: false },
         { key: 'wager_multiplier', value: 2 },
+        { key: 'min_withdraw', value: 5 },
         { key: 'rtp_upgrade', value: 85 },
         { key: 'rtp_plinko', value: 88 },
         { key: 'rtp_duck', value: 87 },
@@ -461,7 +475,7 @@ app.post('/api/auth', async (req, res) => {
 
     const wagerSett = await Settings.findOne({ key: 'wager_multiplier' });
     const wagerMult = wagerSett ? wagerSett.value : 2;
-    const _w48=walletToFriendly48(process.env.ADMIN_WALLET)||process.env.ADMIN_WALLET||'';
+    const _w48=ensureTonAddr48(process.env.ADMIN_WALLET)||process.env.ADMIN_WALLET||'';
     res.json({ user: userObj, adminWallet: (process.env.ADMIN_WALLET||'').trim(), wallet48: _w48, rtp: rtpData, maintenance: maintenanceData, wagerMultiplier: wagerMult });
 });
 
@@ -1156,7 +1170,10 @@ app.post('/api/check_deposit', async (req, res) => {
     try {
         const cleanAddr = adminWallet.trim().replace(/[\r\n\s]/g, '');
         const cleanKey = apiKey.trim().replace(/[\r\n\s]/g, '');
-        const tcUrl = `https://toncenter.com/api/v2/getTransactions?address=${cleanAddr}&limit=50`;
+        // FIX: добавляем CRC16 если адрес 46 символов (без checksum)
+        const tcAddr = ensureTonAddr48(cleanAddr) || cleanAddr;
+        const tcUrl = `https://toncenter.com/api/v2/getTransactions?address=${encodeURIComponent(tcAddr)}&limit=50`;
+        console.log('[TonCenter] addr len:', tcAddr.length, tcAddr.slice(0,10)+'...');
         const tcRes = await fetch(tcUrl, {
             headers: { 'X-API-Key': cleanKey }
         });
@@ -1262,7 +1279,8 @@ app.post('/api/withdraw', async (req, res) => {
 
     try {
         const user = await User.findOne({ id });
-        if (isNaN(amount) || user.balance < amount || amount < 5) return res.status(400).json({error: 'Min 5 TON'});
+        const minWdSett=await Settings.findOne({key:'min_withdraw'});const minWd=minWdSett?Number(minWdSett.value):5;
+        if (isNaN(amount) || user.balance < amount || amount < minWd) return res.status(400).json({error: 'Min '+minWd+' TON'});
         // Check wager requirement
         const wagerLeft = (user.wagerRequired || 0) - (user.wagerCompleted || 0);
         if (wagerLeft > 0) return res.status(400).json({error: `Нужно отыграть ещё ${wagerLeft.toFixed(2)} TON перед выводом`});
@@ -1632,41 +1650,57 @@ app.post('/api/admin/reset_game_stats', checkAdmin, async (req, res) => {
     }
 });
 
-// Banner
 app.get('/api/banner', async (req, res) => {
-    try{ const b=await Settings.findOne({key:'banner'}); res.json({banner:b?b.value:null}); }catch(e){ res.json({banner:null}); }
+    try{const b=await Settings.findOne({key:'banner'});res.json({banner:b?b.value:null});}catch(e){res.json({banner:null});}
 });
 app.post('/api/admin/set_banner', checkAdmin, async (req, res) => {
-    try{
-        const {imageUrl, linkUrl, text, active} = req.body;
+    try{const {imageUrl,linkUrl,text,active}=req.body;
         await Settings.findOneAndUpdate({key:'banner'},{key:'banner',value:{imageUrl:imageUrl||'',linkUrl:linkUrl||'',text:text||'',active:active!==false}},{upsert:true,new:true});
         res.json({ok:true});
-    }catch(e){ res.status(500).json({error:'Ошибка: '+(e.message||'')}); }
+    }catch(e){res.status(500).json({error:'Ошибка: '+(e.message||'')});}
 });
-// Casino sound
 app.get('/api/casino_sound', async (req, res) => {
-    try{ const s=await Settings.findOne({key:'casino_sound'}); res.json({sound:s?s.value:null}); }catch(e){ res.json({sound:null}); }
+    try{const s=await Settings.findOne({key:'casino_sound'});res.json({sound:s?s.value:null});}catch(e){res.json({sound:null});}
 });
 app.post('/api/admin/set_casino_sound', checkAdmin, async (req, res) => {
-    try{
-        const {soundUrl, volume, enabled} = req.body;
-        // soundUrl может быть как URL так и data:audio/...
+    try{const {soundUrl,volume,enabled}=req.body;
+        const sizeBytes=soundUrl?Buffer.byteLength(soundUrl,'utf8'):0;
+        if(sizeBytes>10*1024*1024)return res.status(400).json({error:'Файл >10MB. Используй URL.'});
         await Settings.findOneAndUpdate({key:'casino_sound'},{key:'casino_sound',value:{soundUrl:soundUrl||'',volume:volume!==undefined?volume:0.3,enabled:enabled!==false}},{upsert:true,new:true});
         res.json({ok:true});
-    }catch(e){ res.status(500).json({error: e.message}); }
+    }catch(e){res.status(500).json({error:e.message});}
 });
-// Game user stats
+// Мин вывод + настройки
+app.post('/api/admin/set_min_withdraw', checkAdmin, async (req, res) => {
+    try{const {value}=req.body;const v=parseFloat(value);if(isNaN(v)||v<0)return res.status(400).json({error:'Неверное значение'});
+        await Settings.findOneAndUpdate({key:'min_withdraw'},{key:'min_withdraw',value:v},{upsert:true,new:true});
+        res.json({ok:true});
+    }catch(e){res.status(500).json({error:e.message});}
+});
 app.post('/api/admin/game_user_stats', checkAdmin, async (req, res) => {
-    try{const { game } = req.body;if(!game) return res.status(400).json({error:'required'});
+    try{const{game}=req.body;if(!game)return res.status(400).json({error:'required'});
         const agg=await Bet.aggregate([{$match:{game,mode:'Real'}},{$group:{_id:'$userId',username:{$last:'$username'},playCount:{$sum:1},totalBet:{$sum:'$amount'},totalPayout:{$sum:{$cond:[{$gt:['$result',0]},{$add:['$amount','$result']},0]}}}},{$sort:{totalBet:-1}},{$limit:50}]);
         res.json({users:agg.map(u=>({userId:u._id,username:u.username||u._id,playCount:u.playCount,totalBet:Number(u.totalBet.toFixed(2)),totalPayout:Number(u.totalPayout.toFixed(2)),profit:Number((u.totalBet-u.totalPayout).toFixed(2))}))});
     }catch(err){res.status(500).json({error:'Ошибка'});}
 });
 app.post('/api/admin/remove_user_game_stats', checkAdmin, async (req, res) => {
-    try{const {game,userId}=req.body;if(!game||!userId)return res.status(400).json({error:'required'});
+    try{const{game,userId}=req.body;if(!game||!userId)return res.status(400).json({error:'required'});
         const r=await Bet.deleteMany({game,userId:String(userId),mode:'Real'});
         res.json({ok:true,deleted:r.deletedCount});
     }catch(err){res.status(500).json({error:'Ошибка'});}
+});
+app.post('/api/admin/set_game_setting', checkAdmin, async (req, res) => {
+    try{const{key,value}=req.body;
+        if(!key||!key.startsWith('game_'))return res.status(400).json({error:'Key must start with game_'});
+        await Settings.findOneAndUpdate({key},{key,value},{upsert:true,new:true});
+        res.json({ok:true});
+    }catch(e){res.status(500).json({error:e.message});}
+});
+app.post('/api/admin/get_game_settings', checkAdmin, async (req, res) => {
+    try{const settings=await Settings.find({key:/^game_/});
+        const result={};settings.forEach(s=>{result[s.key]=s.value;});
+        res.json({ok:true,settings:result});
+    }catch(e){res.status(500).json({error:e.message});}
 });
 
 app.post('/api/admin/logs', checkAdmin, async (req, res) => {
