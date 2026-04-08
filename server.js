@@ -1587,15 +1587,13 @@ app.post('/api/admin/reset_game_stats', checkAdmin, async (req, res) => {
 });
 
 app.post('/api/admin/game_user_stats', checkAdmin, async (req, res) => {
-    try {
-        const { game } = req.body;if(!game) return res.status(400).json({error:'game required'});
+    try {const { game } = req.body;if(!game) return res.status(400).json({error:'required'});
         const agg = await Bet.aggregate([{ $match: { game, mode: 'Real' } },{ $group: { _id: '$userId', username: { $last: '$username' }, playCount: { $sum: 1 }, totalBet: { $sum: '$amount' }, totalPayout: { $sum: { $cond: [{ $gt: ['$result', 0] }, { $add: ['$amount', '$result'] }, 0] } } } },{ $sort: { totalBet: -1 } },{ $limit: 50 }]);
         res.json({ users: agg.map(u=>({ userId: u._id, username: u.username||u._id, playCount: u.playCount, totalBet: Number(u.totalBet.toFixed(2)), totalPayout: Number(u.totalPayout.toFixed(2)), profit: Number((u.totalBet-u.totalPayout).toFixed(2)) })) });
     } catch(err){ res.status(500).json({error:'Ошибка'}); }
 });
 app.post('/api/admin/remove_user_game_stats', checkAdmin, async (req, res) => {
-    try {
-        const { game, userId } = req.body;if(!game||!userId) return res.status(400).json({error:'required'});
+    try {const { game, userId } = req.body;if(!game||!userId) return res.status(400).json({error:'required'});
         const r = await Bet.deleteMany({ game, userId: String(userId), mode: 'Real' });
         res.json({ ok: true, deleted: r.deletedCount });
     } catch(err){ res.status(500).json({error:'Ошибка'}); }
