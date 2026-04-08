@@ -50,9 +50,9 @@ body {
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 
 .card { background: var(--card); border: 1px solid #222; border-radius: 18px; padding: 18px; margin-bottom: 15px; }
-.game-card { display: flex; align-items: center; gap: 15px; cursor: pointer; transition: 0.2s; background: linear-gradient(180deg, #151515, #0d0d0d); border: 1px solid #2a2a2a; border-radius: 16px; padding: 15px; margin-bottom: 12px; }
-.game-card:active { transform: scale(0.98); }
-.g-icon { width: 55px; height: 55px; border-radius: 14px; display: flex; align-items: center; justify-content: center; font-size: 26px; flex-shrink: 0; }
+
+
+
 .cr { background: linear-gradient(135deg, #ff0055, #ff007f); box-shadow: 0 0 15px rgba(255,0,85,0.3); }
 .mi { background: linear-gradient(135deg, #00ff88, #00ccff); box-shadow: 0 0 15px rgba(0,255,136,0.3); }
 .co { background: linear-gradient(135deg, #ffcc00, #ff9900); box-shadow: 0 0 15px rgba(255,204,0,0.3); }
@@ -732,137 +732,161 @@ body {
 }
 
 /* ════════════════════════════════════════
-   LOONXGIFT — FULLSCREEN LAYOUT
-   Контент начинается ПОД нативным TG заголовком
-   Используем CSS переменные Telegram WebApp
+   LOONXGIFT — ПОЛНАЯ ВЕРСТКА
 ════════════════════════════════════════ */
 
-:root {
-    --tg-top: 0px; /* устанавливается в JS */
-}
-
 html, body {
-    margin: 0;
-    padding: 0;
+    margin: 0; padding: 0;
     background: #050508;
-    min-height: 100%;
+    /* body как flex-column: header + content + hotbar */
+    display: flex;
+    flex-direction: column;
+    height: 100dvh; /* dynamic viewport height */
+    overflow: hidden;
 }
 
-/* ════ HEADER ════
-   Размещается сразу под нативным TG заголовком.
-   Используем var(--tg-safe-area-inset-top) + env(safe-area-inset-top) */
+/* ════ HEADER ════ */
 .app-header {
-    background: rgba(5,5,10,0.98);
+    flex-shrink: 0;
+    background: rgba(5,5,12,0.98);
     backdrop-filter: blur(12px);
-    border-bottom: 1px solid rgba(255,255,255,0.06);
-    position: sticky;
-    top: 0;
+    border-bottom: 1px solid rgba(255,255,255,0.07);
     z-index: 100;
-    /* Сдвигаем вниз на высоту TG нативного заголовка */
-    padding-top: var(--tg-safe-area-inset-top, var(--tg-top, 0px));
 }
 
-/* Строка 1: Логотип + онлайн */
-.hdr-top {
+/* Строка 1: логотип по центру + онлайн справа */
+.hdr-logo-row {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    padding: 8px 14px 4px;
+    justify-content: center;
+    position: relative;
+    padding: 8px 14px 5px;
 }
+.app-logo { display: flex; align-items: baseline; gap: 0; }
 
-/* ЛОГОТИП — плавное переливание цветов */
-.app-logo { display: flex; align-items: center; }
-.logo-text {
-    font-size: 22px;
+/* "Loonx" — плавно меняет оттенок от синего к зелёному */
+.logo-loonx {
+    font-size: 24px;
     font-weight: 900;
-    letter-spacing: -0.3px;
-    background: linear-gradient(
-        90deg,
-        #00ff88, #00e5ff, #a855f7, #ff2255, #ff9900, #00ff88
-    );
-    background-size: 300% 100%;
+    letter-spacing: -0.5px;
+    background: linear-gradient(90deg, #00e5ff, #00ff88, #00e5ff);
+    background-size: 200% 100%;
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
-    animation: logoShimmer 4s ease-in-out infinite;
-    filter: drop-shadow(0 0 10px rgba(0,229,255,0.3));
+    animation: loonxShift 3s ease-in-out infinite;
 }
-@keyframes logoShimmer {
+@keyframes loonxShift {
     0%   { background-position: 0% 50%; }
     50%  { background-position: 100% 50%; }
     100% { background-position: 0% 50%; }
 }
+/* "Gift" — белый, чуть меньше (premium) */
+.logo-gift {
+    font-size: 24px;
+    font-weight: 700;
+    color: #ffffff;
+    letter-spacing: -0.3px;
+    text-shadow: 0 0 12px rgba(255,255,255,0.25);
+}
 
-/* Онлайн */
-.hdr-online { display: flex; align-items: center; gap: 5px; }
-.online-dot {
+/* Онлайн — справа, абсолютно */
+.hdr-online-badge {
+    position: absolute;
+    right: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+.online-dot-pulse {
     width: 7px; height: 7px;
     border-radius: 50%;
-    background: var(--neon);
-    box-shadow: 0 0 8px rgba(0,255,136,0.8);
-    animation: onlinePulse 2s ease-in-out infinite;
+    background: #00ff88;
+    box-shadow: 0 0 8px rgba(0,255,136,0.9);
+    animation: dotPulse 2s ease-in-out infinite;
 }
-@keyframes onlinePulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.5;transform:scale(0.8)} }
-.online-count { color: var(--neon); font-size: 12px; font-weight: 700; }
+@keyframes dotPulse { 0%,100%{transform:scale(1);opacity:1} 50%{transform:scale(0.7);opacity:0.5} }
+.online-num { color: #00ff88; font-size: 12px; font-weight: 700; }
 
 /* Строка 2: аватар + баланс + кошелёк */
-.hdr-bottom {
+.hdr-bal-row {
     display: flex;
     align-items: center;
     justify-content: space-between;
     padding: 4px 14px 8px;
 }
-.hdr-user { display: flex; align-items: center; gap: 10px; }
-.hdr-wallet {
-    transform: scale(0.82);
-    transform-origin: right center;
-}
+.hdr-user-info { display: flex; align-items: center; gap: 10px; }
+.hdr-tc-btn { transform: scale(0.82); transform-origin: right center; }
 
-/* Content */
+/* ════ CONTENT ════ */
 .content {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
     padding: 10px 12px;
-    padding-bottom: calc(64px + env(safe-area-inset-bottom, 0px));
+    /* Отступ снизу: hotbar + phone nav bar */
+    padding-bottom: calc(60px + env(safe-area-inset-bottom, 12px));
+    -webkit-overflow-scrolling: touch;
 }
 
-/* Скрываем кастомную кнопку назад */
+/* Скрываем кастомные кнопки назад */
 .game-back-btn { display: none !important; }
 .game-card { display: none !important; }
 
-/* ════ СЕТКА ИГР ════ */
+/* ════ СЕТКА ИГР — больше ════ */
 .games-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 8px;
-    margin-bottom: 0;
+    grid-auto-rows: minmax(82px, auto);
+    gap: 9px;
+    margin-bottom: 4px;
 }
 .gc {
     position: relative;
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 12px 10px;
-    border-radius: 14px;
+    gap: 10px;
+    padding: 14px 12px;
+    border-radius: 16px;
     overflow: hidden;
     cursor: pointer;
-    min-height: 68px;
-    border: 1px solid rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.06);
     transition: transform 0.12s;
     -webkit-tap-highlight-color: transparent;
     user-select: none;
+    min-height: 82px;
 }
-.gc:active { transform: scale(0.94); }
+.gc:active { transform: scale(0.93); }
 .gc-bg { position:absolute;inset:0;z-index:0;border-radius:inherit; }
-.gc-icon-wrap { position:relative;z-index:1;width:44px;height:44px;border-radius:11px;display:flex;align-items:center;justify-content:center;flex-shrink:0;backdrop-filter:blur(6px);border:1px solid rgba(255,255,255,0.08); }
-.gc-emoji { font-size:24px;line-height:1;filter:drop-shadow(0 2px 6px rgba(0,0,0,0.5)); }
+.gc-icon-wrap {
+    position:relative;z-index:1;
+    width:50px;height:50px;
+    border-radius:13px;
+    display:flex;align-items:center;justify-content:center;
+    flex-shrink:0;
+    backdrop-filter:blur(8px);
+    border:1px solid rgba(255,255,255,0.1);
+}
+.gc-emoji { font-size:27px;line-height:1; }
 .gc-info { position:relative;z-index:1;flex:1;min-width:0; }
-.gc-name { font-size:13px;font-weight:800;color:#fff;margin-bottom:2px;text-shadow:0 1px 4px rgba(0,0,0,0.9);white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
-.gc-desc { font-size:10px;color:rgba(255,255,255,0.5);line-height:1.3; }
+.gc-name { font-size:14px;font-weight:800;color:#fff;margin-bottom:3px;text-shadow:0 1px 6px rgba(0,0,0,0.9);white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
+.gc-desc { font-size:10px;color:rgba(255,255,255,0.55);line-height:1.3; }
 
-/* Live title */
-.live-section-title { font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--sub);font-weight:700;margin:14px 0 8px; }
+/* Live ставки */
+.live-section-title { font-size:11px;letter-spacing:2px;text-transform:uppercase;color:rgba(255,255,255,0.35);font-weight:700;margin:14px 0 8px; }
 
-/* Hotbar */
-.hotbar { height:60px;padding-bottom:env(safe-area-inset-bottom,0px); }
+/* ════ HOTBAR — выше для меню телефона ════ */
+.hotbar {
+    flex-shrink: 0;
+    height: auto;
+    padding-top: 8px;
+    padding-bottom: calc(8px + env(safe-area-inset-bottom, 8px));
+    background: rgba(5,5,10,0.97);
+    border-top: 1px solid rgba(255,255,255,0.07);
+    z-index: 50;
+}
 
 /* Mine */
 .mine-bet-row { position:sticky;bottom:0;background:rgba(10,10,10,.97);z-index:20;padding:3px 0; }
