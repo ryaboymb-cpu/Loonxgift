@@ -28,30 +28,29 @@
     <div id="toast-container"></div>
 
     <header class="app-header">
-        <!-- Логотип LoonxGift вверху -->
-        <div class="header-logo-row">
+        <!-- Строка 1: Логотип + Онлайн -->
+        <div class="hdr-top">
             <div class="app-logo">
-                <span class="logo-loonx">Loonx</span><span class="logo-gift">Gift</span>
-                <span class="logo-gem">💎</span>
+                <span class="logo-text">LoonxGift</span>
             </div>
-            <div class="header-online">
+            <div class="hdr-online">
                 <span class="online-dot"></span>
-                <span id="online-c" style="color:var(--neon);font-size:11px;font-weight:700;">0</span>
+                <span id="online-c" class="online-count">0</span>
             </div>
         </div>
-        <!-- Баланс и кошелёк ниже -->
-        <div class="header-balance-row">
-            <div class="h-left">
+        <!-- Строка 2: Аватар + Баланс + Кошелёк -->
+        <div class="hdr-bottom">
+            <div class="hdr-user">
                 <img src="" id="user-ava" class="avatar" alt="ava">
                 <div>
                     <div class="bal-wrap">
                         <span id="bal-val">0.00</span>
-                        <svg class="ton-icon" viewBox="0 0 24 24" style="width:16px;height:16px;fill:currentColor;"><path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm4.8 7.3l-3.9 9.3c-.2.5-.9.5-1.1 0l-1.5-3.6-3.6-1.5c-.5-.2-.5-.9 0-1.1l9.3-3.9c.4-.2.9.2.8.8z"/></svg>
+                        <svg class="ton-icon" viewBox="0 0 24 24" style="width:15px;height:15px;fill:currentColor;"><path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm4.8 7.3l-3.9 9.3c-.2.5-.9.5-1.1 0l-1.5-3.6-3.6-1.5c-.5-.2-.5-.9 0-1.1l9.3-3.9c.4-.2.9.2.8.8z"/></svg>
                     </div>
                     <div id="bal-mode" class="mode-btn" onclick="toggleMode()">REAL TON</div>
                 </div>
             </div>
-            <div id="ton-connect-btn" style="transform:scale(0.82);transform-origin:right center;"></div>
+            <div id="ton-connect-btn" class="hdr-wallet"></div>
         </div>
     </header>
 
@@ -306,9 +305,7 @@
                 <div style="position:relative;width:196px;max-width:80vw;margin:0 auto 8px;aspect-ratio:1;">
                     <div style="position:absolute;top:-11px;left:50%;transform:translateX(-50%);z-index:10;width:0;height:0;border-left:10px solid transparent;border-right:10px solid transparent;border-top:18px solid #fff;filter:drop-shadow(0 0 5px rgba(255,255,255,0.9));"></div>
                     <div class="upg-disk" style="width:100%;height:100%;border-radius:50%;background:conic-gradient(#00e676 0% 50%,#1a1a2e 50% 100%);transform:rotate(0deg);will-change:transform;"></div>
-                    <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:33%;height:33%;background:#0a0a1a;border-radius:50%;display:flex;align-items:center;justify-content:center;z-index:5;border:3px solid #111;">
-                        <span id="upg-slider-val" style="font-size:10px;font-weight:bold;color:#fff;">50%</span>
-                    </div>
+                    <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:33%;height:33%;background:#0a0a1a;border-radius:50%;display:flex;align-items:center;justify-content:center;z-index:5;border:3px solid #111;"><span id="upg-slider-val" style="font-size:10px;font-weight:bold;color:#fff;">50%</span></div>
                 </div>
                 <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--sub);margin-bottom:2px;"><span>1%</span><span style="color:#fff;font-weight:700;">Шанс победы</span><span>90%</span></div>
                 <input type="range" id="upg-slider" min="1" max="90" value="50" oninput="upgSetChance(this.value)" style="width:100%;-webkit-appearance:none;height:6px;border-radius:3px;background:linear-gradient(to right,#ff2255,#ff6600,#ffcc00,#00e676);margin-bottom:7px;cursor:pointer;">
@@ -320,14 +317,7 @@
                     <button class="qb-btn" style="font-size:10px;" onclick="upgSetChance(75)">75%</button>
                     <button class="qb-btn" style="font-size:10px;" onclick="upgSetChance(90)">90%</button>
                 </div>
-                <div class="quick-bets" style="margin-bottom:5px;">
-                    <div class="qb-btn" onclick="upgSetBet(0.1)">0.1</div>
-                    <div class="qb-btn" onclick="upgSetBet(0.5)">0.5</div>
-                    <div class="qb-btn" onclick="upgSetBet(1)">1</div>
-                    <div class="qb-btn" onclick="upgSetBet(5)">5</div>
-                    <div class="qb-btn" onclick="upgSetBet(10)">10</div>
-                    <div class="qb-btn" onclick="upgSetBet(25)">25</div>
-                </div>
+                <div class="quick-bets" style="margin-bottom:5px;"><div class="qb-btn" onclick="upgSetBet(0.1)">0.1</div><div class="qb-btn" onclick="upgSetBet(0.5)">0.5</div><div class="qb-btn" onclick="upgSetBet(1)">1</div><div class="qb-btn" onclick="upgSetBet(5)">5</div><div class="qb-btn" onclick="upgSetBet(10)">10</div><div class="qb-btn" onclick="upgSetBet(25)">25</div></div>
                 <input type="number" id="up-bet" class="input-box" placeholder="Ставка TON" oninput="upgRefresh()" style="margin-bottom:5px;">
                 <div id="upgrade-result" style="text-align:center;font-size:14px;font-weight:bold;min-height:18px;margin-bottom:5px;"></div>
                 <button id="up-btn" class="btn" onclick="playUpgrade()" style="background:linear-gradient(135deg,#0097a7,#00e5ff);color:#fff;font-weight:900;">Играть ⬆️</button>
