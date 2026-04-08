@@ -275,12 +275,30 @@ function renderQuickBets() {
 }
 
 window.onload = async () => {
-    // Expand — занимаем всё место ниже нативного TG header
     tg.expand();
-    // Фон = наш
     if(tg.setHeaderColor) tg.setHeaderColor('#050508');
     if(tg.setBackgroundColor) tg.setBackgroundColor('#050508');
     if(tg.setBottomBarColor) tg.setBottomBarColor('#050508');
+
+    // Применяем safe area — топбар НИЖЕ нативного TG заголовка
+    function applySafeArea(){
+        const top = Math.max(
+            tg.contentSafeAreaInset ? (tg.contentSafeAreaInset.top||0) : 0,
+            tg.safeAreaInset ? (tg.safeAreaInset.top||0) : 0
+        );
+        const bottom = tg.safeAreaInset ? (tg.safeAreaInset.bottom||0) : 0;
+        document.documentElement.style.setProperty('--sa-top',  top + 'px');
+        document.documentElement.style.setProperty('--sa-bot', bottom + 'px');
+    }
+    applySafeArea();
+    // Повторяем через 200мс — значения могут прийти позже
+    setTimeout(applySafeArea, 200);
+    setTimeout(applySafeArea, 800);
+    try{tg.onEvent('safeAreaChanged', applySafeArea);}catch(e){}
+    try{tg.onEvent('contentSafeAreaChanged', applySafeArea);}catch(e){}
+
+    // Загружаем баннер
+    loadBanner();
     renderQuickBets(); 
     
     const res = await fetch('/api/auth', {
@@ -412,6 +430,7 @@ try{if(tg&&tg.BackButton){tg.BackButton.onClick(function(){
     if(gn){document.querySelectorAll('.nav-item').forEach(i=>i.classList.remove('active'));gn.classList.add('active');}
     tg.BackButton.hide();
 });}}catch(e){}
+
 function navGame(game){
     let mKey=game;if(game==='coin')mKey='coinflip';
     if(game==='cases'){nav('cases');return;}
@@ -1135,12 +1154,14 @@ function renderBattlePlayers(lobby) {
 }
 
 // ФИНАНСЫ И ПРОМО
-async function checkRealDeposit(btn) {
-    btn.innerText = "ПРОВЕРЯЕМ..."; btn.disabled = true;
-    const r = await fetch('/api/check_deposit', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id:user.id}) });
-    if(r.ok) { const d = await r.json(); user = d.user; updateUI(); renderWithdrawHistory(); showToast(`+${d.added} TON`); } 
-    else { const e = await r.json(); showToast(e.error || 'Не найдено'); } 
-    btn.innerText = "ПРОВЕРИТЬ ОПЛАТУ"; btn.disabled = false;
+async function checkRealDeposit(btn,silent){
+    if(btn){btn.innerText='ПРОВЕРЯЕМ...';btn.disabled=true;}
+    try{const r=await fetch('/api/check_deposit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:user.id})});
+        const d=await r.json();
+        if(r.ok&&d.success){user=d.user;updateUI();renderWithdrawHistory();if(d.added>0){playSound('win');showToast('+'+d.added.toFixed(2)+' TON');flyToBalance(d.added);}}
+        else if(!silent)showToast(d.error||'Оплата не найдена');}
+    catch(e){if(!silent)showToast('Ошибка соединения');}
+    if(btn){btn.innerText='ПРОВЕРИТЬ ОПЛАТУ';btn.disabled=false;}
 }
 
 async function withdraw() {
@@ -1159,17 +1180,14 @@ async function withdraw() {
 }
 
 async function activatePromo() {
-    const code = $('promo-code').value;
-    const r = await fetch('/api/promo', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id:user.id, code}) });
-    if(r.ok) { 
-        user = await r.json(); 
-        updateUI(); 
-        showToast('Активирован!'); 
-        $('promo-code').value=''; 
-    } else { 
-        const e = await r.json(); 
-        showToast(e.error || 'Ошибка промо');
-    }
+    const input=$('promo-code');
+    const code=(input?input.value:'').trim();if(!code)return showToast('Введи промокод');
+    const r=await fetch('/api/promo',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:user.id,code})});
+    if(r.ok){
+        const d=await r.json();user=d.user||d;updateUI();if(input)input.value='';
+        const amt=d.amount||0;showToast('Промокод активирован'+(amt>0?' +'+amt+' TON':'')+'!');
+        if(amt>0){playSound('win');flyToBalance(amt);}
+    }else{const e=await r.json();showToast(e.error||'Ошибка промо');}
 }
 
 async function reqBet(game, bet, win, reqMode = mode) {
@@ -1619,11 +1637,41 @@ async function loadAdminGameStats() {
         }
         html += `<button class="btn" style="background:red; margin-top:15px; padding:10px;" onclick="adminResetGameStats('')">СБРОСИТЬ ВСЮ СТАТИСТИКУ</button>`;
         c.innerHTML = html;
+        const bBn=document.createElement('button');bBn.className='btn';bBn.style.cssText='background:linear-gradient(135deg,#ff6b00,#ffcc00);color:#000;font-weight:900;margin-top:10px;';bBn.innerText='📢 Управление баннером';bBn.onclick=adminShowBannerMgr;c.appendChild(bBn);
     } catch (e) {
         c.innerHTML = '<div style="color:red;">Сбой сети</div>';
     }
 }
 
+
+async function loadBanner(){
+    try{
+        const r=await fetch('/api/banner');const d=await r.json();
+        const bw=$('banner-widget');if(!bw)return;
+        if(!d.banner||!d.banner.active){bw.classList.add('banner-hidden');return;}
+        const b=d.banner;
+        if(b.imageUrl){
+            bw.classList.remove('banner-hidden');
+            bw.innerHTML='<a href="'+(b.linkUrl||'#')+'" target="_blank" style="display:block;"><img src="'+b.imageUrl+'" style="width:100%;height:100%;object-fit:cover;border-radius:10px;"><\/a>';
+        }else if(b.text){
+            bw.classList.remove('banner-hidden');
+            bw.innerHTML='<span style="color:#fff;font-size:12px;text-align:center;padding:0 12px;">'+b.text+'<\/span>';
+        }else{bw.classList.add('banner-hidden');}
+    }catch(e){}
+}
+function adminShowBannerMgr(){
+    const ov=document.createElement('div');ov.id='banner-overlay';
+    ov.style.cssText='position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,0.93);overflow-y:auto;padding:16px;';
+    ov.innerHTML='<div style="max-width:460px;margin:0 auto;"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;"><h3 style="color:#00e5ff;margin:0;">📢 Баннер</h3><button onclick="document.getElementById(\'banner-overlay\').remove()" style="background:#333;border:1px solid #555;color:#fff;border-radius:8px;padding:6px 12px;cursor:pointer;">✕</button></div><div style="background:#111;border-radius:12px;padding:14px;border:1px solid #222;"><div style="margin-bottom:10px;"><label style="color:#aaa;font-size:11px;">URL картинки:</label><input id="bnr-img" class="input-box" style="margin-top:4px;" placeholder="https://...jpg"></div><div style="margin-bottom:10px;"><label style="color:#aaa;font-size:11px;">Ссылка при нажатии:</label><input id="bnr-link" class="input-box" style="margin-top:4px;" placeholder="https://..."></div><div style="margin-bottom:10px;"><label style="color:#aaa;font-size:11px;">Текст (если нет картинки):</label><input id="bnr-text" class="input-box" style="margin-top:4px;" placeholder="Акция!"></div><label style="display:flex;align-items:center;gap:8px;cursor:pointer;color:#ccc;margin-bottom:12px;"><input type="checkbox" id="bnr-active" checked> Показывать</label><button class="btn" style="background:linear-gradient(135deg,#00e5ff,#0097a7);font-weight:800;" onclick="adminSaveBanner()">Сохранить</button><div id="bnr-status" style="margin-top:8px;font-size:12px;color:#aaa;"></div></div></div>';
+    document.body.appendChild(ov);
+    fetch('/api/banner').then(r=>r.json()).then(d=>{if(d.banner){const b=d.banner;if($('bnr-img'))$('bnr-img').value=b.imageUrl||'';if($('bnr-link'))$('bnr-link').value=b.linkUrl||'';if($('bnr-text'))$('bnr-text').value=b.text||'';if($('bnr-active'))$('bnr-active').checked=b.active!==false;}}).catch(()=>{});
+}
+async function adminSaveBanner(){
+    const body={imageUrl:$('bnr-img')?.value||'',linkUrl:$('bnr-link')?.value||'',text:$('bnr-text')?.value||'',active:$('bnr-active')?.checked!==false};
+    try{const r=await fetch('/api/admin/set_banner',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pass:adminPass,...body})});
+        const d=await r.json();const st=$('bnr-status');if(st)st.innerText=r.ok?'✅ Сохранено!':('Ошибка: '+(d.error||'?'));if(r.ok)loadBanner();
+    }catch(e){const st=$('bnr-status');if(st)st.innerText='Ошибка';}
+}
 async function adminResetGameStats(game) {
     if (!confirm(game ? `Сбросить статистику ${game}?` : 'Сбросить ВСЮ статистику?')) return;
     await fetch('/api/admin/reset_game_stats', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({pass: adminPass, game}) });
@@ -2012,12 +2060,10 @@ function spawnPickaxeWorker(blockQueue, pickaxeType, workerIdx, onWorkerDone, on
         qi++;
         remainDur -= hitsCanDo;
 
-        const shaft=$('mc-shaft');
-        const _col=blk.c;let _invSlot=null;
+        const shaft=$('mc-shaft');const _col=blk.c;let _invSlot=null;
         for(let ir=0;ir<3;ir++){const _cell=document.getElementById('inv-'+ir+'-'+_col);if(_cell&&_cell.dataset.slotType==='pickaxe'){_invSlot=_cell;break;}}
         if(_invSlot){_invSlot.innerHTML='';delete _invSlot.dataset.slotType;delete _invSlot.dataset.pickType;}
-        const _blkBR=blkEl.getBoundingClientRect();
-        const bxF=_blkBR.left+_blkBR.width/2,hoverY=_blkBR.top-10,hitY=_blkBR.top+1;
+        const _blkBR=blkEl.getBoundingClientRect();const bxF=_blkBR.left+_blkBR.width/2,hoverY=_blkBR.top-10,hitY=_blkBR.top+1;
         let _startY=_blkBR.top-70;if(_invSlot){const _sBR=_invSlot.getBoundingClientRect();_startY=_sBR.top+_sBR.height/2;}
         const pUrl=getPickaxeImg(pickaxeType);const el=document.createElement('img');el.src=pUrl;
         el.style.cssText='position:fixed;width:22px;height:22px;z-index:99999;pointer-events:none;image-rendering:pixelated;left:'+bxF+'px;top:'+_startY+'px;transform:translate(-50%,-50%);filter:drop-shadow(0 2px 6px rgba(100,60,10,0.9));';
@@ -2113,8 +2159,7 @@ function spawnPickaxeWorker(blockQueue, pickaxeType, workerIdx, onWorkerDone, on
         }
 
         if (!blkEl) { if (cb) cb(); return; }
-        const _b2BR=blkEl.getBoundingClientRect();
-        const _bx2=_b2BR.left+_b2BR.width/2,_sY2=_b2BR.top-30,_hov2=_b2BR.top-10;
+        const _b2BR=blkEl.getBoundingClientRect();const _bx2=_b2BR.left+_b2BR.width/2,_sY2=_b2BR.top-30,_hov2=_b2BR.top-10;
         const pUrl=getPickaxeImg(pickaxeType);el=document.createElement('img');el.src=pUrl;
         el.style.cssText='position:fixed;width:22px;height:22px;z-index:99999;pointer-events:none;image-rendering:pixelated;transform:translate(-50%,-100%);left:'+_bx2+'px;top:'+_sY2+'px;filter:drop-shadow(0 2px 6px rgba(100,60,10,0.9));';
         document.body.appendChild(el);_pickaxeEls.add(el);
