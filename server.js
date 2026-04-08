@@ -1632,29 +1632,8 @@ app.post('/api/admin/reset_game_stats', checkAdmin, async (req, res) => {
     }
 });
 
-// === GAME SETTINGS API ===
-// Получить все настройки игры
-app.post('/api/admin/get_game_settings', checkAdmin, async (req, res) => {
-    try {
-        const settings = await Settings.find({key: /^game_/});
-        const result = {};
-        settings.forEach(s => { result[s.key] = s.value; });
-        res.json({ok:true, settings: result});
-    } catch(e) { res.status(500).json({error: e.message}); }
-});
-// Установить настройку игры
-app.post('/api/admin/set_game_setting', checkAdmin, async (req, res) => {
-    try {
-        const {key, value} = req.body;
-        if (!key || !key.startsWith('game_')) return res.status(400).json({error:'Ключ должен начинаться с game_'});
-        await Settings.findOneAndUpdate({key}, {key, value}, {upsert:true, new:true});
-        res.json({ok:true});
-    } catch(e) { res.status(500).json({error: e.message}); }
-});
-// Баннер
 app.get('/api/banner', async (req, res) => {
-    try{ const b=await Settings.findOne({key:'banner'}); res.json({banner:b?b.value:null}); }
-    catch(e){ res.json({banner:null}); }
+    try{ const b=await Settings.findOne({key:'banner'}); res.json({banner:b?b.value:null}); }catch(e){ res.json({banner:null}); }
 });
 app.post('/api/admin/set_banner', checkAdmin, async (req, res) => {
     try{
@@ -1663,19 +1642,16 @@ app.post('/api/admin/set_banner', checkAdmin, async (req, res) => {
         res.json({ok:true});
     }catch(e){ res.status(500).json({error:'Ошибка: '+(e.message||'')}); }
 });
-// Звук казино
 app.get('/api/casino_sound', async (req, res) => {
-    try{ const s=await Settings.findOne({key:'casino_sound'}); res.json({sound:s?s.value:null}); }
-    catch(e){ res.json({sound:null}); }
+    try{ const s=await Settings.findOne({key:'casino_sound'}); res.json({sound:s?s.value:null}); }catch(e){ res.json({sound:null}); }
 });
 app.post('/api/admin/set_casino_sound', checkAdmin, async (req, res) => {
     try{
         const {soundUrl, volume, enabled} = req.body;
-        await Settings.findOneAndUpdate({key:'casino_sound'},{key:'casino_sound',value:{soundUrl:soundUrl||'',volume:volume||0.5,enabled:enabled!==false}},{upsert:true,new:true});
+        await Settings.findOneAndUpdate({key:'casino_sound'},{key:'casino_sound',value:{soundUrl:soundUrl||'',volume:volume!==undefined?volume:0.3,enabled:enabled!==false}},{upsert:true,new:true});
         res.json({ok:true});
     }catch(e){ res.status(500).json({error: e.message}); }
 });
-// Статистика игроков по игре
 app.post('/api/admin/game_user_stats', checkAdmin, async (req, res) => {
     try{const { game } = req.body;if(!game) return res.status(400).json({error:'required'});
         const agg=await Bet.aggregate([{$match:{game,mode:'Real'}},{$group:{_id:'$userId',username:{$last:'$username'},playCount:{$sum:1},totalBet:{$sum:'$amount'},totalPayout:{$sum:{$cond:[{$gt:['$result',0]},{$add:['$amount','$result']},0]}}}},{$sort:{totalBet:-1}},{$limit:50}]);
@@ -1687,6 +1663,19 @@ app.post('/api/admin/remove_user_game_stats', checkAdmin, async (req, res) => {
         const r=await Bet.deleteMany({game,userId:String(userId),mode:'Real'});
         res.json({ok:true,deleted:r.deletedCount});
     }catch(err){res.status(500).json({error:'Ошибка'});}
+});
+app.post('/api/admin/set_game_setting', checkAdmin, async (req, res) => {
+    try{const {key,value}=req.body;
+        if(!key||!key.startsWith('game_'))return res.status(400).json({error:'Ключ должен начинаться с game_'});
+        await Settings.findOneAndUpdate({key},{key,value},{upsert:true,new:true});
+        res.json({ok:true});
+    }catch(e){res.status(500).json({error:e.message});}
+});
+app.post('/api/admin/get_game_settings', checkAdmin, async (req, res) => {
+    try{const settings=await Settings.find({key:/^game_/});
+        const result={};settings.forEach(s=>{result[s.key]=s.value;});
+        res.json({ok:true,settings:result});
+    }catch(e){res.status(500).json({error:e.message});}
 });
 
 app.post('/api/admin/logs', checkAdmin, async (req, res) => {
