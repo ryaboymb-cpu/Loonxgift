@@ -275,11 +275,14 @@ function renderQuickBets() {
 }
 
 window.onload = async () => {
+    // Расширяем на весь экран
     tg.expand();
-    if(tg.requestFullscreen) tg.requestFullscreen();
+    // Цвет нативного TG заголовка = наш фон
     if(tg.setHeaderColor) tg.setHeaderColor('#050508');
     if(tg.setBackgroundColor) tg.setBackgroundColor('#050508');
     if(tg.setBottomBarColor) tg.setBottomBarColor('#050508');
+    // Применяем safe-area для контента
+    document.documentElement.style.setProperty('--tg-top', (tg.contentSafeAreaInset?.top || 0) + 'px');
     renderQuickBets(); 
     
     const res = await fetch('/api/auth', {
@@ -394,16 +397,36 @@ function toggleMode() {
 }
 
 const MAIN_PAGES=new Set(['games','profile','wallet','promo']);
-function nav(pageId,el){
-    if(pageId!=='mine'&&typeof killAllPickaxes==='function')killAllPickaxes();
+
+function nav(pageId, el){
+    if(pageId!=='mine' && typeof killAllPickaxes==='function') killAllPickaxes();
     document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
-    if($('page-'+pageId))$('page-'+pageId).classList.add('active');
-    if(el){document.querySelectorAll('.nav-item').forEach(i=>i.classList.remove('active'));el.classList.add('active');}
-    if(tg&&tg.BackButton){if(MAIN_PAGES.has(pageId))tg.BackButton.hide();else tg.BackButton.show();}
+    if($('page-'+pageId)) $('page-'+pageId).classList.add('active');
+    if(el){ document.querySelectorAll('.nav-item').forEach(i=>i.classList.remove('active')); el.classList.add('active'); }
+    // Telegram BackButton: показываем в играх, скрываем на главных страницах
+    try {
+        if(tg && tg.BackButton) {
+            if(MAIN_PAGES.has(pageId)) tg.BackButton.hide();
+            else tg.BackButton.show();
+        }
+    } catch(e){}
 }
 
 
-if(tg&&tg.BackButton){tg.BackButton.onClick(()=>{if(typeof killAllPickaxes==='function')killAllPickaxes();document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));const gp=$('page-games');if(gp)gp.classList.add('active');const gn=document.querySelector('.nav-item');if(gn){document.querySelectorAll('.nav-item').forEach(i=>i.classList.remove('active'));gn.classList.add('active');}tg.BackButton.hide();});}
+// Telegram BackButton — нажатие возвращает на главную
+try {
+    if(tg && tg.BackButton) {
+        tg.BackButton.onClick(function(){
+            if(typeof killAllPickaxes==='function') killAllPickaxes();
+            document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+            const gp = $('page-games'); if(gp) gp.classList.add('active');
+            const gn = document.querySelector('.nav-item');
+            if(gn){ document.querySelectorAll('.nav-item').forEach(i=>i.classList.remove('active')); gn.classList.add('active'); }
+            tg.BackButton.hide();
+        });
+    }
+} catch(e){}
+
 function navGame(game){
     let mKey=game;if(game==='coin')mKey='coinflip';
     if(game==='cases'){nav('cases');return;}
@@ -1629,14 +1652,12 @@ async function adminShowGameUsers(game){
             html+=`<div style="background:#111;border:1px solid #222;border-radius:10px;padding:10px;margin-bottom:8px;"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;"><b style="color:#fff;">${u.username}</b><span style="color:#888;font-size:11px;">${u.userId}</span></div><div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;font-size:11px;color:#aaa;margin-bottom:6px;"><div>Игр: <b>${u.playCount}</b></div><div>Ставки: <b>${u.totalBet}T</b></div><div>Выплаты: <b>${u.totalPayout}T</b></div></div><div style="display:flex;justify-content:space-between;"><div>Профит: <b style="color:${pColor};">${u.profit>=0?'+':''}${u.profit} TON</b></div><button onclick="adminRemoveUserGame('${game}','${u.userId}',this)" style="padding:4px 10px;font-size:10px;background:#2a0808;border:1px solid #ff2255;color:#ff2255;border-radius:6px;cursor:pointer;">Убрать</button></div></div>`;
         });
         document.getElementById('game-users-list').innerHTML=html;
-    }catch(e){document.getElementById('game-users-list').innerText='Ошибка: '+e.message;}
-}
+    }catch(e){document.getElementById('game-users-list').innerText='Ошибка';}}
 async function adminRemoveUserGame(game,userId,btn){
     if(!confirm('Удалить стату из '+game+'?'))return;
     btn.disabled=true;btn.innerText='...';
     try{const r=await fetch('/api/admin/remove_user_game_stats',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pass:adminPass,game,userId})});
-        const d=await r.json();
-        if(r.ok){btn.closest('div[style]').style.opacity='0.4';btn.innerText='Удалено('+d.deleted+')';}else{btn.innerText='Ошибка';btn.disabled=false;}
+        const d=await r.json();if(r.ok){btn.closest('div[style]').style.opacity='0.4';btn.innerText='Удалено('+d.deleted+')';}else{btn.innerText='Ошибка';btn.disabled=false;}
     }catch(e){btn.innerText='Ошибка';btn.disabled=false;}
 }
 async function adminResetGameStats(game) {
@@ -1979,7 +2000,6 @@ function doBreakBlock(blkEl, blk, onDone, onBlockFullyGone) {
         mineRunningTotal+=blk.win;
         const rt=$('mine-running-total');
         if(rt){rt.classList.add('has-win');animateCounter(rt,mineRunningTotal-blk.win,mineRunningTotal,500,'','');}
-
     }
     spawnBreakParticles(blkEl, blk.type);
 
@@ -2827,22 +2847,7 @@ function upgSetChance(v){if(isUpgrading)return;upgChance=Math.max(1,Math.min(90,
 function upgSetBet(v){if($('up-bet'))$('up-bet').value=v;upgRefresh();playSound('click');}
 function initUpgradePage(){upgChance=50;if($('upg-slider'))$('upg-slider').value=50;upgRefresh();}
 function upgSpinDisk(winPct,isWin,onDone){const disk=document.querySelector('.upg-disk');if(!disk){if(onDone)onDone();return;}const winA=(Math.min(winPct,90)/100)*360;let targetR;if(isWin){const lo=360-winA,hi=360,mg=Math.max(4,winA*0.07);targetR=(lo+mg)+Math.random()*((hi-mg)-(lo+mg));}else{const lo=0,hi=360-winA,mg=Math.max(4,(360-winA)*0.07);targetR=(lo+mg)+Math.random()*((hi-mg)-(lo+mg));}const spinMs=2500+Math.random()*3000,totalRot=(3+Math.floor(spinMs/1000))*360+targetR;disk.style.transition='none';disk.style.transform='rotate(0deg)';requestAnimationFrame(()=>requestAnimationFrame(()=>{disk.style.transition='transform '+spinMs+'ms cubic-bezier(0.15,0.0,0.08,1.0)';disk.style.transform='rotate('+totalRot+'deg)';}));setTimeout(()=>{disk.style.transition='none';disk.style.transform='rotate('+targetR+'deg)';if(onDone)onDone();},spinMs+80);}
-async function playUpgrade(){
-    if(isUpgrading)return;const betVal=parseFloat($('up-bet')?.value);
-    if(isNaN(betVal)||betVal<0.1||betVal>25)return showToast('Мин 0.1, Макс 25 TON');
-    if(betVal>(mode==='demo'?user.demo_balance:user.balance))return showToast('Недостаточно средств');
-    isUpgrading=true;const btn=$('up-btn'),sldr=$('upg-slider'),resEl=$('upgrade-result');
-    if(btn){btn.disabled=true;btn.innerText='...';}if(sldr)sldr.disabled=true;
-    if(resEl){resEl.innerText='';resEl.style.color='';}playSound('click');
-    try{const r=await fetch('/api/upgrade',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:user.id,bet:betVal,chance:upgChance,mode})});
-        const data=await r.json();if(!r.ok){showToast(data.error||'Ошибка');return;}
-        upgSpinDisk(upgChance,data.win>0,()=>{user=data.user;updateUI();upgRefresh();
-            const profit=data.profit!==undefined?data.profit:(data.win>0?data.win-betVal:-betVal);
-            if(resEl){resEl.innerText=data.win>0?'+'+profit.toFixed(2)+' TON (x'+data.multiplier+')':'-'+betVal.toFixed(2)+' TON';resEl.style.color=data.win>0?'#00ff88':'#ff0055';}
-            if(data.win>0){playSound('win');flyToBalance(profit);showToast('+'+profit.toFixed(2)+' TON');}
-            else showToast('-'+betVal.toFixed(2)+' TON');});}
-    catch(e){showToast('Ошибка соединения');}
-    finally{setTimeout(()=>{isUpgrading=false;if(btn){btn.disabled=false;btn.innerText='Играть ⬆️';}if(sldr)sldr.disabled=false;},7000);}
+async function playUpgrade(){if(isUpgrading)return;const betVal=parseFloat($('up-bet')?.value);if(isNaN(betVal)||betVal<0.1||betVal>25)return showToast('Мин 0.1, Макс 25 TON');if(betVal>(mode==='demo'?user.demo_balance:user.balance))return showToast('Недостаточно средств');isUpgrading=true;const btn=$('up-btn'),sldr=$('upg-slider'),resEl=$('upgrade-result');if(btn){btn.disabled=true;btn.innerText='...';}if(sldr)sldr.disabled=true;if(resEl){resEl.innerText='';resEl.style.color='';}playSound('click');try{const r=await fetch('/api/upgrade',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:user.id,bet:betVal,chance:upgChance,mode})});const data=await r.json();if(!r.ok){showToast(data.error||'Ошибка');return;}upgSpinDisk(upgChance,data.win>0,()=>{user=data.user;updateUI();upgRefresh();const profit=data.profit!==undefined?data.profit:(data.win>0?data.win-betVal:-betVal);if(resEl){resEl.innerText=data.win>0?'+'+profit.toFixed(2)+' TON (x'+data.multiplier+')':'-'+betVal.toFixed(2)+' TON';resEl.style.color=data.win>0?'#00ff88':'#ff0055';}if(data.win>0){playSound('win');flyToBalance(profit);showToast('+'+profit.toFixed(2)+' TON');}else showToast('-'+betVal.toFixed(2)+' TON');});}catch(e){showToast('Ошибка соединения');}finally{setTimeout(()=>{isUpgrading=false;if(btn){btn.disabled=false;btn.innerText='Играть ⬆️';}if(sldr)sldr.disabled=false;},7000);}
 }
 // ===================== PLINKO GAME =====================
 let plinkoRisk = 'medium';
