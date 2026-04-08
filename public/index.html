@@ -28,19 +28,19 @@
     <div id="toast-container"></div>
 
     <header class="app-header">
-        <!-- Строка 1: Логотип + Онлайн -->
-        <div class="hdr-top">
+        <!-- Строка 1: Логотип по центру + онлайн справа -->
+        <div class="hdr-logo-row">
             <div class="app-logo">
-                <span class="logo-text">LoonxGift</span>
+                <span class="logo-loonx">Loonx</span><span class="logo-gift"> Gift</span>
             </div>
-            <div class="hdr-online">
-                <span class="online-dot"></span>
-                <span id="online-c" class="online-count">0</span>
+            <div class="hdr-online-badge">
+                <span class="online-dot-pulse"></span>
+                <span id="online-c" class="online-num">0</span>
             </div>
         </div>
-        <!-- Строка 2: Аватар + Баланс + Кошелёк -->
-        <div class="hdr-bottom">
-            <div class="hdr-user">
+        <!-- Строка 2: Аватар + баланс + кошелёк -->
+        <div class="hdr-bal-row">
+            <div class="hdr-user-info">
                 <img src="" id="user-ava" class="avatar" alt="ava">
                 <div>
                     <div class="bal-wrap">
@@ -50,7 +50,7 @@
                     <div id="bal-mode" class="mode-btn" onclick="toggleMode()">REAL TON</div>
                 </div>
             </div>
-            <div id="ton-connect-btn" class="hdr-wallet"></div>
+            <div id="ton-connect-btn" class="hdr-tc-btn"></div>
         </div>
     </header>
 
@@ -60,43 +60,43 @@
             
             <div class="games-grid">
                 <div class="gc" onclick="navGame('crash')">
-                    <div class="gc-bg" style="background:linear-gradient(135deg,#1a0010,#4a0025,#200030);"></div>
-                    <div class="gc-icon-wrap" style="background:radial-gradient(circle,rgba(255,0,85,0.25) 0%,transparent 70%);"><span class="gc-emoji">🚀</span></div>
+                    <div class="gc-bg" style="background:linear-gradient(145deg,#1a0010 0%,#4a0025 60%,#200030 100%);"></div>
+                    <div class="gc-icon-wrap" style="background:radial-gradient(circle,rgba(255,0,85,0.3) 0%,transparent 70%);"><span class="gc-emoji">🚀</span></div>
                     <div class="gc-info"><div class="gc-name">Crash</div><div class="gc-desc">Успей забрать множитель</div></div>
                 </div>
                 <div class="gc" onclick="navGame('mines')">
-                    <div class="gc-bg" style="background:linear-gradient(135deg,#001a10,#003d20,#001a30);"></div>
-                    <div class="gc-icon-wrap" style="background:radial-gradient(circle,rgba(0,255,136,0.25) 0%,transparent 70%);"><span class="gc-emoji">💣</span></div>
+                    <div class="gc-bg" style="background:linear-gradient(145deg,#001a10 0%,#003d20 60%,#001a30 100%);"></div>
+                    <div class="gc-icon-wrap" style="background:radial-gradient(circle,rgba(0,255,136,0.3) 0%,transparent 70%);"><span class="gc-emoji">💣</span></div>
                     <div class="gc-info"><div class="gc-name">Mines</div><div class="gc-desc">Ищи кристаллы</div></div>
                 </div>
                 <div class="gc" onclick="navGame('coinflip')">
-                    <div class="gc-bg" style="background:linear-gradient(135deg,#1a1000,#3d2800,#1a0a00);"></div>
-                    <div class="gc-icon-wrap" style="background:radial-gradient(circle,rgba(255,204,0,0.25) 0%,transparent 70%);"><span class="gc-emoji">🪙</span></div>
+                    <div class="gc-bg" style="background:linear-gradient(145deg,#1a1000 0%,#3d2800 60%,#1a0a00 100%);"></div>
+                    <div class="gc-icon-wrap" style="background:radial-gradient(circle,rgba(255,204,0,0.3) 0%,transparent 70%);"><span class="gc-emoji">🪙</span></div>
                     <div class="gc-info"><div class="gc-name">Coinflip</div><div class="gc-desc">Выбери свою сторону</div></div>
                 </div>
                 <div class="gc" onclick="navGame('cases')">
-                    <div class="gc-bg" style="background:linear-gradient(135deg,#100020,#2d0050,#180030);"></div>
-                    <div class="gc-icon-wrap" style="background:radial-gradient(circle,rgba(206,147,216,0.25) 0%,transparent 70%);"><span class="gc-emoji">🎁</span></div>
+                    <div class="gc-bg" style="background:linear-gradient(145deg,#100020 0%,#2d0050 60%,#180030 100%);"></div>
+                    <div class="gc-icon-wrap" style="background:radial-gradient(circle,rgba(206,147,216,0.3) 0%,transparent 70%);"><span class="gc-emoji">🎁</span></div>
                     <div class="gc-info"><div class="gc-name">Cases</div><div class="gc-desc">Открой кейс с призами</div></div>
                 </div>
                 <div class="gc" onclick="navGame('battle')">
-                    <div class="gc-bg" style="background:linear-gradient(135deg,#0d001a,#2a0045,#150028);"></div>
-                    <div class="gc-icon-wrap" style="background:radial-gradient(circle,rgba(138,43,226,0.25) 0%,transparent 70%);"><span class="gc-emoji">⚔️</span></div>
+                    <div class="gc-bg" style="background:linear-gradient(145deg,#0d001a 0%,#2a0045 60%,#150028 100%);"></div>
+                    <div class="gc-icon-wrap" style="background:radial-gradient(circle,rgba(138,43,226,0.3) 0%,transparent 70%);"><span class="gc-emoji">⚔️</span></div>
                     <div class="gc-info"><div class="gc-name">Battle Roulette</div><div class="gc-desc">Сразись за TON</div></div>
                 </div>
                 <div class="gc" onclick="navGame('spin')">
-                    <div class="gc-bg" style="background:linear-gradient(135deg,#1a0800,#3d1500,#200500);"></div>
-                    <div class="gc-icon-wrap" style="background:radial-gradient(circle,rgba(255,107,0,0.25) 0%,transparent 70%);"><span class="gc-emoji">🎰</span></div>
+                    <div class="gc-bg" style="background:linear-gradient(145deg,#1a0800 0%,#3d1500 60%,#200500 100%);"></div>
+                    <div class="gc-icon-wrap" style="background:radial-gradient(circle,rgba(255,107,0,0.3) 0%,transparent 70%);"><span class="gc-emoji">🎰</span></div>
                     <div class="gc-info"><div class="gc-name">Spin</div><div class="gc-desc">Слот 5×3 с фриспинами</div></div>
                 </div>
                 <div class="gc" onclick="navGame('mine')">
-                    <div class="gc-bg" style="background:linear-gradient(135deg,#0a0500,#2a1400,#150800);"></div>
-                    <div class="gc-icon-wrap" style="background:radial-gradient(circle,rgba(200,112,32,0.25) 0%,transparent 70%);"><span class="gc-emoji">⛏️</span></div>
+                    <div class="gc-bg" style="background:linear-gradient(145deg,#0a0500 0%,#2a1400 60%,#150800 100%);"></div>
+                    <div class="gc-icon-wrap" style="background:radial-gradient(circle,rgba(200,112,32,0.3) 0%,transparent 70%);"><span class="gc-emoji">⛏️</span></div>
                     <div class="gc-info"><div class="gc-name">Mine</div><div class="gc-desc">Копай и побеждай</div></div>
                 </div>
                 <div class="gc" onclick="navGame('upgrade')">
-                    <div class="gc-bg" style="background:linear-gradient(135deg,#001020,#002040,#001530);"></div>
-                    <div class="gc-icon-wrap" style="background:radial-gradient(circle,rgba(0,229,255,0.25) 0%,transparent 70%);"><span class="gc-emoji">⬆️</span></div>
+                    <div class="gc-bg" style="background:linear-gradient(145deg,#001020 0%,#002040 60%,#001530 100%);"></div>
+                    <div class="gc-icon-wrap" style="background:radial-gradient(circle,rgba(0,229,255,0.3) 0%,transparent 70%);"><span class="gc-emoji">⬆️</span></div>
                     <div class="gc-info"><div class="gc-name">Upgrade</div><div class="gc-desc">Удвой свою ставку</div></div>
                 </div>
             </div>
@@ -302,21 +302,10 @@
                     <div style="color:#444;">→</div>
                     <div style="text-align:center;"><div style="color:var(--neon);font-weight:900;font-size:15px;" id="upg-win-val">+0 TON</div><div style="color:var(--sub);font-size:9px;">прибыль</div></div>
                 </div>
-                <div style="position:relative;width:196px;max-width:80vw;margin:0 auto 8px;aspect-ratio:1;">
-                    <div style="position:absolute;top:-11px;left:50%;transform:translateX(-50%);z-index:10;width:0;height:0;border-left:10px solid transparent;border-right:10px solid transparent;border-top:18px solid #fff;filter:drop-shadow(0 0 5px rgba(255,255,255,0.9));"></div>
-                    <div class="upg-disk" style="width:100%;height:100%;border-radius:50%;background:conic-gradient(#00e676 0% 50%,#1a1a2e 50% 100%);transform:rotate(0deg);will-change:transform;"></div>
-                    <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:33%;height:33%;background:#0a0a1a;border-radius:50%;display:flex;align-items:center;justify-content:center;z-index:5;border:3px solid #111;"><span id="upg-slider-val" style="font-size:10px;font-weight:bold;color:#fff;">50%</span></div>
-                </div>
+                <div style="position:relative;width:196px;max-width:80vw;margin:0 auto 8px;aspect-ratio:1;"><div style="position:absolute;top:-11px;left:50%;transform:translateX(-50%);z-index:10;width:0;height:0;border-left:10px solid transparent;border-right:10px solid transparent;border-top:18px solid #fff;filter:drop-shadow(0 0 5px rgba(255,255,255,0.9));"></div><div class="upg-disk" style="width:100%;height:100%;border-radius:50%;background:conic-gradient(#00e676 0% 50%,#1a1a2e 50% 100%);transform:rotate(0deg);will-change:transform;"></div><div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:33%;height:33%;background:#0a0a1a;border-radius:50%;display:flex;align-items:center;justify-content:center;z-index:5;border:3px solid #111;"><span id="upg-slider-val" style="font-size:10px;font-weight:bold;color:#fff;">50%</span></div></div>
                 <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--sub);margin-bottom:2px;"><span>1%</span><span style="color:#fff;font-weight:700;">Шанс победы</span><span>90%</span></div>
                 <input type="range" id="upg-slider" min="1" max="90" value="50" oninput="upgSetChance(this.value)" style="width:100%;-webkit-appearance:none;height:6px;border-radius:3px;background:linear-gradient(to right,#ff2255,#ff6600,#ffcc00,#00e676);margin-bottom:7px;cursor:pointer;">
-                <div style="display:flex;gap:4px;justify-content:center;flex-wrap:wrap;margin-bottom:7px;">
-                    <button class="qb-btn" style="font-size:10px;" onclick="upgSetChance(5)">5%</button>
-                    <button class="qb-btn" style="font-size:10px;" onclick="upgSetChance(15)">15%</button>
-                    <button class="qb-btn" style="font-size:10px;" onclick="upgSetChance(33)">33%</button>
-                    <button class="qb-btn" style="font-size:10px;" onclick="upgSetChance(50)">50%</button>
-                    <button class="qb-btn" style="font-size:10px;" onclick="upgSetChance(75)">75%</button>
-                    <button class="qb-btn" style="font-size:10px;" onclick="upgSetChance(90)">90%</button>
-                </div>
+                <div style="display:flex;gap:4px;justify-content:center;flex-wrap:wrap;margin-bottom:7px;"><button class="qb-btn" style="font-size:10px;" onclick="upgSetChance(5)">5%</button><button class="qb-btn" style="font-size:10px;" onclick="upgSetChance(15)">15%</button><button class="qb-btn" style="font-size:10px;" onclick="upgSetChance(33)">33%</button><button class="qb-btn" style="font-size:10px;" onclick="upgSetChance(50)">50%</button><button class="qb-btn" style="font-size:10px;" onclick="upgSetChance(75)">75%</button><button class="qb-btn" style="font-size:10px;" onclick="upgSetChance(90)">90%</button></div>
                 <div class="quick-bets" style="margin-bottom:5px;"><div class="qb-btn" onclick="upgSetBet(0.1)">0.1</div><div class="qb-btn" onclick="upgSetBet(0.5)">0.5</div><div class="qb-btn" onclick="upgSetBet(1)">1</div><div class="qb-btn" onclick="upgSetBet(5)">5</div><div class="qb-btn" onclick="upgSetBet(10)">10</div><div class="qb-btn" onclick="upgSetBet(25)">25</div></div>
                 <input type="number" id="up-bet" class="input-box" placeholder="Ставка TON" oninput="upgRefresh()" style="margin-bottom:5px;">
                 <div id="upgrade-result" style="text-align:center;font-size:14px;font-weight:bold;min-height:18px;margin-bottom:5px;"></div>
@@ -324,11 +313,7 @@
             </div>
         </div>
         <div id="page-cases" class="page">
-            <div class="card" style="text-align:center;padding:30px;">
-                <div style="font-size:64px;margin-bottom:16px;">🎁</div>
-                <h2 style="color:#ce93d8;margin-bottom:8px;">CASES</h2>
-                <p style="color:var(--sub);font-size:13px;">Скоро!</p>
-            </div>
+            <div class="card" style="text-align:center;padding:30px;"><div style="font-size:64px;margin-bottom:16px;">🎁</div><h2 style="color:#ce93d8;margin-bottom:8px;">CASES</h2><p style="color:var(--sub);font-size:13px;">Скоро!</p></div>
         </div>
 
         <div id="page-battle"  class="page">
