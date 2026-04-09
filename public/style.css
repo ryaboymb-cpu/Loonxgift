@@ -948,30 +948,8 @@ body {
 }
 .case-card:active { transform: scale(.93); }
 .case-card:hover { border-color: rgba(0,229,255,.25); }
-.case-img-wrap {
-    position: relative;
-    width: 100%;
-    aspect-ratio: 1;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    margin-bottom: 10px;
-}
-.case-img {
-    width: 90%;
-    height: 90%;
-    object-fit: contain;
-    filter: drop-shadow(0 4px 12px rgba(0,0,0,.5));
-    transition: transform .25s;
-    position: relative;
-    z-index: 1;
-}
-.case-card:hover .case-img { transform: scale(1.06) translateY(-4px); }
-.case-glow {
-    position: absolute; inset: 20% 15%; border-radius: 50%;
-    background: radial-gradient(circle, rgba(0,229,255,.08) 0%, transparent 70%);
-    pointer-events: none;
-}
+
+
 .case-name {
     font-size: 12px; font-weight: 800; color: #fff;
     letter-spacing: .5px; text-transform: uppercase;
@@ -1507,6 +1485,10 @@ body {
 }
 
 /* Case image fix — убираем все дубли, один чистый стиль */
+
+
+
+/* ════ FINAL CASE IMG FIX ════ */
 .case-img-wrap {
     position: relative !important;
     width: 100% !important;
@@ -1515,6 +1497,7 @@ body {
     align-items: center !important;
     justify-content: center !important;
     margin-bottom: 8px !important;
+    box-sizing: border-box !important;
 }
 .case-img {
     width: 90% !important;
@@ -1522,5 +1505,8 @@ body {
     object-fit: contain !important;
     position: relative !important;
     z-index: 1 !important;
-    filter: drop-shadow(0 4px 12px rgba(0,0,0,.4)) !important;
+    display: block !important;
 }
+/* case6 card: badge absolute чтобы не сжимал img */
+.case-card-free { position: relative !important; }
+.case-free-badge { position: absolute !important; top: 8px !important; right: 8px !important; z-index: 5 !important; }
