@@ -32,7 +32,7 @@
         <div class="h-left">
             <img src="" id="user-ava" class="avatar" alt="ava">
             <div>
-                <div class="bal-wrap"><span id="bal-val">0.00</span> <span class="ton-sym">TON</span></div>
+                <div class="bal-wrap"><span id="bal-val">0.00</span> <img src="/toncoin-ton-logo.png" alt="TON" class="ton-icon-img"></div>
                 <div id="bal-mode" class="mode-btn" onclick="toggleMode()">REAL TON</div>
             </div>
         </div>
@@ -60,7 +60,7 @@
                 <div class="gc" onclick="navGame('upgrade')"><div class="gc-bg" style="background:linear-gradient(145deg,#001020,#002040);"></div><div class="gc-icon-wrap"><span class="gc-emoji">⬆️</span></div><div class="gc-info"><div class="gc-name">Upgrade</div><div class="gc-desc">Удвой свою ставку</div></div></div>
             </div>
             <div class="live-section-title">ЛАЙВ СТАВКИ</div>
-            <div class="live-bets-container" id="feed-list"></div>
+            <div class="live-bets-container" id="feed-list" style="max-height:300px;"></div>
         </div>
 
         <div id="page-profile" class="page">
@@ -89,38 +89,47 @@
         </div>
 
         <div id="page-wallet" class="page">
-            <div class="card">
-                <div style="display:flex; gap:10px; margin-bottom:20px;">
+
+
+            <!-- Вкладки Депозит / Вывод -->
+            <div style="display:flex;gap:8px;margin-bottom:8px;padding:0 2px;">
+                <button id="wt-dep" onclick="switchWalletTab('dep')" style="flex:1;padding:12px;border-radius:12px;border:none;cursor:pointer;font-weight:900;font-size:13px;background:linear-gradient(135deg,#00e5ff,#0097a7);color:#000;">💳 Депозит</button>
+                <button id="wt-wd" onclick="switchWalletTab('wd')" style="flex:1;padding:12px;border-radius:12px;border:none;cursor:pointer;font-weight:900;font-size:13px;background:#1a1a2e;color:#888;">📤 Вывод</button>
+            </div>
+
+            <!-- Депозит панель -->
+            <div id="wallet-dep-panel" class="card">
+                <div style="display:flex;gap:8px;margin-bottom:16px;">
                     <button class="w-tab active" onclick="switchDepTab('manual', this)">РУЧНОЙ ДЕП.</button>
                     <button class="w-tab" onclick="switchDepTab('connect', this)">TON CONNECT</button>
                 </div>
-
                 <div id="dep-manual">
-                    <h3 style="margin-bottom:15px; color:var(--neon); text-align:center;">Пополнение</h3>
-                    <div style="background:#0a0a0a; padding:15px; border-radius:12px; border:1px solid #222; margin-bottom:15px; text-align:center;">
-                        <p style="color:var(--sub); font-size:12px; font-weight:bold; margin-bottom:5px;">АДРЕС ДЛЯ ПЕРЕВОДА:</p>
+                    <h3 style="margin-bottom:15px;color:var(--neon);text-align:center;">Пополнение</h3>
+                    <div style="background:#0a0a0a;padding:15px;border-radius:12px;border:1px solid #222;margin-bottom:15px;text-align:center;">
+                        <p style="color:var(--sub);font-size:12px;font-weight:bold;margin-bottom:5px;">АДРЕС ДЛЯ ПЕРЕВОДА:</p>
                         <b id="dep-wallet" onclick="copyText(this.innerText)">Загрузка...</b>
-                        <p style="color:var(--sub); font-size:12px; font-weight:bold; margin:15px 0 5px 0;">ОБЯЗАТЕЛЬНЫЙ MEMO (COMMENT):</p>
+                        <p style="color:var(--sub);font-size:12px;font-weight:bold;margin:15px 0 5px;">ОБЯЗАТЕЛЬНЫЙ MEMO (COMMENT):</p>
                         <b id="dep-memo" onclick="copyText(this.innerText)">-</b>
                     </div>
-                    <p style="font-size:11px; color:var(--sub); text-align:center; margin-bottom:15px; font-weight:bold;">Нажмите на текст, чтобы скопировать. Переводите TON только в сети The Open Network.</p>
-                    <button class="btn" style="background:var(--neon-blue); box-shadow: 0 0 15px rgba(0,210,255,0.2);" onclick="checkRealDeposit(this)">ПРОВЕРИТЬ ОПЛАТУ</button>
+                    <p style="font-size:11px;color:var(--sub);text-align:center;margin-bottom:15px;font-weight:bold;">Нажмите на текст, чтобы скопировать. Переводите TON только в сети The Open Network.</p>
+                    <button class="btn" style="background:var(--neon-blue);" onclick="checkRealDeposit(this)">ПРОВЕРИТЬ ОПЛАТУ</button>
                 </div>
-
-                <div id="dep-connect" style="display:none; text-align:center;">
-                    <h3 style="margin-bottom:15px; color:var(--neon);">Авто-Депозит</h3>
+                <div id="dep-connect" style="display:none;text-align:center;">
+                    <h3 style="margin-bottom:15px;color:var(--neon);">Авто-Депозит</h3>
                     <input type="number" id="tc-amount" class="input-box" placeholder="Сумма в TON (Мин 0.5)">
                     <button class="btn btn-connect" onclick="payWithTonConnect()">ОПЛАТИТЬ ЧЕРЕЗ TON CONNECT</button>
                 </div>
             </div>
 
-            <div class="card">
-                <h3 style="margin-bottom:15px; color:var(--neon-red); text-align:center;">Вывод средств</h3>
+            <!-- Вывод панель -->
+            <div id="wallet-wd-panel" class="card" style="display:none;">
+                <h3 style="margin-bottom:15px;color:var(--neon-red);text-align:center;">Вывод средств</h3>
                 <input type="number" id="with-amount" class="input-box" placeholder="Сумма (Мин 5 TON)">
                 <input type="text" id="with-addr" class="input-box" placeholder="Ваш TON адрес">
                 <button class="btn btn-withdraw" onclick="withdraw()">СОЗДАТЬ ЗАЯВКУ</button>
             </div>
 
+            <!-- История -->
             <div class="card" id="w-history-list"></div>
         </div>
 
@@ -138,12 +147,20 @@
                 <div style="background:#0a0a0a; padding:10px; border-radius:8px; border:1px solid #222; margin-bottom:15px; word-break: break-all;">
                     <b id="ref-link" onclick="copyText(this.innerText)">Загрузка...</b>
                 </div>
-                <div style="display:flex; justify-content:space-around; margin-bottom:15px;">
-                    <div class="prof-panel" style="width:45%;">Приглашено<br><span id="ref-count" style="color:var(--neon);">0</span></div>
-                    <div class="prof-panel" style="width:45%;">Заработано<br><span id="ref-earned" style="color:var(--neon-blue);">0.00 TON</span></div>
+                <!-- Статистика -->
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;">
+                    <div class="prof-panel">Приглашено<br><span id="ref-count" style="color:var(--neon);">0</span></div>
+                    <div class="prof-panel">Всего заработано<br><span id="ref-earned" style="color:var(--neon-blue);font-size:13px;">0.00 TON</span></div>
                 </div>
-                <h4 style="color:var(--neon); margin-bottom:10px; font-size:14px; text-align:left;">Мои рефералы</h4>
-                <div id="ref-list" style="text-align:left; max-height:150px; overflow-y:auto; font-size:12px; border:1px solid #222; padding:10px; border-radius:8px; background:#111;"></div>
+                <!-- Накоплено (pending) -->
+                <div style="background:#0d1f0d;border:1px solid #00ff8844;border-radius:12px;padding:12px;margin-bottom:12px;text-align:center;">
+                    <div style="color:var(--sub);font-size:11px;margin-bottom:4px;">НАКОПЛЕНО (10% с рефералов)</div>
+                    <div style="font-size:22px;font-weight:900;color:#00ff88;"><span id="ref-pending">0.00</span> TON</div>
+                    <div style="font-size:10px;color:#555;margin-top:4px;">Учитываются только первые 10 депозитов реферала</div>
+                    <button id="btn-ref-claim" onclick="claimRefBonus()" style="display:none;margin-top:10px;width:100%;padding:10px;background:linear-gradient(135deg,#00ff88,#00c060);color:#000;border:none;border-radius:10px;font-weight:900;font-size:14px;cursor:pointer;">Забрать кэш</button>
+                </div>
+                <h4 style="color:var(--neon);margin-bottom:8px;font-size:14px;">Мои рефералы</h4>
+                <div id="ref-list" style="max-height:350px;overflow-y:auto;"></div>
             </div>
         </div>
 
@@ -264,9 +281,7 @@
                 <button id="up-btn" class="btn" onclick="playUpgrade()" style="background:linear-gradient(135deg,#0097a7,#00e5ff);color:#fff;font-weight:900;">Играть ⬆️</button>
             </div>
         </div>
-        <div id="page-cases" class="page">
-            <div class="card" style="text-align:center;padding:30px;"><div style="font-size:64px;">🎁</div><h2 style="color:#ce93d8;">CASES</h2><p style="color:var(--sub);font-size:13px;">Скоро!</p></div>
-        </div>
+        <div id="page-cases" class="page"></div>
 
         <div id="page-battle"  class="page">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
