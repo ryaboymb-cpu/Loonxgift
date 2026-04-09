@@ -101,7 +101,8 @@ const UserSchema = new mongoose.Schema({
     referrals: [{ type: String }],               
     referralEarnings: { type: Number, default: 0 },
     referralPending: { type: Number, default: 0 }, // накоплено, но не выплачено
-    referralDepositCounts: { type: Map, of: Number, default: {} }, // счётчик депозитов per reферал 
+    referralDepositCounts: { type: Map, of: Number, default: {} }, // счётчик депозитов per reферал
+    freeCaseLastOpened: { type: Map, of: Date, default: {} }, // время последнего открытия бесплатных кейсов 
     stats: { 
         bets: {type:Number, default:0}, 
         wins: {type:Number, default:0}, 
@@ -1786,7 +1787,13 @@ const CASES_DEFAULT = {
         "drops":[{"val":2.0,"w":1212},{"val":3.0,"w":1100},{"val":5.0,"w":1000},
                  {"val":7.0,"w":900},{"val":8.0,"w":700},{"val":10.0,"w":4091},
                  {"val":12.0,"w":400},{"val":15.0,"w":250},{"val":20.0,"w":120},
-                 {"val":30.0,"w":50},{"val":50.0,"w":15}]}
+                 {"val":30.0,"w":50},{"val":50.0,"w":15}]},
+    "case6": {"id":"case6","price":0,"name":"Лоникс Гифт","img":"case6.png","isFree":true,
+        "cooldownHours":24,
+        "channels":[],
+        "drops":[{"val":0.1,"w":3000},{"val":0.2,"w":2000},{"val":0.3,"w":1500},
+                 {"val":0.5,"w":1000},{"val":1.0,"w":500},{"val":2.0,"w":200},
+                 {"val":5.0,"w":50},{"val":10.0,"w":10}]}
 };
 // Рабочая конфигурация (может быть перезаписана из DB)
 let CASES_CONFIG = JSON.parse(JSON.stringify(CASES_DEFAULT));
@@ -1815,13 +1822,18 @@ function weightedRandom(drops) {
 // Admin: сохранить конфиг кейса
 app.post('/api/admin/set_case_config', checkAdmin, async (req, res) => {
     try {
-        const { caseId, price, drops } = req.body;
+        const { caseId, price, drops, channels, cooldownHours } = req.body;
         if(!caseId || !CASES_CONFIG[caseId]) return res.status(400).json({error:'Кейс не найден'});
-        if(price !== undefined) CASES_CONFIG[caseId].price = parseFloat(price);
+        if(price !== undefined && !CASES_CONFIG[caseId].isFree) CASES_CONFIG[caseId].price = parseFloat(price);
         if(drops && Array.isArray(drops)) {
-            // Валидируем drops
             const valid = drops.filter(d => d.val>0 && d.w>0);
             if(valid.length > 0) CASES_CONFIG[caseId].drops = valid;
+        }
+        if(channels !== undefined && CASES_CONFIG[caseId].isFree) {
+            CASES_CONFIG[caseId].channels = Array.isArray(channels) ? channels : [];
+        }
+        if(cooldownHours !== undefined && CASES_CONFIG[caseId].isFree) {
+            CASES_CONFIG[caseId].cooldownHours = parseInt(cooldownHours) || 24;
         }
         // Сохраняем в DB
         await Settings.findOneAndUpdate(
@@ -1837,13 +1849,68 @@ app.get('/api/admin/cases_config', checkAdmin, async (req, res) => {
     res.json({ cases: Object.values(CASES_CONFIG) });
 });
 
+// Статистика кейсов (для админки)
+app.post('/api/admin/case_stats', checkAdmin, async (req, res) => {
+    try {
+        const { caseId } = req.body;
+        const matchFilter = caseId ? { game:'Case', 'result': { $exists: true } } : { game:'Case' };
+        // Агрегируем по caseId из username поля (hack: храним caseId в multiplier>0 bets)
+        const allBets = await Bet.find({game:'Case'}).sort({createdAt:-1}).limit(500);
+        const byCaseId = {};
+        allBets.forEach(b => {
+            // caseId определяем по amount (price)
+            const price = b.amount;
+            let cid = 'unknown';
+            Object.values(CASES_CONFIG).forEach(c => { if(c.price===price) cid=c.id; });
+            if(!byCaseId[cid]) byCaseId[cid]={count:0,totalBet:0,totalPayout:0,players:{}};
+            byCaseId[cid].count++;
+            byCaseId[cid].totalBet+=price;
+            const win=Number((price+b.result).toFixed(2));
+            byCaseId[cid].totalPayout+=win;
+            if(!byCaseId[cid].players[b.userId]) byCaseId[cid].players[b.userId]={username:b.username,count:0,won:0};
+            byCaseId[cid].players[b.userId].count++;
+            byCaseId[cid].players[b.userId].won+=win;
+        });
+        // Форматируем
+        const result = Object.entries(byCaseId).map(([id,d])=>({
+            caseId:id,caseName:(CASES_CONFIG[id]?.name||id),
+            openCount:d.count,totalBet:Number(d.totalBet.toFixed(2)),
+            totalPayout:Number(d.totalPayout.toFixed(2)),
+            profit:Number((d.totalBet-d.totalPayout).toFixed(2)),
+            topPlayers:Object.values(d.players).sort((a,b)=>b.count-a.count).slice(0,10)
+        }));
+        res.json({ok:true, stats:result, total:allBets.length});
+    } catch(e) { res.status(500).json({error:e.message}); }
+});
+
 app.get('/api/cases/config', (req, res) => {
     res.json({ cases: Object.values(CASES_CONFIG) });
 });
 
+// Получить статус бесплатного кейса для юзера
+app.post('/api/cases/free_status', async (req, res) => {
+    try {
+        const { id, caseId } = req.body;
+        const cfg = CASES_CONFIG[caseId];
+        if (!cfg || !cfg.isFree) return res.json({ available: true });
+        const user = await User.findOne({ id });
+        if (!user) return res.json({ available: true });
+        const lastMap = user.freeCaseLastOpened || new Map();
+        const lastTime = (lastMap instanceof Map) ? lastMap.get(caseId) : lastMap[caseId];
+        if (!lastTime) return res.json({ available: true, nextAvailableAt: null });
+        const cooldownMs = (cfg.cooldownHours || 24) * 3600000;
+        const nextAt = new Date(new Date(lastTime).getTime() + cooldownMs);
+        const now = new Date();
+        if (now >= nextAt) return res.json({ available: true, nextAvailableAt: null });
+        return res.json({ available: false, nextAvailableAt: nextAt.toISOString(), lastOpened: lastTime });
+    } catch(e) { res.json({ available: true }); }
+});
+
 app.post('/api/cases/open', async (req, res) => {
     const { id, caseId, mode, count } = req.body;
-    const openCount = Math.min(5, Math.max(1, parseInt(count)||1));
+    // Бесплатный кейс (case6): только 1 раз, с cooldown
+    const isFreeCase = CASES_CONFIG[caseId] && CASES_CONFIG[caseId].isFree;
+    const openCount = isFreeCase ? 1 : Math.min(5, Math.max(1, parseInt(count)||1));
     if (actionLocks.has(id)) return res.status(429).json({error:'Подождите...'});
     actionLocks.add(id);
     try {
@@ -1852,6 +1919,20 @@ app.post('/api/cases/open', async (req, res) => {
         
         const cfg = CASES_CONFIG[caseId];
         if (!cfg) return res.status(400).json({error:'Кейс не найден'});
+        
+        // Проверяем cooldown для бесплатных кейсов
+        if (cfg.isFree) {
+            const lastMap = user.freeCaseLastOpened || new Map();
+            const lastTime = (lastMap instanceof Map) ? lastMap.get(caseId) : lastMap[caseId];
+            if (lastTime) {
+                const cooldownMs = (cfg.cooldownHours || 24) * 3600000;
+                const nextAt = new Date(new Date(lastTime).getTime() + cooldownMs);
+                if (new Date() < nextAt) {
+                    const hoursLeft = ((nextAt - new Date()) / 3600000).toFixed(1);
+                    return res.status(400).json({error:`Кейс доступен через ${hoursLeft} ч`});
+                }
+            }
+        }
         
         const maintSetting = await Settings.findOne({ key: 'maintenance_cases' });
         if (maintSetting && maintSetting.value === true) return res.status(400).json({error:'Игра временно недоступна'});
@@ -1888,6 +1969,15 @@ app.post('/api/cases/open', async (req, res) => {
             user.stats.minus = Number(((user.stats.minus||0) + totalCost).toFixed(2));
             if(totalProfit > 0) user.stats.wins++;
         }
+        // Записываем время открытия бесплатного кейса
+        if (cfg.isFree) {
+            if (!user.freeCaseLastOpened) user.freeCaseLastOpened = new Map();
+            if (!(user.freeCaseLastOpened instanceof Map)) {
+                user.freeCaseLastOpened = new Map(Object.entries(user.freeCaseLastOpened));
+            }
+            user.freeCaseLastOpened.set(caseId, new Date());
+            user.markModified('freeCaseLastOpened');
+        }
         await user.save();
         
         if (!isDemo) {
@@ -1911,6 +2001,40 @@ app.post('/api/cases/open', async (req, res) => {
         actionLocks.delete(id);
     }
 });
+
+// Проверка подписки на каналы для бесплатного кейса
+app.post('/api/cases/check_subscriptions', async (req, res) => {
+    try {
+        const { id, caseId } = req.body;
+        const cfg = CASES_CONFIG[caseId];
+        if (!cfg || !cfg.isFree) return res.json({ok:true, subscribed:true});
+        
+        const channels = cfg.channels || [];
+        
+        // Если каналов нет - сразу разрешаем
+        if (channels.length === 0) return res.json({ok:true, subscribed:true});
+        
+        // Проверяем через Telegram Bot API
+        const token = process.env.BOT_TOKEN;
+        if (!token) return res.json({ok:true, subscribed:true}); // если нет бота - пропускаем
+        
+        for (const ch of channels) {
+            try {
+                const chId = ch.startsWith('@') ? ch : '@'+ch;
+                const r = await fetch(`https://api.telegram.org/bot${token}/getChatMember?chat_id=${chId}&user_id=${id}`);
+                const d = await r.json();
+                if (!d.ok) continue; // канал недоступен - пропускаем
+                const status = d.result?.status;
+                const isIn = ['creator','administrator','member'].includes(status);
+                if (!isIn) return res.json({ok:false, subscribed:false, error:`Подпишитесь на ${chId}`});
+            } catch(e) { /* Если не можем проверить - пропускаем */ }
+        }
+        
+        res.json({ok:true, subscribed:true});
+    } catch(e) { res.json({ok:true, subscribed:true}); }
+});
+
+// Обновление конфига кейса (включая case6 channels + cooldown)
 
 app.post('/api/admin/logs', checkAdmin, async (req, res) => {
     try {
