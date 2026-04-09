@@ -949,15 +949,22 @@ body {
 .case-card:active { transform: scale(.93); }
 .case-card:hover { border-color: rgba(0,229,255,.25); }
 .case-img-wrap {
-    position: relative; width: 100%;
-    aspect-ratio: 1; margin-bottom: 10px;
-    display: flex; align-items: center; justify-content: center;
+    position: relative;
+    width: 100%;
+    aspect-ratio: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 10px;
 }
 .case-img {
-    width: 88%; height: 88%; object-fit: contain;
-    filter: drop-shadow(0 4px 18px rgba(0,229,255,.12));
+    width: 90%;
+    height: 90%;
+    object-fit: contain;
+    filter: drop-shadow(0 4px 12px rgba(0,0,0,.5));
     transition: transform .25s;
-    position: relative; z-index: 1;
+    position: relative;
+    z-index: 1;
 }
 .case-card:hover .case-img { transform: scale(1.06) translateY(-4px); }
 .case-glow {
@@ -1215,7 +1222,7 @@ body {
 
 /* ════ WALLET TABS ════ */
 .wtab-btn {
-    flex: 1; padding: 13px 8px; border-radius: 12px;
+    flex: 1; padding: 12px 8px; border-radius: 12px;
     border: none; cursor: pointer; font-weight: 900; font-size: 13px;
     letter-spacing: .3px; transition: background .18s, color .18s;
     -webkit-tap-highlight-color: transparent;
@@ -1232,9 +1239,9 @@ body {
 
 /* ════ CASE6: Лоникс Гифт ════ */
 .case-card-free {
-    border: 2px solid rgba(255,204,0,.5) !important;
-    background: linear-gradient(160deg, #0d0d00, #191400) !important;
-    box-shadow: 0 0 18px rgba(255,204,0,.08);
+    border: 2px solid rgba(255,204,0,.55) !important;
+    background: #080808 !important;
+    box-shadow: 0 0 20px rgba(255,204,0,.12);
 }
 .case-card-free:hover {
     border-color: rgba(255,204,0,.8) !important;
@@ -1395,29 +1402,125 @@ body {
 }
 
 /* ════ CASE6: Fix image size = same as other cases ════ */
-.case-card-free .case-img-wrap {
-    /* badge absolute - не влияет на размер img-wrap */
-    margin-top: 4px;
-}
-.case-free-badge {
-    position: absolute !important;
-    top: 8px !important;
-    right: 8px !important;
+.case-card-free .case-free-badge {
+    position: absolute;
+    top: 8px;
+    right: 8px;
     z-index: 5;
 }
 /* Одинаковый размер изображений во всех кейсах */
+
+
+/* Wallet history tab - withdraws variant */
+.wtab-dep-w {
+    background: linear-gradient(135deg, #ff2255, #c00040) !important;
+    color: #fff !important;
+}
+
+/* ════════════════════════════════════════
+   ADMIN UI v3 — unified styles
+════════════════════════════════════════ */
+
+/* Stat cards */
+.adm-stat-card {
+    background: #0d0d1a;
+    border: 1px solid rgba(255,255,255,.07);
+    border-radius: 10px;
+    padding: 10px 8px;
+    text-align: center;
+}
+.adm-stat-label { font-size: 10px; color: rgba(255,255,255,.35); margin-bottom: 4px; letter-spacing: .5px; }
+.adm-stat-val   { font-size: 16px; font-weight: 900; color: #fff; display: block; }
+.adm-stat-sub   { font-size: 10px; color: rgba(255,255,255,.3); margin-top: 2px; }
+
+/* Withdraw card */
+.adm-wd-card {
+    background: #0d0d1a;
+    border: 1px solid rgba(255,255,255,.07);
+    border-radius: 12px;
+    padding: 12px;
+    margin-bottom: 8px;
+}
+.adm-wd-top   { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+.adm-wd-user  { color: var(--neon); font-weight: 800; font-size: 14px; text-decoration: none; }
+.adm-wd-amount{ font-size: 17px; font-weight: 900; color: #fff; }
+.adm-wd-addr  { font-size: 10px; color: #666; word-break: break-all; margin-bottom: 4px; background: #111; padding: 6px 8px; border-radius: 6px; font-family: monospace; }
+.adm-wd-time  { font-size: 10px; color: #555; }
+.adm-approve-btn {
+    flex: 1; background: linear-gradient(135deg,#00ff88,#00c060);
+    color: #000; border: none; padding: 9px; border-radius: 8px;
+    font-weight: 900; cursor: pointer; font-size: 12px;
+}
+.adm-reject-btn {
+    flex: 1; background: #1a0808; border: 1px solid #ff2255;
+    color: #ff2255; padding: 9px; border-radius: 8px;
+    font-weight: 900; cursor: pointer; font-size: 12px;
+}
+
+/* Promo card */
+.adm-promo-card {
+    background: #0d0d1a;
+    border: 1px solid rgba(255,255,255,.07);
+    border-radius: 12px;
+    padding: 12px;
+    margin-bottom: 8px;
+}
+.adm-promo-bar {
+    height: 4px; background: rgba(255,255,255,.07);
+    border-radius: 2px; overflow: hidden;
+}
+.adm-promo-fill {
+    height: 100%; background: linear-gradient(90deg,#00e5ff,#0097a7);
+    border-radius: 2px; transition: width .3s;
+}
+
+/* Empty state */
+.adm-empty { text-align: center; color: rgba(255,255,255,.25); padding: 16px; font-size: 13px; }
+
+/* User list */
+.adm-user-card {
+    display: flex; align-items: center; gap: 10px;
+    padding: 12px 14px;
+    border-bottom: 1px solid rgba(255,255,255,.05);
+    cursor: pointer; transition: background .1s;
+    -webkit-tap-highlight-color: transparent;
+}
+.adm-user-card:active { background: rgba(255,255,255,.03); }
+.adm-user-ava  { width: 38px; height: 38px; border-radius: 50%; object-fit: cover; border: 1.5px solid rgba(0,229,255,.3); flex-shrink: 0; }
+.adm-user-info { flex: 1; min-width: 0; }
+.adm-user-name { font-size: 13px; font-weight: 700; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.adm-user-bal  { font-size: 11px; color: var(--neon); font-weight: 700; margin-top: 2px; }
+.adm-user-arr  { color: rgba(255,255,255,.2); font-size: 20px; flex-shrink: 0; }
+.adm-badge-ban { background: #ff2255; color: #fff; font-size: 9px; font-weight: 800; padding: 2px 6px; border-radius: 4px; letter-spacing: 1px; margin-left: 6px; }
+
+/* Filter buttons */
+.adm-filt-btn {
+    background: #0d0d1a; border: 1px solid rgba(255,255,255,.08);
+    color: rgba(255,255,255,.4); border-radius: 8px; padding: 8px;
+    cursor: pointer; font-size: 12px; font-weight: 700; width: 100%;
+    transition: all .12s; -webkit-tap-highlight-color: transparent;
+}
+.adm-filt-active {
+    background: rgba(0,229,255,.08) !important;
+    border-color: rgba(0,229,255,.3) !important;
+    color: #00e5ff !important;
+}
+
+/* Case image fix — убираем все дубли, один чистый стиль */
 .case-img-wrap {
-    position: relative;
-    width: 100%;
-    aspect-ratio: 1;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    position: relative !important;
+    width: 100% !important;
+    aspect-ratio: 1 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    margin-bottom: 8px !important;
 }
 .case-img {
-    width: 92% !important;
-    height: 92% !important;
+    width: 90% !important;
+    height: 90% !important;
     object-fit: contain !important;
-    position: relative;
-    z-index: 1;
+    position: relative !important;
+    z-index: 1 !important;
+    filter: drop-shadow(0 4px 12px rgba(0,0,0,.4)) !important;
 }
