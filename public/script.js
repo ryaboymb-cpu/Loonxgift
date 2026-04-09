@@ -367,31 +367,77 @@ function updateUI() {
     if($('ref-link')) $('ref-link').innerText = `https://t.me/LoonxGift_Bot?start=${user.id}`;
     if($('ref-count')) $('ref-count').innerText = user.referrals ? user.referrals.length : 0;
     if($('ref-earned')) $('ref-earned').innerText = (user.referralEarnings || 0).toFixed(2) + ' TON';
-    
-    if($('ref-list')) {
-        if(!user.referrals || user.referrals.length === 0) {
-            $('ref-list').innerHTML = '<div style="color:#555; text-align:center;">У вас пока нет рефералов</div>';
-        } else {
-            $('ref-list').innerHTML = user.referrals.map(r => {
-                const refId = typeof r === 'string' ? r : r.id;
-                const refName = (typeof r === 'object' && r.username) ? r.username : refId;
-                const refPhoto = (typeof r === 'object' && r.photo) ? r.photo : '';
-                const avatarHtml = refPhoto
-                    ? `<img src="${refPhoto}" style="width:24px;height:24px;border-radius:50%;object-fit:cover;border:1px solid var(--neon);flex-shrink:0;">`
-                    : `<div style="width:24px;height:24px;border-radius:50%;background:#333;display:flex;align-items:center;justify-content:center;font-size:10px;color:#888;flex-shrink:0;">👤</div>`;
-                return `
-                <div style="display:flex; align-items:center; gap:8px; border-bottom:1px solid #222; padding:6px 0;">
-                    ${avatarHtml}
-                    <div style="flex:1; min-width:0;">
-                        <div style="font-weight:700; font-size:12px; color:#fff; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${refName}</div>
-                        <div style="font-size:10px; color:var(--sub);">ID: ${refId}</div>
-                    </div>
-                </div>`;
-            }).join('');
-        }
-    }
+    if($('ref-pending')) $('ref-pending').innerText = (user.referralPending || 0).toFixed(2);
+    // Грузим детали рефералов с сервера
+    loadRefDetails();
 }
 
+
+// ════ REFERRAL DETAILS ════
+async function loadRefDetails() {
+    const el = $('ref-list');
+    if(!el) return;
+    try{
+        const r = await fetch('/api/ref/details',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:user.id})});
+        if(!r.ok) return;
+        const d = await r.json();
+        // Обновляем pending
+        if($('ref-pending')) $('ref-pending').innerText = (d.pending||0).toFixed(2);
+        if($('btn-ref-claim')) $('btn-ref-claim').style.display = d.pending>0.01 ? 'block':'none';
+        if(!d.details||!d.details.length){
+            el.innerHTML='<div style="color:#555;text-align:center;padding:16px;">Нет рефералов</div>';return;
+        }
+        el.innerHTML = d.details.map(r=>{
+            const ava = r.photo
+                ? `<img src="${r.photo}" style="width:40px;height:40px;border-radius:50%;object-fit:cover;border:2px solid var(--neon);flex-shrink:0;">`
+                : `<div style="width:40px;height:40px;border-radius:50%;background:#1a1a2e;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;">👤</div>`;
+            const myShare = Number((Math.min(r.depositsCounted,10)*r.totalDeposited/Math.max(r.depositsCounted||1,1)*0.1).toFixed(2));
+            return `<div style="display:flex;align-items:center;gap:10px;background:#0a0a0a;border:1px solid #1a1a2e;border-radius:12px;padding:10px;margin-bottom:8px;">
+                ${ava}
+                <div style="flex:1;min-width:0;">
+                    <div style="font-weight:800;font-size:13px;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${r.username}</div>
+                    <div style="display:flex;gap:8px;margin-top:4px;flex-wrap:wrap;">
+                        <span style="color:#00ff88;font-size:11px;font-weight:700;" title="Внёс депозитов">💰 ${r.totalDeposited.toFixed(2)} TON</span>
+                        <span style="color:#00e5ff;font-size:11px;font-weight:700;" title="Ваша доля 10%">✨ +${r.myEarnings.toFixed(2)}</span>
+                    </div>
+                    <div style="color:#555;font-size:10px;margin-top:2px;">Депозитов: ${r.depositsCounted}/10 учтено</div>
+                </div>
+                <div style="text-align:right;font-size:12px;color:#888;">${r.balance.toFixed(2)}<br><span style="font-size:9px;">баланс</span></div>
+            </div>`;
+        }).join('');
+    }catch(e){}
+}
+async function claimRefBonus() {
+    const btn = $('btn-ref-claim');if(btn){btn.disabled=true;btn.innerText='...';}
+    try{
+        const r = await fetch('/api/ref/claim',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:user.id})});
+        const d = await r.json();
+        if(r.ok){user=d.user;updateUI();playSound('win');flyToBalance(d.claimed);showToast('Получено +'+d.claimed+' TON');}
+        else showToast('❌ '+(d.error||'Ошибка'));
+    }catch(e){showToast('❌ Ошибка');}
+    if(btn){btn.disabled=false;btn.innerText='Забрать кэш';}
+}
+
+// ════ WALLET TABS ════
+function switchWalletTab(tab) {
+    const depPanel = $('wallet-dep-panel');
+    const wdPanel  = $('wallet-wd-panel');
+    const btnDep   = $('wt-dep');
+    const btnWd    = $('wt-wd');
+    if(tab === 'dep') {
+        if(depPanel) depPanel.style.display = '';
+        if(wdPanel)  wdPanel.style.display  = 'none';
+        if(btnDep) { btnDep.style.background='linear-gradient(135deg,#00e5ff,#0097a7)'; btnDep.style.color='#000'; }
+        if(btnWd)  { btnWd.style.background='#1a1a2e'; btnWd.style.color='#888'; }
+    } else {
+        if(depPanel) depPanel.style.display = 'none';
+        if(wdPanel)  wdPanel.style.display  = '';
+        if(btnWd)  { btnWd.style.background='linear-gradient(135deg,#ff2255,#c00040)'; btnWd.style.color='#fff'; }
+        if(btnDep) { btnDep.style.background='#1a1a2e'; btnDep.style.color='#888'; }
+        // показываем историю выводов
+        renderWithdrawHistory('withdraws');
+    }
+}
 function toggleMode() {
     if (isCrashBetting || isCashingOut || myCrashBets.length > 0 || miActive || isFlipping || currentBattle) {
         return showToast('Сначала завершите активные ставки и игры!');
@@ -408,6 +454,10 @@ function nav(pageId,el){
     if($('page-'+pageId))$('page-'+pageId).classList.add('active');
     if(el){document.querySelectorAll('.nav-item').forEach(i=>i.classList.remove('active'));el.classList.add('active');}
     try{if(tg&&tg.BackButton){if(MAIN_PAGES.has(pageId))tg.BackButton.hide();else tg.BackButton.show();}}catch(e){}
+    // При открытии кошелька - обновляем историю
+    if(pageId==='wallet') setTimeout(()=>renderWithdrawHistory(),50);
+    // При открытии промо - загружаем рефералов
+    if(pageId==='promo') setTimeout(()=>loadRefDetails(),50);
 }
 
 
@@ -421,7 +471,7 @@ try{if(tg&&tg.BackButton){tg.BackButton.onClick(function(){
 });}}catch(e){}
 function navGame(game){
     let mKey=game;if(game==='coin')mKey='coinflip';
-    if(game==='cases'){nav('cases');return;}
+    if(game==='cases'){nav('cases');loadCasesPage();return;}
     if(maintenance[mKey])return showToast('Временно тех. перерыв');
     if(game!=='mine')killAllPickaxes();
     nav(game);
@@ -545,35 +595,48 @@ async function payWithTonConnect() {
     }
 }
 
-function renderWithdrawHistory() {
+function renderWithdrawHistory(activeTab) {
     const list = $('w-history-list');
     if(!list) return;
-    
-    let wHtml = '';
-    if(!user.withdrawHistory || user.withdrawHistory.length === 0) wHtml = '<div style="color:#555; text-align:center;">Нет выводов</div>';
-    else {
-        wHtml = user.withdrawHistory.map(w => {
-            let cls = w.status === 'Подтверждено' ? 'approved' : (w.status === 'Отклонено' ? 'rejected' : 'pending');
-            let rsn = w.reason ? `<br><span style="color:var(--neon-red); font-size:10px;">Причина: ${w.reason}</span>` : '';
-            return `
-                <div class="w-history-item ${cls}">
-                    <div><b>ВЫВОД:</b> ${w.amount} TON<br><span style="color:#888; font-size:10px;">${w.time || ''}</span></div>
-                    <div style="text-align:right;">${w.status} ${rsn}</div>
-                </div>`;
+    const tab = activeTab || list.dataset.tab || 'deposits';
+    list.dataset.tab = tab;
+
+    // Табы
+    const tabs = `<div style="display:flex;gap:8px;margin-bottom:14px;">
+        <button onclick="renderWithdrawHistory('deposits')" style="flex:1;padding:10px;border-radius:10px;border:none;cursor:pointer;font-weight:800;font-size:13px;
+            background:${tab==='deposits'?'linear-gradient(135deg,#00e5ff,#0097a7)':'#1a1a2e'};
+            color:${tab==='deposits'?'#000':'#888'};">💳 Пополнения</button>
+        <button onclick="renderWithdrawHistory('withdraws')" style="flex:1;padding:10px;border-radius:10px;border:none;cursor:pointer;font-weight:800;font-size:13px;
+            background:${tab==='withdraws'?'linear-gradient(135deg,#ff2255,#c00040)':'#1a1a2e'};
+            color:${tab==='withdraws'?'#fff':'#888'};">📤 Выводы</button>
+    </div>`;
+
+    let html = '';
+    if (tab === 'deposits') {
+        const deps = user.depositHistory || [];
+        if(!deps.length) html = '<div style="color:#555;text-align:center;padding:20px;">Нет пополнений</div>';
+        else html = deps.map(d => {
+            const isPromo = d.hash && d.hash.startsWith('PROMO');
+            const isAdmin = d.hash && d.hash.startsWith('ADMIN');
+            const label = isPromo ? 'Промокод' : isAdmin ? 'Выдано' : 'Депозит';
+            return `<div class="w-history-item approved" style="border-left:3px solid var(--neon);">
+                <div><b>${label}:</b> +${d.amount} TON<br><span style="color:#888;font-size:10px;">${d.time||''}</span></div>
+                <div style="text-align:right;color:var(--neon);">+${d.amount}</div>
+            </div>`;
+        }).join('');
+    } else {
+        const wds = user.withdrawHistory || [];
+        if(!wds.length) html = '<div style="color:#555;text-align:center;padding:20px;">Нет выводов</div>';
+        else html = wds.map(w => {
+            let cls = w.status==='Подтверждено'?'approved':(w.status==='Отклонено'?'rejected':'pending');
+            let rsn = w.reason?`<br><span style="color:var(--neon-red);font-size:10px;">Причина: ${w.reason}</span>`:'';
+            return `<div class="w-history-item ${cls}">
+                <div><b>Вывод:</b> ${w.amount} TON<br><span style="color:#888;font-size:10px;">${w.time||''}</span></div>
+                <div style="text-align:right;">${w.status}${rsn}</div>
+            </div>`;
         }).join('');
     }
-
-    let dHtml = '<h4 style="color:var(--neon); margin-top:20px; text-align:center;">ИСТОРИЯ ДЕПОЗИТОВ</h4>';
-    if(!user.depositHistory || user.depositHistory.length === 0) dHtml += '<div style="color:#555; text-align:center;">Нет депозитов</div>';
-    else {
-        dHtml += user.depositHistory.map(d => `
-            <div class="w-history-item approved" style="border-left: 3px solid var(--neon);">
-                <div><b>ДЕПОЗИТ:</b> ${d.amount} TON<br><span style="color:#888; font-size:10px;">${d.time || ''}</span></div>
-                <div style="text-align:right; color:var(--neon);">Успешно</div>
-            </div>`).join('');
-    }
-
-    list.innerHTML = wHtml + dHtml;
+    list.innerHTML = tabs + html;
 }
 
 if($('online-c')) socket.on('online', c => $('online-c').innerText = c);
@@ -612,7 +675,7 @@ function addLiveBetToDOM(b, isInit) {
         list.appendChild(d);
     } else {
         list.prepend(d);
-        if(list.children.length > 10) list.lastChild.remove();
+        if(list.children.length > 15) list.lastChild.remove();
     }
 }
 
@@ -1420,7 +1483,7 @@ function renderAdminContent(tab) {
             <div><b>🎰 Spin RTP (%):</b> <input type="number" id="rtp-spin" value="${adData.rtp.spin||40}" class="input-box" style="padding:5px; width:70px; display:inline-block;"> <button class="btn" style="padding:5px; width:auto; display:inline-block; background:linear-gradient(90deg,#ff6b00,#ff0055);" onclick="adminRTP('spin')">OK</button></div>
             <div><b>⛏️ Mine RTP (%):</b> <input type="number" id="rtp-mine" value="${adData.rtp.mine||40}" class="input-box" style="padding:5px; width:70px; display:inline-block;"> <button class="btn" style="padding:5px; width:auto; display:inline-block; background:linear-gradient(90deg,#7a4920,#c07030);" onclick="adminRTP('mine')">OK</button></div>
             <div><b>⬆️ Upgrade RTP (%):</b> <input type="number" id="rtp-upgrade" value="${adData.rtp.upgrade||85}" class="input-box" style="padding:5px; width:70px; display:inline-block;"> <button class="btn" style="padding:5px; width:auto; display:inline-block; background:linear-gradient(90deg,#0097a7,#00e5ff);" onclick="adminRTP('upgrade')">OK</button></div>
-            <div><b>🎁 Cases RTP (%):</b> <input type="number" id="rtp-cases" value="${adData.rtp.cases||90}" class="input-box" style="padding:5px; width:70px; display:inline-block;"> <button class="btn" style="padding:5px; width:auto; display:inline-block; background:linear-gradient(90deg,#6a1b9a,#ce93d8);" onclick="adminRTP('cases')">OK</button></div>
+            <div><b>Cases RTP (%):</b> <input type="number" id="rtp-cases" value="${adData.rtp.cases||78}" class="input-box" style="padding:5px; width:70px; display:inline-block;"> <button class="btn" style="padding:5px; width:auto; display:inline-block; background:linear-gradient(90deg,#6a1b9a,#ce93d8);" onclick="adminRTP('cases')">OK</button></div>
 
             <hr>
             <h4 style="color:var(--neon); margin-bottom:10px;">💸 МИН. ВЫВОД</h4>
@@ -1444,7 +1507,8 @@ function renderAdminContent(tab) {
             <hr>
             <h4 style="color:var(--neon); margin-bottom:10px;">ОТОБРАЖЕНИЕ В ИСТОРИИ</h4>
             <label><input type="checkbox" ${isShowDemo ? 'checked' : ''} onchange="adminDemoToggle(this.checked)"> Показывать Demo ставки</label><br>
-        <button class="btn" style="margin-top:12px;background:linear-gradient(135deg,#ff6b00,#ffcc00);color:#000;font-weight:900;" onclick="adminOpenSettingsPanel()">📢 Баннер + 🎵 Музыка + ⚙️ Настройки игр</button>
+        <button class="btn" style="margin-top:12px;background:linear-gradient(135deg,#ff6b00,#ffcc00);color:#000;font-weight:900;" onclick="adminOpenSettingsPanel()">Баннер + Музыка + Настройки игр</button>
+        <button class="btn" style="margin-top:8px;background:linear-gradient(135deg,#6a1b9a,#ce93d8);font-weight:900;" onclick="adminShowCaseSettings()">Настройки кейсов</button>
         `;
     }
     if(tab === 'users') { 
@@ -2997,6 +3061,374 @@ function highlightSpinWins(winLines, grid) {
             }
         }
     });
+}
+
+// ===================== CASES GAME =====================
+let casesConfig = [];
+let caseIsOpening = false;
+let currentCaseId = null;
+let caseOpenCount = 1; // 1-5
+
+async function loadCasesPage() {
+    caseOpenCount = 1;
+    if (casesConfig.length === 0) {
+        try {
+            const r = await fetch('/api/cases/config');
+            const d = await r.json();
+            casesConfig = d.cases || [];
+        } catch(e) { showToast('Ошибка загрузки кейсов'); return; }
+    }
+    renderCasesList();
+}
+
+function renderCasesList() {
+    const page = $('page-cases');
+    if (!page) return;
+    page.innerHTML = `<div class="cases-page">
+        <div class="cases-section-label">ВЫБЕРИТЕ КЕЙС</div>
+        <div class="cases-grid">
+            ${casesConfig.map(c => `
+                <div class="case-card" onclick="openCaseDetail('${c.id}')">
+                    <div class="case-img-wrap">
+                        <img src="/${c.img}" alt="${c.name}" class="case-img" onerror="this.style.opacity='0.3'">
+                        <div class="case-glow"></div>
+                    </div>
+                    <div class="case-name">${c.name}</div>
+                    <div class="case-price-row">
+                        <img src="/toncoin-ton-logo.png" class="case-ton-ic">
+                        <span>${c.price} TON</span>
+                    </div>
+                </div>
+            `).join('')}
+        </div>
+    </div>`;
+}
+
+function openCaseDetail(caseId) {
+    const cfg = casesConfig.find(c => c.id === caseId);
+    if (!cfg) return;
+    currentCaseId = caseId;
+    caseOpenCount = 1;
+    renderCaseDetail(cfg);
+}
+
+function renderCaseDetail(cfg) {
+    const page = $('page-cases');
+    if(!page) return;
+    const totalW = cfg.drops.reduce((s,d)=>s+d.w, 0);
+    const cost = Number((cfg.price * caseOpenCount).toFixed(2));
+    
+    page.innerHTML = `<div class="case-detail">
+        <button class="case-back-btn" onclick="renderCasesList()">НАЗАД</button>
+        
+        <div class="case-detail-header">
+            <div class="case-detail-img-wrap">
+                <img src="/${cfg.img}" alt="${cfg.name}" class="case-detail-img" onerror="this.style.opacity='0.3'">
+                <div class="case-detail-glow"></div>
+            </div>
+            <div class="case-detail-info">
+                <div class="case-detail-name">${cfg.name}</div>
+                <div class="case-detail-price">
+                    <img src="/toncoin-ton-logo.png" class="case-ton-ic">
+                    <span>${cfg.price} TON</span>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Счётчик количества -->
+        <div class="case-count-row">
+            <div class="case-count-label">Количество</div>
+            <div class="case-counter">
+                <button class="case-cnt-btn" onclick="setCaseCount(${Math.max(1,caseOpenCount-1)}, '${cfg.id}')">−</button>
+                <div class="case-cnt-val" id="case-cnt-val">${caseOpenCount}</div>
+                <button class="case-cnt-btn" onclick="setCaseCount(${Math.min(5,caseOpenCount+1)}, '${cfg.id}')">+</button>
+            </div>
+            <div class="case-total-cost" id="case-total-cost">
+                <img src="/toncoin-ton-logo.png" class="case-ton-ic">
+                <span id="case-total-num">${cost}</span> TON
+            </div>
+        </div>
+        
+        <!-- Рулетки (1-5 штук) -->
+        <div class="case-roulettes-container" id="case-roulettes-container"></div>
+        
+        <!-- Результаты -->
+        <div id="case-results-grid" style="display:none;"></div>
+        
+        <!-- Кнопка открытия -->
+        <button id="case-open-btn" class="btn case-open-btn" onclick="playCaseOpen('${cfg.id}', ${cfg.price})">
+            Открыть за ${cost} TON
+        </button>
+        
+        <!-- Список дропов -->
+        <div class="case-drops-title">ВОЗМОЖНЫЕ ВЫИГРЫШИ</div>
+        <div class="case-drops-grid">
+            ${cfg.drops.map(d => {
+                const pct = (d.w/totalW*100).toFixed(1);
+                let rar = '';
+                if(d.val >= cfg.price*5) rar='drop-jackpot';
+                else if(d.val >= cfg.price*2) rar='drop-rare';
+                else if(d.val >= cfg.price*0.9) rar='drop-mid';
+                return `<div class="case-drop-item ${rar}">
+                    <img src="/toncoin-ton-logo.png" class="drop-ton-ic">
+                    <div class="drop-val">${d.val}</div>
+                    <div class="drop-pct">${pct}%</div>
+                </div>`;
+            }).join('')}
+        </div>
+    </div>`;
+}
+
+function setCaseCount(n, caseId) {
+    caseOpenCount = Math.min(5, Math.max(1, n));
+    const cfg = casesConfig.find(c=>c.id===caseId);
+    if(!cfg) return;
+    const cost = Number((cfg.price * caseOpenCount).toFixed(2));
+    const cntEl = $('case-cnt-val');
+    const costEl = $('case-total-num');
+    const btnEl  = $('case-open-btn');
+    if(cntEl) cntEl.innerText = caseOpenCount;
+    if(costEl) costEl.innerText = cost;
+    if(btnEl) btnEl.innerText = `Открыть за ${cost} TON`;
+}
+
+function buildRouletteStrip(drops, winVal) {
+    const totalW = drops.reduce((s,d)=>s+d.w, 0);
+    const strip = [];
+    for(let i=0;i<62;i++){
+        let r=Math.random()*totalW;
+        let picked=drops[drops.length-1].val;
+        for(const d of drops){r-=d.w;if(r<=0){picked=d.val;break;}}
+        strip.push(picked);
+    }
+    // Near-miss: редкие призы рядом с позицией 50 но не на ней
+    if(drops.length > 3) {
+        const big = drops[drops.length-2].val;
+        strip[47] = big;
+        strip[53] = big;
+    }
+    strip[50] = winVal; // реальный результат ровно по центру
+    return strip;
+}
+
+async function playCaseOpen(caseId, price) {
+    if (caseIsOpening) return;
+    const cfg = casesConfig.find(c=>c.id===caseId);
+    if(!cfg) return;
+    const totalCost = Number((price * caseOpenCount).toFixed(2));
+    const bal = mode==='demo' ? user.demo_balance : user.balance;
+    if (bal < totalCost) return showToast('Недостаточно средств');
+    
+    const btn = $('case-open-btn');
+    if(!btn) return;
+    
+    caseIsOpening = true;
+    btn.disabled = true;
+    btn.innerText = 'Открываем...';
+    const resGrid = $('case-results-grid');
+    if(resGrid) resGrid.style.display='none';
+    
+    // Запрашиваем сервер
+    let serverData;
+    try {
+        const r = await fetch('/api/cases/open', {
+            method:'POST', headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({id:user.id, caseId, mode, count: caseOpenCount})
+        });
+        serverData = await r.json();
+        if(!r.ok){ showToast(serverData.error||'Ошибка'); caseIsOpening=false; btn.disabled=false; btn.innerText=`Открыть за ${totalCost} TON`; return; }
+    } catch(e) { showToast('Ошибка соединения'); caseIsOpening=false; btn.disabled=false; btn.innerText=`Открыть за ${totalCost} TON`; return; }
+    
+    const results = serverData.results || [serverData.win];
+    
+    // Рендерим рулетки
+    const container = $('case-roulettes-container');
+    if(!container) return;
+    container.innerHTML = '';
+    
+    const ITEM_W = 80;
+    const rouletteEls = [];
+    
+    results.forEach((winVal, idx) => {
+        const strip = buildRouletteStrip(cfg.drops, winVal);
+        const wrap = document.createElement('div');
+        wrap.className = 'case-roulette-wrap';
+        wrap.id = `rl-wrap-${idx}`;
+        wrap.innerHTML = `
+            <div class="case-roulette-pointer"></div>
+            <div class="case-roulette" id="rl-${idx}">
+                ${strip.map(v=>{
+                    let cls='rl-item';
+                    if(v>=cfg.price*5)cls+=' rl-jackpot';
+                    else if(v>=cfg.price*2)cls+=' rl-rare';
+                    else if(v>=cfg.price*0.9)cls+=' rl-mid';
+                    return `<div class="${cls}"><img src="/toncoin-ton-logo.png" class="rl-ton"><span>${v}</span></div>`;
+                }).join('')}
+            </div>`;
+        container.appendChild(wrap);
+        rouletteEls.push({id:`rl-${idx}`, winVal});
+    });
+    
+    // Небольшая задержка чтобы DOM отрисовался
+    await new Promise(res=>setTimeout(res,60));
+    
+    // Запускаем анимации с небольшим сдвигом между лентами
+    const spinPromises = rouletteEls.map(({id, winVal}, idx) => {
+        return new Promise(async (resolve) => {
+            const rl = $(id);
+            if(!rl){ resolve(); return; }
+            
+            const containerW = rl.parentElement?.offsetWidth || 320;
+            const visibleItems = Math.floor(containerW / ITEM_W);
+            const centerOffset = Math.floor(visibleItems/2);
+            const targetPos = (50 - centerOffset) * ITEM_W + Math.random()*8 - 4;
+            
+            rl.style.transition = 'none';
+            rl.style.transform = 'translateX(0px)';
+            
+            // Стартуем с задержкой между лентами
+            await new Promise(r2=>setTimeout(r2, idx * 120));
+            
+            const spinDuration = 4000 + idx * 200 + Math.random()*300;
+            rl.style.transition = `transform ${spinDuration}ms cubic-bezier(0.15, 0.0, 0.05, 1.0)`;
+            rl.style.transform = `translateX(-${targetPos}px)`;
+            
+            await new Promise(r2=>setTimeout(r2, spinDuration + 100));
+            
+            // Подсвечиваем выигрышный элемент
+            const items = rl.querySelectorAll('.rl-item');
+            if(items[50]) items[50].classList.add('rl-winner');
+            
+            resolve();
+        });
+    });
+    
+    await Promise.all(spinPromises);
+    
+    // Показываем результаты
+    user = serverData.user;
+    updateUI();
+    
+    const totalWin = serverData.totalWin;
+    const totalProfit = serverData.totalProfit;
+    const isProfit = totalProfit >= 0;
+    
+    if(resGrid) {
+        resGrid.style.display = 'grid';
+        resGrid.style.gridTemplateColumns = results.length === 1 ? '1fr' : results.length <= 2 ? '1fr 1fr' : results.length <= 4 ? '1fr 1fr' : '1fr 1fr 1fr';
+        resGrid.style.gap = '8px';
+        resGrid.style.marginBottom = '12px';
+        
+        let resHtml = results.map(v => {
+            const diff = v - price;
+            const pos = diff >= 0;
+            return `<div class="case-single-result ${pos?'csw-pos':'csw-neg'}">
+                <img src="/toncoin-ton-logo.png" class="csr-ton">
+                <div class="csr-val">${v}</div>
+                <div class="csr-diff" style="color:${pos?'#00ff88':'#ff2255'}">${pos?'+':''}${diff.toFixed(2)}</div>
+            </div>`;
+        }).join('');
+        
+        if(results.length > 1) {
+            resHtml += `<div class="case-total-result ${isProfit?'ctr-pos':'ctr-neg'}" style="grid-column:1/-1;">
+                <span>Итого: </span>
+                <img src="/toncoin-ton-logo.png" class="csr-ton">
+                <span class="ctr-sum">${totalWin}</span>
+                <span style="color:${isProfit?'#00ff88':'#ff2255'};font-size:13px;">${isProfit?'+':''}${totalProfit.toFixed(2)}</span>
+            </div>`;
+        }
+        
+        resHtml += `<button class="btn cr-collect-btn" onclick="caseCollect('${caseId}', ${price})" style="grid-column:1/-1;">Забрать кэш</button>`;
+        resGrid.innerHTML = resHtml;
+    }
+    
+    if(isProfit){ playSound('win'); flyToBalance(totalWin); }
+    else playSound('hit');
+    
+    caseIsOpening = false;
+    btn.disabled = false;
+    btn.innerText = `Открыть ещё раз (${Number((price*caseOpenCount).toFixed(2))} TON)`;
+}
+
+function caseCollect(caseId, price) {
+    const res=$('case-results-grid');
+    if(res) res.style.display='none';
+    const container=$('case-roulettes-container');
+    if(container) container.innerHTML='';
+    const btn=$('case-open-btn');
+    if(btn) btn.innerText=`Открыть за ${Number((price*caseOpenCount).toFixed(2))} TON`;
+}
+
+// Admin: настройка кейсов
+function adminShowCaseSettings(){
+    const c=$('admin-content');if(!c)return;
+    fetch('/api/cases/config').then(r=>r.json()).then(d=>{
+        const cases=d.cases||[];
+        let html='<div>';
+        cases.forEach(cas=>{
+            const totalW=cas.drops.reduce((s,x)=>s+x.w,0);
+            const ev=cas.drops.reduce((s,x)=>s+x.val*x.w/totalW,0);
+            const rtp=(ev/cas.price*100).toFixed(1);
+            html+=`<div style="background:#0a0a14;border-radius:12px;padding:12px;margin-bottom:10px;border:1px solid #1a1a2e;">
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+<b style="color:#fff;font-size:14px;">${cas.name}</b>
+<span style="color:#888;font-size:11px;">RTP: ${rtp}%</span>
+</div>
+<div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;">
+<label style="color:#aaa;font-size:12px;">Цена:</label>
+<input type="number" id="cp_${cas.id}" class="input-box" value="${cas.price}" style="width:80px;" step="0.5" min="0.1">
+<button onclick="adminSaveCasePrice('${cas.id}')" style="background:#0d2a33;border:1px solid #00e5ff;color:#00e5ff;padding:6px 10px;border-radius:6px;cursor:pointer;font-size:11px;">Сохранить</button>
+</div>
+<div style="font-size:11px;color:#888;margin-bottom:6px;">Дропы (цена : вес):</div>
+<div id="drops_${cas.id}">
+${cas.drops.map((d,i)=>`<div style="display:flex;gap:6px;margin-bottom:4px;align-items:center;">
+<input type="number" id="dv_${cas.id}_${i}" class="input-box" value="${d.val}" step="0.01" style="width:70px;">
+<span style="color:#555;">:</span>
+<input type="number" id="dw_${cas.id}_${i}" class="input-box" value="${d.w}" style="width:70px;">
+<span style="color:#888;font-size:10px;">${(d.w/totalW*100).toFixed(1)}%</span>
+<button onclick="adminRemoveDrop('${cas.id}',${i})" style="background:#2a0808;border:1px solid #ff2255;color:#ff2255;padding:3px 7px;border-radius:4px;cursor:pointer;font-size:10px;">X</button>
+</div>`).join('')}
+</div>
+<button onclick="adminAddDrop('${cas.id}')" style="background:#1a1a2e;border:1px solid #00e5ff44;color:#00e5ff;padding:6px 10px;border-radius:6px;cursor:pointer;font-size:11px;margin-top:4px;">+ Добавить позицию</button>
+<button onclick="adminSaveCaseDrops('${cas.id}',${cas.drops.length})" style="background:linear-gradient(135deg,#00e5ff,#0097a7);color:#000;padding:7px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:700;margin-top:6px;border:none;float:right;">Сохранить дропы</button>
+<div style="clear:both;"></div>
+</div>`;
+        });
+        html+='</div>';
+        c.innerHTML=html;
+    });
+}
+let _dropCounts={};
+function adminAddDrop(caseId){
+    const cas=casesConfig.find(x=>x.id===caseId)||(window._caseAdminData||[]).find(x=>x.id===caseId);
+    const container=document.getElementById('drops_'+caseId);if(!container)return;
+    const idx=container.querySelectorAll('[id^="dv_"]').length;
+    const div=document.createElement('div');div.style.cssText='display:flex;gap:6px;margin-bottom:4px;align-items:center;';
+    div.innerHTML=`<input type="number" id="dv_${caseId}_${idx}" class="input-box" value="1" step="0.01" style="width:70px;"><span style="color:#555;">:</span><input type="number" id="dw_${caseId}_${idx}" class="input-box" value="100" style="width:70px;"><span style="color:#888;font-size:10px;">new</span><button onclick="this.parentNode.remove()" style="background:#2a0808;border:1px solid #ff2255;color:#ff2255;padding:3px 7px;border-radius:4px;cursor:pointer;font-size:10px;">X</button>`;
+    container.appendChild(div);
+}
+function adminRemoveDrop(caseId,idx){
+    const el=document.getElementById('drops_'+caseId);if(!el)return;
+    const rows=el.querySelectorAll('div');if(rows[idx])rows[idx].remove();
+}
+async function adminSaveCasePrice(caseId){
+    const v=parseFloat(document.getElementById('cp_'+caseId)?.value||0);if(!v||v<=0)return showToast('Неверная цена');
+    const r=await fetch('/api/admin/set_case_config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pass:adminPass,caseId,price:v})});
+    if(r.ok){showToast('Цена сохранена');casesConfig=[];}else showToast('Ошибка');
+}
+async function adminSaveCaseDrops(caseId, origLen){
+    const container=document.getElementById('drops_'+caseId);if(!container)return;
+    const dvEls=container.querySelectorAll('[id^="dv_"]');
+    const dwEls=container.querySelectorAll('[id^="dw_"]');
+    const drops=[];
+    dvEls.forEach((el,i)=>{
+        const v=parseFloat(el.value);const w=parseInt(dwEls[i]?.value||0);
+        if(v>0&&w>0)drops.push({val:v,w});
+    });
+    if(drops.length<2)return showToast('Минимум 2 дропа');
+    const r=await fetch('/api/admin/set_case_config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pass:adminPass,caseId,drops})});
+    if(r.ok){const totalW=drops.reduce((s,d)=>s+d.w,0);const ev=drops.reduce((s,d)=>s+d.val*d.w/totalW,0);const price=parseFloat(document.getElementById('cp_'+caseId)?.value||1);showToast('Сохранено. RTP='+(ev/price*100).toFixed(1)+'%');casesConfig=[];}
+    else{const d=await r.json();showToast('Ошибка: '+(d.error||'?'));}
 }
 
 // ===================== UPGRADE GAME =====================
