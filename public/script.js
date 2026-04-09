@@ -1270,7 +1270,7 @@ function switchAdminTab(tab) {
     
     if (tab === 'logs') {
         const c = $('admin-content');
-        c.innerHTML = '<div style="text-align:center; padding:20px; color:var(--neon);">Загрузка логов...</div>';
+        c.innerHTML = '<div class="adm-block" style="text-align:center;padding:20px;color:var(--neon);">Загрузка логов...</div>';
         loadAdminLogs(1, '');
     } else if (tab === 'stats') {
         loadAdminGameStats();
@@ -1519,8 +1519,8 @@ function renderAdminContent(tab) {
 <div class="adm-block">
     <div class="adm-block-title">ПРОЧЕЕ</div>
     <label class="adm-maint-item"><input type="checkbox" ${isShowDemo ? 'checked' : ''} onchange="adminDemoToggle(this.checked)"><span>Показывать Demo ставки</span></label>
-    <button class="btn" style="margin-top:10px;background:linear-gradient(135deg,#ff6b00,#ffcc00);color:#000;font-weight:900;" onclick="adminOpenSettingsPanel()">Баннер + Музыка + Настройки игр</button>
-    <button class="btn" style="margin-top:8px;background:linear-gradient(135deg,#6a1b9a,#ce93d8);font-weight:900;" onclick="adminShowCaseSettings()">Настройки кейсов</button>
+    <button class="btn" style="margin-top:8px;background:linear-gradient(135deg,#ff6b00,#ffcc00);color:#000;font-weight:900;" onclick="adminOpenSettingsPanel()">Баннер / Музыка / Настройки игр</button>
+    
     <button class="btn" style="margin-top:8px;background:#1a0808;border:1px solid #ff2255;color:#ff2255;" onclick="adminReset()">Обнулить историю ставок</button>
 </div>
         `;
@@ -1681,7 +1681,7 @@ async function adminDemoToggle(state) {
 
 async function loadAdminGameStats() {
     const c = $('admin-content');
-    c.innerHTML = '<div style="text-align:center; padding:20px; color:var(--neon);">Загрузка статистики...</div>';
+    c.innerHTML = '<div class="adm-block" style="text-align:center;padding:20px;color:var(--neon);">Загрузка...</div>';
     try {
         const r = await fetch('/api/admin/game_stats', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({pass: adminPass}) });
         if (!r.ok) { c.innerHTML = '<div style="color:red;">Ошибка загрузки</div>'; return; }
@@ -1693,29 +1693,31 @@ async function loadAdminGameStats() {
         Object.values(stats).forEach(s => { totalBet += s.totalBet; totalPayout += s.totalPayout; totalPlays += s.playCount; });
         const totalProfit = totalBet - totalPayout;
         let html = `
-            <div style="background:#1a1a1a; padding:15px; border-radius:8px; margin-bottom:15px; text-align:center; border:1px solid ${totalProfit >= 0 ? 'var(--neon)' : 'var(--neon-red)'};">
-                <div style="font-size:10px; color:#888; margin-bottom:5px;">ОБЩИЙ ИТОГ</div>
-                <div style="font-size:22px; font-weight:900; color:${totalProfit >= 0 ? 'var(--neon)' : 'var(--neon-red)'};">${totalProfit >= 0 ? '+' : ''}${totalProfit.toFixed(2)} TON</div>
-                <div style="font-size:11px; color:#666; margin-top:5px;">Ставок: ${totalPlays} | Ввод: ${totalBet.toFixed(2)} | Выплаты: ${totalPayout.toFixed(2)}</div>
+            <div class="adm-block" style="text-align:center;margin-bottom:10px;">
+                <div style="font-size:10px;color:#555;margin-bottom:6px;letter-spacing:2px;">ОБЩИЙ ИТОГ</div>
+                <div style="font-size:26px;font-weight:900;color:${totalProfit>=0?'var(--neon)':'#ff2255'};">${totalProfit>=0?'+':''}${totalProfit.toFixed(2)} TON</div>
+                <div style="font-size:11px;color:#555;margin-top:6px;">Ставок: ${totalPlays} | Ввод: ${totalBet.toFixed(2)} | Выплаты: ${totalPayout.toFixed(2)}</div>
             </div>`;
         for (const [game, s] of Object.entries(stats)) {
             const profit = s.totalBet - s.totalPayout;
             html += `
-            <div style="background:#111; padding:12px; border-radius:8px; margin-bottom:8px; border-left:3px solid ${colors[game] || '#888'};">
-                <div style="display:flex; justify-content:space-between; align-items:center;">
+            <div class="adm-block" style="margin-bottom:6px;border-left:3px solid ${colors[game]||'#888'};">
+                <div style="display:flex;justify-content:space-between;align-items:center;">
                     <div>
-                        <div style="font-weight:900; color:${colors[game] || '#fff'}; font-size:14px;">${gameNames[game] || game}</div>
-                        <div style="font-size:11px; color:#666; margin-top:3px;">Игр: ${s.playCount} | Ввод: ${s.totalBet.toFixed(2)} | Вывод: ${s.totalPayout.toFixed(2)}</div>
+                        <div style="font-weight:900;color:${colors[game]||'#fff'};font-size:14px;">${gameNames[game]||game}</div>
+                        <div style="font-size:11px;color:#555;margin-top:3px;">Игр: ${s.playCount} | Ввод: ${s.totalBet.toFixed(2)} | Вывод: ${s.totalPayout.toFixed(2)}</div>
                     </div>
                     <div style="text-align:right;">
-                        <div style="font-size:16px; font-weight:900; color:${profit >= 0 ? 'var(--neon)' : 'var(--neon-red)'};">${profit >= 0 ? '+' : ''}${profit.toFixed(2)}</div>
-                        <button style="background:#0d2a33;color:#00e5ff;border:1px solid #00e5ff44;padding:3px 7px;border-radius:4px;font-size:10px;margin-top:4px;margin-right:3px;" onclick="adminShowGameUsers('${game}')">👥</button>
-                        <button style="background:#333; color:#ff4444; border:none; padding:3px 8px; border-radius:4px; font-size:10px; margin-top:4px;" onclick="adminResetGameStats('${game}')">СБРОС</button>
+                        <div style="font-size:16px;font-weight:900;color:${profit>=0?'var(--neon)':'#ff2255'};">${profit>=0?'+':''}${profit.toFixed(2)}</div>
+                        <div style="display:flex;gap:4px;margin-top:6px;">
+                        <button class="adm-ok-btn" style="border-color:rgba(0,229,255,.3);font-size:10px;padding:4px 8px;" onclick="adminShowGameUsers('${game}')">👥</button>
+                        <button class="adm-del-btn" style="font-size:10px;padding:4px 8px;" onclick="adminResetGameStats('${game}')">Сброс</button>
+                        </div>
                     </div>
                 </div>
             </div>`;
         }
-        html += `<button class="btn" style="background:red; margin-top:15px; padding:10px;" onclick="adminResetGameStats('')">СБРОСИТЬ ВСЮ СТАТИСТИКУ</button>`;
+        html += `<button class="btn" style="background:rgba(255,0,0,.15);border:1px solid rgba(255,0,0,.3);color:#ff2255;margin-top:8px;" onclick="adminResetGameStats('')">Сбросить всю статистику</button>`;
         html += `<button class="btn" style="margin-top:8px;background:linear-gradient(135deg,#ce93d8,#9c27b0);color:#000;font-weight:800;padding:10px;" onclick="adminShowCaseStats()">Статистика кейсов</button>`;
         c.innerHTML = html;
     } catch (e) {
@@ -1822,7 +1824,7 @@ function adminOpenSettingsPanel(){
 </div>
 <h4 style="color:#ce93d8;margin:0 0 8px;">⚙️ Настройки механик игр</h4>
 <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
-${['crash','mines','coinflip','spin','mine','upgrade','battle','cases'].map(g=>'<button class="btn" style="background:#1a1a2e;border:1px solid #ce93d844;color:#ce93d8;padding:10px;font-size:12px;font-weight:700;" onclick="adminShowGameSettings(\''+g+'\')">'+'⚙️ '+g+'<\/button>').join('')}
+${['crash','mines','coinflip','spin','mine','upgrade','battle'].map(g=>'<button class="btn" style="background:#0d0d1e;border:1px solid rgba(206,147,216,.2);color:#ce93d8;padding:10px;font-size:13px;font-weight:700;border-radius:10px;" onclick="adminShowGameSettings(\''+g+'\')">'+'⚙ '+g+'<\/button>').join('')}
 </div>
 </div>`;
     fetch('/api/banner').then(r=>r.json()).then(d=>{if(!d.banner)return;const b=d.banner;
@@ -3601,6 +3603,116 @@ function adminShowCaseSettings(selectedCaseId) {
         c.innerHTML=html;
     });
 }
+
+async function adminShowCaseStats(caseId) {
+    const c=$('admin-content');if(!c)return;
+    c.innerHTML='<div class="adm-block" style="text-align:center;padding:20px;color:var(--neon);">Загрузка статистики...</div>';
+    try {
+        const r=await fetch('/api/admin/case_stats',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pass:adminPass,caseId})});
+        const d=await r.json();
+        if(!r.ok){c.innerHTML='<div style="color:red;">Ошибка</div>';return;}
+        const stats=d.stats||[];
+        let html=`<div class="adm-block">
+<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
+<button onclick="adminShowCaseSettings()" class="adm-back-btn">← Назад</button>
+<div class="adm-block-title" style="margin-bottom:0;">${caseId?'Стата: '+caseId:'Статистика кейсов'}</div>
+</div>`;
+        let totalBet=0,totalPayout=0,totalOpens=0;
+        stats.forEach(cs=>{totalBet+=cs.totalBet;totalPayout+=cs.totalPayout;totalOpens+=cs.openCount;});
+        const totalP=totalBet-totalPayout;
+        html+=`<div style="text-align:center;margin-bottom:10px;">
+<div style="font-size:10px;color:#888;margin-bottom:4px;">ИТОГО КЕЙСЫ</div>
+<div style="font-size:22px;font-weight:900;color:${totalP>=0?'var(--neon)':'#ff2255'};">${totalP>=0?'+':''}${totalP.toFixed(2)} TON</div>
+<div style="font-size:11px;color:#555;margin-top:4px;">Открытий: ${totalOpens} | Ввод: ${totalBet.toFixed(2)} | Выплаты: ${totalPayout.toFixed(2)}</div>
+</div></div>`;
+        stats.forEach(cs=>{
+            const profit=cs.totalBet-cs.totalPayout;
+            html+=`<div class="adm-block">
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+<b style="color:#ce93d8;font-size:14px;">${cs.caseName}</b>
+<span style="font-size:16px;font-weight:900;color:${profit>=0?'var(--neon)':'#ff2255'}">${profit>=0?'+':''}${profit.toFixed(2)}</span>
+</div>
+<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;margin-bottom:8px;">
+<div class="adm-stat-chip"><span>Открытий</span><b>${cs.openCount}</b></div>
+<div class="adm-stat-chip"><span>Ввод</span><b>${cs.totalBet.toFixed(2)}T</b></div>
+<div class="adm-stat-chip"><span>Выплаты</span><b>${cs.totalPayout.toFixed(2)}T</b></div>
+</div>
+${cs.topPlayers&&cs.topPlayers.length?`<div style="font-size:11px;color:#555;margin-bottom:4px;">Топ игроков:</div>
+${cs.topPlayers.slice(0,5).map(p=>`<div class="adm-player-row"><span>${p.username}</span><span style="color:#00e5ff;">x${p.count} | ${p.won.toFixed(2)} TON</span></div>`).join('')}`:''}
+</div>`;
+        });
+        c.innerHTML=html;
+    }catch(e){c.innerHTML='<div style="color:#ff2255;padding:20px;text-align:center;">Ошибка соединения</div>';}
+}
+
+function adminShowSingleCaseSettings(caseId) {
+    const c=$('admin-content');if(!c)return;
+    // Загружаем конфиг
+    fetch('/api/cases/config').then(r=>r.json()).then(d=>{
+        const cases=d.cases||[];
+        const cfg=cases.find(x=>x.id===caseId);
+        if(!cfg){c.innerHTML='<div style="color:red;">Кейс не найден</div>';return;}
+        // Обновляем casesConfig
+        casesConfig=cases;
+        const totalW=cfg.drops.reduce((s,x)=>s+x.w,0);
+        const ev=cfg.drops.reduce((s,x)=>s+x.val*x.w/totalW,0);
+        const rtp=cfg.isFree?'—':(ev/cfg.price*100).toFixed(1)+'%';
+        let html=`<div>
+<div class="adm-block" style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+<button onclick="adminShowCaseSettings()" class="adm-back-btn">← Назад</button>
+<b style="color:#fff;font-size:15px;">${cfg.name}</b>
+<span style="margin-left:auto;font-size:11px;color:#888;">RTP: ${rtp}</span>
+</div>`;
+        // Бесплатный кейс
+        if(cfg.isFree){
+            html+=`<div class="adm-block">
+<div class="adm-block-title">БОНУСНЫЙ КЕЙС</div>
+<div class="adm-rtp-row" style="margin-bottom:8px;">
+<div class="adm-rtp-label">Кулдаун (часов)</div>
+<input type="number" id="c6_cooldown" class="input-box adm-rtp-inp" value="${cfg.cooldownHours||24}" min="1" max="720">
+<button class="adm-ok-btn" onclick="adminSaveCase6Settings()">OK</button>
+</div>
+<div class="adm-block-title" style="margin-top:8px;">Каналы для подписки</div>
+<div id="c6-channels" style="margin-bottom:8px;">
+${(cfg.channels||[]).map((ch,i)=>`<div class="adm-channel-row">
+<input type="text" id="c6ch_${i}" class="input-box" value="${ch}" style="flex:1;" placeholder="@channel">
+<button onclick="this.parentNode.remove()" class="adm-del-btn">X</button>
+</div>`).join('')}
+</div>
+<button onclick="adminAddChannel6()" class="adm-add-btn">+ Добавить канал</button>
+</div>`;
+        } else {
+            html+=`<div class="adm-block">
+<div class="adm-rtp-row">
+<div class="adm-rtp-label">Цена кейса</div>
+<input type="number" id="cp_${cfg.id}" class="input-box adm-rtp-inp" value="${cfg.price}" step="0.5" min="0.1">
+<button class="adm-ok-btn" onclick="adminSaveCasePrice('${cfg.id}')">OK</button>
+</div>
+</div>`;
+        }
+        // Дропы
+        html+=`<div class="adm-block">
+<div class="adm-block-title">ДРОПЫ (сумма : вес)</div>
+<div id="drops_${cfg.id}">
+${cfg.drops.map((d,i)=>`<div class="adm-drop-row">
+<input type="number" id="dv_${cfg.id}_${i}" class="input-box adm-drop-inp" value="${d.val}" step="0.01">
+<span class="adm-drop-sep">:</span>
+<input type="number" id="dw_${cfg.id}_${i}" class="input-box adm-drop-inp" value="${d.w}">
+<span class="adm-drop-pct">${(d.w/totalW*100).toFixed(1)}%</span>
+<button onclick="adminRemoveDrop('${cfg.id}',${i})" class="adm-del-btn">X</button>
+</div>`).join('')}
+</div>
+<button onclick="adminAddDrop('${cfg.id}')" class="adm-add-btn" style="margin-top:4px;">+ Позиция</button>
+<div style="display:flex;gap:8px;margin-top:10px;">
+<button onclick="adminSaveCaseDrops('${cfg.id}',${cfg.drops.length})" class="btn" style="flex:1;background:linear-gradient(135deg,#00e5ff,#0097a7);color:#000;font-weight:900;">Сохранить дропы</button>
+<button onclick="adminShowCaseStats('${cfg.id}')" class="btn" style="flex:1;background:#0d2a33;border:1px solid #ce93d844;color:#ce93d8;">Статистика</button>
+</div>
+</div>
+</div>`;
+        c.innerHTML=html;
+    });
+}
+
 let _dropCounts={};
 function adminAddDrop(caseId){
     const cas=casesConfig.find(x=>x.id===caseId)||(window._caseAdminData||[]).find(x=>x.id===caseId);
