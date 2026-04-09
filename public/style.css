@@ -896,3 +896,270 @@ body {
     left: auto !important;
     z-index: 50 !important;
 }
+
+/* ════ TON ICON IMG ════ */
+.ton-icon-img {
+    width: 16px;
+    height: 16px;
+    vertical-align: middle;
+    margin-left: 4px;
+    object-fit: contain;
+    filter: drop-shadow(0 0 3px rgba(0,229,255,0.5));
+}
+
+/* ════ WALLET TABS ════ */
+#wt-dep, #wt-wd {
+    transition: background 0.2s, color 0.2s;
+    -webkit-tap-highlight-color: transparent;
+}
+#wt-dep:active, #wt-wd:active { transform: scale(0.96); }
+
+/* ════ REF PENDING BOX ════ */
+#btn-ref-claim {
+    transition: transform 0.12s;
+}
+#btn-ref-claim:active { transform: scale(0.95); }
+
+/* ════ LIVE BETS BIGGER ════ */
+#feed-list.live-bets-container {
+    max-height: 300px !important;
+}
+
+
+/* ════════════════════════════════════════
+   CASES GAME v2
+════════════════════════════════════════ */
+
+/* ─── Список кейсов ─── */
+.cases-page { padding: 4px 0 20px; }
+.cases-section-label {
+    font-size: 10px; letter-spacing: 3px; text-transform: uppercase;
+    color: rgba(255,255,255,.25); font-weight: 700;
+    text-align: center; margin-bottom: 16px;
+}
+.cases-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.case-card {
+    background: linear-gradient(160deg, #0d0d1e 0%, #10101f 100%);
+    border: 1px solid rgba(255,255,255,.06);
+    border-radius: 18px; padding: 14px 10px 12px;
+    cursor: pointer; text-align: center;
+    transition: transform .12s, border-color .2s;
+    -webkit-tap-highlight-color: transparent; position: relative; overflow: hidden;
+}
+.case-card:active { transform: scale(.93); }
+.case-card:hover { border-color: rgba(0,229,255,.25); }
+.case-img-wrap {
+    position: relative; width: 100%;
+    aspect-ratio: 1; margin-bottom: 10px;
+    display: flex; align-items: center; justify-content: center;
+}
+.case-img {
+    width: 88%; height: 88%; object-fit: contain;
+    filter: drop-shadow(0 4px 18px rgba(0,229,255,.12));
+    transition: transform .25s;
+    position: relative; z-index: 1;
+}
+.case-card:hover .case-img { transform: scale(1.06) translateY(-4px); }
+.case-glow {
+    position: absolute; inset: 20% 15%; border-radius: 50%;
+    background: radial-gradient(circle, rgba(0,229,255,.08) 0%, transparent 70%);
+    pointer-events: none;
+}
+.case-name {
+    font-size: 12px; font-weight: 800; color: #fff;
+    letter-spacing: .5px; text-transform: uppercase;
+    margin-bottom: 7px; line-height: 1.2;
+}
+.case-price-row {
+    display: inline-flex; align-items: center; gap: 5px;
+    background: rgba(0,229,255,.07); border: 1px solid rgba(0,229,255,.18);
+    border-radius: 8px; padding: 4px 10px;
+    font-size: 13px; font-weight: 900; color: #00e5ff;
+}
+.case-ton-ic { width: 13px; height: 13px; object-fit: contain; flex-shrink: 0; }
+
+/* ─── Детальная страница ─── */
+.case-detail { padding: 0 0 24px; }
+.case-back-btn {
+    background: none; border: 1px solid rgba(255,255,255,.1);
+    color: rgba(255,255,255,.45); border-radius: 8px;
+    padding: 7px 14px; cursor: pointer; font-size: 11px;
+    font-weight: 700; letter-spacing: 1.5px; margin-bottom: 18px;
+    transition: all .15s;
+}
+.case-back-btn:hover { color: #fff; border-color: rgba(255,255,255,.3); }
+
+.case-detail-header {
+    display: flex; align-items: center; gap: 16px;
+    background: linear-gradient(135deg,#0a0a18,#10101e);
+    border: 1px solid rgba(255,255,255,.06);
+    border-radius: 16px; padding: 14px; margin-bottom: 14px;
+}
+.case-detail-img-wrap {
+    position: relative; width: 90px; height: 90px; flex-shrink: 0;
+}
+.case-detail-img {
+    width: 100%; height: 100%; object-fit: contain;
+    filter: drop-shadow(0 4px 20px rgba(0,229,255,.2));
+    position: relative; z-index: 1;
+}
+.case-detail-glow {
+    position: absolute; inset: -10px;
+    background: radial-gradient(circle, rgba(0,229,255,.1) 0%, transparent 70%);
+}
+.case-detail-info { flex: 1; }
+.case-detail-name {
+    font-size: 16px; font-weight: 900; color: #fff;
+    letter-spacing: .5px; text-transform: uppercase; margin-bottom: 6px;
+}
+.case-detail-price {
+    display: flex; align-items: center; gap: 5px;
+    font-size: 15px; font-weight: 900; color: #00e5ff;
+}
+.case-detail-price img { width: 14px; height: 14px; }
+
+/* ─── Счётчик количества ─── */
+.case-count-row {
+    display: flex; align-items: center; gap: 12px;
+    background: #0a0a14; border: 1px solid rgba(255,255,255,.07);
+    border-radius: 12px; padding: 10px 14px; margin-bottom: 12px;
+}
+.case-count-label {
+    font-size: 11px; color: rgba(255,255,255,.4);
+    font-weight: 700; letter-spacing: 1px; text-transform: uppercase; flex: 1;
+}
+.case-counter {
+    display: flex; align-items: center; gap: 0;
+    background: #111; border-radius: 10px; overflow: hidden;
+    border: 1px solid rgba(255,255,255,.1);
+}
+.case-cnt-btn {
+    width: 36px; height: 36px; background: none; border: none;
+    color: #00e5ff; font-size: 18px; font-weight: 900; cursor: pointer;
+    transition: background .1s; display: flex; align-items: center; justify-content: center;
+}
+.case-cnt-btn:hover { background: rgba(0,229,255,.08); }
+.case-cnt-btn:active { background: rgba(0,229,255,.16); }
+.case-cnt-val {
+    width: 36px; text-align: center; font-size: 15px; font-weight: 900; color: #fff;
+}
+.case-total-cost {
+    display: flex; align-items: center; gap: 4px;
+    font-size: 13px; font-weight: 800; color: #00e5ff;
+}
+.case-total-cost img { width: 12px; height: 12px; }
+
+/* ─── Рулетки контейнер ─── */
+.case-roulettes-container {
+    display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px;
+}
+.case-roulette-wrap {
+    position: relative; width: 100%; height: 88px;
+    overflow: hidden; border-radius: 12px;
+    border: 1px solid rgba(0,229,255,.2);
+    background: #080810;
+}
+.case-roulette-pointer {
+    position: absolute; top: 0; bottom: 0; left: 50%;
+    transform: translateX(-50%); width: 2px;
+    background: linear-gradient(180deg,transparent,#00e5ff 20%,#00e5ff 80%,transparent);
+    z-index: 10;
+}
+.case-roulette-pointer::before, .case-roulette-pointer::after {
+    content:''; position:absolute; left:50%; transform:translateX(-50%);
+    width:0; height:0; border-left:6px solid transparent; border-right:6px solid transparent;
+}
+.case-roulette-pointer::before { top:0; border-top:9px solid #00e5ff; }
+.case-roulette-pointer::after  { bottom:0; border-bottom:9px solid #00e5ff; }
+.case-roulette {
+    display: flex; align-items: center; height: 100%;
+    gap: 3px; padding: 0 6px; will-change: transform;
+}
+.rl-item {
+    flex-shrink: 0; width: 78px; height: 78px;
+    background: #0d0d1e; border: 1px solid rgba(255,255,255,.07);
+    border-radius: 10px; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 4px;
+    transition: border-color .2s, box-shadow .2s;
+}
+.rl-item .rl-ton { width: 20px; height: 20px; object-fit: contain; }
+.rl-item span { font-size: 13px; font-weight: 800; color: rgba(255,255,255,.7); }
+.rl-item.rl-mid { border-color: rgba(255,255,255,.15); }
+.rl-item.rl-mid span { color: #fff; }
+.rl-item.rl-rare { border-color: rgba(0,229,255,.3); background: #07101a; }
+.rl-item.rl-rare span { color: #00e5ff; }
+.rl-item.rl-jackpot {
+    border-color: rgba(255,204,0,.45); background: #0f0d00;
+    box-shadow: 0 0 10px rgba(255,204,0,.15);
+}
+.rl-item.rl-jackpot span { color: #ffcc00; }
+.rl-item.rl-winner {
+    border-color: #00ff88 !important;
+    box-shadow: 0 0 16px rgba(0,255,136,.35) !important;
+    animation: rlWinPulse 0.6s ease 2;
+}
+@keyframes rlWinPulse {
+    0%,100%{transform:scale(1);} 50%{transform:scale(1.06);}
+}
+
+/* ─── Результаты ─── */
+.case-single-result {
+    background: #0a0a14; border-radius: 12px;
+    padding: 12px 8px; text-align: center;
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+    border: 1px solid rgba(255,255,255,.07); animation: caseWinIn .35s ease;
+}
+.case-single-result.csw-pos { border-color: rgba(0,255,136,.2); }
+.case-single-result.csw-neg { border-color: rgba(255,34,85,.15); }
+.case-single-result .csr-ton { width: 22px; height: 22px; object-fit: contain; }
+.csr-val { font-size: 18px; font-weight: 900; color: #fff; }
+.csr-diff { font-size: 12px; font-weight: 700; }
+.case-total-result {
+    background: #0d0d1e; border-radius: 12px; padding: 12px;
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    font-size: 14px; color: rgba(255,255,255,.6); font-weight: 700;
+    border: 1px solid rgba(255,255,255,.1);
+}
+.case-total-result .csr-ton { width: 16px; height: 16px; }
+.ctr-sum { font-size: 18px; font-weight: 900; color: #fff; }
+.ctr-pos { border-color: rgba(0,255,136,.25); }
+.ctr-neg { border-color: rgba(255,34,85,.2); }
+
+@keyframes caseWinIn { from{transform:scale(0.7);opacity:0} to{transform:scale(1);opacity:1} }
+
+/* ─── Open btn ─── */
+.case-open-btn {
+    background: linear-gradient(135deg, #00e5ff, #0097a7) !important;
+    color: #000 !important; font-weight: 900 !important;
+    font-size: 14px !important; letter-spacing: .3px;
+    margin-bottom: 20px; border: none !important;
+}
+.cr-collect-btn {
+    background: linear-gradient(135deg,#00ff88,#00c060) !important;
+    color: #000 !important; font-weight: 900 !important;
+    padding: 11px 28px !important; width: auto !important; margin: 0 auto !important;
+    display: block !important;
+}
+
+/* ─── Дропы ─── */
+.case-drops-title {
+    font-size: 10px; letter-spacing: 2px; text-transform: uppercase;
+    color: rgba(255,255,255,.25); font-weight: 700;
+    margin-bottom: 10px; text-align: center;
+}
+.case-drops-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 6px; }
+.case-drop-item {
+    background: #0c0c1c; border: 1px solid rgba(255,255,255,.06);
+    border-radius: 10px; padding: 8px 4px;
+    text-align: center; display: flex; flex-direction: column;
+    align-items: center; gap: 3px;
+}
+.case-drop-item img.drop-ton-ic { width: 16px; height: 16px; object-fit: contain; }
+.drop-val { font-size: 12px; font-weight: 800; color: rgba(255,255,255,.8); }
+.drop-pct { font-size: 9px; color: rgba(255,255,255,.25); }
+.drop-mid { border-color: rgba(255,255,255,.12); }
+.drop-mid .drop-val { color: #fff; }
+.drop-rare { border-color: rgba(0,229,255,.25); background: #07101a; }
+.drop-rare .drop-val { color: #00e5ff; }
+.drop-jackpot { border-color: rgba(255,204,0,.35); background: #0f0d00; }
+.drop-jackpot .drop-val { color: #ffcc00; }
