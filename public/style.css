@@ -944,7 +944,9 @@ body {
     border-radius: 18px; padding: 14px 10px 12px;
     cursor: pointer; text-align: center;
     transition: transform .12s, border-color .2s, box-shadow .2s;
-    -webkit-tap-highlight-color: transparent; position: relative; overflow: hidden;
+    -webkit-tap-highlight-color: transparent;
+    position: relative;
+    overflow: hidden;
 }
 .case-card:active { transform: scale(.93); }
 .case-card:hover { border-color: rgba(0,229,255,.25); }
@@ -1217,9 +1219,9 @@ body {
 
 /* ════ CASE6: Лоникс Гифт ════ */
 .case-card-free {
-    border: 2px solid rgba(255,204,0,.55) !important;
+    border: 1px solid rgba(255,204,0,.55) !important;
     background: #080808 !important;
-    box-shadow: 0 0 20px rgba(255,204,0,.12);
+    box-shadow: 0 0 0 1px rgba(255,204,0,.4), 0 0 20px rgba(255,204,0,.12);
 }
 .case-card-free:hover {
     border-color: rgba(255,204,0,.8) !important;
@@ -1380,12 +1382,7 @@ body {
 }
 
 /* ════ CASE6: Fix image size = same as other cases ════ */
-.case-card-free .case-free-badge {
-    position: absolute;
-    top: 8px;
-    right: 8px;
-    z-index: 5;
-}
+.case-card-free 
 /* Одинаковый размер изображений во всех кейсах */
 
 
@@ -1509,4 +1506,48 @@ body {
 }
 /* case6 card: badge absolute чтобы не сжимал img */
 .case-card-free { position: relative !important; }
-.case-free-badge { position: absolute !important; top: 8px !important; right: 8px !important; z-index: 5 !important; }
+
+
+/* ════ FINAL BADGE FIX ════ */
+.case-free-badge {
+    position: absolute !important;
+    top: 6px !important;
+    right: 6px !important;
+    z-index: 10 !important;
+    /* НЕ влияет на layout благодаря position:absolute */
+}
+
+/* ════ ADMIN: Online indicators ════ */
+.adm-online-dot {
+    position: absolute;
+    bottom: 1px;
+    right: 1px;
+    width: 10px;
+    height: 10px;
+    background: #00ff88;
+    border-radius: 50%;
+    border: 2px solid #0a0a14;
+    box-shadow: 0 0 6px rgba(0,255,136,.6);
+}
+.adm-badge-online {
+    display: inline-block;
+    background: rgba(0,255,136,.12);
+    border: 1px solid rgba(0,255,136,.3);
+    color: #00ff88;
+    font-size: 9px;
+    font-weight: 800;
+    padding: 1px 5px;
+    border-radius: 4px;
+    letter-spacing: .5px;
+    margin-left: 5px;
+    vertical-align: middle;
+}
+.adm-filt-online { 
+    border-color: rgba(0,255,136,.2) !important;
+    color: rgba(0,255,136,.6) !important;
+}
+.adm-filt-online-active {
+    background: rgba(0,255,136,.1) !important;
+    border-color: rgba(0,255,136,.4) !important;
+    color: #00ff88 !important;
+}
