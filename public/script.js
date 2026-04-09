@@ -303,7 +303,10 @@ window.onload = async () => {
 
     user = data.user;
     rtpObj = data.rtp || { crash: 90, mines: 90, coinflip: 90, spin: 94, upgrade: 85, cases: 78 };
-    maintenance = data.maintenance || { crash: false, mines: false, coinflip: false, battle: false, spin: false, upgrade: false, case: false };
+    maintenance = data.maintenance || {};
+    // Нормализуем ключи (сервер может вернуть maintenance_mine вместо mine)
+    if(maintenance.maintenance_mine !== undefined) maintenance.mine = maintenance.maintenance_mine;
+    if(maintenance.maintenance_mines !== undefined) maintenance.mines = maintenance.maintenance_mines;
     isShowDemo = data.config ? data.config.showDemo : false;
     
     adminWalletAddress=data.adminWallet||'';
@@ -1661,7 +1664,10 @@ async function adminRTP(game) {
 }
 async function adminMaint(game, state) {
     await fetch('/api/admin/maintenance', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({pass: adminPass, game, state}) }); 
-    adData.maintenance[game] = state; showToast(`Статус ${game} обновлен!`);
+    adData.maintenance[game] = state;
+    // Синхронизируем глобальный maintenance для мгновенного эффекта
+    maintenance[game] = state;
+    showToast('Тех. работы ' + game + ': ' + (state ? 'ВКЛЮЧЕНЫ' : 'ВЫКЛЮЧЕНЫ'));
 }
 async function adminSetMinWithdraw(){
     const val=parseFloat($('min-wd-val')?.value);if(isNaN(val)||val<0.5)return showToast('Мин 0.5 TON');
@@ -3713,6 +3719,31 @@ ${cfg.drops.map((d,i)=>`<div class="adm-drop-row">
     });
 }
 
+
+async function adminSaveCase6Settings(){
+    const cooldown=parseInt(document.getElementById('c6_cooldown')?.value||24);
+    const chInputs=document.querySelectorAll('[id^="c6ch_"]');
+    const channels=Array.from(chInputs).map(el=>el.value.trim().replace(/^@/,'')).filter(v=>v);
+    const r=await fetch('/api/admin/set_case_config',{
+        method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({pass:adminPass,caseId:'case6',cooldownHours:cooldown,channels})
+    });
+    if(r.ok){
+        showToast('Настройки Лоникс Гифт сохранены');
+        casesConfig=[];
+        // Перезагружаем конфиг чтобы case6Status был актуальным
+        await checkCase6Status();
+    }else showToast('Ошибка сохранения');
+}
+function adminAddChannel6(){
+    const cont=document.getElementById('c6-channels');if(!cont)return;
+    const i=cont.querySelectorAll('[id^="c6ch_"]').length;
+    const div=document.createElement('div');
+    div.className='adm-channel-row';
+    div.innerHTML=`<input type="text" id="c6ch_${i}" class="input-box" style="flex:1;" placeholder="@channel (без @)">
+<button onclick="this.parentNode.remove()" class="adm-del-btn">X</button>`;
+    cont.appendChild(div);
+}
 let _dropCounts={};
 function adminAddDrop(caseId){
     const cas=casesConfig.find(x=>x.id===caseId)||(window._caseAdminData||[]).find(x=>x.id===caseId);
