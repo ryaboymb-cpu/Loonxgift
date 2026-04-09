@@ -311,6 +311,16 @@ window.onload = async () => {
     
     adminWalletAddress=data.adminWallet||'';
     adminWallet48=data.wallet48||'';
+    // Регистрируем юзера в онлайн-трекере
+    socket.emit('register_online', data.user?.id || user?.id);
+    // Восстанавливаем последнюю страницу
+    try{
+        const lastPage = localStorage.getItem('lx_lastPage');
+        if(lastPage && MAIN_PAGES.has(lastPage) && lastPage !== 'games') {
+            const navEl = document.querySelector(`.nav-item[onclick*="${lastPage}"]`);
+            nav(lastPage, navEl);
+        }
+    }catch(e){}
     if($('dep-wallet')) $('dep-wallet').innerText = adminWalletAddress || 'Кошелек не настроен на сервере';
     if($('dep-memo')) $('dep-memo').innerText = user.id;
 
@@ -456,10 +466,10 @@ function nav(pageId,el){
     if($('page-'+pageId))$('page-'+pageId).classList.add('active');
     if(el){document.querySelectorAll('.nav-item').forEach(i=>i.classList.remove('active'));el.classList.add('active');}
     try{if(tg&&tg.BackButton){if(MAIN_PAGES.has(pageId))tg.BackButton.hide();else tg.BackButton.show();}}catch(e){}
-    // При открытии кошелька - обновляем историю
     if(pageId==='wallet') setTimeout(()=>renderWithdrawHistory(),50);
-    // При открытии промо - загружаем рефералов
     if(pageId==='promo') setTimeout(()=>loadRefDetails(),50);
+    // Сохраняем последнюю страницу
+    try{ if(MAIN_PAGES.has(pageId)) localStorage.setItem('lx_lastPage', pageId); }catch(e){}
 }
 
 
@@ -1281,14 +1291,25 @@ function switchAdminTab(tab) {
 let adData = {};
 async function loadAdminData() {
     const r = await fetch('/api/admin/data', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({pass: adminPass}) });
-    if(r.ok) { adData = await r.json(); $('admin-modal').style.display = 'flex'; switchAdminTab('withdraws'); } else showToast('Неверный пароль');
+    if(r.ok) {
+        const admD = await r.json();
+        adData = admD;
+        adData.onlineIds = admD.onlineIds || [];
+        $('admin-modal').style.display = 'flex';
+        switchAdminTab('withdraws');
+    } else showToast('Неверный пароль');
 }
 
 async function searchAdminUsers(query, filterType = currentAdminFilter) {
     adminSearchQuery = query;
     currentAdminFilter = filterType;
     const r = await fetch('/api/admin/search_user', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({pass: adminPass, query, filterType}) });
-    if(r.ok) { const d = await r.json(); adData.users = d.users; renderAdminContent('users'); }
+    if(r.ok) {
+        const d = await r.json();
+        adData.users = d.users;
+        if(filterType === 'online') adData.onlineCount = d.onlineCount;
+        renderAdminContent('users');
+    }
 }
 
 async function adminViewUser(userId, page = 1) {
@@ -1306,7 +1327,9 @@ async function adminViewUser(userId, page = 1) {
 <div class="adm-block" style="display:flex;align-items:center;gap:12px;">
     <img src="${u.photo||'https://cdn-icons-png.flaticon.com/512/149/149071.png'}" style="width:52px;height:52px;border-radius:50%;border:2px solid var(--neon);object-fit:cover;flex-shrink:0;">
     <div style="flex:1;min-width:0;">
-        <div style="font-size:16px;font-weight:900;color:#fff;margin-bottom:2px;">${u.username||'Без имени'}</div>
+        <a href="https://t.me/${u.username||''}" target="_blank" style="font-size:16px;font-weight:900;color:#fff;margin-bottom:2px;text-decoration:none;display:block;">
+            ${u.username||'Без имени'} <span style="font-size:11px;color:#00e5ff;opacity:0.7;">↗</span>
+        </a>
         <div style="font-size:12px;color:#888;">ID: ${u.id}</div>
         ${u.isBlocked?'<span class="adm-badge-ban" style="font-size:11px;">ЗАБЛОКИРОВАН</span>':''}
     </div>
@@ -1342,17 +1365,23 @@ async function adminViewUser(userId, page = 1) {
 </div>
 <div class="adm-block">
     <div class="adm-block-title">ИСТОРИЯ СТАВОК</div>
+    <div style="font-size:10px;color:#555;margin-bottom:8px;">Всего ставок: ${d.totalBets||0} | Страница ${d.page||1} из ${d.totalPages||1}</div>
     ${(d.bets||[]).map(b=>{
         const profit=b.result||0;
-        return `<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid rgba(255,255,255,.05);">
-            <div><div style="font-size:12px;font-weight:700;color:#ccc;">${b.game}</div><div style="font-size:10px;color:#555;">${b.timeMsk||b.createdAt?.slice(0,10)||''}</div></div>
-            <div style="text-align:right;"><div style="font-size:13px;font-weight:800;color:${profit>0?'var(--neon)':'#ff2255'};">${profit>0?'+':''}${profit.toFixed(2)}</div><div style="font-size:10px;color:#555;">${b.amount}T → x${b.multiplier||'?'}</div></div>
+        const pColor=profit>0?'var(--neon)':'#ff2255';
+        const modeTag=b.mode==='Demo'?'<span style="color:#00e5ff;font-size:9px;">[D]</span>':'';
+        return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.04);">
+            <div>
+                <div style="font-size:12px;font-weight:700;color:#ddd;">${b.game} ${modeTag}</div>
+                <div style="font-size:10px;color:#555;">${b.timeMsk||String(b.createdAt||'').slice(0,10)||'—'} · ${b.amount}T × ${b.multiplier||'?'}</div>
+            </div>
+            <div style="text-align:right;font-size:14px;font-weight:900;color:${pColor};">${profit>0?'+':''}${profit.toFixed(2)}</div>
         </div>`;
     }).join('') || '<div class="adm-empty">Нет ставок</div>'}
-    ${d.totalPages>1?`<div style="display:flex;gap:8px;margin-top:12px;">
-        ${page>1?`<button onclick="adminViewUser('${u.id}',${page-1})" class="adm-ok-btn" style="flex:1;">← Пред</button>`:''}
-        <span style="flex:1;text-align:center;color:#888;padding:8px;font-size:12px;">${page}/${d.totalPages}</span>
-        ${page<d.totalPages?`<button onclick="adminViewUser('${u.id}',${page+1})" class="adm-ok-btn" style="flex:1;">След →</button>`:''}
+    ${(d.totalPages||1)>1?`<div style="display:flex;gap:6px;margin-top:10px;align-items:center;">
+        <button onclick="adminViewUser('${u.id}',${Math.max(1,(d.page||1)-1)})" class="adm-ok-btn" style="flex:1;${(d.page||1)<=1?'opacity:.4;pointer-events:none;':''}">←</button>
+        <span style="flex:2;text-align:center;color:#888;font-size:12px;">${d.page||1} / ${d.totalPages||1}</span>
+        <button onclick="adminViewUser('${u.id}',${Math.min(d.totalPages||1,(d.page||1)+1)})" class="adm-ok-btn" style="flex:1;${(d.page||1)>=(d.totalPages||1)?'opacity:.4;pointer-events:none;':''}">→</button>
     </div>`:''}
 </div>
 <button onclick="renderAdminContent('users')" class="adm-back-btn" style="margin-top:4px;">← Назад к списку</button>
@@ -1552,22 +1581,33 @@ function renderAdminContent(tab) {
     if(tab === 'users') {
         const usersHtml = (adData.users||[]).map(u=>`
         <div class="adm-user-card" onclick="adminViewUser('${u.id}',1)">
-            <img src="${u.photo||'https://cdn-icons-png.flaticon.com/512/149/149071.png'}" class="adm-user-ava">
+            <div style="position:relative;flex-shrink:0;">
+                <img src="${u.photo||'https://cdn-icons-png.flaticon.com/512/149/149071.png'}" class="adm-user-ava">
+                ${u.isOnline?'<div class="adm-online-dot"></div>':''}
+            </div>
             <div class="adm-user-info">
-                <div class="adm-user-name">${u.username||'Без имени'} ${u.isBlocked?'<span class="adm-badge-ban">БАН</span>':''}</div>
-                <div class="adm-user-bal">${u.balance.toFixed(2)} TON</div>
+                <div class="adm-user-name">
+                    ${u.username||'Без имени'}
+                    ${u.isBlocked?'<span class="adm-badge-ban">БАН</span>':''}
+                    ${u.isOnline?'<span class="adm-badge-online">онлайн</span>':''}
+                </div>
+                <div class="adm-user-bal">${(u.balance||0).toFixed(2)} TON</div>
             </div>
             <div class="adm-user-arr">›</div>
         </div>`).join('');
         c.innerHTML = `
 <div class="adm-block">
-    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:10px;">
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin-bottom:10px;">
         <button class="adm-filt-btn ${currentAdminFilter==='balance'?'adm-filt-active':''}" onclick="searchAdminUsers(adminSearchQuery,'balance')">Баланс</button>
         <button class="adm-filt-btn ${currentAdminFilter==='new'?'adm-filt-active':''}" onclick="searchAdminUsers(adminSearchQuery,'new')">Новые</button>
-        <button class="adm-filt-btn ${currentAdminFilter==='banned'?'adm-filt-active':''}" onclick="searchAdminUsers(adminSearchQuery,'banned')">Забанены</button>
+        <button class="adm-filt-btn ${currentAdminFilter==='banned'?'adm-filt-active':''}" onclick="searchAdminUsers(adminSearchQuery,'banned')">Забан</button>
+        <button class="adm-filt-btn adm-filt-online ${currentAdminFilter==='online'?'adm-filt-active adm-filt-online-active':''}" onclick="searchAdminUsers(adminSearchQuery,'online')">Онлайн</button>
     </div>
     <input type="text" class="input-box" placeholder="Поиск по ID или нику..." value="${adminSearchQuery}" oninput="searchAdminUsers(this.value)" style="margin-bottom:6px;">
-    <div style="text-align:right;font-size:10px;color:#555;">Всего: ${adData.totalUsers||0}</div>
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+        <div style="font-size:11px;color:#888;">Всего: <b style="color:#fff;">${adData.totalUsers||0}</b></div>
+        <div style="font-size:11px;color:#00ff88;font-weight:700;">● Онлайн: ${adData.onlineIds?.length||0}</div>
+    </div>
 </div>
 <div class="adm-block" style="padding:0;">
     ${usersHtml || '<div class="adm-empty" style="padding:20px;">Нет пользователей</div>'}
