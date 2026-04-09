@@ -427,14 +427,13 @@ function switchWalletTab(tab) {
     if(tab === 'dep') {
         if(depPanel) depPanel.style.display = '';
         if(wdPanel)  wdPanel.style.display  = 'none';
-        if(btnDep) { btnDep.style.background='linear-gradient(135deg,#00e5ff,#0097a7)'; btnDep.style.color='#000'; }
-        if(btnWd)  { btnWd.style.background='#1a1a2e'; btnWd.style.color='#888'; }
+        if(btnDep) { btnDep.classList.add('wtab-active'); btnDep.classList.remove('wtab-inactive'); }
+        if(btnWd)  { btnWd.classList.remove('wtab-active'); btnWd.classList.add('wtab-inactive'); }
     } else {
         if(depPanel) depPanel.style.display = 'none';
         if(wdPanel)  wdPanel.style.display  = '';
-        if(btnWd)  { btnWd.style.background='linear-gradient(135deg,#ff2255,#c00040)'; btnWd.style.color='#fff'; }
-        if(btnDep) { btnDep.style.background='#1a1a2e'; btnDep.style.color='#888'; }
-        // показываем историю выводов
+        if(btnWd)  { btnWd.classList.add('wtab-active'); btnWd.classList.remove('wtab-inactive'); }
+        if(btnDep) { btnDep.classList.remove('wtab-active'); btnDep.classList.add('wtab-inactive'); }
         renderWithdrawHistory('withdraws');
     }
 }
@@ -471,7 +470,7 @@ try{if(tg&&tg.BackButton){tg.BackButton.onClick(function(){
 });}}catch(e){}
 function navGame(game){
     let mKey=game;if(game==='coin')mKey='coinflip';
-    if(game==='cases'){nav('cases');loadCasesPage();return;}
+    if(game==='cases'||game==='case'){nav('cases');loadCasesPage();return;}
     if(maintenance[mKey])return showToast('Временно тех. перерыв');
     if(game!=='mine')killAllPickaxes();
     nav(game);
@@ -1717,6 +1716,7 @@ async function loadAdminGameStats() {
             </div>`;
         }
         html += `<button class="btn" style="background:red; margin-top:15px; padding:10px;" onclick="adminResetGameStats('')">СБРОСИТЬ ВСЮ СТАТИСТИКУ</button>`;
+        html += `<button class="btn" style="margin-top:8px;background:linear-gradient(135deg,#ce93d8,#9c27b0);color:#000;font-weight:800;padding:10px;" onclick="adminShowCaseStats()">Статистика кейсов</button>`;
         c.innerHTML = html;
     } catch (e) {
         c.innerHTML = '<div style="color:red;">Сбой сети</div>';
@@ -3090,6 +3090,107 @@ let caseIsOpening = false;
 let currentCaseId = null;
 let caseOpenCount = 1; // 1-5
 
+
+// ════ CASE6: Бесплатный кейс Лоникс Гифт ════
+let case6Status = null; // {available, nextAvailableAt}
+let case6TimerInterval = null;
+
+async function checkCase6Status() {
+    try {
+        const r = await fetch('/api/cases/free_status', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:user.id,caseId:'case6'})});
+        case6Status = await r.json();
+    } catch(e) { case6Status = {available:true}; }
+    return case6Status;
+}
+
+function formatCountdown(nextAvailableAt) {
+    if(!nextAvailableAt) return '';
+    const diff = new Date(nextAvailableAt) - new Date();
+    if(diff <= 0) return '';
+    const h = Math.floor(diff/3600000);
+    const m = Math.floor((diff%3600000)/60000);
+    const sec = Math.floor((diff%60000)/1000);
+    return `${h.toString().padStart(2,'0')}:${m.toString().padStart(2,'0')}:${sec.toString().padStart(2,'0')}`;
+}
+
+function startCase6Timer(nextAvailableAt, onExpire) {
+    if(case6TimerInterval) clearInterval(case6TimerInterval);
+    case6TimerInterval = setInterval(() => {
+        const timeStr = formatCountdown(nextAvailableAt);
+        const el = document.getElementById('case6-timer');
+        if(el) el.innerText = timeStr || '';
+        if(!timeStr) {
+            clearInterval(case6TimerInterval);
+            case6Status = {available:true};
+            if(onExpire) onExpire();
+        }
+    }, 1000);
+}
+
+function showCase6ChannelBottomSheet(cfg) {
+    const channels = (CASES_CONFIG['case6']?.channels) || cfg.channels || [];
+    let channelHtml = '';
+    if(channels.length === 0) {
+        channelHtml = '<p style="color:#888;font-size:13px;text-align:center;">Подпишитесь на канал LoonxGift</p>';
+    } else {
+        channelHtml = channels.map(ch => `
+            <a href="https://t.me/${ch.replace('@','')}" target="_blank" class="case6-channel-btn">
+                ${ch}
+            </a>`).join('');
+    }
+    
+    // Удаляем старый если есть
+    const old = document.getElementById('case6-sheet');
+    if(old) old.remove();
+    
+    const sheet = document.createElement('div');
+    sheet.id = 'case6-sheet';
+    sheet.className = 'case6-bottom-sheet';
+    sheet.innerHTML = `
+        <div class="case6-sheet-handle"></div>
+        <div class="case6-sheet-title">Для открытия подпишитесь</div>
+        <p class="case6-sheet-desc">Откройте Лоникс Гифт бесплатно — подпишитесь на каналы и нажмите Проверить</p>
+        <div class="case6-channels-list">
+            ${channelHtml}
+        </div>
+        <button class="btn case6-check-btn" id="case6-check-btn" onclick="checkCase6Subscriptions()">
+            Проверить подписку
+        </button>
+        <button class="case6-skip-btn" onclick="document.getElementById('case6-sheet').remove()">Отмена</button>
+    `;
+    document.body.appendChild(sheet);
+    // Анимация снизу
+    requestAnimationFrame(() => {
+        requestAnimationFrame(() => { sheet.classList.add('case6-sheet-open'); });
+    });
+}
+
+async function checkCase6Subscriptions() {
+    const btn = document.getElementById('case6-check-btn');
+    if(btn) { btn.disabled=true; btn.innerText='Проверяем...'; }
+    
+    // Проверяем через Telegram bot API
+    try {
+        const r = await fetch('/api/cases/check_subscriptions', {
+            method:'POST', headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({id:user.id, caseId:'case6'})
+        });
+        const d = await r.json();
+        
+        if(d.ok || d.subscribed) {
+            // Подписан - закрываем и открываем кейс
+            const sheet = document.getElementById('case6-sheet');
+            if(sheet) sheet.remove();
+            playCaseOpen('case6', 0);
+        } else {
+            if(btn) { btn.disabled=false; btn.innerText='Проверить подписку'; }
+            showToast(d.error || 'Необходимо подписаться на все каналы');
+        }
+    } catch(e) {
+        if(btn) { btn.disabled=false; btn.innerText='Проверить подписку'; }
+        showToast('Ошибка проверки');
+    }
+}
 async function loadCasesPage() {
     caseOpenCount = 1;
     if (casesConfig.length === 0) {
@@ -3099,17 +3200,43 @@ async function loadCasesPage() {
             casesConfig = d.cases || [];
         } catch(e) { showToast('Ошибка загрузки кейсов'); return; }
     }
+    // Загружаем статус бесплатного кейса
+    await checkCase6Status();
     renderCasesList();
 }
 
 function renderCasesList() {
     const page = $('page-cases');
     if (!page) return;
+    
+    // Сортируем: case6 (free) первым
+    const sorted = [...casesConfig].sort((a,b)=>(a.isFree?-1:0)-(b.isFree?-1:0));
+    
     page.innerHTML = `<div class="cases-page">
         <div class="cases-section-label">ВЫБЕРИТЕ КЕЙС</div>
         <div class="cases-grid">
-            ${casesConfig.map(c => `
-                <div class="case-card" onclick="openCaseDetail('${c.id}')">
+            ${sorted.map(c => {
+                if(c.isFree) {
+                    // Бесплатный кейс
+                    const st = case6Status || {};
+                    const avail = st.available !== false;
+                    const timerStr = !avail ? formatCountdown(st.nextAvailableAt) : '';
+                    return `<div class="case-card case-card-free" onclick="openCaseDetail('${c.id}')" id="case6-card">
+                        <div class="case-free-badge">БОНУС</div>
+                        <div class="case-img-wrap">
+                            <img src="/${c.img}" alt="${c.name}" class="case-img" onerror="this.style.opacity='0.3'">
+                            <div class="case-glow case-glow-gold"></div>
+                        </div>
+                        <div class="case-name" style="color:#ffcc00;">${c.name}</div>
+                        ${avail
+                            ? `<div class="case-price-row case-price-free">Открыть бесплатно</div>`
+                            : `<div class="case-price-row" style="color:#888;font-size:11px;gap:4px;">
+                                <span id="case6-timer-list">${timerStr}</span>
+                               </div>`
+                        }
+                    </div>`;
+                }
+                return `<div class="case-card" onclick="openCaseDetail('${c.id}')">
                     <div class="case-img-wrap">
                         <img src="/${c.img}" alt="${c.name}" class="case-img" onerror="this.style.opacity='0.3'">
                         <div class="case-glow"></div>
@@ -3119,10 +3246,23 @@ function renderCasesList() {
                         <img src="/toncoin-ton-logo.png" class="case-ton-ic">
                         <span>${c.price} TON</span>
                     </div>
-                </div>
-            `).join('')}
+                </div>`;
+            }).join('')}
         </div>
     </div>`;
+    
+    // Запускаем таймер в списке
+    if(case6Status && !case6Status.available && case6Status.nextAvailableAt) {
+        const timerEl = document.getElementById('case6-timer-list');
+        if(timerEl) {
+            if(case6TimerInterval) clearInterval(case6TimerInterval);
+            case6TimerInterval = setInterval(() => {
+                const t = formatCountdown(case6Status.nextAvailableAt);
+                if(timerEl) timerEl.innerText = t;
+                if(!t) { clearInterval(case6TimerInterval); case6Status={available:true}; renderCasesList(); }
+            }, 1000);
+        }
+    }
 }
 
 function openCaseDetail(caseId) {
@@ -3130,6 +3270,23 @@ function openCaseDetail(caseId) {
     if (!cfg) return;
     currentCaseId = caseId;
     caseOpenCount = 1;
+    
+    // Для бесплатного кейса — сначала проверяем каналы
+    if(cfg.isFree) {
+        if(case6Status && !case6Status.available) {
+            renderCaseDetail(cfg); // покажем кейс с таймером
+            return;
+        }
+        const channels = cfg.channels || [];
+        if(channels.length > 0) {
+            renderCaseDetail(cfg);
+            showCase6ChannelBottomSheet(cfg);
+            return;
+        }
+        // Нет каналов - сразу открываем
+        renderCaseDetail(cfg);
+        return;
+    }
     renderCaseDetail(cfg);
 }
 
@@ -3137,7 +3294,10 @@ function renderCaseDetail(cfg) {
     const page = $('page-cases');
     if(!page) return;
     const totalW = cfg.drops.reduce((s,d)=>s+d.w, 0);
-    const cost = Number((cfg.price * caseOpenCount).toFixed(2));
+    const isFree = cfg.isFree === true;
+    const cost = isFree ? 0 : Number((cfg.price * caseOpenCount).toFixed(2));
+    const st = case6Status || {};
+    const avail = !isFree || st.available !== false;
     
     page.innerHTML = `<div class="case-detail">
         <button class="case-back-btn" onclick="renderCasesList()">НАЗАД</button>
@@ -3148,15 +3308,17 @@ function renderCaseDetail(cfg) {
                 <div class="case-detail-glow"></div>
             </div>
             <div class="case-detail-info">
-                <div class="case-detail-name">${cfg.name}</div>
-                <div class="case-detail-price">
-                    <img src="/toncoin-ton-logo.png" class="case-ton-ic">
-                    <span>${cfg.price} TON</span>
-                </div>
+                <div class="case-detail-name" style="${isFree?'color:#ffcc00;':''}">${cfg.name}</div>
+                ${isFree
+                    ? (avail
+                        ? `<div class="case-price-free-badge">БЕСПЛАТНО</div>`
+                        : `<div style="font-size:13px;color:#888;">Доступно через <span id="case6-timer" style="color:#ffcc00;font-weight:900;"></span></div>`)
+                    : `<div class="case-detail-price"><img src="/toncoin-ton-logo.png" class="case-ton-ic"><span>${cfg.price} TON</span></div>`
+                }
             </div>
         </div>
         
-        <!-- Счётчик количества -->
+        ${!isFree ? `<!-- Счётчик количества -->
         <div class="case-count-row">
             <div class="case-count-label">Количество</div>
             <div class="case-counter">
@@ -3168,7 +3330,7 @@ function renderCaseDetail(cfg) {
                 <img src="/toncoin-ton-logo.png" class="case-ton-ic">
                 <span id="case-total-num">${cost}</span> TON
             </div>
-        </div>
+        </div>` : ''}
         
         <!-- Рулетки (1-5 штук) -->
         <div class="case-roulettes-container" id="case-roulettes-container"></div>
@@ -3177,9 +3339,12 @@ function renderCaseDetail(cfg) {
         <div id="case-results-grid" style="display:none;"></div>
         
         <!-- Кнопка открытия -->
-        <button id="case-open-btn" class="btn case-open-btn" onclick="playCaseOpen('${cfg.id}', ${cfg.price})">
-            Открыть за ${cost} TON
-        </button>
+        ${isFree
+            ? (avail
+                ? `<button id="case-open-btn" class="btn case-open-btn case-open-btn-free" onclick="openFreeCase('${cfg.id}')">Открыть Лоникс Гифт</button>`
+                : `<button id="case-open-btn" class="btn" disabled style="background:#1a1a2e;color:#555;cursor:not-allowed;">Недоступно — ждите таймера</button>`)
+            : `<button id="case-open-btn" class="btn case-open-btn" onclick="playCaseOpen('${cfg.id}', ${cfg.price})">Открыть за ${cost} TON</button>`
+        }
         
         <!-- Список дропов -->
         <div class="case-drops-title">ВОЗМОЖНЫЕ ВЫИГРЫШИ</div>
@@ -3232,13 +3397,30 @@ function buildRouletteStrip(drops, winVal) {
     return strip;
 }
 
+
+function openFreeCase(caseId) {
+    const cfg = casesConfig.find(c=>c.id===caseId);
+    if(!cfg) return;
+    const channels = cfg.channels || [];
+    if(channels.length > 0) {
+        showCase6ChannelBottomSheet(cfg);
+    } else {
+        // Нет каналов - открываем сразу
+        playCaseOpen(caseId, 0);
+    }
+}
 async function playCaseOpen(caseId, price) {
     if (caseIsOpening) return;
     const cfg = casesConfig.find(c=>c.id===caseId);
     if(!cfg) return;
-    const totalCost = Number((price * caseOpenCount).toFixed(2));
+    // Бесплатный кейс: только 1, только если доступен
+    const realCount = cfg.isFree ? 1 : caseOpenCount;
+    const totalCost = Number((price * realCount).toFixed(2));
+    if(cfg.isFree && case6Status && !case6Status.available) {
+        return showToast('Кейс ещё не доступен');
+    }
     const bal = mode==='demo' ? user.demo_balance : user.balance;
-    if (bal < totalCost) return showToast('Недостаточно средств');
+    if (!cfg.isFree && bal < totalCost) return showToast('Недостаточно средств');
     
     const btn = $('case-open-btn');
     if(!btn) return;
@@ -3254,7 +3436,7 @@ async function playCaseOpen(caseId, price) {
     try {
         const r = await fetch('/api/cases/open', {
             method:'POST', headers:{'Content-Type':'application/json'},
-            body: JSON.stringify({id:user.id, caseId, mode, count: caseOpenCount})
+            body: JSON.stringify({id:user.id, caseId, mode, count: realCount})
         });
         serverData = await r.json();
         if(!r.ok){ showToast(serverData.error||'Ошибка'); caseIsOpening=false; btn.disabled=false; btn.innerText=`Открыть за ${totalCost} TON`; return; }
@@ -3377,9 +3559,15 @@ async function playCaseOpen(caseId, price) {
     if(isProfit){ playSound('win'); flyToBalance(totalWin); }
     else playSound('hit');
     
+    // Обновляем статус case6
+    if(cfg && cfg.isFree) {
+        case6Status = {available:false, nextAvailableAt: new Date(Date.now()+24*3600000).toISOString()};
+        startCase6Timer(case6Status.nextAvailableAt, ()=>{ case6Status={available:true}; });
+    }
+    
     caseIsOpening = false;
     btn.disabled = false;
-    btn.innerText = `Открыть ещё раз (${Number((price*caseOpenCount).toFixed(2))} TON)`;
+    btn.innerText = cfg && cfg.isFree ? 'Лоникс Гифт открыт!' : `Открыть ещё раз (${Number((price*(cfg?.isFree?1:caseOpenCount)).toFixed(2))} TON)`;
 }
 
 function caseCollect(caseId, price) {
@@ -3392,39 +3580,22 @@ function caseCollect(caseId, price) {
 }
 
 // Admin: настройка кейсов
-function adminShowCaseSettings(){
+function adminShowCaseSettings(selectedCaseId) {
+    if(selectedCaseId) { adminShowSingleCaseSettings(selectedCaseId); return; }
     const c=$('admin-content');if(!c)return;
     fetch('/api/cases/config').then(r=>r.json()).then(d=>{
         const cases=d.cases||[];
         let html='<div>';
+        html+=`<button onclick="adminShowCaseStats()" style="background:linear-gradient(135deg,#ce93d8,#9c27b0);color:#000;padding:9px 14px;border-radius:10px;cursor:pointer;font-size:13px;font-weight:800;width:100%;margin-bottom:12px;border:none;">Статистика всех кейсов</button>`;
         cases.forEach(cas=>{
-            const totalW=cas.drops.reduce((s,x)=>s+x.w,0);
-            const ev=cas.drops.reduce((s,x)=>s+x.val*x.w/totalW,0);
-            const rtp=(ev/cas.price*100).toFixed(1);
-            html+=`<div style="background:#0a0a14;border-radius:12px;padding:12px;margin-bottom:10px;border:1px solid #1a1a2e;">
-<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-<b style="color:#fff;font-size:14px;">${cas.name}</b>
-<span style="color:#888;font-size:11px;">RTP: ${rtp}%</span>
+            html+=`<div class="adm-block" style="margin-bottom:8px;">
+<div style="display:flex;justify-content:space-between;align-items:center;">
+<div><b style="color:#fff;">${cas.name}</b><span style="color:#888;font-size:11px;margin-left:8px;">${cas.isFree?'БЕСПЛАТНЫЙ':cas.price+' TON'}</span></div>
+<div style="display:flex;gap:6px;">
+<button onclick="adminShowCaseStats('${cas.id}')" style="background:#0d2a33;border:1px solid #ce93d844;color:#ce93d8;padding:6px 10px;border-radius:6px;cursor:pointer;font-size:11px;">Стата</button>
+<button onclick="adminShowCaseSettings('${cas.id}')" style="background:#0d2a33;border:1px solid #00e5ff;color:#00e5ff;padding:6px 10px;border-radius:6px;cursor:pointer;font-size:11px;">Ред.</button>
 </div>
-<div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;">
-<label style="color:#aaa;font-size:12px;">Цена:</label>
-<input type="number" id="cp_${cas.id}" class="input-box" value="${cas.price}" style="width:80px;" step="0.5" min="0.1">
-<button onclick="adminSaveCasePrice('${cas.id}')" style="background:#0d2a33;border:1px solid #00e5ff;color:#00e5ff;padding:6px 10px;border-radius:6px;cursor:pointer;font-size:11px;">Сохранить</button>
-</div>
-<div style="font-size:11px;color:#888;margin-bottom:6px;">Дропы (цена : вес):</div>
-<div id="drops_${cas.id}">
-${cas.drops.map((d,i)=>`<div style="display:flex;gap:6px;margin-bottom:4px;align-items:center;">
-<input type="number" id="dv_${cas.id}_${i}" class="input-box" value="${d.val}" step="0.01" style="width:70px;">
-<span style="color:#555;">:</span>
-<input type="number" id="dw_${cas.id}_${i}" class="input-box" value="${d.w}" style="width:70px;">
-<span style="color:#888;font-size:10px;">${(d.w/totalW*100).toFixed(1)}%</span>
-<button onclick="adminRemoveDrop('${cas.id}',${i})" style="background:#2a0808;border:1px solid #ff2255;color:#ff2255;padding:3px 7px;border-radius:4px;cursor:pointer;font-size:10px;">X</button>
-</div>`).join('')}
-</div>
-<button onclick="adminAddDrop('${cas.id}')" style="background:#1a1a2e;border:1px solid #00e5ff44;color:#00e5ff;padding:6px 10px;border-radius:6px;cursor:pointer;font-size:11px;margin-top:4px;">+ Добавить позицию</button>
-<button onclick="adminSaveCaseDrops('${cas.id}',${cas.drops.length})" style="background:linear-gradient(135deg,#00e5ff,#0097a7);color:#000;padding:7px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:700;margin-top:6px;border:none;float:right;">Сохранить дропы</button>
-<div style="clear:both;"></div>
-</div>`;
+</div></div>`;
         });
         html+='</div>';
         c.innerHTML=html;
