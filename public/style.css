@@ -939,11 +939,11 @@ body {
 }
 .cases-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .case-card {
-    background: linear-gradient(160deg, #0d0d1e 0%, #10101f 100%);
-    border: 1px solid rgba(255,255,255,.06);
+    background: #080810;
+    border: 1px solid rgba(255,255,255,.07);
     border-radius: 18px; padding: 14px 10px 12px;
     cursor: pointer; text-align: center;
-    transition: transform .12s, border-color .2s;
+    transition: transform .12s, border-color .2s, box-shadow .2s;
     -webkit-tap-highlight-color: transparent; position: relative; overflow: hidden;
 }
 .case-card:active { transform: scale(.93); }
@@ -991,12 +991,12 @@ body {
 
 .case-detail-header {
     display: flex; align-items: center; gap: 16px;
-    background: linear-gradient(135deg,#0a0a18,#10101e);
-    border: 1px solid rgba(255,255,255,.06);
+    background: #080810;
+    border: 1px solid rgba(255,255,255,.07);
     border-radius: 16px; padding: 14px; margin-bottom: 14px;
 }
 .case-detail-img-wrap {
-    position: relative; width: 90px; height: 90px; flex-shrink: 0;
+    position: relative; width: 110px; height: 110px; flex-shrink: 0;
 }
 .case-detail-img {
     width: 100%; height: 100%; object-fit: contain;
@@ -1323,4 +1323,73 @@ body {
     display: block; width: 100%; background: none; border: none;
     color: rgba(255,255,255,.3); font-size: 13px; padding: 8px;
     cursor: pointer; text-align: center;
+}
+
+/* ════ ADMIN UI IMPROVEMENTS ════ */
+.adm-back-btn {
+    background: #0d0d1e; border: 1px solid rgba(255,255,255,.1);
+    color: rgba(255,255,255,.5); border-radius: 8px;
+    padding: 7px 14px; cursor: pointer; font-size: 11px;
+    font-weight: 700; letter-spacing: 1px; flex-shrink: 0;
+    transition: color .15s, border-color .15s;
+}
+.adm-back-btn:active { color:#fff; border-color:rgba(255,255,255,.3); }
+
+.adm-stat-chip {
+    background: rgba(255,255,255,.04); border-radius: 8px;
+    padding: 8px 6px; text-align: center;
+}
+.adm-stat-chip span { display:block; color:#555; font-size:9px; margin-bottom:3px; }
+.adm-stat-chip b { color:#fff; font-size:12px; }
+
+.adm-player-row {
+    display: flex; justify-content: space-between;
+    padding: 5px 0; border-bottom: 1px solid rgba(255,255,255,.04);
+    font-size: 12px; color: rgba(255,255,255,.6);
+}
+
+.adm-channel-row {
+    display: flex; gap: 6px; margin-bottom: 6px; align-items: center;
+}
+.adm-drop-row {
+    display: flex; gap: 6px; margin-bottom: 5px; align-items: center;
+}
+.adm-drop-inp { width: 70px !important; flex-shrink: 0; }
+.adm-drop-sep { color: #333; font-size: 14px; }
+.adm-drop-pct { color: #555; font-size: 10px; width: 34px; flex-shrink: 0; }
+.adm-del-btn {
+    background: rgba(255,34,85,.1); border: 1px solid rgba(255,34,85,.3);
+    color: #ff2255; border-radius: 6px; padding: 4px 8px;
+    cursor: pointer; font-size: 11px; font-weight: 700; flex-shrink: 0;
+}
+.adm-add-btn {
+    background: rgba(0,229,255,.06); border: 1px solid rgba(0,229,255,.2);
+    color: #00e5ff; border-radius: 8px; padding: 8px 12px;
+    cursor: pointer; font-size: 12px; font-weight: 700;
+    display: inline-block;
+}
+
+/* Admin tabs redesign */
+.admin-tab {
+    background: #0d0d1e !important;
+    border: 1px solid rgba(255,255,255,.07) !important;
+    color: rgba(255,255,255,.4) !important;
+    border-radius: 10px !important;
+    padding: 9px 14px !important;
+    cursor: pointer; font-size: 12px; font-weight: 700;
+    white-space: nowrap; transition: all .15s;
+}
+.admin-tab.active {
+    background: linear-gradient(135deg,#00e5ff22,#0097a722) !important;
+    border-color: rgba(0,229,255,.35) !important;
+    color: #00e5ff !important;
+}
+
+/* Withdraws/Deposits admin redesign */
+#admin-content .w-history-item {
+    background: #0a0a14;
+    border: 1px solid rgba(255,255,255,.06);
+    border-radius: 10px;
+    padding: 10px 12px;
+    margin-bottom: 6px;
 }
