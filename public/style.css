@@ -1393,3 +1393,31 @@ body {
     padding: 10px 12px;
     margin-bottom: 6px;
 }
+
+/* ════ CASE6: Fix image size = same as other cases ════ */
+.case-card-free .case-img-wrap {
+    /* badge absolute - не влияет на размер img-wrap */
+    margin-top: 4px;
+}
+.case-free-badge {
+    position: absolute !important;
+    top: 8px !important;
+    right: 8px !important;
+    z-index: 5;
+}
+/* Одинаковый размер изображений во всех кейсах */
+.case-img-wrap {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.case-img {
+    width: 92% !important;
+    height: 92% !important;
+    object-fit: contain !important;
+    position: relative;
+    z-index: 1;
+}
