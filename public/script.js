@@ -430,7 +430,7 @@ function switchWalletTab(tab) {
     if(tab === 'dep') {
         if(depPanel) depPanel.style.display = '';
         if(wdPanel)  wdPanel.style.display  = 'none';
-        if(btnDep) { btnDep.classList.add('wtab-active'); btnDep.classList.remove('wtab-inactive'); }
+        if(btnDep){btnDep.classList.add('wtab-active');btnDep.classList.remove('wtab-inactive');}
         if(btnWd)  { btnWd.classList.remove('wtab-active'); btnWd.classList.add('wtab-inactive'); }
     } else {
         if(depPanel) depPanel.style.display = 'none';
@@ -605,12 +605,8 @@ function renderWithdrawHistory(activeTab) {
 
     // Табы
     const tabs = `<div style="display:flex;gap:8px;margin-bottom:14px;">
-        <button onclick="renderWithdrawHistory('deposits')" style="flex:1;padding:10px;border-radius:10px;border:none;cursor:pointer;font-weight:800;font-size:13px;
-            background:${tab==='deposits'?'linear-gradient(135deg,#00e5ff,#0097a7)':'#1a1a2e'};
-            color:${tab==='deposits'?'#000':'#888'};">💳 Пополнения</button>
-        <button onclick="renderWithdrawHistory('withdraws')" style="flex:1;padding:10px;border-radius:10px;border:none;cursor:pointer;font-weight:800;font-size:13px;
-            background:${tab==='withdraws'?'linear-gradient(135deg,#ff2255,#c00040)':'#1a1a2e'};
-            color:${tab==='withdraws'?'#fff':'#888'};">📤 Выводы</button>
+        <button onclick="renderWithdrawHistory('deposits')" class="wtab-btn ${tab==='deposits'?'wtab-active':'wtab-inactive'}">Пополнения</button>
+        <button onclick="renderWithdrawHistory('withdraws')" class="wtab-btn ${tab==='withdraws'?'wtab-dep-w':'wtab-inactive'}">Выводы</button>
     </div>`;
 
     let html = '';
@@ -1296,91 +1292,71 @@ async function searchAdminUsers(query, filterType = currentAdminFilter) {
 }
 
 async function adminViewUser(userId, page = 1) {
-    const r = await fetch('/api/admin/user_details', { 
-        method:'POST', 
-        headers:{'Content-Type':'application/json'}, 
-        body:JSON.stringify({pass: adminPass, userId, page}) 
+    const r = await fetch('/api/admin/user_details', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({pass:adminPass, userId, page})
     });
-    
-    if(!r.ok) return showToast('Ошибка загрузки юзера');
-    const data = await r.json();
-    const u = data.user;
-    const hist = data.history || [];
-    const totalPages = data.pagination ? data.pagination.totalPages : 1;
-    const deposits = data.deposits || [];
-    const withdrawals = data.withdrawals || [];
-    const totalUserDep = data.totalUserDeposited || 0;
-    const totalUserWith = data.totalUserWithdrawn || 0;
-    const wagerReq = data.wagerRequired || 0;
-    const wagerDone = data.wagerCompleted || 0;
-    const wagerLeft = Math.max(0, wagerReq - wagerDone);
-
+    if(!r.ok){showToast('Ошибка');return;}
+    const d = await r.json();
+    const u = d.user;
     const c = $('admin-content');
+    if(!c) return;
+    const wl = Math.max(0,(u.wagerRequired||0)-(u.wagerCompleted||0));
     c.innerHTML = `
-        <button onclick="renderAdminContent('users')" class="btn" style="margin-bottom:15px; background:#333; font-size:12px;">← НАЗАД К СПИСКУ</button>
-
-        <div style="background:#1a1a1a; padding:15px; border-radius:8px; margin-bottom:15px; border:1px solid var(--neon);">
-            <h3 style="color:var(--neon); margin-bottom:5px;">${u.username || 'Игрок'} (ID: ${u.id})</h3>
-            <p style="font-size:14px; margin-bottom:5px;"><b>Баланс:</b> <span style="color:var(--neon); font-weight:bold;">${u.balance.toFixed(2)} TON</span></p>
-            <p style="font-size:12px; color:#888; margin-bottom:3px;">Реф. доход: ${(u.referralEarnings || 0).toFixed(2)} TON | Промо: ${(u.stats?.promo || 0).toFixed(2)} TON</p>
-            <p style="font-size:12px; color:#888; margin-bottom:3px;">Всего проиграно: ${(u.stats?.minus || 0).toFixed(2)} TON | Выиграно: ${(u.stats?.plus || 0).toFixed(2)} TON</p>
-            <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin:10px 0; background:#111; padding:10px; border-radius:6px;">
-                <div style="text-align:center;"><div style="font-size:10px; color:#888;">ПОПОЛНЕНО</div><div style="color:var(--neon); font-weight:bold;">${totalUserDep.toFixed(2)} TON</div></div>
-                <div style="text-align:center;"><div style="font-size:10px; color:#888;">ВЫВЕДЕНО</div><div style="color:var(--neon-red); font-weight:bold;">${totalUserWith.toFixed(2)} TON</div></div>
-                <div style="text-align:center;"><div style="font-size:10px; color:#888;">ОТЫГРЫШ</div><div style="color:#ffcc00; font-weight:bold;">${wagerDone.toFixed(2)} / ${wagerReq.toFixed(2)}</div></div>
-                <div style="text-align:center;"><div style="font-size:10px; color:#888;">ОСТАЛОСЬ</div><div style="color:${wagerLeft > 0 ? 'var(--neon-red)' : 'var(--neon)'}; font-weight:bold;">${wagerLeft.toFixed(2)} TON</div></div>
-            </div>
-
-            <div style="display:flex; gap:10px; margin-bottom:10px;">
-                <input type="number" id="ad-bal-val" class="input-box" placeholder="Сумма TON" style="margin-bottom:0;">
-            </div>
-            <div style="display:flex; gap:10px; margin-bottom:10px;">
-                <button class="btn" style="background:var(--neon); color:#000; font-size:12px;" onclick="adminChangeBal('${u.id}', 'add')">ВЫДАТЬ</button>
-                <button class="btn" style="background:var(--neon-red); font-size:12px;" onclick="adminChangeBal('${u.id}', 'sub')">ЗАБРАТЬ</button>
-            </div>
-            <div style="display:flex; gap:10px;">
-                <button class="btn" style="background:var(--neon-blue); color:#000; font-size:12px;" onclick="adminMsgUser('${u.id}')">НАПИСАТЬ В ЛС</button>
-                <button class="btn" style="background:${u.isBlocked?'#555':'red'}; font-size:12px;" onclick="adminBan('${u.id}', ${!u.isBlocked}); setTimeout(()=>adminViewUser('${u.id}',1), 500)">${u.isBlocked?'РАЗБАН':'БАН'}</button>
-            </div>
-        </div>
-
-        <h4 style="color:var(--neon-blue); margin-bottom:8px;">Депозиты (${deposits.length})</h4>
-        <div style="max-height:120px; overflow-y:auto; background:#111; border-radius:6px; margin-bottom:15px; padding:5px;">
-            ${deposits.length > 0 ? deposits.map(d => `<div style="padding:4px 8px; border-bottom:1px solid #222; font-size:11px;"><span style="color:var(--neon);">+${d.amount} TON</span> <span style="color:#666;">${d.time || ''}</span></div>`).join('') : '<div style="color:#555; text-align:center; padding:10px;">Нет депозитов</div>'}
-        </div>
-
-        <h4 style="color:var(--neon-red); margin-bottom:8px;">Выводы (${withdrawals.length})</h4>
-        <div style="max-height:120px; overflow-y:auto; background:#111; border-radius:6px; margin-bottom:15px; padding:5px;">
-            ${withdrawals.length > 0 ? withdrawals.map(w => `<div style="padding:4px 8px; border-bottom:1px solid #222; font-size:11px;"><span style="color:var(--neon-red);">-${w.amount} TON</span> <span style="color:${w.status==='approved'?'var(--neon)':w.status==='rejected'?'#ff4444':'#ffcc00'}">${w.status}</span> <span style="color:#666;">${w.time || ''}</span></div>`).join('') : '<div style="color:#555; text-align:center; padding:10px;">Нет выводов</div>'}
-        </div>
-
-        <h4 style="color:var(--neon-blue); margin-top:10px; margin-bottom:10px;">История ставок (Стр. ${page} / ${totalPages})</h4>
-        <div style="overflow-x:auto;">
-            <table style="width:100%; font-size:11px; text-align:left; border-collapse: collapse; background:#111; border-radius:8px;">
-                <tr style="background:#222; border-bottom:1px solid #444;">
-                    <th style="padding:10px;">Время</th>
-                    <th>Игра</th>
-                    <th>Ставка -> Результат</th>
-                    <th>Баланс</th>
-                </tr>
-                ${hist.length > 0 ? hist.map(h => `
-                <tr style="border-bottom:1px solid #222;">
-                    <td style="padding:8px; color:#666;">${h.timeMsk || '---'}</td>
-                    <td style="font-weight:bold;">${h.game}</td>
-                    <td style="color:${h.result > 0 ? 'var(--neon)' : '#ff4d4d'}">
-                        ${h.amount} -> ${h.result > 0 ? '+' : ''}${h.result}
-                    </td>
-                    <td style="color:#aaa;">${(h.balanceAfter || 0).toFixed(2)}</td>
-                </tr>
-                `).join('') : '<tr><td colspan="4" style="padding:20px; text-align:center; color:#555;">История пуста</td></tr>'}
-            </table>
-        </div>
-
-        <div style="display:flex; justify-content:space-between; margin-top:15px; margin-bottom:30px;">
-            <button class="btn" style="width:48%; background:#222; font-size:12px;" onclick="adminViewUser('${u.id}', ${page > 1 ? page - 1 : 1})" ${page === 1 ? 'disabled' : ''}>← Назад</button>
-            <button class="btn" style="width:48%; background:#222; font-size:12px;" onclick="adminViewUser('${u.id}', ${page + 1})" ${page >= totalPages ? 'disabled' : ''}>Вперед →</button>
-        </div>
-    `;
+<div class="adm-block" style="display:flex;align-items:center;gap:12px;">
+    <img src="${u.photo||'https://cdn-icons-png.flaticon.com/512/149/149071.png'}" style="width:52px;height:52px;border-radius:50%;border:2px solid var(--neon);object-fit:cover;flex-shrink:0;">
+    <div style="flex:1;min-width:0;">
+        <div style="font-size:16px;font-weight:900;color:#fff;margin-bottom:2px;">${u.username||'Без имени'}</div>
+        <div style="font-size:12px;color:#888;">ID: ${u.id}</div>
+        ${u.isBlocked?'<span class="adm-badge-ban" style="font-size:11px;">ЗАБЛОКИРОВАН</span>':''}
+    </div>
+    <div style="text-align:right;flex-shrink:0;">
+        <div style="font-size:20px;font-weight:900;color:var(--neon);">${(u.balance||0).toFixed(2)}</div>
+        <div style="font-size:10px;color:#888;">TON</div>
+    </div>
+</div>
+<div class="adm-block" style="display:grid;grid-template-columns:repeat(2,1fr);gap:6px;">
+    <div class="adm-stat-card"><div class="adm-stat-label">Ставок</div><b class="adm-stat-val">${u.stats?.bets||0}</b></div>
+    <div class="adm-stat-card"><div class="adm-stat-label">Побед</div><b class="adm-stat-val" style="color:var(--neon);">${u.stats?.wins||0}</b></div>
+    <div class="adm-stat-card"><div class="adm-stat-label">Выиграл</div><b class="adm-stat-val" style="color:var(--neon);">${(u.stats?.plus||0).toFixed(2)}</b></div>
+    <div class="adm-stat-card"><div class="adm-stat-label">Проиграл</div><b class="adm-stat-val" style="color:#ff2255;">${(u.stats?.minus||0).toFixed(2)}</b></div>
+    <div class="adm-stat-card"><div class="adm-stat-label">Депозиты</div><b class="adm-stat-val">${(u.totalDeposited||0).toFixed(2)}T</b></div>
+    <div class="adm-stat-card"><div class="adm-stat-label">Отыгрыш</div><b class="adm-stat-val" style="color:${wl>0?'#ffcc00':'var(--neon)'};">${wl.toFixed(2)}T</b></div>
+</div>
+<div class="adm-block">
+    <div class="adm-block-title">ИЗМЕНИТЬ БАЛАНС</div>
+    <div style="display:flex;gap:8px;">
+        <input type="number" id="ad-bal-val" class="input-box" placeholder="Сумма TON" step="0.5" min="0.01" style="flex:1;">
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px;">
+        <button style="background:linear-gradient(135deg,#00ff88,#00c060);color:#000;padding:10px;border-radius:10px;font-weight:900;border:none;cursor:pointer;" onclick="adminChangeBal('${u.id}','add')">+ Выдать</button>
+        <button style="background:#1a0808;border:1px solid #ff2255;color:#ff2255;padding:10px;border-radius:10px;font-weight:900;cursor:pointer;" onclick="adminChangeBal('${u.id}','sub')">- Списать</button>
+    </div>
+</div>
+<div class="adm-block">
+    <div class="adm-block-title">ДЕЙСТВИЯ</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+        <button onclick="adminBan('${u.id}',${!u.isBlocked})" style="${u.isBlocked?'background:linear-gradient(135deg,#00ff88,#00c060);color:#000;':'background:#2a0808;border:1px solid #ff2255;color:#ff2255;'} padding:10px;border-radius:10px;font-weight:800;border:${u.isBlocked?'none':'1px solid #ff2255'};cursor:pointer;">${u.isBlocked?'Разбанить':'Забанить'}</button>
+        <button onclick="adminMsgUser('${u.id}')" style="background:#0d2a33;border:1px solid #00e5ff44;color:#00e5ff;padding:10px;border-radius:10px;font-weight:800;cursor:pointer;">Написать в бота</button>
+    </div>
+</div>
+<div class="adm-block">
+    <div class="adm-block-title">ИСТОРИЯ СТАВОК</div>
+    ${(d.bets||[]).map(b=>{
+        const profit=b.result||0;
+        return `<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid rgba(255,255,255,.05);">
+            <div><div style="font-size:12px;font-weight:700;color:#ccc;">${b.game}</div><div style="font-size:10px;color:#555;">${b.timeMsk||b.createdAt?.slice(0,10)||''}</div></div>
+            <div style="text-align:right;"><div style="font-size:13px;font-weight:800;color:${profit>0?'var(--neon)':'#ff2255'};">${profit>0?'+':''}${profit.toFixed(2)}</div><div style="font-size:10px;color:#555;">${b.amount}T → x${b.multiplier||'?'}</div></div>
+        </div>`;
+    }).join('') || '<div class="adm-empty">Нет ставок</div>'}
+    ${d.totalPages>1?`<div style="display:flex;gap:8px;margin-top:12px;">
+        ${page>1?`<button onclick="adminViewUser('${u.id}',${page-1})" class="adm-ok-btn" style="flex:1;">← Пред</button>`:''}
+        <span style="flex:1;text-align:center;color:#888;padding:8px;font-size:12px;">${page}/${d.totalPages}</span>
+        ${page<d.totalPages?`<button onclick="adminViewUser('${u.id}',${page+1})" class="adm-ok-btn" style="flex:1;">След →</button>`:''}
+    </div>`:''}
+</div>
+<button onclick="renderAdminContent('users')" class="adm-back-btn" style="margin-top:4px;">← Назад к списку</button>
+`;
 }
 
 async function adminChangeBal(userId, type) {
@@ -1425,50 +1401,93 @@ async function adminChangeBal(userId, type) {
 
 function renderAdminContent(tab) {
     const c = $('admin-content');
+
+    // ── ВЫВОДЫ / ДЕПОЗИТЫ ──────────────────────────────────────────
     if(tab === 'withdraws') {
+        const profit = (adData.totalDeposited||0) - (adData.totalWithdrawn||0);
         c.innerHTML = `
-            <div style="background:#222; padding:10px; border-radius:8px; margin-bottom:15px; text-align:center;">
-                <div style="color:var(--neon); font-size:18px;"><b>ВСЕГО ДЕПОВ:</b> ${adData.totalDeposited.toFixed(2)} TON</div>
-                <div style="color:var(--neon-red); font-size:18px;"><b>ВСЕГО ВЫВОДОВ:</b> ${adData.totalWithdrawn.toFixed(2)} TON</div>
+<div class="adm-block" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;text-align:center;">
+    <div class="adm-stat-card" style="border-color:rgba(0,229,255,.2);">
+        <div class="adm-stat-label">Всего депозитов</div>
+        <div class="adm-stat-val" style="color:var(--neon);">${(adData.totalDeposited||0).toFixed(2)}</div>
+        <div class="adm-stat-sub">TON</div>
+    </div>
+    <div class="adm-stat-card" style="border-color:rgba(255,34,85,.2);">
+        <div class="adm-stat-label">Всего выводов</div>
+        <div class="adm-stat-val" style="color:#ff2255;">${(adData.totalWithdrawn||0).toFixed(2)}</div>
+        <div class="adm-stat-sub">TON</div>
+    </div>
+</div>
+<div class="adm-block" style="text-align:center;padding:10px;">
+    <div class="adm-stat-label">Прибыль казино</div>
+    <div style="font-size:26px;font-weight:900;color:${profit>=0?'var(--neon)':'#ff2255'};">${profit>=0?'+':''}${profit.toFixed(2)} TON</div>
+</div>
+<div class="adm-block">
+    <div class="adm-block-title">ОЖИДАЮТ ВЫПЛАТЫ (${adData.withdraws.length})</div>
+    ${adData.withdraws.length ? adData.withdraws.map(w => `
+        <div class="adm-wd-card">
+            <div class="adm-wd-top">
+                <a href="tg://user?id=${w.userId}" class="adm-wd-user">@${w.username||w.userId}</a>
+                <span class="adm-wd-amount">${w.amount} TON</span>
             </div>
-            <h4 style="color:var(--neon);">ОЖИДАЮТ ВЫПЛАТЫ</h4>
-            ${adData.withdraws.map(w => `
-                <div style="background:#1a1a1a; padding:10px; border-radius:8px; margin-bottom:10px;">
-                    <b>ID:</b> ${w.userId} <br> <b>Сумма:</b> ${w.amount} TON <br> <code style="word-break: break-all; font-size:10px;">${w.address}</code><br>
-                    <button class="btn" style="padding:8px; margin-top:5px;" onclick="adminW('${w._id}', 'approve')">ОДОБРИТЬ</button>
-                    <button class="btn" style="padding:8px; margin-top:5px; background:var(--neon-red);" onclick="adminW('${w._id}', 'reject')">ОТКЛОНИТЬ (ВЕРНУТЬ)</button>
-                </div>
-            `).join('') || '<div style="color:#555;">Нет заявок</div>'}
-            
-            <hr>
-            <h4 style="color:var(--neon);">ПОСЛЕДНИЕ ДЕПОЗИТЫ</h4>
-            ${adData.latestDeposits.map(d => `
-                <div style="padding:8px; border-bottom:1px solid #333;">
-                    <a href="tg://user?id=${d.userId}" style="color:var(--neon); text-decoration:none;"><b>@${d.username}</b></a>
-                    (ID: ${d.userId}) <br>
-                    Пополнил: <b style="color:#fff;">${d.amount} TON</b> <span style="font-size:10px; color:#888;">${d.time||""}</span>
-                </div>
-            `).join('') || '<div style="color:#555;">Нет депозитов</div>'}
-        `;
+            <div class="adm-wd-addr">${w.address}</div>
+            <div class="adm-wd-time">${w.time||''}</div>
+            <div style="display:flex;gap:6px;margin-top:8px;">
+                <button class="adm-approve-btn" onclick="adminW('${w._id}','approve')">Одобрить</button>
+                <button class="adm-reject-btn" onclick="adminW('${w._id}','reject')">Отклонить</button>
+            </div>
+        </div>`).join('') : '<div class="adm-empty">Нет заявок</div>'}
+</div>
+<div class="adm-block">
+    <div class="adm-block-title">ПОСЛЕДНИЕ ДЕПОЗИТЫ</div>
+    ${(adData.latestDeposits||[]).map(d=>`
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.05);">
+            <a href="tg://user?id=${d.userId}" style="color:var(--neon);font-weight:700;font-size:13px;">@${d.username}</a>
+            <div style="text-align:right;">
+                <div style="font-weight:800;color:#fff;">+${d.amount} TON</div>
+                <div style="font-size:10px;color:#555;">${d.time||''}</div>
+            </div>
+        </div>`).join('') || '<div class="adm-empty">Нет депозитов</div>'}
+</div>`;
     }
-    if(tab === 'promo') { 
+
+    // ── ПРОМО ──────────────────────────────────────────────────────
+    if(tab === 'promo') {
         c.innerHTML = `
-            <input type="text" id="ad-pr-code" class="input-box" style="padding:10px; font-size:14px;" placeholder="Код">
-            <input type="number" id="ad-pr-sum" class="input-box" style="padding:10px; font-size:14px;" placeholder="Сумма TON">
-            <input type="number" id="ad-pr-lim" class="input-box" style="padding:10px; font-size:14px;" placeholder="Лимит активаций">
-            <button class="btn" style="padding:10px;" onclick="adminPromo()">СОЗДАТЬ ПРОМО</button><hr>
-            ${adData.promos.map(p => {
-                const usedListHtml = p.usedBy.map(uid => `<a href="tg://user?id=${uid}" style="color:var(--neon);">ID: ${uid}</a>`).join(', ');
-                return `
-                <div style="padding:8px; border-bottom:1px solid #222;">
-                    <div><b>${p.code}</b> - ${p.amount} TON | Осталось: <span style="color:var(--neon)">${p.limit - p.usedBy.length}</span> из ${p.limit}</div>
-                    <div style="font-size:10px; margin-top:5px; max-height:40px; overflow-y:auto; background:#111; padding:5px;">Использовали: ${usedListHtml || 'Никто'}</div>
-                    <button style="background:var(--neon-red); color:#fff; border:none; padding:4px 8px; border-radius:4px; margin-top:5px;" onclick="adminDelPromo('${p._id}')">Удалить</button>
-                </div>
-            `}).join('')}
-        `;
+<div class="adm-block">
+    <div class="adm-block-title">СОЗДАТЬ ПРОМОКОД</div>
+    <div class="adm-rtp-row" style="margin-bottom:8px;">
+        <input type="text" id="ad-pr-code" class="input-box" placeholder="Код" style="flex:1;text-transform:uppercase;">
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">
+        <input type="number" id="ad-pr-sum" class="input-box" placeholder="Сумма TON" step="0.5" min="0.1">
+        <input type="number" id="ad-pr-lim" class="input-box" placeholder="Лимит" min="1">
+    </div>
+    <button class="btn" style="background:linear-gradient(135deg,#00e5ff,#0097a7);color:#000;font-weight:900;" onclick="adminPromo()">Создать промокод</button>
+</div>
+<div class="adm-block">
+    <div class="adm-block-title">АКТИВНЫЕ ПРОМОКОДЫ (${(adData.promos||[]).length})</div>
+    ${(adData.promos||[]).map(p=>{
+        const used=p.usedBy.length, left=p.limit-used;
+        const pct=Math.round(used/p.limit*100);
+        return `<div class="adm-promo-card">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                <b style="color:#fff;font-size:15px;letter-spacing:1px;">${p.code}</b>
+                <button onclick="adminDelPromo('${p._id}')" class="adm-del-btn">Удалить</button>
+            </div>
+            <div style="display:flex;gap:12px;font-size:12px;margin-bottom:6px;">
+                <span>Сумма: <b style="color:#00e5ff;">${p.amount} TON</b></span>
+                <span>Осталось: <b style="color:${left>0?'var(--neon)':'#ff2255'}">${left}/${p.limit}</b></span>
+            </div>
+            <div class="adm-promo-bar"><div class="adm-promo-fill" style="width:${pct}%"></div></div>
+        </div>`;
+    }).join('') || '<div class="adm-empty">Нет промокодов</div>'}
+</div>`;
     }
+
     try{if(tg&&tg.BackButton)tg.BackButton.show();}catch(e){}
+
+    // ── НАСТРОЙКИ ──────────────────────────────────────────────────
     if(tab === 'rtp') {
         const rtpGames=[
             {id:'crash',label:'Crash',color:'#ff2255',def:90},
@@ -1482,11 +1501,6 @@ function renderAdminContent(tab) {
         const maintGames=['crash','mines','coinflip','battle','spin','mine','upgrade','case'];
         c.innerHTML = `
 <div class="adm-block">
-    <div class="adm-block-title">РАССЫЛКА</div>
-    <textarea id="ad-bot-msg" class="input-box" style="height:54px;font-size:12px;" placeholder="Сообщение всем пользователям..."></textarea>
-    <button class="btn" style="background:linear-gradient(135deg,#00e5ff,#0097a7);color:#000;font-weight:800;padding:9px;" onclick="adminBotBroadcast()">Отправить всем</button>
-</div>
-<div class="adm-block">
     <div class="adm-block-title">RTP ПО ИГРАМ</div>
     <div class="adm-rtp-grid">
         ${rtpGames.map(g=>`<div class="adm-rtp-row">
@@ -1498,67 +1512,66 @@ function renderAdminContent(tab) {
 </div>
 <div class="adm-block">
     <div class="adm-block-title">ФИНАНСЫ</div>
-    <div class="adm-rtp-row">
-        <div class="adm-rtp-label">Мин. вывод</div>
+    <div class="adm-rtp-row" style="margin-bottom:8px;">
+        <div class="adm-rtp-label">Мин. вывод (TON)</div>
         <input type="number" id="min-wd-val" value="${adData.minWithdraw||5}" class="input-box adm-rtp-inp" step="0.5" min="0.5">
         <button class="adm-ok-btn" onclick="adminSetMinWithdraw()">OK</button>
     </div>
-    <div class="adm-rtp-row" style="margin-top:8px;">
+    <div class="adm-rtp-row">
         <div class="adm-rtp-label">Вейджер x</div>
         <input type="number" id="wager-mult" value="${adData.wagerMultiplier||2}" class="input-box adm-rtp-inp" step="0.5" min="1">
         <button class="adm-ok-btn" onclick="adminSetWager()">OK</button>
     </div>
-    <p style="font-size:10px;color:#555;margin-top:6px;">Промокоды и выдача от адм. НЕ учитываются в отыгрыше</p>
+    <p style="font-size:10px;color:#555;margin-top:6px;">Промо и выдача от адм. не учитываются в отыгрыше</p>
 </div>
 <div class="adm-block">
     <div class="adm-block-title">ТЕХ. РАБОТЫ</div>
     <div class="adm-maint-grid">
         ${maintGames.map(g=>`<label class="adm-maint-item">
-            <input type="checkbox" ${(adData.maintenance[g]||adData.maintenance[g+'s']) ? 'checked' : ''} onchange="adminMaint('${g}', this.checked)">
+            <input type="checkbox" ${(adData.maintenance[g]||adData.maintenance[g+'s'])?'checked':''} onchange="adminMaint('${g}',this.checked)">
             <span>${g.charAt(0).toUpperCase()+g.slice(1)}</span>
         </label>`).join('')}
     </div>
 </div>
 <div class="adm-block">
-    <div class="adm-block-title">ПРОЧЕЕ</div>
-    <label class="adm-maint-item"><input type="checkbox" ${isShowDemo ? 'checked' : ''} onchange="adminDemoToggle(this.checked)"><span>Показывать Demo ставки</span></label>
-    <button class="btn" style="margin-top:8px;background:linear-gradient(135deg,#ff6b00,#ffcc00);color:#000;font-weight:900;" onclick="adminOpenSettingsPanel()">Баннер / Музыка / Настройки игр</button>
-    
-    <button class="btn" style="margin-top:8px;background:#1a0808;border:1px solid #ff2255;color:#ff2255;" onclick="adminReset()">Обнулить историю ставок</button>
+    <div class="adm-block-title">КЕЙСЫ</div>
+    <button class="btn" style="background:linear-gradient(135deg,#ce93d8,#9c27b0);font-weight:900;margin-bottom:0;" onclick="adminShowCaseSettings()">Настройки кейсов</button>
 </div>
-        `;
+<div class="adm-block">
+    <div class="adm-block-title">ПРОЧЕЕ</div>
+    <label class="adm-maint-item" style="margin-bottom:10px;"><input type="checkbox" ${isShowDemo?'checked':''} onchange="adminDemoToggle(this.checked)"><span>Показывать Demo ставки</span></label>
+    <button class="btn" style="background:linear-gradient(135deg,#ff6b00,#ffcc00);color:#000;font-weight:900;margin-bottom:8px;" onclick="adminOpenSettingsPanel()">Баннер + Музыка</button>
+    <button class="btn" style="background:linear-gradient(135deg,#ce93d8,#6a1b9a);font-weight:900;margin-bottom:8px;" onclick="adminOpenGameAndCaseSettings()">Настройки механик игр</button>
+    <button class="btn" style="background:#1a0808;border:1px solid #ff2255;color:#ff2255;" onclick="adminBotBroadcast()">Рассылка в бота</button>
+    <textarea id="ad-bot-msg" class="input-box" style="height:48px;font-size:12px;margin-top:8px;" placeholder="Текст рассылки..."></textarea>
+    <button class="btn" style="background:#1a0808;border:1px solid #ff2255;color:#ff2255;margin-top:8px;" onclick="adminReset()">Обнулить историю ставок</button>
+</div>`;
     }
-    if(tab === 'users') { 
-        let usersHtml = (adData.users || []).map(u => `
-            <div style="padding:10px; border-bottom:1px solid #222; position:relative; display:flex; flex-direction:column; gap:8px;">
-                <div style="display:flex; align-items:center; gap:10px;" onclick="adminViewUser('${u.id}', 1)">
-                    <img src="${u.photo || 'https://cdn-icons-png.flaticon.com/512/149/149071.png'}" style="width:30px; border-radius:50%;"> 
-                    <div>
-                        <b style="color:var(--text); text-decoration:underline;">${u.username}</b> 
-                        (${u.balance.toFixed(2)} TON)
-                        ${u.isBlocked ? '<span style="background:red; padding:2px 5px; border-radius:4px; font-size:10px;">ЗАБАНЕН</span>' : ''}
-                    </div>
-                </div>
-                <div style="display:flex; gap:5px;">
-                    <button style="background:var(--neon-blue); color:#000; border:none; padding:5px; border-radius:4px; flex:1;" onclick="adminMsgUser('${u.id}')">В ЛС БОТА</button>
-                    <button style="background:${u.isBlocked?'#555':'red'}; color:#fff; border:none; padding:5px; border-radius:4px; flex:1;" onclick="adminBan('${u.id}', ${!u.isBlocked})">${u.isBlocked?'РАЗБАНИТЬ':'БАН'}</button>
-                </div>
-            </div>
-            `).join('');
 
-        c.innerHTML = `
-            <div style="text-align:center; color:var(--neon-blue); font-weight:bold; margin-bottom:10px;">Всего юзеров: ${adData.totalUsers}</div>
-            
-            <div style="display:flex; justify-content:space-around; background:#111; padding:10px; border-radius:8px; margin-bottom:10px; font-size:12px;">
-                <label><input type="radio" name="u_filt" ${currentAdminFilter==='balance'?'checked':''} onchange="searchAdminUsers(adminSearchQuery, 'balance')"> Топ Баланс</label>
-                <label><input type="radio" name="u_filt" ${currentAdminFilter==='new'?'checked':''} onchange="searchAdminUsers(adminSearchQuery, 'new')"> Новые</label>
-                <label><input type="radio" name="u_filt" ${currentAdminFilter==='banned'?'checked':''} onchange="searchAdminUsers(adminSearchQuery, 'banned')"> Забаненые</label>
+    // ── ЮЗЕРЫ ─────────────────────────────────────────────────────
+    if(tab === 'users') {
+        const usersHtml = (adData.users||[]).map(u=>`
+        <div class="adm-user-card" onclick="adminViewUser('${u.id}',1)">
+            <img src="${u.photo||'https://cdn-icons-png.flaticon.com/512/149/149071.png'}" class="adm-user-ava">
+            <div class="adm-user-info">
+                <div class="adm-user-name">${u.username||'Без имени'} ${u.isBlocked?'<span class="adm-badge-ban">БАН</span>':''}</div>
+                <div class="adm-user-bal">${u.balance.toFixed(2)} TON</div>
             </div>
-            
-            <input type="text" class="input-box" placeholder="Поиск (ID / Юзер)" value="${adminSearchQuery}" oninput="searchAdminUsers(this.value)">
-            <p style="font-size:10px; color:var(--sub); margin-top:5px; text-align:center;">*Нажми на логин юзера для полной статистики</p>
-            <div style="margin-top:10px;">${usersHtml}</div>
-        `;
+            <div class="adm-user-arr">›</div>
+        </div>`).join('');
+        c.innerHTML = `
+<div class="adm-block">
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:10px;">
+        <button class="adm-filt-btn ${currentAdminFilter==='balance'?'adm-filt-active':''}" onclick="searchAdminUsers(adminSearchQuery,'balance')">Баланс</button>
+        <button class="adm-filt-btn ${currentAdminFilter==='new'?'adm-filt-active':''}" onclick="searchAdminUsers(adminSearchQuery,'new')">Новые</button>
+        <button class="adm-filt-btn ${currentAdminFilter==='banned'?'adm-filt-active':''}" onclick="searchAdminUsers(adminSearchQuery,'banned')">Забанены</button>
+    </div>
+    <input type="text" class="input-box" placeholder="Поиск по ID или нику..." value="${adminSearchQuery}" oninput="searchAdminUsers(this.value)" style="margin-bottom:6px;">
+    <div style="text-align:right;font-size:10px;color:#555;">Всего: ${adData.totalUsers||0}</div>
+</div>
+<div class="adm-block" style="padding:0;">
+    ${usersHtml || '<div class="adm-empty" style="padding:20px;">Нет пользователей</div>'}
+</div>`;
     }
 }
 
@@ -3591,7 +3604,8 @@ function caseCollect(caseId, price) {
 function adminShowCaseSettings(selectedCaseId) {
     if(selectedCaseId) { adminShowSingleCaseSettings(selectedCaseId); return; }
     const c=$('admin-content');if(!c)return;
-    fetch('/api/cases/config').then(r=>r.json()).then(d=>{
+    fetch('/api/cases/config?_t='+Date.now()).then(r=>r.json()).then(d=>{
+        casesConfig=d.cases||[];
         const cases=d.cases||[];
         let html='<div>';
         html+=`<button onclick="adminShowCaseStats()" style="background:linear-gradient(135deg,#ce93d8,#9c27b0);color:#000;padding:9px 14px;border-radius:10px;cursor:pointer;font-size:13px;font-weight:800;width:100%;margin-bottom:12px;border:none;">Статистика всех кейсов</button>`;
