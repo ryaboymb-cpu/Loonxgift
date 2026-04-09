@@ -171,8 +171,8 @@ document.addEventListener('click', () => { if (!_bgMusicPlaying) startBgMusic();
 document.addEventListener('touchstart', () => { if (!_bgMusicPlaying) startBgMusic(); }, { once: true });
 let adminPass = '';
 let globalRtp = 90;
-let rtpObj = { crash: 90, mines: 90, coinflip: 90, spin: 94, mine: 40, upgrade: 85, plinko: 88, duck: 87 };
-let maintenance = { crash: false, mines: false, coinflip: false, battle: false, spin: false, mine: false, upgrade: false, plinko: false, duck: false };
+let rtpObj = { crash: 90, mines: 90, coinflip: 90, spin: 94, mine: 40, upgrade: 85, cases: 78 };
+let maintenance = { crash: false, mines: false, coinflip: false, battle: false, spin: false, mine: false, upgrade: false, case: false };
 let adminWalletAddress='';
 let adminWallet48='';
 let isShowDemo = false;
@@ -302,8 +302,8 @@ window.onload = async () => {
     }
 
     user = data.user;
-    rtpObj = data.rtp || { crash: 90, mines: 90, coinflip: 90, spin: 94, upgrade: 85, plinko: 88, duck: 87 };
-    maintenance = data.maintenance || { crash: false, mines: false, coinflip: false, battle: false, spin: false, upgrade: false, plinko: false, duck: false };
+    rtpObj = data.rtp || { crash: 90, mines: 90, coinflip: 90, spin: 94, upgrade: 85, cases: 78 };
+    maintenance = data.maintenance || { crash: false, mines: false, coinflip: false, battle: false, spin: false, upgrade: false, case: false };
     isShowDemo = data.config ? data.config.showDemo : false;
     
     adminWalletAddress=data.adminWallet||'';
@@ -1468,47 +1468,62 @@ function renderAdminContent(tab) {
     }
     try{if(tg&&tg.BackButton)tg.BackButton.show();}catch(e){}
     if(tab === 'rtp') {
+        const rtpGames=[
+            {id:'crash',label:'Crash',color:'#ff2255',def:90},
+            {id:'mines',label:'Mines',color:'#00ff88',def:90},
+            {id:'coinflip',label:'Coinflip',color:'#ffcc00',def:90},
+            {id:'spin',label:'Spin',color:'#ff6b00',def:90},
+            {id:'mine',label:'Mine',color:'#c87020',def:50},
+            {id:'upgrade',label:'Upgrade',color:'#00e5ff',def:85},
+            {id:'cases',label:'Case',color:'#ce93d8',def:78},
+        ];
+        const maintGames=['crash','mines','coinflip','battle','spin','mine','upgrade','case'];
         c.innerHTML = `
-            <h4 style="color:var(--neon);">РАССЫЛКА В БОТА</h4>
-            <textarea id="ad-bot-msg" class="input-box" style="height:60px; font-size:12px;" placeholder="Сообщение ВСЕМ в бота..."></textarea>
-            <button class="btn" style="padding:8px; margin-top:0; margin-bottom:20px; background:var(--neon-blue); color:#000;" onclick="adminBotBroadcast()">ОТПРАВИТЬ ВСЕМ</button>
-            <hr>
-            <h4 style="color:var(--neon);">ОБНУЛЕНИЕ</h4>
-            <button class="btn" style="padding:8px; background:red; margin-bottom:20px;" onclick="adminReset()">ОБНУЛИТЬ ИСТОРИЮ (Баланс останется)</button>
-            <hr>
-            <h4 style="color:var(--neon); margin-bottom:10px;">RTP</h4>
-            <div><b>Crash RTP (%):</b> <input type="number" id="rtp-crash" value="${adData.rtp.crash||90}" class="input-box" style="padding:5px; width:70px; display:inline-block;"> <button class="btn" style="padding:5px; width:auto; display:inline-block;" onclick="adminRTP('crash')">OK</button></div>
-            <div><b>Mines RTP (%):</b> <input type="number" id="rtp-mines" value="${adData.rtp.mines||90}" class="input-box" style="padding:5px; width:70px; display:inline-block;"> <button class="btn" style="padding:5px; width:auto; display:inline-block;" onclick="adminRTP('mines')">OK</button></div>
-            <div><b>Coinflip RTP (%):</b> <input type="number" id="rtp-coinflip" value="${adData.rtp.coinflip||90}" class="input-box" style="padding:5px; width:70px; display:inline-block;"> <button class="btn" style="padding:5px; width:auto; display:inline-block;" onclick="adminRTP('coinflip')">OK</button></div>
-            <div><b>🎰 Spin RTP (%):</b> <input type="number" id="rtp-spin" value="${adData.rtp.spin||40}" class="input-box" style="padding:5px; width:70px; display:inline-block;"> <button class="btn" style="padding:5px; width:auto; display:inline-block; background:linear-gradient(90deg,#ff6b00,#ff0055);" onclick="adminRTP('spin')">OK</button></div>
-            <div><b>⛏️ Mine RTP (%):</b> <input type="number" id="rtp-mine" value="${adData.rtp.mine||40}" class="input-box" style="padding:5px; width:70px; display:inline-block;"> <button class="btn" style="padding:5px; width:auto; display:inline-block; background:linear-gradient(90deg,#7a4920,#c07030);" onclick="adminRTP('mine')">OK</button></div>
-            <div><b>⬆️ Upgrade RTP (%):</b> <input type="number" id="rtp-upgrade" value="${adData.rtp.upgrade||85}" class="input-box" style="padding:5px; width:70px; display:inline-block;"> <button class="btn" style="padding:5px; width:auto; display:inline-block; background:linear-gradient(90deg,#0097a7,#00e5ff);" onclick="adminRTP('upgrade')">OK</button></div>
-            <div><b>Cases RTP (%):</b> <input type="number" id="rtp-cases" value="${adData.rtp.cases||78}" class="input-box" style="padding:5px; width:70px; display:inline-block;"> <button class="btn" style="padding:5px; width:auto; display:inline-block; background:linear-gradient(90deg,#6a1b9a,#ce93d8);" onclick="adminRTP('cases')">OK</button></div>
-
-            <hr>
-            <h4 style="color:var(--neon); margin-bottom:10px;">💸 МИН. ВЫВОД</h4>
-            <div><b>Минимальный вывод (TON):</b> <input type="number" id="min-wd-val" value="${adData.minWithdraw||5}" class="input-box" style="padding:5px; width:70px; display:inline-block;" step="0.5" min="0.5" max="100"> <button class="btn" style="padding:5px; width:auto; display:inline-block; background:linear-gradient(90deg,#00ff88,#00c060); color:#000;" onclick="adminSetMinWithdraw()">OK</button></div>
-            <p style="font-size:10px; color:#666; margin-bottom:15px;">Минимальная сумма для вывода средств</p>
-            <hr>
-            <h4 style="color:var(--neon); margin-bottom:10px;">ОТЫГРЫШ (ВЕЙДЖЕР)</h4>
-            <div><b>Множитель отыгрыша (x):</b> <input type="number" id="wager-mult" value="${adData.wagerMultiplier || 2}" class="input-box" style="padding:5px; width:70px; display:inline-block;" step="0.5" min="1" max="20"> <button class="btn" style="padding:5px; width:auto; display:inline-block; background:#ffcc00; color:#000;" onclick="adminSetWager()">OK</button></div>
-            <p style="font-size:10px; color:#666; margin-bottom:15px;">Каждый депозит нужно отыграть xN от суммы перед выводом</p>
-            <hr>
-            <h4 style="color:var(--neon); margin-bottom:10px;">ОТКЛЮЧЕНИЕ ИГР (ТЕХ. РАБОТЫ)</h4>
-            <label><input type="checkbox" ${adData.maintenance.crash ? 'checked' : ''} onchange="adminMaint('crash', this.checked)"> Crash</label><br>
-            <label><input type="checkbox" ${adData.maintenance.mines ? 'checked' : ''} onchange="adminMaint('mines', this.checked)"> Mines</label><br>
-            <label><input type="checkbox" ${adData.maintenance.coinflip ? 'checked' : ''} onchange="adminMaint('coinflip', this.checked)"> Coinflip</label><br>
-            <label><input type="checkbox" ${adData.maintenance.battle ? 'checked' : ''} onchange="adminMaint('battle', this.checked)"> Battle Roulette</label><br>
-            <label><input type="checkbox" ${adData.maintenance.spin ? 'checked' : ''} onchange="adminMaint('spin', this.checked)"> 🎰 Spin</label><br>
-            <label><input type="checkbox" ${adData.maintenance.mine ? 'checked' : ''} onchange="adminMaint('mine', this.checked)"> ⛏️ Mine</label><br>
-            <label><input type="checkbox" ${adData.maintenance.upgrade ? 'checked' : ''} onchange="adminMaint('upgrade', this.checked)"> ⬆️ Upgrade</label><br>
-            <label><input type="checkbox" ${adData.maintenance.plinko ? 'checked' : ''} onchange="adminMaint('plinko', this.checked)"> 📍 Plinko</label><br>
-            <label><input type="checkbox" ${adData.maintenance.duck ? 'checked' : ''} onchange="adminMaint('duck', this.checked)"> 🦆 Duck</label><br>
-            <hr>
-            <h4 style="color:var(--neon); margin-bottom:10px;">ОТОБРАЖЕНИЕ В ИСТОРИИ</h4>
-            <label><input type="checkbox" ${isShowDemo ? 'checked' : ''} onchange="adminDemoToggle(this.checked)"> Показывать Demo ставки</label><br>
-        <button class="btn" style="margin-top:12px;background:linear-gradient(135deg,#ff6b00,#ffcc00);color:#000;font-weight:900;" onclick="adminOpenSettingsPanel()">Баннер + Музыка + Настройки игр</button>
-        <button class="btn" style="margin-top:8px;background:linear-gradient(135deg,#6a1b9a,#ce93d8);font-weight:900;" onclick="adminShowCaseSettings()">Настройки кейсов</button>
+<div class="adm-block">
+    <div class="adm-block-title">РАССЫЛКА</div>
+    <textarea id="ad-bot-msg" class="input-box" style="height:54px;font-size:12px;" placeholder="Сообщение всем пользователям..."></textarea>
+    <button class="btn" style="background:linear-gradient(135deg,#00e5ff,#0097a7);color:#000;font-weight:800;padding:9px;" onclick="adminBotBroadcast()">Отправить всем</button>
+</div>
+<div class="adm-block">
+    <div class="adm-block-title">RTP ПО ИГРАМ</div>
+    <div class="adm-rtp-grid">
+        ${rtpGames.map(g=>`<div class="adm-rtp-row">
+            <div class="adm-rtp-label" style="color:${g.color}">${g.label}</div>
+            <input type="number" id="rtp-${g.id}" value="${adData.rtp[g.id]||g.def}" class="input-box adm-rtp-inp">
+            <button class="adm-ok-btn" style="border-color:${g.color};color:${g.color}" onclick="adminRTP('${g.id}')">OK</button>
+        </div>`).join('')}
+    </div>
+</div>
+<div class="adm-block">
+    <div class="adm-block-title">ФИНАНСЫ</div>
+    <div class="adm-rtp-row">
+        <div class="adm-rtp-label">Мин. вывод</div>
+        <input type="number" id="min-wd-val" value="${adData.minWithdraw||5}" class="input-box adm-rtp-inp" step="0.5" min="0.5">
+        <button class="adm-ok-btn" onclick="adminSetMinWithdraw()">OK</button>
+    </div>
+    <div class="adm-rtp-row" style="margin-top:8px;">
+        <div class="adm-rtp-label">Вейджер x</div>
+        <input type="number" id="wager-mult" value="${adData.wagerMultiplier||2}" class="input-box adm-rtp-inp" step="0.5" min="1">
+        <button class="adm-ok-btn" onclick="adminSetWager()">OK</button>
+    </div>
+    <p style="font-size:10px;color:#555;margin-top:6px;">Промокоды и выдача от адм. НЕ учитываются в отыгрыше</p>
+</div>
+<div class="adm-block">
+    <div class="adm-block-title">ТЕХ. РАБОТЫ</div>
+    <div class="adm-maint-grid">
+        ${maintGames.map(g=>`<label class="adm-maint-item">
+            <input type="checkbox" ${(adData.maintenance[g]||adData.maintenance[g+'s']) ? 'checked' : ''} onchange="adminMaint('${g}', this.checked)">
+            <span>${g.charAt(0).toUpperCase()+g.slice(1)}</span>
+        </label>`).join('')}
+    </div>
+</div>
+<div class="adm-block">
+    <div class="adm-block-title">ПРОЧЕЕ</div>
+    <label class="adm-maint-item"><input type="checkbox" ${isShowDemo ? 'checked' : ''} onchange="adminDemoToggle(this.checked)"><span>Показывать Demo ставки</span></label>
+    <button class="btn" style="margin-top:10px;background:linear-gradient(135deg,#ff6b00,#ffcc00);color:#000;font-weight:900;" onclick="adminOpenSettingsPanel()">Баннер + Музыка + Настройки игр</button>
+    <button class="btn" style="margin-top:8px;background:linear-gradient(135deg,#6a1b9a,#ce93d8);font-weight:900;" onclick="adminShowCaseSettings()">Настройки кейсов</button>
+    <button class="btn" style="margin-top:8px;background:#1a0808;border:1px solid #ff2255;color:#ff2255;" onclick="adminReset()">Обнулить историю ставок</button>
+</div>
         `;
     }
     if(tab === 'users') { 
@@ -1673,8 +1688,8 @@ async function loadAdminGameStats() {
         if (!r.ok) { c.innerHTML = '<div style="color:red;">Ошибка загрузки</div>'; return; }
         const data = await r.json();
         const stats = data.stats;
-        const gameNames = { Crash:'🚀 Crash', Mines:'💣 Mines', Coinflip:'🪙 Coinflip', Battle:'⚔️ Battle', Spin:'🎰 Spin', Mine:'⛏️ Mine', Upgrade:'⬆️ Upgrade', Plinko:'📍 Plinko', Duck:'🦆 Duck' };
-        const colors = { Crash:'#ff0055', Mines:'#00ff88', Coinflip:'#ffcc00', Battle:'#8a2be2', Spin:'#ff6b00', Mine:'#c87020', Upgrade:'#00e5ff', Plinko:'#e040fb', Duck:'#ffd600' };
+        const gameNames = { Crash:'Crash', Mines:'Mines', Coinflip:'Coinflip', Battle:'Battle', Spin:'Spin', Mine:'Mine', Upgrade:'Upgrade', Case:'Case' };
+        const colors = { Crash:'#ff0055', Mines:'#00ff88', Coinflip:'#ffcc00', Battle:'#8a2be2', Spin:'#ff6b00', Mine:'#c87020', Upgrade:'#00e5ff', Case:'#ce93d8' };
         let totalBet = 0, totalPayout = 0, totalPlays = 0;
         Object.values(stats).forEach(s => { totalBet += s.totalBet; totalPayout += s.totalPayout; totalPlays += s.playCount; });
         const totalProfit = totalBet - totalPayout;
@@ -2132,6 +2147,9 @@ function initMineShaft(keepPersist, idlePreview) {
     const wd = $('mine-win-display');
     if (wd) { wd.innerText = ''; wd.style.color = ''; wd.classList.remove('show'); }
     mineRunningTotal = 0;
+    // Сбрасываем counter display
+    const rtEl=$('mine-running-total');
+    if(rtEl){rtEl.innerText='0';rtEl.classList.remove('has-win');}
 }
 
 // Плавная анимация числа (считает от start до end)
@@ -2273,7 +2291,9 @@ function spawnPickaxeWorker(blockQueue, pickaxeType, workerIdx, onWorkerDone, on
         qi++;
         remainDur -= hitsCanDo;
 
+        // Получаем координаты в requestAnimationFrame для актуального layout
         const _br=blkEl.getBoundingClientRect();
+        if(_br.width===0||_br.height===0){qi++;setTimeout(processNext,50);return;}
         const bxF=_br.left+_br.width/2,hoverY=_br.top-10,hitY=_br.top+_br.height*0.4;
         let _invSlot=null;
         for(let ir=0;ir<3;ir++){const _c=document.getElementById('inv-'+ir+'-'+blk.c);if(_c&&_c.dataset.slotType==='pickaxe'){_invSlot=_c;break;}}
@@ -2316,7 +2336,8 @@ function spawnPickaxeWorker(blockQueue, pickaxeType, workerIdx, onWorkerDone, on
                         });
                         const _flyY=hoverY-(_br&&_br.height||30);
                         _animProp(el,'top',hitY,_flyY,180,t=>1-Math.pow(1-t,2),()=>{
-                            el.style.opacity='0';setTimeout(()=>{removeEl();setTimeout(processNext,60);},100);
+                            el.style.transition='opacity 0.08s ease';el.style.opacity='0';
+                        setTimeout(()=>{removeEl();setTimeout(processNext,80);},90);
                         });
                     } else {
                         blkEl.classList.add('cracking-2');
@@ -3273,27 +3294,38 @@ async function playCaseOpen(caseId, price) {
     await new Promise(res=>setTimeout(res,60));
     
     // Запускаем анимации с небольшим сдвигом между лентами
+    const ITEM_FULL = 81; // 78px item + 3px gap
     const spinPromises = rouletteEls.map(({id, winVal}, idx) => {
         return new Promise(async (resolve) => {
             const rl = $(id);
             if(!rl){ resolve(); return; }
             
-            const containerW = rl.parentElement?.offsetWidth || 320;
-            const visibleItems = Math.floor(containerW / ITEM_W);
-            const centerOffset = Math.floor(visibleItems/2);
-            const targetPos = (50 - centerOffset) * ITEM_W + Math.random()*8 - 4;
+            // Ждём рендер для получения реальной ширины
+            await new Promise(r2=>setTimeout(r2, idx * 150 + 20));
+            
+            const wrap = rl.parentElement;
+            const containerW = wrap ? wrap.offsetWidth : 320;
+            const centerX = containerW / 2; // пиксель-центр контейнера
+            // Позиция левого края item[50]: 50 * ITEM_FULL + 3 (padding-left)
+            const item50Left = 50 * ITEM_FULL + 6;
+            const item50Center = item50Left + ITEM_FULL / 2 - 6;
+            // translateX чтобы item50Center совпал с centerX контейнера
+            const targetPos = item50Center - centerX;
             
             rl.style.transition = 'none';
             rl.style.transform = 'translateX(0px)';
+            await new Promise(r2=>requestAnimationFrame(()=>requestAnimationFrame(r2)));
             
-            // Стартуем с задержкой между лентами
-            await new Promise(r2=>setTimeout(r2, idx * 120));
-            
-            const spinDuration = 4000 + idx * 200 + Math.random()*300;
-            rl.style.transition = `transform ${spinDuration}ms cubic-bezier(0.15, 0.0, 0.05, 1.0)`;
+            const spinDuration = 4200 + idx * 250;
+            // Сначала быстро до targetPos * 0.7, потом замедляемся точно
+            rl.style.transition = `transform ${spinDuration}ms cubic-bezier(0.12, 0.0, 0.04, 1.0)`;
             rl.style.transform = `translateX(-${targetPos}px)`;
             
-            await new Promise(r2=>setTimeout(r2, spinDuration + 100));
+            await new Promise(r2=>setTimeout(r2, spinDuration + 50));
+            
+            // Убеждаемся что стоим точно
+            rl.style.transition = 'none';
+            rl.style.transform = `translateX(-${targetPos}px)`;
             
             // Подсвечиваем выигрышный элемент
             const items = rl.querySelectorAll('.rl-item');
