@@ -29,6 +29,58 @@ function ensureTonAddr48(a){
 }
 function walletToFriendly48(a){return ensureTonAddr48(a);}
 app.use(express.json({ limit: '15mb' }));
+
+// ════ DDOS PROTECTION ════
+const _rateLimitMap = new Map();
+const _RATE_WINDOW = 60000;
+const _RATE_LIMIT_API = 120;
+const _BLOCKED_DURATION = 300000;
+
+function getRealIP(req) {
+    return req.headers['cf-connecting-ip'] ||
+           req.headers['x-real-ip'] ||
+           (req.headers['x-forwarded-for']||'').split(',')[0].trim() ||
+           req.socket.remoteAddress || '0.0.0.0';
+}
+
+function checkRateLimit(req, res, next, limit) {
+    const ip = getRealIP(req);
+    const now = Date.now();
+    let data = _rateLimitMap.get(ip);
+    if (!data || (now - data.firstReq) > _RATE_WINDOW) {
+        data = { count: 0, firstReq: now, blocked: false, blockedAt: 0 };
+    }
+    if (data.blocked && (now - data.blockedAt) > _BLOCKED_DURATION) {
+        data.blocked = false; data.count = 0; data.firstReq = now;
+    }
+    if (data.blocked) {
+        _rateLimitMap.set(ip, data);
+        return res.status(429).json({ error: 'Too many requests. Try again later.' });
+    }
+    data.count++;
+    if (data.count > limit) {
+        data.blocked = true; data.blockedAt = now;
+        console.warn('[DDOS] Blocked:', ip, 'requests:', data.count);
+        _rateLimitMap.set(ip, data);
+        return res.status(429).json({ error: 'Too many requests. Try again later.' });
+    }
+    _rateLimitMap.set(ip, data);
+    next();
+}
+
+setInterval(() => {
+    const now = Date.now();
+    for (const [ip, data] of _rateLimitMap.entries()) {
+        if ((now - data.firstReq) > _RATE_WINDOW * 5 && !data.blocked) _rateLimitMap.delete(ip);
+    }
+}, 600000);
+
+app.use((req, res, next) => {
+    if (req.path.endsWith('.png') || req.path.endsWith('.js') || req.path.endsWith('.css') ||
+        req.path.startsWith('/sprites') || req.path.startsWith('/sounds')) return next();
+    checkRateLimit(req, res, next, _RATE_LIMIT_API);
+});
+
 app.use(express.urlencoded({ limit: '15mb', extended: true }));
 
 // Защита от падения сервера
@@ -421,13 +473,27 @@ setInterval(async () => {
 
 // --- СОКЕТЫ ---
 let online = 0;
+const onlineUsers = new Map(); // socketId -> userId
+
 io.on('connection', async (socket) => {
-    online++; io.emit('online', online);
+    online++;
+    io.emit('online', online);
     socket.emit('crashHistoryUpdate', crashHistory);
     socket.emit('crashBetsUpdate', crashLiveBets);
     socket.emit('init_history', globalBetHistory);
-    socket.on('disconnect', () => { online--; io.emit('online', online); });
+    
+    socket.on('register_online', (userId) => {
+        if(userId) { onlineUsers.set(socket.id, String(userId)); }
+    });
+    
+    socket.on('disconnect', () => {
+        onlineUsers.delete(socket.id);
+        online--;
+        io.emit('online', online);
+    });
 });
+
+function getOnlineUserIds() { return new Set(onlineUsers.values()); }
 
 // --- API ЭНДПОИНТЫ ---
 app.post('/api/auth', async (req, res) => {
@@ -483,7 +549,8 @@ app.post('/api/auth', async (req, res) => {
     // добавляем рефStats
     const refPending = userObj.referralPending||0;
     userObj.referralPending = refPending;
-    res.json({ user: userObj, adminWallet: (process.env.ADMIN_WALLET||'').trim(), wallet48: _w48, rtp: rtpData, maintenance: maintenanceData, wagerMultiplier: wagerMult });
+    const onlineIds = Array.from(getOnlineUserIds());
+    res.json({ user: userObj, onlineIds, adminWallet: (process.env.ADMIN_WALLET||'').trim(), wallet48: _w48, rtp: rtpData, maintenance: maintenanceData, wagerMultiplier: wagerMult });
 });
 
 app.post('/api/bet', async (req, res) => {
@@ -1370,18 +1437,18 @@ app.post('/api/admin/data', checkAdmin, async (req, res) => {
 app.post('/api/admin/search_user', checkAdmin, async (req, res) => {
     const { query, filterType } = req.body;
     let filter = {};
-    
-    if (query) {
-        filter = { $or: [{ id: new RegExp(query, 'i') }, { username: new RegExp(query, 'i') }] };
-    }
-    
+    if (query) filter = { $or: [{ id: new RegExp(query,'i') }, { username: new RegExp(query,'i') }] };
     if (filterType === 'banned') filter.isBlocked = true;
-    
     let sortConfig = { balance: -1 };
     if (filterType === 'new') sortConfig = { createdAt: -1 };
-
+    if (filterType === 'online') {
+        const ids = Array.from(getOnlineUserIds());
+        filter = { ...filter, id: { $in: ids } };
+    }
     const users = await User.find(filter).sort(sortConfig).limit(500);
-    res.json({ users });
+    const onlineIds = getOnlineUserIds();
+    const usersWithOnline = users.map(u => ({ ...u.toObject(), isOnline: onlineIds.has(String(u.id)) }));
+    res.json({ users: usersWithOnline, onlineCount: onlineIds.size });
 });
 
 app.post(['/api/admin/user_details', '/api/admin/user_history'], checkAdmin, async (req, res) => {
@@ -2068,7 +2135,7 @@ app.post('/api/user/history', async (req, res) => {
 });
 
 // Keep-alive endpoint (for uptime monitors like UptimeRobot)
-app.get('/ping', (req, res) => res.status(200).json({ ok: true, time: Date.now() }));
+// ping removed
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, '0.0.0.0', () => {
