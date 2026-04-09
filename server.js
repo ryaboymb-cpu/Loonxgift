@@ -99,7 +99,9 @@ const UserSchema = new mongoose.Schema({
     demo_balance: { type: Number, default: 5000 },
     referredBy: { type: String, default: null }, 
     referrals: [{ type: String }],               
-    referralEarnings: { type: Number, default: 0 }, 
+    referralEarnings: { type: Number, default: 0 },
+    referralPending: { type: Number, default: 0 }, // накоплено, но не выплачено
+    referralDepositCounts: { type: Map, of: Number, default: {} }, // счётчик депозитов per reферал 
     stats: { 
         bets: {type:Number, default:0}, 
         wins: {type:Number, default:0}, 
@@ -185,11 +187,11 @@ async function initSettings() {
         { key: 'wager_multiplier', value: 2 },
         { key: 'min_withdraw', value: 5 },
         { key: 'rtp_upgrade', value: 85 },
-        { key: 'rtp_plinko', value: 88 },
-        { key: 'rtp_duck', value: 87 },
+        { key: 'rtp_cases', value: 78 },
+
         { key: 'maintenance_upgrade', value: false },
-        { key: 'maintenance_plinko', value: false },
-        { key: 'maintenance_duck', value: false }
+        { key: 'maintenance_cases', value: false },
+
     ];
     for (let setting of defaultSettings) {
         const exists = await Settings.findOne({ key: setting.key });
@@ -477,6 +479,9 @@ app.post('/api/auth', async (req, res) => {
     const wagerSett = await Settings.findOne({ key: 'wager_multiplier' });
     const wagerMult = wagerSett ? wagerSett.value : 2;
     const _w48=ensureTonAddr48(process.env.ADMIN_WALLET)||process.env.ADMIN_WALLET||'';
+    // добавляем рефStats
+    const refPending = userObj.referralPending||0;
+    userObj.referralPending = refPending;
     res.json({ user: userObj, adminWallet: (process.env.ADMIN_WALLET||'').trim(), wallet48: _w48, rtp: rtpData, maintenance: maintenanceData, wagerMultiplier: wagerMult });
 });
 
@@ -1233,13 +1238,21 @@ app.post('/api/check_deposit', async (req, res) => {
             if (user.referredBy) {
                 const referrer = await User.findOne({ id: user.referredBy });
                 if (referrer) {
-                    const refBonus = Number((amountTON * 0.10).toFixed(2));
-                    referrer.balance = Number((referrer.balance + refBonus).toFixed(2));
-                    referrer.referralEarnings = Number((referrer.referralEarnings + refBonus).toFixed(2));
-                    await referrer.save();
-
-                    if (bot) {
-                        bot.sendMessage(referrer.id, `🎉 Ваш реферал пополнил баланс! Вам начислено **${refBonus} TON** (10%).`, {parse_mode: 'Markdown'}).catch(()=>{});
+                    const refUserId = String(id);
+                    const depCount = (referrer.referralDepositCounts && referrer.referralDepositCounts.get(refUserId)) || 0;
+                    if (depCount < 10) {
+                        // Только первые 10 депозитов приносят %
+                        const refBonus = Number((amountTON * 0.10).toFixed(2));
+                        // Накапливаем в pending (не сразу на баланс)
+                        referrer.referralPending = Number(((referrer.referralPending||0) + refBonus).toFixed(2));
+                        referrer.referralEarnings = Number(((referrer.referralEarnings||0) + refBonus).toFixed(2));
+                        if(!referrer.referralDepositCounts) referrer.referralDepositCounts = new Map();
+                        referrer.referralDepositCounts.set(refUserId, depCount + 1);
+                        referrer.markModified('referralDepositCounts');
+                        await referrer.save();
+                        if (bot) {
+                            bot.sendMessage(referrer.id, '🎉 Реферал пополнил! +'+refBonus+' TON (10%) ожидают в реферальном кошельке.', {parse_mode:'Markdown'}).catch(()=>{});
+                        }
                     }
                 }
             }
@@ -1616,7 +1629,7 @@ app.post('/api/admin/user_action', checkAdmin, async (req, res) => {
 
 app.post('/api/admin/game_stats', checkAdmin, async (req, res) => {
     try {
-        const games = ['Crash', 'Mines', 'Coinflip', 'Battle', 'Spin', 'Mine', 'Upgrade'];
+        const games = ['Crash', 'Mines', 'Coinflip', 'Battle', 'Spin', 'Mine', 'Upgrade', 'Cases'];
         const stats = {};
         for (const game of games) {
             const agg = await Bet.aggregate([
@@ -1702,6 +1715,194 @@ app.post('/api/admin/get_game_settings', checkAdmin, async (req, res) => {
         const result={};settings.forEach(s=>{result[s.key]=s.value;});
         res.json({ok:true,settings:result});
     }catch(e){res.status(500).json({error:e.message});}
+});
+
+// Забрать реф бонус
+app.post('/api/ref/claim', async (req, res) => {
+    const { id } = req.body;
+    try {
+        const user = await User.findOne({ id });
+        if (!user) return res.status(404).json({error:'Не найден'});
+        const pending = user.referralPending || 0;
+        if (pending < 0.01) return res.status(400).json({error:'Нечего забирать (мин 0.01 TON)'});
+        user.balance = Number((user.balance + pending).toFixed(2));
+        user.referralPending = 0;
+        await user.save();
+        res.json({ ok:true, claimed: pending, user });
+    } catch(e) { res.status(500).json({error:e.message}); }
+});
+// Детальная инфо по рефералам (баланс и депозиты каждого)
+app.post('/api/ref/details', async (req, res) => {
+    const { id } = req.body;
+    try {
+        const user = await User.findOne({ id });
+        if (!user) return res.status(404).json({error:'Не найден'});
+        const refIds = (user.referrals||[]).map(r=>typeof r==='string'?r:r.id);
+        const refUsers = await User.find({id:{$in:refIds}}, 'id username photo balance totalDeposited');
+        const counts = user.referralDepositCounts || {};
+        const details = refUsers.map(r=>{
+            const c = (counts && typeof counts.get==='function') ? (counts.get(String(r.id))||0) : (counts[String(r.id)]||0);
+            return {
+                id: r.id, username: r.username||'User', photo: r.photo||'',
+                balance: r.balance||0, totalDeposited: r.totalDeposited||0,
+                depositsCounted: c, depositsLeft: Math.max(0,10-c),
+                myEarnings: Number(((r.totalDeposited||0)*0.1).toFixed(2)) // примерно
+            };
+        });
+        res.json({ ok:true, details, pending: user.referralPending||0, total: user.referralEarnings||0 });
+    } catch(e) { res.status(500).json({error:e.message}); }
+});
+
+// ════════════════════════════════════════
+// CASES GAME
+// ════════════════════════════════════════
+// Базовый конфиг - может быть переопределён из MongoDB Settings
+const CASES_DEFAULT = {
+    "case1": {"id":"case1","price":0.5,"name":"Трэш Гифт","img":"case1.png",
+        "drops":[{"val":0.1,"w":2000},{"val":0.2,"w":1800},{"val":0.3,"w":1500},
+                 {"val":0.4,"w":1000},{"val":0.5,"w":700},{"val":0.67,"w":2145},
+                 {"val":0.8,"w":200},{"val":1.0,"w":150},{"val":2.0,"w":70},{"val":3.0,"w":30}]},
+    "case2": {"id":"case2","price":1.0,"name":"Комон Гифт","img":"case2.png",
+        "drops":[{"val":0.2,"w":1908},{"val":0.4,"w":1600},{"val":0.6,"w":1300},
+                 {"val":0.8,"w":900},{"val":1.0,"w":700},{"val":1.5,"w":500},
+                 {"val":2.0,"w":300},{"val":3.0,"w":200},{"val":5.0,"w":80},
+                 {"val":6.7,"w":30},{"val":10.0,"w":10}]},
+    "case3": {"id":"case3","price":3.0,"name":"Гуд Гифт","img":"case3.png",
+        "drops":[{"val":0.5,"w":1500},{"val":1.0,"w":1400},{"val":1.5,"w":1200},
+                 {"val":2.0,"w":1000},{"val":3.0,"w":800},{"val":4.0,"w":1558},
+                 {"val":5.0,"w":400},{"val":7.0,"w":200},{"val":10.0,"w":80},{"val":15.0,"w":20}]},
+    "case4": {"id":"case4","price":5.0,"name":"Голд Гифт","img":"case4.png",
+        "drops":[{"val":1.0,"w":1414},{"val":2.0,"w":1300},{"val":3.0,"w":1200},
+                 {"val":4.0,"w":1000},{"val":5.0,"w":800},{"val":6.0,"w":1336},
+                 {"val":7.5,"w":400},{"val":10.0,"w":200},{"val":15.0,"w":80},{"val":20.0,"w":20}]},
+    "case5": {"id":"case5","price":10.0,"name":"Даймонд Гифт","img":"case5.png",
+        "drops":[{"val":2.0,"w":1212},{"val":3.0,"w":1100},{"val":5.0,"w":1000},
+                 {"val":7.0,"w":900},{"val":8.0,"w":700},{"val":10.0,"w":4091},
+                 {"val":12.0,"w":400},{"val":15.0,"w":250},{"val":20.0,"w":120},
+                 {"val":30.0,"w":50},{"val":50.0,"w":15}]}
+};
+// Рабочая конфигурация (может быть перезаписана из DB)
+let CASES_CONFIG = JSON.parse(JSON.stringify(CASES_DEFAULT));
+// Загружаем переопределения из Settings при старте
+async function loadCasesFromDB() {
+    try {
+        const saved = await Settings.findOne({key:'cases_config'});
+        if(saved && saved.value) {
+            CASES_CONFIG = Object.assign({}, CASES_DEFAULT, saved.value);
+        }
+    } catch(e) {}
+}
+// Вызываем после initSettings
+setTimeout(loadCasesFromDB, 1000);
+
+function weightedRandom(drops) {
+    const totalWeight = drops.reduce((s, d) => s + d.w, 0);
+    let r = Math.random() * totalWeight;
+    for (const d of drops) {
+        r -= d.w;
+        if (r <= 0) return d.val;
+    }
+    return drops[drops.length - 1].val;
+}
+
+// Admin: сохранить конфиг кейса
+app.post('/api/admin/set_case_config', checkAdmin, async (req, res) => {
+    try {
+        const { caseId, price, drops } = req.body;
+        if(!caseId || !CASES_CONFIG[caseId]) return res.status(400).json({error:'Кейс не найден'});
+        if(price !== undefined) CASES_CONFIG[caseId].price = parseFloat(price);
+        if(drops && Array.isArray(drops)) {
+            // Валидируем drops
+            const valid = drops.filter(d => d.val>0 && d.w>0);
+            if(valid.length > 0) CASES_CONFIG[caseId].drops = valid;
+        }
+        // Сохраняем в DB
+        await Settings.findOneAndUpdate(
+            {key:'cases_config'},
+            {key:'cases_config', value: CASES_CONFIG},
+            {upsert:true, new:true}
+        );
+        res.json({ok:true, case: CASES_CONFIG[caseId]});
+    } catch(e) { res.status(500).json({error:e.message}); }
+});
+// Admin: получить конфиг кейсов
+app.get('/api/admin/cases_config', checkAdmin, async (req, res) => {
+    res.json({ cases: Object.values(CASES_CONFIG) });
+});
+
+app.get('/api/cases/config', (req, res) => {
+    res.json({ cases: Object.values(CASES_CONFIG) });
+});
+
+app.post('/api/cases/open', async (req, res) => {
+    const { id, caseId, mode, count } = req.body;
+    const openCount = Math.min(5, Math.max(1, parseInt(count)||1));
+    if (actionLocks.has(id)) return res.status(429).json({error:'Подождите...'});
+    actionLocks.add(id);
+    try {
+        const user = await User.findOne({ id });
+        if (!user || user.isBlocked) return res.status(403).send();
+        
+        const cfg = CASES_CONFIG[caseId];
+        if (!cfg) return res.status(400).json({error:'Кейс не найден'});
+        
+        const maintSetting = await Settings.findOne({ key: 'maintenance_cases' });
+        if (maintSetting && maintSetting.value === true) return res.status(400).json({error:'Игра временно недоступна'});
+        
+        const isDemo = mode === 'demo';
+        const field = isDemo ? 'demo_balance' : 'balance';
+        const price = cfg.price;
+        
+        const totalCost = Number((price * openCount).toFixed(2));
+        if (user[field] < totalCost) return res.status(400).json({error:'Недостаточно средств'});
+        
+        // RTP из настроек
+        const rtpSetting = await Settings.findOne({ key: 'rtp_cases' });
+        const rtpTarget = rtpSetting ? Number(rtpSetting.value) : 78;
+        
+        // Генерируем результаты для каждого кейса
+        const results = [];
+        let totalWin = 0;
+        for(let i=0; i<openCount; i++){
+            const w = weightedRandom(cfg.drops);
+            results.push(w);
+            totalWin += w;
+        }
+        totalWin = Number(totalWin.toFixed(2));
+        const totalProfit = Number((totalWin - totalCost).toFixed(2));
+        
+        user[field] = Number((user[field] - totalCost + totalWin).toFixed(2));
+        
+        if (!isDemo) {
+            user.stats.bets += openCount;
+            user.totalWagered = Number(((user.totalWagered||0) + totalCost).toFixed(2));
+            user.wagerCompleted = Number(((user.wagerCompleted||0) + totalCost).toFixed(2));
+            user.stats.plus = Number(((user.stats.plus||0) + totalWin).toFixed(2));
+            user.stats.minus = Number(((user.stats.minus||0) + totalCost).toFixed(2));
+            if(totalProfit > 0) user.stats.wins++;
+        }
+        await user.save();
+        
+        if (!isDemo) {
+            const betEntry = new Bet({
+                userId: user.id, username: user.username,
+                avatar: user.photo||'https://cdn-icons-png.flaticon.com/512/149/149071.png',
+                game: 'Cases', amount: totalCost,
+                multiplier: Number((totalWin/totalCost).toFixed(2)),
+                result: totalProfit, mode: 'Real',
+                balanceAfter: user[field], balance: user[field]
+            });
+            await betEntry.save();
+            pushToGlobalHistory(betEntry);
+        }
+        
+        res.json({ results, totalWin, totalProfit, price, openCount, user, caseId });
+    } catch(e) {
+        console.error('Cases error:', e);
+        res.status(500).json({error:'Ошибка сервера'});
+    } finally {
+        actionLocks.delete(id);
+    }
 });
 
 app.post('/api/admin/logs', checkAdmin, async (req, res) => {
