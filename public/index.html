@@ -53,7 +53,7 @@
                 <div class="gc" onclick="navGame('crash')"><div class="gc-bg" style="background:linear-gradient(145deg,#1a0010,#4a0025);"></div><div class="gc-icon-wrap"><span class="gc-emoji">🚀</span></div><div class="gc-info"><div class="gc-name">Crash</div><div class="gc-desc">Успей забрать множитель</div></div></div>
                 <div class="gc" onclick="navGame('mines')"><div class="gc-bg" style="background:linear-gradient(145deg,#001a10,#003d20);"></div><div class="gc-icon-wrap"><span class="gc-emoji">💣</span></div><div class="gc-info"><div class="gc-name">Mines</div><div class="gc-desc">Ищи кристаллы</div></div></div>
                 <div class="gc" onclick="navGame('coinflip')"><div class="gc-bg" style="background:linear-gradient(145deg,#1a1000,#3d2800);"></div><div class="gc-icon-wrap"><span class="gc-emoji">🪙</span></div><div class="gc-info"><div class="gc-name">Coinflip</div><div class="gc-desc">Выбери свою сторону</div></div></div>
-                <div class="gc" onclick="navGame('cases')"><div class="gc-bg" style="background:linear-gradient(145deg,#100020,#2d0050);"></div><div class="gc-icon-wrap"><span class="gc-emoji">🎁</span></div><div class="gc-info"><div class="gc-name">Cases</div><div class="gc-desc">Открой кейс с призами</div></div></div>
+                <div class="gc" onclick="navGame('cases')"><div class="gc-bg" style="background:linear-gradient(145deg,#100020,#2d0050);"></div><div class="gc-icon-wrap"><span class="gc-emoji">🎁</span></div><div class="gc-info"><div class="gc-name">Case</div><div class="gc-desc">Открой кейс с призами</div></div></div>
                 <div class="gc" onclick="navGame('battle')"><div class="gc-bg" style="background:linear-gradient(145deg,#0d001a,#2a0045);"></div><div class="gc-icon-wrap"><span class="gc-emoji">⚔️</span></div><div class="gc-info"><div class="gc-name">Battle Roulette</div><div class="gc-desc">Сразись за TON</div></div></div>
                 <div class="gc" onclick="navGame('spin')"><div class="gc-bg" style="background:linear-gradient(145deg,#1a0800,#3d1500);"></div><div class="gc-icon-wrap"><span class="gc-emoji">🎰</span></div><div class="gc-info"><div class="gc-name">Spin</div><div class="gc-desc">Слот 5×3 с фриспинами</div></div></div>
                 <div class="gc" onclick="navGame('mine')"><div class="gc-bg" style="background:linear-gradient(145deg,#0a0500,#2a1400);"></div><div class="gc-icon-wrap"><span class="gc-emoji">⛏️</span></div><div class="gc-info"><div class="gc-name">Mine</div><div class="gc-desc">Копай и побеждай</div></div></div>
@@ -93,8 +93,8 @@
 
             <!-- Вкладки Депозит / Вывод -->
             <div style="display:flex;gap:8px;margin-bottom:8px;padding:0 2px;">
-                <button id="wt-dep" onclick="switchWalletTab('dep')" style="flex:1;padding:12px;border-radius:12px;border:none;cursor:pointer;font-weight:900;font-size:13px;background:linear-gradient(135deg,#00e5ff,#0097a7);color:#000;">💳 Депозит</button>
-                <button id="wt-wd" onclick="switchWalletTab('wd')" style="flex:1;padding:12px;border-radius:12px;border:none;cursor:pointer;font-weight:900;font-size:13px;background:#1a1a2e;color:#888;">📤 Вывод</button>
+                <button id="wt-dep" class="wtab-btn wtab-active" onclick="switchWalletTab('dep')">Депозит</button>
+                <button id="wt-wd" class="wtab-btn wtab-inactive" onclick="switchWalletTab('wd')">Вывод</button>
             </div>
 
             <!-- Депозит панель -->
