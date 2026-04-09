@@ -1226,7 +1226,10 @@ app.post('/api/check_deposit', async (req, res) => {
             const wagerSetting = await Settings.findOne({ key: 'wager_multiplier' });
             const wagerMult = wagerSetting ? Number(wagerSetting.value) : 2;
             user.totalDeposited = Number(((user.totalDeposited || 0) + amountTON).toFixed(2));
-            user.wagerRequired = Number(((user.wagerRequired || 0) + amountTON * wagerMult).toFixed(2));
+            // Вейджер: каждый депозит добавляет свой отыгрыш
+            // Промо и выдача от адмнина НЕ добавляют к вейджеру
+            const prevWagerLeft = Math.max(0, (user.wagerRequired||0) - (user.wagerCompleted||0));
+            user.wagerRequired = Number(((user.wagerCompleted||0) + prevWagerLeft + amountTON * wagerMult).toFixed(2));
             await user.save();
             foundNew = true;
             totalAdded += amountTON;
@@ -1278,8 +1281,9 @@ app.post('/api/promo', async (req, res) => {
     user.balance = Number((user.balance + promo.amount).toFixed(2)); 
     user.stats.promo += promo.amount; 
     promo.usedBy.push(id);
-    
+    // Промокод НЕ добавляет к wagerRequired (только реальные депозиты)
     await user.save(); await promo.save();
+    await logAdmin(`Промокод ${promo.code || ''} активирован юзером ${id}, +${promo.amount} TON`);
 
     if(bot){bot.sendMessage(id,'🎁 Промокод активирован! +'+promo.amount+' TON зачислено.',{parse_mode:'Markdown'}).catch(()=>{});}
     res.json({user,amount:promo.amount});
@@ -1296,8 +1300,8 @@ app.post('/api/withdraw', async (req, res) => {
         const minWdSett=await Settings.findOne({key:'min_withdraw'});const minWd=minWdSett?Number(minWdSett.value):5;
         if (isNaN(amount) || user.balance < amount || amount < minWd) return res.status(400).json({error: 'Min '+minWd+' TON'});
         // Check wager requirement
-        const wagerLeft = (user.wagerRequired || 0) - (user.wagerCompleted || 0);
-        if (wagerLeft > 0) return res.status(400).json({error: `Нужно отыграть ещё ${wagerLeft.toFixed(2)} TON перед выводом`});
+        const wagerLeft = Math.max(0, (user.wagerRequired||0) - (user.wagerCompleted||0));
+        if (wagerLeft > 0.01) return res.status(400).json({error: `Нужно отыграть ещё ${wagerLeft.toFixed(2)} TON перед выводом`});
         user.balance = Number((user.balance - amount).toFixed(2)); 
         
         const newW = await Withdraw.create({ userId: id, address, amount, time: getMskTime() });
@@ -1550,7 +1554,9 @@ app.post('/api/admin/promo_delete', checkAdmin, async (req, res) => {
 app.post('/api/admin/set_rtp', checkAdmin, async (req, res) => {
     const { game, value } = req.body;
     const key = `rtp_${game}`;
+    const old = await Settings.findOne({key});
     await Settings.updateOne({key}, {value: Number(value)}, {upsert: true});
+    await logAdmin(`Изменил RTP ${game}: ${old?old.value:'?'} → ${value}%`);
     res.json({success: true});
 });
 
@@ -1629,7 +1635,7 @@ app.post('/api/admin/user_action', checkAdmin, async (req, res) => {
 
 app.post('/api/admin/game_stats', checkAdmin, async (req, res) => {
     try {
-        const games = ['Crash', 'Mines', 'Coinflip', 'Battle', 'Spin', 'Mine', 'Upgrade', 'Cases'];
+        const games = ['Crash', 'Mines', 'Coinflip', 'Battle', 'Spin', 'Mine', 'Upgrade', 'Case'];
         const stats = {};
         for (const game of games) {
             const agg = await Bet.aggregate([
@@ -1688,6 +1694,7 @@ app.post('/api/admin/set_casino_sound', checkAdmin, async (req, res) => {
 app.post('/api/admin/set_min_withdraw', checkAdmin, async (req, res) => {
     try{const {value}=req.body;const v=parseFloat(value);if(isNaN(v)||v<0)return res.status(400).json({error:'Неверное значение'});
         await Settings.findOneAndUpdate({key:'min_withdraw'},{key:'min_withdraw',value:v},{upsert:true,new:true});
+        await logAdmin(`Изменил мин. вывод на ${v} TON`);
         res.json({ok:true});
     }catch(e){res.status(500).json({error:e.message});}
 });
@@ -1887,7 +1894,7 @@ app.post('/api/cases/open', async (req, res) => {
             const betEntry = new Bet({
                 userId: user.id, username: user.username,
                 avatar: user.photo||'https://cdn-icons-png.flaticon.com/512/149/149071.png',
-                game: 'Cases', amount: totalCost,
+                game: 'Case', amount: totalCost,
                 multiplier: Number((totalWin/totalCost).toFixed(2)),
                 result: totalProfit, mode: 'Real',
                 balanceAfter: user[field], balance: user[field]
