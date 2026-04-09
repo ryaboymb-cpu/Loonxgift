@@ -1856,6 +1856,20 @@ ${['crash','mines','coinflip','spin','mine','upgrade','battle'].map(g=>'<button 
         if($('snd-on'))$('snd-on').checked=snd.enabled!==false;
     }).catch(()=>{});
 }
+
+function adminOpenGameAndCaseSettings() {
+    const c=$('admin-content');if(!c)return;
+    const games=['crash','mines','coinflip','spin','mine','upgrade','battle'];
+    let html=`<div>
+<div class="adm-block-title" style="margin-bottom:12px;">НАСТРОЙКИ МЕХАНИК ИГР</div>
+<div class="adm-maint-grid">
+${games.map(g=>`<button onclick="adminShowGameSettings('${g}')" style="background:#0d0d1e;border:1px solid rgba(206,147,216,.25);color:#ce93d8;padding:12px 6px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;-webkit-tap-highlight-color:transparent;">${g.charAt(0).toUpperCase()+g.slice(1)}</button>`).join('')}
+</div>
+<div class="adm-block-title" style="margin:14px 0 10px;">НАСТРОЙКИ КЕЙСОВ</div>
+<button onclick="adminShowCaseSettings()" style="width:100%;background:linear-gradient(135deg,#ce93d8,#9c27b0);color:#000;padding:12px;border-radius:10px;font-weight:900;border:none;cursor:pointer;font-size:14px;">Открыть настройки кейсов</button>
+</div>`;
+    c.innerHTML=html;
+}
 async function adminShowGameSettings(game){
     const c=$('admin-content');if(!c)return;
     let settings={};
@@ -1870,7 +1884,7 @@ async function adminShowGameSettings(game){
     const icons={crash:'🚀',mines:'💣',coinflip:'🪙',spin:'🎰',mine:'⛏️',upgrade:'⬆️',battle:'⚔️',cases:'🎁'};
     const fs=GS[game]||[];
     let html=`<div><div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid #222;">
-<button class="btn" style="padding:6px 12px;width:auto;background:#1a1a2e;border:1px solid #ce93d844;color:#ce93d8;font-size:12px;" onclick="adminOpenSettingsPanel()">← Назад</button>
+<button class="adm-back-btn" onclick="adminOpenGameAndCaseSettings()">← Назад</button>
 <b style="color:#fff;font-size:14px;">${icons[game]||'🎮'} ${game}</b></div>`;
     if(!fs.length)html+='<p style="color:#888;text-align:center;">Нет параметров</p>';
     else{html+='<p style="color:#888;font-size:11px;margin-bottom:10px;">RTP — в RTP вкладке. Здесь механика.</p>';
@@ -3149,7 +3163,8 @@ function startCase6Timer(nextAvailableAt, onExpire) {
 }
 
 function showCase6ChannelBottomSheet(cfg) {
-    const channels = (CASES_CONFIG['case6']?.channels) || cfg.channels || [];
+    const freeCase = casesConfig.find(c=>c.id==='case6') || cfg;
+    const channels = (freeCase.channels) || cfg.channels || [];
     let channelHtml = '';
     if(channels.length === 0) {
         channelHtml = '<p style="color:#888;font-size:13px;text-align:center;">Подпишитесь на канал LoonxGift</p>';
@@ -3286,26 +3301,35 @@ function renderCasesList() {
     }
 }
 
-function openCaseDetail(caseId) {
-    const cfg = casesConfig.find(c => c.id === caseId);
-    if (!cfg) return;
+async function openCaseDetail(caseId) {
     currentCaseId = caseId;
     caseOpenCount = 1;
-    
-    // Для бесплатного кейса — сначала проверяем каналы
+
+    // Для бесплатного кейса - всегда берём свежий конфиг (каналы могут поменяться)
+    let cfg = casesConfig.find(c => c.id === caseId);
+    if(cfg && cfg.isFree) {
+        try {
+            const r = await fetch('/api/cases/config?_t='+Date.now());
+            const d = await r.json();
+            casesConfig = d.cases || casesConfig;
+            cfg = casesConfig.find(c => c.id === caseId) || cfg;
+        } catch(e) {}
+    }
+    if (!cfg) return;
+
     if(cfg.isFree) {
+        await checkCase6Status();
         if(case6Status && !case6Status.available) {
-            renderCaseDetail(cfg); // покажем кейс с таймером
+            renderCaseDetail(cfg);
+            // Запускаем таймер
+            if(case6Status.nextAvailableAt) startCase6Timer(case6Status.nextAvailableAt, ()=>{case6Status={available:true};renderCaseDetail(cfg);});
             return;
         }
         const channels = cfg.channels || [];
-        if(channels.length > 0) {
-            renderCaseDetail(cfg);
-            showCase6ChannelBottomSheet(cfg);
-            return;
-        }
-        // Нет каналов - сразу открываем
         renderCaseDetail(cfg);
+        if(channels.length > 0) {
+            setTimeout(()=>showCase6ChannelBottomSheet(cfg), 100);
+        }
         return;
     }
     renderCaseDetail(cfg);
@@ -3419,14 +3443,15 @@ function buildRouletteStrip(drops, winVal) {
 }
 
 
-function openFreeCase(caseId) {
+async function openFreeCase(caseId) {
+    // Свежий конфиг для актуальных каналов
+    try{const r=await fetch('/api/cases/config?_t='+Date.now());const d=await r.json();casesConfig=d.cases||casesConfig;}catch(e){}
     const cfg = casesConfig.find(c=>c.id===caseId);
     if(!cfg) return;
     const channels = cfg.channels || [];
     if(channels.length > 0) {
         showCase6ChannelBottomSheet(cfg);
     } else {
-        // Нет каналов - открываем сразу
         playCaseOpen(caseId, 0);
     }
 }
