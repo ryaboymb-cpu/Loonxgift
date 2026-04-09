@@ -191,7 +191,7 @@ async function initSettings() {
         { key: 'rtp_cases', value: 78 },
 
         { key: 'maintenance_upgrade', value: false },
-        { key: 'maintenance_cases', value: false },
+        { key: 'maintenance_case', value: false },
 
     ];
     for (let setting of defaultSettings) {
@@ -1934,7 +1934,7 @@ app.post('/api/cases/open', async (req, res) => {
             }
         }
         
-        const maintSetting = await Settings.findOne({ key: 'maintenance_cases' });
+        const maintSetting = await Settings.findOne({ key: 'maintenance_case' });
         if (maintSetting && maintSetting.value === true) return res.status(400).json({error:'Игра временно недоступна'});
         
         const isDemo = mode === 'demo';
