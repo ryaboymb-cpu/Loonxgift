@@ -1494,37 +1494,38 @@ body {
     justify-content: center !important;
     margin-bottom: 8px !important;
     box-sizing: border-box !important;
-    overflow: hidden !important;
+    overflow: visible !important;
 }
 .case-img {
     width: 85% !important;
     height: 85% !important;
+    max-width: 100% !important;
+    max-height: 100% !important;
     object-fit: contain !important;
     position: relative !important;
     z-index: 1 !important;
     display: block !important;
     flex-shrink: 0 !important;
 }
-/* Для case6: картинка не сжимается из-за badge, т.к. badge absolute */
+/* case6: badge не влияет на layout, он поверх padding области */
+.case-card-free { position: relative !important; }
 .case-card-free .case-img-wrap {
-    padding-top: 0 !important;
+    width: 100% !important;
+    aspect-ratio: 1 !important;
 }
 .case-card-free .case-img {
     width: 85% !important;
     height: 85% !important;
 }
-/* case6 card: badge absolute чтобы не сжимал img */
-.case-card-free { position: relative !important; }
-
 
 /* ════ FINAL BADGE FIX ════ */
 .case-free-badge {
     position: absolute !important;
-    top: 6px !important;
-    right: 6px !important;
-    z-index: 10 !important;
+    top: 8px !important;
+    right: 8px !important;
+    z-index: 20 !important;
     pointer-events: none !important;
-    /* position:absolute полностью исключён из потока — не сжимает img */
+    /* Полностью вне потока — не влияет на размеры дочерних элементов */
 }
 
 /* ════ ADMIN: Online indicators ════ */
