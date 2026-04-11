@@ -1382,8 +1382,7 @@ body {
 }
 
 /* ════ CASE6: Fix image size = same as other cases ════ */
-.case-card-free 
-/* Одинаковый размер изображений во всех кейсах */
+/* Одинаковый размер изображений во всех кейсах — badge не влияет на layout */
 
 
 /* Wallet history tab - withdraws variant */
@@ -1495,14 +1494,24 @@ body {
     justify-content: center !important;
     margin-bottom: 8px !important;
     box-sizing: border-box !important;
+    overflow: hidden !important;
 }
 .case-img {
-    width: 90% !important;
-    height: 90% !important;
+    width: 85% !important;
+    height: 85% !important;
     object-fit: contain !important;
     position: relative !important;
     z-index: 1 !important;
     display: block !important;
+    flex-shrink: 0 !important;
+}
+/* Для case6: картинка не сжимается из-за badge, т.к. badge absolute */
+.case-card-free .case-img-wrap {
+    padding-top: 0 !important;
+}
+.case-card-free .case-img {
+    width: 85% !important;
+    height: 85% !important;
 }
 /* case6 card: badge absolute чтобы не сжимал img */
 .case-card-free { position: relative !important; }
@@ -1514,7 +1523,8 @@ body {
     top: 6px !important;
     right: 6px !important;
     z-index: 10 !important;
-    /* НЕ влияет на layout благодаря position:absolute */
+    pointer-events: none !important;
+    /* position:absolute полностью исключён из потока — не сжимает img */
 }
 
 /* ════ ADMIN: Online indicators ════ */
