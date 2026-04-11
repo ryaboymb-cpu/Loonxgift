@@ -1497,6 +1497,21 @@ app.post('/api/admin/search_user', checkAdmin, async (req, res) => {
     res.json({ users: usersWithOnline, onlineCount: onlineIds.size });
 });
 
+// Топ рефералов для админки
+app.post('/api/admin/top_referrals', checkAdmin, async (req, res) => {
+    try {
+        const users = await User.find({})
+            .select('id username photo balance referrals referralEarnings referralPending totalDeposited')
+            .lean();
+        const sorted = users
+            .map(u => ({ ...u, refCount: (u.referrals || []).length }))
+            .filter(u => u.refCount > 0)
+            .sort((a, b) => b.refCount - a.refCount)
+            .slice(0, 50);
+        res.json({ users: sorted });
+    } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
 app.post(['/api/admin/user_details', '/api/admin/user_history'], checkAdmin, async (req, res) => {
     const targetId = String(req.body.userId || req.body.id || req.body.tgId || req.body.user_id);
     const page = req.body.page || 1;
