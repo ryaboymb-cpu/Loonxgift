@@ -173,9 +173,18 @@ let adminPass = '';
 let globalRtp = 90;
 let rtpObj = { crash: 90, mines: 90, coinflip: 90, spin: 94, mine: 40, upgrade: 85, cases: 78 };
 let maintenance = { crash: false, mines: false, coinflip: false, battle: false, spin: false, mine: false, upgrade: false, case: false };
+let gameSettings = {}; // Настройки механик из админки
 let adminWalletAddress='';
 let adminWallet48='';
 let isShowDemo = false;
+
+// Загружаем публичные настройки механик игр
+async function loadGameSettings() {
+    try {
+        const r = await fetch('/api/game_settings');
+        if(r.ok){ const d = await r.json(); if(d.ok) gameSettings = d.settings || {}; }
+    } catch(e) {}
+}
 
 // TON CONNECT
 let tonConnectUI = null;
@@ -291,6 +300,7 @@ window.onload = async () => {
     loadBanner(); loadCasinoSound();
     renderQuickBets();
     loadBanner();
+    loadGameSettings(); // Загружаем настройки механик из админки
     const res = await fetch('/api/auth', {
         method: 'POST', headers: {'Content-Type': 'application/json'},
         body: JSON.stringify(tg.initDataUnsafe.user || {id: "1", first_name: "Dev", username: "DevUser", photo_url: ""})
@@ -821,11 +831,15 @@ function playMines() {
     if(isNaN(miBet) || miBet < 0.1 || miBet > 25) return showToast('Мин 0.1, Макс 25 TON');
     if(miBet > curBal) return showToast('Нет средств!');
     
+    // Количество бомб из настроек админки (по умолчанию 5, максимум из gameSettings)
+    const maxBombs = Number(gameSettings['game_mines_max_bombs']) || 24;
+    const bombCount = Math.min(5, maxBombs); // Ставим 5 или меньше если лимит меньше
+    
     isMinesProcessing = true; $('mi-btn').disabled = true; miMode = mode;
     reqBet('Mines', miBet, 0, miMode).then(success => {
         isMinesProcessing = false; $('mi-btn').disabled = false;
         if(success) {
-            bombs = []; while(bombs.length<5) { let r=Math.floor(Math.random()*25); if(!bombs.includes(r)) bombs.push(r); }
+            bombs = []; while(bombs.length<bombCount) { let r=Math.floor(Math.random()*25); if(!bombs.includes(r)) bombs.push(r); }
             miActive = true; openedCells = 0; currentMinesWin = miBet; $('mi-btn').innerText = `ЗАБРАТЬ ${currentMinesWin.toFixed(2)} TON`; renderMines(); showToast('Ищи кристаллы!');
         }
     });
@@ -891,8 +905,9 @@ setTimeout(() => setSide('L'), 500);
 async function playCoin() {
     if(isFlipping) return;
     const curBal = mode === 'real' ? user.balance : user.demo_balance;
-    const bet = parseFloat($('co-bet').value); 
-    if(isNaN(bet) || bet < 0.1 || bet > 25) return showToast('Мин 0.1, Макс 25 TON');
+    const bet = parseFloat($('co-bet').value);
+    const cfMaxBet = Number(gameSettings['game_coinflip_max_bet']) || 25;
+    if(isNaN(bet) || bet < 0.1 || bet > cfMaxBet) return showToast(`Мин 0.1, Макс ${cfMaxBet} TON`);
     if(bet > curBal) return showToast('Недостаточно средств!');
 
     playSound('click');
@@ -902,6 +917,7 @@ async function playCoin() {
     const winChance = ((rtpObj.coinflip || 90) / 100) * 0.5; 
     const isWin = Math.random() < winChance;
     const result = isWin ? cSide : (cSide === 'L' ? 'X' : 'L');
+    const cfWinMult = Number(gameSettings['game_coinflip_win_mult']) || 1.9;
     
     const coin = $('coin-3d');
     const rotation = result === 'L' ? 1800 : 1980;
@@ -909,7 +925,7 @@ async function playCoin() {
     coin.style.transform = `rotateY(${rotation}deg)`;
     
     setTimeout(async () => {
-        const win = result === cSide ? bet*2 : 0;
+        const win = result === cSide ? Number((bet * cfWinMult).toFixed(2)) : 0;
         if (win > 0) playSound('win');
         showToast(win > 0 ? `Победа! +${win.toFixed(2)}` : `Проигрыш: ${result}`); 
         await reqBet('Coinflip', bet, win, coMode);
@@ -1713,7 +1729,9 @@ async function adminDelPromo(pId) {
 }
 async function adminRTP(game) {
     const value = $(`rtp-${game}`).value;
-    await fetch('/api/admin/set_rtp', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({pass: adminPass, game, value}) }); showToast('RTP сохранен!');
+    await fetch('/api/admin/set_rtp', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({pass: adminPass, game, value}) });
+    rtpObj[game] = Number(value);
+    showToast('RTP сохранен!');
 }
 async function adminMaint(game, state) {
     await fetch('/api/admin/maintenance', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({pass: adminPass, game, state}) }); 
@@ -1818,11 +1836,18 @@ async function loadCasinoSound(){
     }catch(e){}
 }
 async function adminSaveBanner(){
-    const body={imageUrl:($('bnr-img')?.value||'').trim(),linkUrl:($('bnr-link')?.value||'').trim(),text:($('bnr-text')?.value||'').trim(),active:$('bnr-active')?.checked!==false};
     const st=$('bnr-st');if(st){st.innerText='Сохраняем...';st.style.color='#aaa';}
+    let imageUrl=($('bnr-img')?.value||'').trim();
+    // Если выбран файл с устройства — конвертируем в base64
+    if(_pendingBannerBlob){
+        if(_pendingBannerBlob.size>5*1024*1024){if(st){st.innerText='❌ Файл >5MB!';st.style.color='#ff2255';}return;}
+        try{imageUrl=await new Promise((res,rej)=>{const rd=new FileReader();rd.onload=e=>res(e.target.result);rd.onerror=rej;rd.readAsDataURL(_pendingBannerBlob);});}
+        catch(e){if(st){st.innerText='❌ Ошибка чтения файла';st.style.color='#ff2255';}return;}
+    }
+    const body={imageUrl,linkUrl:($('bnr-link')?.value||'').trim(),text:($('bnr-text')?.value||'').trim(),active:$('bnr-active')?.checked!==false};
     try{const r=await fetch('/api/admin/set_banner',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pass:adminPass,...body})});
         const d=await r.json();if(st){st.innerText=r.ok?'✅ Сохранено!':'❌ '+(d.error||'Ошибка');st.style.color=r.ok?'#00ff88':'#ff2255';}
-        if(r.ok)loadBanner();
+        if(r.ok){_pendingBannerBlob=null;loadBanner();}
     }catch(e){if(st){st.innerText='❌ Ошибка';st.style.color='#ff2255';}}
 }
 async function adminClearBanner(){
@@ -1831,6 +1856,16 @@ async function adminClearBanner(){
     }catch(e){}
 }
 let _pendingSoundBlob=null;
+let _pendingBannerBlob=null;
+function bnrFileLoad(input){
+    const file=input.files[0];if(!file)return;
+    const maxMB=5;
+    if(file.size>maxMB*1024*1024){showToast('Файл >'+maxMB+'MB! Используй URL.');return;}
+    const fn=$('bnr-fname');if(fn)fn.innerText='📄 '+file.name+' ('+Math.round(file.size/1024)+'KB)';
+    _pendingBannerBlob=file;
+    if($('bnr-img'))$('bnr-img').value='';
+    showToast('Картинка выбрана. Нажми Сохранить.');
+}
 function sndFileLoad(input){
     const file=input.files[0];if(!file)return;
     if(file.size>8*1024*1024){showToast('Файл >8MB! Используй URL.');return;}
@@ -1859,11 +1894,14 @@ function adminOpenSettingsPanel(){
 <h4 style="color:#ffcc00;margin:0 0 8px;">📢 Баннер</h4>
 <div style="background:#111;border-radius:10px;padding:12px;border:1px solid #222;margin-bottom:14px;">
 <p style="color:#888;font-size:11px;margin:0 0 8px;">URL картинки в разделе Игры. Статический — скроллируется вместе.</p>
-<label style="color:#aaa;font-size:11px;">URL картинки</label><input id="bnr-img" class="input-box" placeholder="https://...jpg" style="margin-bottom:6px;">
+<label style="display:flex;align-items:center;gap:8px;background:#1a1a2e;border:1px dashed #ffcc00;border-radius:8px;padding:10px;cursor:pointer;color:#ffcc00;font-size:13px;margin-bottom:6px;">
+📷 Загрузить фото с устройства<input type="file" id="bnr-file" accept="image/*" onchange="bnrFileLoad(this)" style="display:none;"></label>
+<div id="bnr-fname" style="color:#888;font-size:11px;margin-bottom:6px;min-height:14px;"></div>
+<label style="color:#aaa;font-size:11px;">ИЛИ вставьте URL картинки</label><input id="bnr-img" class="input-box" placeholder="https://...jpg" style="margin-bottom:6px;">
 <label style="color:#aaa;font-size:11px;">Ссылка при нажатии</label><input id="bnr-link" class="input-box" placeholder="https://..." style="margin-bottom:6px;">
 <label style="color:#aaa;font-size:11px;">Текст (если нет картинки)</label><input id="bnr-text" class="input-box" placeholder="🎁 Акция!" style="margin-bottom:8px;">
 <label style="display:flex;align-items:center;gap:8px;cursor:pointer;color:#ccc;margin-bottom:10px;"><input type="checkbox" id="bnr-active" checked style="width:16px;height:16px;"> Показывать</label>
-<div style="display:flex;gap:8px;"><button class="btn" style="flex:1;background:linear-gradient(135deg,#00e5ff,#0097a7);font-weight:800;" onclick="adminSaveBanner()">✅ Сохранить</button>
+<div style="display:flex;gap:8px;"><button class="btn" style="flex:1;background:linear-gradient(135deg,#ffcc00,#ff8c00);color:#000;font-weight:800;" onclick="adminSaveBanner()">✅ Сохранить</button>
 <button class="btn" style="flex:1;background:#2a0808;border:1px solid #ff2255;color:#ff2255;" onclick="adminClearBanner()">🗑 Скрыть</button></div>
 <div id="bnr-st" style="margin-top:8px;font-size:12px;text-align:center;min-height:16px;"></div>
 </div>
@@ -1938,6 +1976,7 @@ async function adminSaveGS(key){const el=document.getElementById('gs_'+key);if(!
     const val=parseFloat(el.value)||0;
     try{const r=await fetch('/api/admin/set_game_setting',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pass:adminPass,key:'game_'+key,value:val})});
         const d=await r.json();showToast(r.ok?'✅ '+key+' = '+val:'❌ '+(d.error||'?'));
+        if(r.ok) loadGameSettings(); // Обновляем настройки механик на клиенте
     }catch(e){showToast('❌ Ошибка');}
 }
 async function adminShowGameUsers(game){
