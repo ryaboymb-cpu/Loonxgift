@@ -339,12 +339,14 @@ async function runCrash() {
     const rtpSetting = await Settings.findOne({key: 'rtp_crash'});
     const rtp = rtpSetting ? rtpSetting.value : 90; 
     const limit = Math.pow(100 / (100 - (Math.random() * rtp)), 0.7).toFixed(2);
+    const maxMultSetting = await Settings.findOne({key: 'game_crash_max_mult'});
+    const maxMult = maxMultSetting ? Number(maxMultSetting.value) : 1000;
     
     const r = setInterval(async () => {
         crash.multiplier = (parseFloat(crash.multiplier) + 0.01).toFixed(2);
         io.emit('crashData', crash);
         
-        if(parseFloat(crash.multiplier) >= limit) { 
+        if(parseFloat(crash.multiplier) >= parseFloat(limit) || parseFloat(crash.multiplier) >= maxMult) { 
             clearInterval(r); 
             crash.status = 'crashed'; 
             crashHistory.unshift(crash.multiplier);
@@ -432,7 +434,10 @@ setInterval(async () => {
             await lobby.save();
 
             const othersPool = totalPool - winner.bet;
-            const winAmount = winner.bet + (othersPool * 0.70);
+            // Применяем процент комиссии казино из настроек
+            const btlFeeGS = await Settings.findOne({ key: 'game_btl_fee_pct' });
+            const btlFee = btlFeeGS ? Math.min(50, Math.max(0, Number(btlFeeGS.value))) : 30;
+            const winAmount = winner.bet + (othersPool * (1 - btlFee / 100));
 
             const wUser = await User.findOne({id: winner.id});
             if (wUser) {
@@ -654,7 +659,11 @@ app.post('/api/battle/create', async (req, res) => {
         const user = await User.findOne({id});
         if(!user || user.isBlocked) return res.status(403).send();
         
-        if(isNaN(bet) || bet < 0.5 || bet > 150) return res.status(400).json({error: 'Ставка от 0.5 до 150 TON'});
+        const btlMinGS = await Settings.findOne({ key: 'game_btl_min' });
+        const btlMaxGS = await Settings.findOne({ key: 'game_btl_max' });
+        const btlMin = btlMinGS ? Number(btlMinGS.value) : 0.5;
+        const btlMax = btlMaxGS ? Number(btlMaxGS.value) : 150;
+        if(isNaN(bet) || bet < btlMin || bet > btlMax) return res.status(400).json({error: `Ставка от ${btlMin} до ${btlMax} TON`});
         if(user.balance < bet) return res.status(400).json({error: 'Недостаточно средств'});
         
         user.balance = Number((user.balance - bet).toFixed(2));
@@ -687,7 +696,11 @@ app.post('/api/battle/join', async (req, res) => {
         if(!user || !lobby || lobby.status !== 'waiting' || lobby.players.length >= 4) return res.status(400).json({error: 'Ошибка входа'});
         if(lobby.players.find(p => p.id === id)) return res.status(400).json({error: 'Уже в лобби'});
         
-        if(isNaN(bet) || bet < 0.5 || bet > 150) return res.status(400).json({error: 'Ставка от 0.5 до 150 TON'});
+        const btlMinGS2 = await Settings.findOne({ key: 'game_btl_min' });
+        const btlMaxGS2 = await Settings.findOne({ key: 'game_btl_max' });
+        const btlMin2 = btlMinGS2 ? Number(btlMinGS2.value) : 0.5;
+        const btlMax2 = btlMaxGS2 ? Number(btlMaxGS2.value) : 150;
+        if(isNaN(bet) || bet < btlMin2 || bet > btlMax2) return res.status(400).json({error: `Ставка от ${btlMin2} до ${btlMax2} TON`});
         if(user.balance < bet) return res.status(400).json({error: 'Недостаточно средств'});
 
         user.balance = Number((user.balance - bet).toFixed(2));
@@ -770,7 +783,8 @@ function generateSpinGrid(userId, rtpTarget) {
     return grid;
 }
 
-function checkSpinWins(grid, bet) {
+function checkSpinWins(grid, bet, paytable) {
+    const PT = paytable || SPIN_PAYTABLE;
     let totalWin = 0; const winLines = [];
     for (let li = 0; li < SPIN_PAYLINES.length; li++) {
         const line = SPIN_PAYLINES[li];
@@ -778,8 +792,8 @@ function checkSpinWins(grid, bet) {
         if(first==='G'||first==='N') continue;
         let count = 1;
         for (let i = 1; i < 5; i++) { if (grid[line[i]][i] === first) count++; else break; }
-        if (count >= 3 && SPIN_PAYTABLE[first] && SPIN_PAYTABLE[first][count]) {
-            const mult = SPIN_PAYTABLE[first][count];
+        if (count >= 3 && PT[first] && PT[first][count]) {
+            const mult = PT[first][count];
             totalWin += bet * mult;
             winLines.push({ lineIndex: li, symbol: first, count, multiplier: mult });
         }
@@ -825,6 +839,14 @@ app.post('/api/spin', async (req, res) => {
         const rtpSetting = await Settings.findOne({ key: 'rtp_spin' });
         const rtpTarget = rtpSetting ? Number(rtpSetting.value) : 94;
 
+        // Загружаем настройки механики спина из БД
+        const spinGS = await Settings.find({ key: /^game_spin_/ });
+        const spinG = {}; spinGS.forEach(s => { spinG[s.key] = s.value; });
+        const dynPaytable = {
+            'X': { 3: Number(spinG['game_spin_x3']) || 2.5, 4: Number(spinG['game_spin_x4']) || 6.0, 5: Number(spinG['game_spin_x5']) || 12.0 },
+            'L': { 3: Number(spinG['game_spin_l3']) || 0.9, 4: Number(spinG['game_spin_l4']) || 2.2, 5: Number(spinG['game_spin_l5']) || 4.5 }
+        };
+
         if (!spinUserStreaks[id]) spinUserStreaks[id] = { losses: 0, wins: 0, progress: 0 };
         const streak = spinUserStreaks[id];
 
@@ -837,7 +859,7 @@ app.post('/api/spin', async (req, res) => {
         // Считаем G ДО hidden G — только настоящие скаттеры триггерят фриспины
         const gCountBase = countSymbols(grid, 'G');
         const hiddenGs = applyHiddenG(grid);
-        const { totalWin, winLines } = checkSpinWins(grid, betAmount);
+        const { totalWin, winLines } = checkSpinWins(grid, betAmount, dynPaytable);
         const gCount = countSymbols(grid, 'G'); // после hidden G, для прогресс-бара
         const xCount = winLines.filter(wl => wl.symbol === 'X').length; // только X на выигрышных линиях
 
@@ -954,14 +976,15 @@ function generateMineGrid() {
     return grid;
 }
 
-function generateMineHotbar(rtpTarget) {
+function generateMineHotbar(rtpTarget, mineG) {
     // 3 rows x 5 cols = 15 slots
     // TNT: 10%, Book: 5%, Pickaxes: RTP-dependent (lower RTP = fewer/worse pickaxes)
     // Remaining: empty slots
     const rtpFactor = Math.max(0.3, Math.min(1.0, (rtpTarget || 50) / 100));
+    const g = mineG || {};
+    const tntChance  = g['game_mine_tnt_pct']  !== undefined ? Number(g['game_mine_tnt_pct'])  / 100 : 0.03;
+    const bookChance = g['game_mine_book_pct']  !== undefined ? Number(g['game_mine_book_pct']) / 100 : 0.02;
     const pickChance = 0.25 * rtpFactor; // 7.5%-25% depending on RTP
-    const tntChance = 0.03;
-    const bookChance = 0.02;
 
     // Adjust pickaxe weights by RTP: lower RTP = more wooden, less diamond
     const rtpPickWeights = [
@@ -1026,6 +1049,22 @@ app.post('/api/mine', async (req, res) => {
         const rtpSetting = await Settings.findOne({ key: 'rtp_mine' });
         const rtpTarget = rtpSetting ? Number(rtpSetting.value) : 40;
 
+        // Загружаем настройки механики mine из БД
+        const mineGS = await Settings.find({ key: /^game_mine_/ });
+        const mineG = {}; mineGS.forEach(s => { mineG[s.key] = s.value; });
+        // Динамические множители блоков
+        const dynBlockMults = {
+            grass:         Number(mineG['game_mine_grass'])    || 0.01,
+            dirt:          Number(mineG['game_mine_dirt'])     || 0.03,
+            stone:         Number(mineG['game_mine_stone'])    || 0.06,
+            redstone:      Number(mineG['game_mine_redstone']) || 0.09,
+            gold_block:    Number(mineG['game_mine_gold'])     || 0.12,
+            diamond_block: Number(mineG['game_mine_diamond'])  || 0.16,
+            obsidian:      Number(mineG['game_mine_obsidian']) || 0.20,
+            gold:          Number(mineG['game_mine_gold'])     || 0.12,
+            diamond:       Number(mineG['game_mine_diamond'])  || 0.16
+        };
+
         if (!isFreeAutoSpin) {
             user[field] = Number((user[field] - betAmount).toFixed(2));
             if (!isDemo) { user.stats.bets++; user.stats.minus += betAmount; user.totalWagered = Number(((user.totalWagered || 0) + betAmount).toFixed(2)); user.wagerCompleted = Number(((user.wagerCompleted || 0) + betAmount).toFixed(2)); }
@@ -1033,7 +1072,7 @@ app.post('/api/mine', async (req, res) => {
 
         // For auto-spin: reuse existing grid (broken blocks stay null), only re-roll hotbar
         const grid = (isFreeAutoSpin && clientGrid) ? clientGrid : generateMineGrid();
-        const hotbar = generateMineHotbar(rtpTarget);
+        const hotbar = generateMineHotbar(rtpTarget, mineG);
         // Per-column chest multipliers (these multiply ENTIRE balance if reached)
         const chestMults = [];
         for (let c = 0; c < 5; c++) chestMults.push(pickChestMult());
@@ -1048,7 +1087,7 @@ app.post('/api/mine', async (req, res) => {
         let blockWinSum=0;
         for(const[colStr,pType]of Object.entries(colPick)){
             const col=parseInt(colStr),maxB=pType==='tnt'?3:(SRV_DUR[pType]||1);let broken=0;
-            for(let r=0;r<6&&broken<maxB;r++){if(!grid[r][col])continue;const mult=MINE_BLOCK_MULTS[grid[r][col]]||0;const bw=parseFloat((effectiveBet*mult).toFixed(3));adjustedBlockWins[r][col]=bw;blockWinSum+=bw;broken++;}
+            for(let r=0;r<6&&broken<maxB;r++){if(!grid[r][col])continue;const mult=dynBlockMults[grid[r][col]]||0;const bw=parseFloat((effectiveBet*mult).toFixed(3));adjustedBlockWins[r][col]=bw;blockWinSum+=bw;broken++;}
         }
         let actualWin=Number(blockWinSum.toFixed(2));
         // CHESTS: multiply ENTIRE user balance (not just block wins)
@@ -1103,15 +1142,22 @@ app.post('/api/upgrade', async (req, res) => {
         const isDemo = mode === 'demo';
         const field = isDemo ? 'demo_balance' : 'balance';
         const betAmount = parseFloat(bet) || 0;
-        if (betAmount < 0.1 || betAmount > 25) return res.status(400).json({ error: 'Ставка от 0.1 до 25 TON' });
-        if (user[field] < betAmount) return res.status(400).json({ error: 'Недостаточно средств' });
         const maintSetting = await Settings.findOne({ key: 'maintenance_upgrade' });
         if (maintSetting && maintSetting.value === true) return res.status(400).json({ error: 'Игра на техническом обслуживании' });
         const rtpSetting = await Settings.findOne({ key: 'rtp_upgrade' });
         const rtpTarget = rtpSetting ? Number(rtpSetting.value) : 85;
+
+        // Применяем настройки механики апгрейда
+        const upgMaxChanceGS = await Settings.findOne({ key: 'game_upg_max_chance' });
+        const upgMaxBetGS    = await Settings.findOne({ key: 'game_upg_max_bet' });
+        const maxChance = upgMaxChanceGS ? Number(upgMaxChanceGS.value) : 90;
+        const maxUpgBet = upgMaxBetGS    ? Number(upgMaxBetGS.value)    : 25;
+
+        if (betAmount < 0.1 || betAmount > maxUpgBet) return res.status(400).json({ error: `Ставка от 0.1 до ${maxUpgBet} TON` });
+        if (user[field] < betAmount) return res.status(400).json({ error: 'Недостаточно средств' });
         user[field] = Number((user[field] - betAmount).toFixed(2));
         if (!isDemo) { user.stats.bets++; user.stats.minus += betAmount; user.totalWagered = Number(((user.totalWagered || 0) + betAmount).toFixed(2)); user.wagerCompleted = Number(((user.wagerCompleted || 0) + betAmount).toFixed(2)); }
-        const chanceP=Math.max(1,Math.min(90,parseFloat(chance)||50));
+        const chanceP=Math.max(1,Math.min(maxChance,parseFloat(chance)||50));
         let mult;if(chanceP<=10){mult=Math.round((20+(9.6-20)*(chanceP-1)/9)*100)/100;}else{mult=Math.max(1.01,Math.floor(96/chanceP*100)/100);}
         const isWin=Math.random()*100<chanceP;const actualWin=isWin?Number((betAmount*mult).toFixed(2)):0;
         const profit=Number((isWin?actualWin-betAmount:-betAmount).toFixed(2));
@@ -1743,6 +1789,9 @@ app.get('/api/banner', async (req, res) => {
 });
 app.post('/api/admin/set_banner', checkAdmin, async (req, res) => {
     try{const {imageUrl,linkUrl,text,active}=req.body;
+        // Проверяем размер base64 картинки (макс 5MB в base64 = ~6.7MB строка)
+        const imgSize = imageUrl ? Buffer.byteLength(imageUrl,'utf8') : 0;
+        if(imgSize > 7*1024*1024) return res.status(400).json({error:'Картинка >5MB. Уменьши или используй URL.'});
         await Settings.findOneAndUpdate({key:'banner'},{key:'banner',value:{imageUrl:imageUrl||'',linkUrl:linkUrl||'',text:text||'',active:active!==false}},{upsert:true,new:true});
         res.json({ok:true});
     }catch(e){res.status(500).json({error:'Ошибка: '+(e.message||'')});}
@@ -1790,6 +1839,15 @@ app.post('/api/admin/get_game_settings', checkAdmin, async (req, res) => {
         const result={};settings.forEach(s=>{result[s.key]=s.value;});
         res.json({ok:true,settings:result});
     }catch(e){res.status(500).json({error:e.message});}
+});
+
+// Публичный эндпоинт настроек механик (только чтение, без пароля)
+app.get('/api/game_settings', async (req, res) => {
+    try{
+        const settings=await Settings.find({key:/^game_/});
+        const result={};settings.forEach(s=>{result[s.key]=s.value;});
+        res.json({ok:true,settings:result});
+    }catch(e){res.json({ok:true,settings:{}});}
 });
 
 // Забрать реф бонус
@@ -1884,6 +1942,17 @@ function weightedRandom(drops) {
         if (r <= 0) return d.val;
     }
     return drops[drops.length - 1].val;
+}
+
+// RTP-скорректированный выбор для кейсов
+// С вероятностью (1 - rtp/100) принудительно выдаётся дроп ниже цены кейса
+function rtpAdjustedCasePick(drops, rtpTarget, price) {
+    const rtp = Math.max(1, Math.min(99, rtpTarget || 78)) / 100;
+    if (Math.random() > rtp) {
+        const losing = drops.filter(d => d.val < price);
+        if (losing.length > 0) return weightedRandom(losing);
+    }
+    return weightedRandom(drops);
 }
 
 // Admin: сохранить конфиг кейса
@@ -2015,11 +2084,11 @@ app.post('/api/cases/open', async (req, res) => {
         const rtpSetting = await Settings.findOne({ key: 'rtp_cases' });
         const rtpTarget = rtpSetting ? Number(rtpSetting.value) : 78;
         
-        // Генерируем результаты для каждого кейса
+        // Генерируем результаты для каждого кейса с учётом RTP
         const results = [];
         let totalWin = 0;
         for(let i=0; i<openCount; i++){
-            const w = weightedRandom(cfg.drops);
+            const w = rtpAdjustedCasePick(cfg.drops, rtpTarget, price);
             results.push(w);
             totalWin += w;
         }
@@ -2088,13 +2157,17 @@ app.post('/api/cases/check_subscriptions', async (req, res) => {
         for (const ch of channels) {
             try {
                 const chId = ch.startsWith('@') ? ch : '@'+ch;
-                const r = await fetch(`https://api.telegram.org/bot${token}/getChatMember?chat_id=${chId}&user_id=${id}`);
+                const r = await fetch(`https://api.telegram.org/bot${token}/getChatMember?chat_id=${encodeURIComponent(chId)}&user_id=${id}`);
                 const d = await r.json();
-                if (!d.ok) continue; // канал недоступен - пропускаем
+                if (!d.ok) {
+                    // Канал недоступен боту — логируем и пропускаем (для публичных каналов должно работать)
+                    console.warn(`[Sub check] Бот не может проверить ${chId}: ${d.description||'нет доступа'}. Добавьте бота в канал.`);
+                    continue;
+                }
                 const status = d.result?.status;
                 const isIn = ['creator','administrator','member'].includes(status);
                 if (!isIn) return res.json({ok:false, subscribed:false, error:`Подпишитесь на ${chId}`});
-            } catch(e) { /* Если не можем проверить - пропускаем */ }
+            } catch(e) { /* Сеть недоступна — пропускаем */ }
         }
         
         res.json({ok:true, subscribed:true});
