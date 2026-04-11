@@ -1561,3 +1561,47 @@ body {
     border-color: rgba(0,255,136,.4) !important;
     color: #00ff88 !important;
 }
+
+/* ════ MINE GAME v3 — clean minimal styles ════ */
+
+/* Hotbar ячейка: алмазная кирка — тонкая синяя рамка */
+.inv-cell[data-pick-type="diamond"] {
+    border-color: rgba(0,228,255,.5) !important;
+    box-shadow: inset 0 0 6px rgba(0,228,255,.12) !important;
+}
+/* Золотая кирка — тонкая жёлтая рамка */
+.inv-cell[data-pick-type="golden"] {
+    border-color: rgba(255,210,0,.45) !important;
+    box-shadow: inset 0 0 5px rgba(255,210,0,.1) !important;
+}
+/* ТНТ — красноватая рамка */
+.inv-tnt {
+    border-color: rgba(255,60,60,.45) !important;
+}
+/* Книга — фиолетоватая рамка */
+.inv-book {
+    border-color: rgba(160,70,255,.45) !important;
+}
+
+/* Счётчик выигрыша */
+.mine-running-total.has-win {
+    color: #00ff88 !important;
+    font-weight: 900;
+}
+
+/* Попап +X над блоком */
+.block-win-popup {
+    position: fixed;
+    z-index: 9900;
+    pointer-events: none;
+    font-size: 13px;
+    font-weight: 800;
+    color: #00ff88;
+    text-shadow: 0 1px 6px rgba(0,0,0,.8);
+    transform: translate(-50%, 0);
+    animation: blk-win-rise 0.7s ease-out forwards;
+}
+@keyframes blk-win-rise {
+    0%   { opacity: 1; transform: translate(-50%, 0); }
+    100% { opacity: 0; transform: translate(-50%, -32px); }
+}
