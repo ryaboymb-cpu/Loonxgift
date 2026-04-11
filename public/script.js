@@ -1328,6 +1328,38 @@ async function searchAdminUsers(query, filterType = currentAdminFilter) {
     }
 }
 
+async function loadTopReferrals() {
+    currentAdminFilter = 'ref';
+    const c = $('admin-content');
+    if(c) c.innerHTML = '<div class="adm-block" style="text-align:center;padding:20px;color:var(--neon);">Загрузка...</div>';
+    const r = await fetch('/api/admin/top_referrals', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({pass:adminPass}) });
+    if(!r.ok){ if(c) c.innerHTML='<div style="color:red;text-align:center;">Ошибка</div>'; return; }
+    const data = await r.json();
+    const users = data.users || [];
+    const rows = users.map((u,i)=>`
+        <div class="adm-user-card" onclick="adminViewUser('${u.id}',1)">
+            <div style="flex-shrink:0;width:22px;text-align:center;font-size:13px;font-weight:900;color:${i===0?'#ffe060':i===1?'#aaa':i===2?'#cd7f32':'#555'};">${i+1}</div>
+            <img src="${u.photo||'https://cdn-icons-png.flaticon.com/512/149/149071.png'}" class="adm-user-ava" style="flex-shrink:0;">
+            <div class="adm-user-info">
+                <div class="adm-user-name">${u.username||'Без имени'}</div>
+                <div style="font-size:11px;color:#ce93d8;font-weight:700;">👥 ${u.refCount} рефералов · ${(u.referralEarnings||0).toFixed(2)} TON заработано</div>
+            </div>
+            <div style="text-align:right;flex-shrink:0;font-size:12px;color:#aaa;">${(u.balance||0).toFixed(2)}</div>
+        </div>`).join('');
+    if(c) c.innerHTML = `
+<div class="adm-block">
+    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:4px;margin-bottom:10px;">
+        <button class="adm-filt-btn" onclick="searchAdminUsers('','balance')">Баланс</button>
+        <button class="adm-filt-btn" onclick="searchAdminUsers('','new')">Новые</button>
+        <button class="adm-filt-btn" onclick="searchAdminUsers('','banned')">Забан</button>
+        <button class="adm-filt-btn adm-filt-online" onclick="searchAdminUsers('','online')">Онлайн</button>
+        <button class="adm-filt-btn adm-filt-active" style="color:#ce93d8;border-color:rgba(206,147,216,.4);">Реф</button>
+    </div>
+    <div style="font-size:11px;color:#888;">Топ по количеству рефералов</div>
+</div>
+<div class="adm-block" style="padding:0;">${rows||'<div class="adm-empty" style="padding:20px;">Нет рефералов</div>'}</div>`;
+}
+
 async function adminViewUser(userId, page = 1) {
     const r = await fetch('/api/admin/user_details', {
         method:'POST', headers:{'Content-Type':'application/json'},
@@ -1595,7 +1627,9 @@ function renderAdminContent(tab) {
 
     // ── ЮЗЕРЫ ─────────────────────────────────────────────────────
     if(tab === 'users') {
-        const usersHtml = (adData.users||[]).map(u=>`
+        const usersHtml = (adData.users||[]).map(u=>{
+            const refCount = Array.isArray(u.referrals) ? u.referrals.length : 0;
+            return `
         <div class="adm-user-card" onclick="adminViewUser('${u.id}',1)">
             <div style="position:relative;flex-shrink:0;">
                 <img src="${u.photo||'https://cdn-icons-png.flaticon.com/512/149/149071.png'}" class="adm-user-ava">
@@ -1607,17 +1641,19 @@ function renderAdminContent(tab) {
                     ${u.isBlocked?'<span class="adm-badge-ban">БАН</span>':''}
                     ${u.isOnline?'<span class="adm-badge-online">онлайн</span>':''}
                 </div>
-                <div class="adm-user-bal">${(u.balance||0).toFixed(2)} TON</div>
+                <div class="adm-user-bal">${(u.balance||0).toFixed(2)} TON${refCount>0?` · <span style="color:#ce93d8;font-size:10px;">👥 ${refCount}</span>`:''}</div>
             </div>
             <div class="adm-user-arr">›</div>
-        </div>`).join('');
+        </div>`;
+        }).join('');
         c.innerHTML = `
 <div class="adm-block">
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin-bottom:10px;">
+    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:4px;margin-bottom:10px;">
         <button class="adm-filt-btn ${currentAdminFilter==='balance'?'adm-filt-active':''}" onclick="searchAdminUsers(adminSearchQuery,'balance')">Баланс</button>
         <button class="adm-filt-btn ${currentAdminFilter==='new'?'adm-filt-active':''}" onclick="searchAdminUsers(adminSearchQuery,'new')">Новые</button>
         <button class="adm-filt-btn ${currentAdminFilter==='banned'?'adm-filt-active':''}" onclick="searchAdminUsers(adminSearchQuery,'banned')">Забан</button>
         <button class="adm-filt-btn adm-filt-online ${currentAdminFilter==='online'?'adm-filt-active adm-filt-online-active':''}" onclick="searchAdminUsers(adminSearchQuery,'online')">Онлайн</button>
+        <button class="adm-filt-btn ${currentAdminFilter==='ref'?'adm-filt-active':''}" style="color:#ce93d8;" onclick="loadTopReferrals()">Реф</button>
     </div>
     <input type="text" class="input-box" placeholder="Поиск по ID или нику..." value="${adminSearchQuery}" oninput="searchAdminUsers(this.value)" style="margin-bottom:6px;">
     <div style="display:flex;justify-content:space-between;align-items:center;">
@@ -2306,51 +2342,35 @@ function doBreakBlock(blkEl, blk, onFullyGone) {
 function spawnPickaxeWorker(blockQueue, pickType, startDelay, onAllDone, onBlockBroken, maxDur) {
     if (!blockQueue.length) { if (onAllDone) setTimeout(onAllDone, startDelay); return; }
 
-    // Создаём элемент кирки
+    // Создаём элемент кирки — позиционируется над первым блоком
     const pEl = document.createElement('img');
     pEl.src = getPickaxeImg(pickType);
-    pEl.style.cssText = 'position:fixed;width:24px;height:24px;z-index:99999;pointer-events:none;image-rendering:pixelated;opacity:0;transform-origin:bottom center;';
+    pEl.style.cssText = 'position:fixed;width:24px;height:24px;z-index:99999;pointer-events:none;image-rendering:pixelated;opacity:0;transform:translate(-50%,-100%) rotate(0deg);transform-origin:bottom center;transition:none;';
     document.body.appendChild(pEl);
     _pickaxeEls.add(pEl);
 
-    const removePick = () => { _pickaxeEls.delete(pEl); pEl.remove(); };
+    const removePick = () => { _pickaxeEls.delete(pEl); if (pEl.parentNode) pEl.remove(); };
 
     let qi = 0;
     let remainDur = maxDur > 0 ? maxDur : 999;
 
+    // Уничтожить кирку: просто исчезает на месте
+    function breakPick(cb) {
+        pEl.style.transition = 'opacity 0.12s ease';
+        pEl.style.opacity = '0';
+        setTimeout(() => { removePick(); if (cb) cb(); }, 130);
+    }
+
     function processNext() {
         if (!mineIsActive) { removePick(); return; }
         if (qi >= blockQueue.length || remainDur <= 0) {
-            // Кирка сломалась или закончила работу
-            if (remainDur <= 0) {
-                // Анимация поломки: трясётся и исчезает
-                pEl.style.filter = 'hue-rotate(120deg) brightness(1.8)';
-                let n = 0; const baseL = parseFloat(pEl.style.left) || 0;
-                const sid = setInterval(() => {
-                    n++;
-                    pEl.style.left = (baseL + (n % 2 === 0 ? 4 : -4)) + 'px';
-                    if (n >= 6) {
-                        clearInterval(sid);
-                        pEl.style.transition = 'opacity 0.18s, transform 0.18s';
-                        pEl.style.opacity = '0';
-                        pEl.style.transform = 'rotate(180deg) scale(0.1)';
-                        setTimeout(() => { removePick(); if (onAllDone) onAllDone(); }, 200);
-                    }
-                }, 32);
-            } else {
-                // Кирка улетает вверх и плавно исчезает
-                const curTop = parseFloat(pEl.style.top) || 0;
-                _anim(pEl, 'top', curTop, curTop - 50, 200, easeOut, () => {
-                    pEl.style.transition = 'opacity 0.15s'; pEl.style.opacity = '0';
-                    setTimeout(() => { removePick(); if (onAllDone) onAllDone(); }, 160);
-                });
-            }
+            breakPick(() => { if (onAllDone) onAllDone(); });
             return;
         }
 
         const blk = blockQueue[qi];
         const blkEl = $(`mc-blk-${blk.r}-${blk.c}`);
-        if (!blkEl || blkEl.dataset.revealed === '1') { qi++; setTimeout(processNext, 30); return; }
+        if (!blkEl || blkEl.dataset.revealed === '1') { qi++; setTimeout(processNext, 20); return; }
 
         const tntDmg = parseInt(blkEl.dataset.tntDmg || '0');
         const adjHits = Math.max(1, blk.hits - tntDmg);
@@ -2361,37 +2381,34 @@ function spawnPickaxeWorker(blockQueue, pickType, startDelay, onAllDone, onBlock
         if (rect.width === 0) { setTimeout(processNext, 80); return; }
 
         const bx     = rect.left + rect.width / 2;
-        const hoverY = rect.top - 8;   // кирка висит чуть выше блока
-        const hitY   = rect.top + rect.height * 0.3; // точка удара
+        const hoverY = rect.top - 6;
+        const hitY   = rect.top + rect.height * 0.28;
 
-        // Позиционируем кирку над блоком и плавно опускаем
+        // Появляемся над блоком мгновенно (уже в своём столбце)
+        pEl.style.transition = 'none';
         pEl.style.left    = bx + 'px';
-        pEl.style.top     = (hoverY - 55) + 'px';
+        pEl.style.top     = hoverY + 'px';
         pEl.style.opacity = '1';
         pEl.style.transform = 'translate(-50%, -100%) rotate(0deg)';
 
-        _anim(pEl, 'top', hoverY - 55, hoverY, 200, easeOut, () => {
-            if (!mineIsActive) { removePick(); return; }
-            qi++;
-            remainDur -= hitsCanDo;
-            blkEl.classList.add('cracking-1');
-            doHits(hitsCanDo, 0);
-        });
+        qi++;
+        remainDur -= hitsCanDo;
+        blkEl.classList.add('cracking-1');
+
+        // Небольшая пауза перед первым ударом
+        setTimeout(() => doHits(hitsCanDo, 0), 60);
 
         function doHits(left, num) {
             if (!mineIsActive) { removePick(); return; }
-            // Замах
-            const swing = num % 2 === 0 ? -20 : 20;
+            const swing = num % 2 === 0 ? -22 : 22;
             pEl.style.transform = `translate(-50%, -100%) rotate(${swing}deg)`;
 
-            // Удар вниз
-            _anim(pEl, 'top', hoverY, hitY, 100, easeIn, () => {
+            _anim(pEl, 'top', hoverY, hitY, 95, easeIn, () => {
                 if (!mineIsActive) { removePick(); return; }
                 pEl.style.transform = 'translate(-50%, -100%) rotate(0deg)';
                 playSound('hit');
                 flashBlock(blkEl);
 
-                // Трещины
                 blkEl.classList.remove('cracking-1', 'cracking-2', 'cracking-3');
                 const prog = (num + 1) / adjHits;
                 blkEl.classList.add(prog >= 0.75 && willBreak ? 'cracking-3' : prog >= 0.4 ? 'cracking-2' : 'cracking-1');
@@ -2399,24 +2416,21 @@ function spawnPickaxeWorker(blockQueue, pickType, startDelay, onAllDone, onBlock
                 if (left <= 1) {
                     if (willBreak) {
                         doBreakBlock(blkEl, blk, () => { if (onBlockBroken) onBlockBroken(blk.r, blk.c); });
-                        // Кирка уходит вверх и сразу к следующему блоку
-                        _anim(pEl, 'top', hitY, hoverY - 30, 160, easeOut, () => {
+                        // Отскок назад на hoverY и сразу к следующему блоку (без перемещения)
+                        _anim(pEl, 'top', hitY, hoverY, 110, easeOut, () => {
                             if (!mineIsActive) { removePick(); return; }
-                            setTimeout(processNext, 60);
+                            setTimeout(processNext, 50);
                         });
                     } else {
-                        // Прочность кончилась — кирка ломается
-                        _anim(pEl, 'top', hitY, hoverY, 90, easeOut, () => {
+                        _anim(pEl, 'top', hitY, hoverY, 95, easeOut, () => {
                             if (!mineIsActive) { removePick(); return; }
-                            remainDur = 0;
-                            processNext(); // уйдёт в ветку поломки
+                            breakPick(() => { if (onAllDone) onAllDone(); });
                         });
                     }
                 } else {
-                    // Отскок вверх и следующий удар
-                    _anim(pEl, 'top', hitY, hoverY, 130, easeOut, () => {
+                    _anim(pEl, 'top', hitY, hoverY, 120, easeOut, () => {
                         if (!mineIsActive) { removePick(); return; }
-                        setTimeout(() => doHits(left - 1, num + 1), 35);
+                        setTimeout(() => doHits(left - 1, num + 1), 30);
                     });
                 }
             });
@@ -2545,68 +2559,102 @@ function renderMineHotbar(hotbar) {
     }
 }
 
-// ── Анимированное появление хотбара (столбец за столбцом) ──
+// ── Хотбар: slot-machine reveal (быстрая смена → стоп) ─────
 function revealMineHotbar(hotbar, onDone) {
     currentHotbar = hotbar || Array(INV_ROWS * INV_COLS).fill(null).map(() => ({ type: 'empty' }));
     const inv = $('mc-inventory');
     if (!inv) { renderMineHotbar(hotbar); if (onDone) onDone(); return; }
-    inv.innerHTML = '';
 
-    const cells = [];
+    // Сначала все ячейки — пустые
+    inv.innerHTML = '';
     for (let r = 0; r < INV_ROWS; r++) {
         for (let c = 0; c < INV_COLS; c++) {
-            const idx = r * INV_COLS + c;
             const cell = document.createElement('div');
             cell.className = 'inv-cell';
             cell.id = `inv-${r}-${c}`;
-            cell.style.cssText = 'opacity:0;transform:translateY(-8px) scale(0.85);transition:none;';
             inv.appendChild(cell);
-            cells.push({ cell, idx, slot: currentHotbar[idx], col: c });
         }
     }
 
-    // Открываем по столбцам с небольшой задержкой
-    for (let c = 0; c < MC_COLS; c++) {
-        const colCells = cells.filter(x => x.col === c);
-        colCells.forEach((x, ri) => {
-            setTimeout(() => {
-                const s = x.slot;
-                x.cell.innerHTML = '';
-                x.cell.className = 'inv-cell';
-                x.cell.style.cssText = '';
-                if (s && s.type === 'pickaxe') {
-                    const img = document.createElement('img');
-                    img.src = getPickaxeImg(s.pickaxeType || 'wooden');
-                    img.style.cssText = 'width:68%;height:68%;object-fit:contain;image-rendering:pixelated;';
-                    x.cell.appendChild(img);
-                    x.cell.dataset.slotType = 'pickaxe';
-                    x.cell.dataset.pickType = s.pickaxeType || 'wooden';
-                } else if (s && s.type === 'book') {
-                    const img = document.createElement('img');
-                    img.src = '/sprites/block_book.png';
-                    img.style.cssText = 'width:76%;height:76%;object-fit:contain;image-rendering:pixelated;';
-                    x.cell.appendChild(img);
-                    x.cell.dataset.slotType = 'book';
-                    x.cell.className += ' inv-book';
-                } else if (s && s.type === 'tnt') {
-                    const img = document.createElement('img');
-                    img.src = '/sprites/block_tnt.png';
-                    img.style.cssText = 'width:76%;height:76%;object-fit:contain;image-rendering:pixelated;';
-                    x.cell.appendChild(img);
-                    x.cell.dataset.slotType = 'tnt';
-                    x.cell.className += ' inv-tnt';
-                }
-                x.cell.style.transition = 'opacity 0.18s ease, transform 0.18s ease';
-                requestAnimationFrame(() => {
-                    x.cell.style.opacity = '1';
-                    x.cell.style.transform = 'none';
-                });
-            }, c * 80 + ri * 25);
-        });
+    // Типы для рандомной прокрутки
+    const SPIN_TYPES = ['pickaxe_wooden','pickaxe_stone','pickaxe_iron','pickaxe_golden','pickaxe_diamond','tnt','book','empty'];
+    const SPIN_IMGS = {
+        pickaxe_wooden:  '/sprites/pick_wooden.png',
+        pickaxe_stone:   '/sprites/pick_stone.png',
+        pickaxe_iron:    '/sprites/pick_iron.png',
+        pickaxe_golden:  '/sprites/pick_golden.png',
+        pickaxe_diamond: '/sprites/pick_diamond.png',
+        tnt:             '/sprites/block_tnt.png',
+        book:            '/sprites/block_book.png',
+        empty:           null,
+    };
+
+    function slotTypeOf(slot) {
+        if (!slot || slot.type === 'empty') return 'empty';
+        if (slot.type === 'pickaxe') return 'pickaxe_' + (slot.pickaxeType || 'wooden');
+        return slot.type;
     }
 
-    const total = MC_COLS * 80 + INV_ROWS * 25 + 180;
-    setTimeout(() => { if (onDone) onDone(); }, total);
+    function renderCellType(cell, typeStr) {
+        cell.innerHTML = '';
+        cell.className = 'inv-cell';
+        const imgSrc = SPIN_IMGS[typeStr];
+        if (imgSrc) {
+            const img = document.createElement('img');
+            img.src = imgSrc;
+            img.style.cssText = 'width:70%;height:70%;object-fit:contain;image-rendering:pixelated;';
+            cell.appendChild(img);
+        }
+    }
+
+    // Крутим все ячейки одновременно с быстрой сменой
+    const SPIN_DURATION = 700;   // мс суммарной прокрутки
+    const FRAME_MS      = 80;    // мс между сменой символа
+    let elapsed = 0;
+    const spinId = setInterval(() => {
+        elapsed += FRAME_MS;
+        // В каждом кадре — рандомный символ в каждой ячейке
+        for (let r = 0; r < INV_ROWS; r++) {
+            for (let c = 0; c < INV_COLS; c++) {
+                const cell = $(`inv-${r}-${c}`);
+                if (!cell) continue;
+                const rndType = SPIN_TYPES[Math.floor(Math.random() * SPIN_TYPES.length)];
+                renderCellType(cell, rndType);
+            }
+        }
+        if (elapsed >= SPIN_DURATION) {
+            clearInterval(spinId);
+            // Стоп: показываем финальный результат столбец за столбцом
+            for (let c = 0; c < MC_COLS; c++) {
+                setTimeout(() => {
+                    for (let r = 0; r < INV_ROWS; r++) {
+                        const idx = r * INV_COLS + c;
+                        const cell = $(`inv-${r}-${c}`);
+                        if (!cell) continue;
+                        const slot = currentHotbar[idx];
+                        const finalType = slotTypeOf(slot);
+                        renderCellType(cell, finalType);
+                        // Проставляем data-атрибуты для последующей логики
+                        if (slot && slot.type === 'pickaxe') {
+                            cell.dataset.slotType = 'pickaxe';
+                            cell.dataset.pickType = slot.pickaxeType || 'wooden';
+                        } else if (slot && slot.type === 'tnt') {
+                            cell.dataset.slotType = 'tnt';
+                            cell.className += ' inv-tnt';
+                        } else if (slot && slot.type === 'book') {
+                            cell.dataset.slotType = 'book';
+                            cell.className += ' inv-book';
+                        }
+                        // Короткий flash при остановке
+                        cell.style.background = 'rgba(255,255,255,0.06)';
+                        setTimeout(() => { cell.style.background = ''; }, 120);
+                    }
+                }, c * 60);
+            }
+            const stopTime = MC_COLS * 60 + 150;
+            setTimeout(() => { if (onDone) onDone(); }, stopTime);
+        }
+    }, FRAME_MS);
 }
 
 // ── Шахта: инициализация ────────────────────────────────────
@@ -2870,14 +2918,13 @@ function revealMineShaft(grid, blockWins, serverWin, balanceBefore, chestMults, 
             showToast('+' + serverWin.toFixed(2) + ' TON');
         }
         updateUI();
-        // Авто-спин
+        // Авто-спин от книг — показываем оверлей как в спинах
         if (mineBookCount >= 3 || mineAutoRemaining > 0) {
             if (mineBookCount >= 3) { mineBookCount -= 3; mineAutoRemaining = Math.max(mineAutoRemaining, 1); }
-            showToast('Авто-спин!', 2000);
-            setTimeout(() => autoSpinMine(), 1400);
+            showMineBonusOverlay(mineAutoRemaining, () => autoSpinMine());
         } else {
             const sEl = $('mine-book-status');
-            if (sEl && sEl.style.display !== 'none') { sEl.innerHTML = ''; setTimeout(() => sEl.style.display = 'none', 1200); }
+            if (sEl) sEl.style.display = 'none';
         }
     }, estReveal);
 
@@ -2933,8 +2980,8 @@ async function playMine() {
     if (betVal > 25) { betVal = 25; if (betInput) betInput.value = 25; }
     mineLastBet = betVal;
     mineBookCount = 0; minePersistGrid = null;
-    const sEl = $('mine-book-status');
-    if (sEl) sEl.style.display = 'none';
+    const sEl2 = $('mine-book-status');
+    if (sEl2) sEl2.style.display = 'none';
     playSound('click');
     mineIsSpinning = true;
     if (btn) btn.disabled = true;
@@ -2954,6 +3001,33 @@ async function playMine() {
     } catch(e) { showToast('Ошибка соединения'); mineIsSpinning = false; if (btn) btn.disabled = false; }
 }
 
+// Mine bonus overlay — показывает на весь экран как в спинах
+function showMineBonusOverlay(count, onDone) {
+    // Убираем надпись книг
+    const sEl = $('mine-book-status');
+    if (sEl) sEl.style.display = 'none';
+
+    const ov = document.createElement('div');
+    ov.style.cssText = `
+        position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,0.82);
+        display:flex;flex-direction:column;align-items:center;justify-content:center;
+        backdrop-filter:blur(4px);pointer-events:all;opacity:0;transition:opacity 0.25s;
+    `;
+    ov.innerHTML = `
+        <div style="text-align:center;">
+            <div style="font-size:52px;font-weight:900;color:#00ff88;letter-spacing:2px;line-height:1;">${count}</div>
+            <div style="font-size:15px;font-weight:700;color:rgba(255,255,255,.55);letter-spacing:3px;margin-top:8px;text-transform:uppercase;">Бесплатный спин</div>
+        </div>
+    `;
+    document.body.appendChild(ov);
+    requestAnimationFrame(() => { ov.style.opacity = '1'; });
+    setTimeout(() => {
+        ov.style.opacity = '0';
+        setTimeout(() => { ov.remove(); if (onDone) onDone(); }, 260);
+    }, 1600);
+}
+
+// showFreeSpinActivation — для спинов (без изменений)
 function showFreeSpinActivation(count) {
     const overlay = $('freespin-overlay'), countEl = $('freespin-overlay-count');
     if (!overlay) return;
@@ -2963,17 +3037,6 @@ function showFreeSpinActivation(count) {
         overlay.style.opacity = '0'; overlay.style.transition = 'opacity 0.4s';
         setTimeout(() => { overlay.style.display = 'none'; overlay.style.opacity = '1'; overlay.style.transition = ''; }, 400);
     }, 2100);
-}
-
-function showFreeSpinActivation(count) {
-    const overlay=$('freespin-overlay');
-    const countEl=$('freespin-overlay-count');
-    if(!overlay) return;
-    if(countEl) countEl.innerText=count;
-    overlay.style.display='flex';
-    setTimeout(()=>{ overlay.style.opacity='0'; overlay.style.transition='opacity 0.4s';
-        setTimeout(()=>{ overlay.style.display='none'; overlay.style.opacity='1'; overlay.style.transition=''; },400);
-    },2100);
 }
 
 function startSpinAnim() {
