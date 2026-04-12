@@ -759,17 +759,31 @@ function _crashAnimate() {
 
 socket.on('crashData', d => {
     curCrash = d; const btn = $('cr-btn');
-    // Auto cashout check
+    // Auto cashout check — applies to ALL bets placed this round
     if (d.status === 'running' && myCrashBets.length > 0) {
         const autoVal = parseFloat($('cr-auto')?.value);
         if (!isNaN(autoVal) && autoVal >= 1.01 && parseFloat(d.multiplier) >= autoVal) {
             if (!isCashingOut) {
                 isCashingOut = true;
-                const autoBet = myCrashBets[0];
-                const autoWin = parseFloat((autoBet * parseFloat(d.multiplier)).toFixed(2));
-                fetch('/api/bet', {method:'POST',headers:{'Content-Type':'application/json'},
-                    body:JSON.stringify({id:user.id,game:'Crash',bet:autoBet,win:autoWin,mode:crMode})
-                }).then(r=>r.json()).then(u=>{user=u;updateUI();myCrashBets=[];isCashingOut=false;showToast('АВТО: +'+autoWin.toFixed(2)+' TON');}).catch(()=>{isCashingOut=false;});
+                const mult = parseFloat(d.multiplier);
+                // Cash out all bets sequentially
+                (async () => {
+                    let totalWin = 0;
+                    const betsToClose = [...myCrashBets];
+                    myCrashBets = [];
+                    for (const autoBet of betsToClose) {
+                        const autoWin = parseFloat((autoBet * mult).toFixed(2));
+                        try {
+                            const r = await fetch('/api/bet', {method:'POST',headers:{'Content-Type':'application/json'},
+                                body:JSON.stringify({id:user.id,game:'Crash',bet:0,win:autoWin,mode:crMode})
+                            });
+                            if (r.ok) { user = await r.json(); totalWin += autoWin; }
+                        } catch(e) {}
+                    }
+                    updateUI();
+                    if (totalWin > 0) { showToast('АВТО: +'+totalWin.toFixed(2)+' TON'); flyToBalance(totalWin); }
+                    isCashingOut = false;
+                })();
             }
         }
     }
@@ -1760,13 +1774,47 @@ function renderLogsUI(logs, totalPages, page) {
 
 
 async function adminGiveGift(userId) {
-    const name = prompt('Название подарка:'); if (!name) return;
-    const imageUrl = prompt('URL картинки (или пусто):') || '';
-    const price = parseFloat(prompt('Цена в TON (или 0):') || '0') || 0;
+    // Show inline form in admin
+    const c = $('admin-content');
+    if (!c) return;
+    const formId = 'admin-gift-form-'+userId;
+    if ($(formId)) { $(formId).remove(); return; }
+    const existing = document.getElementById('admin-gift-form-main');
+    if (existing) existing.remove();
+    const form = document.createElement('div');
+    form.id = 'admin-gift-form-main';
+    form.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:999999;display:flex;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(4px);';
+    form.innerHTML = `
+    <div style="background:#0d0d1e;border:1px solid rgba(255,255,255,.1);border-radius:18px;padding:20px;width:100%;max-width:360px;">
+        <div style="font-size:14px;font-weight:800;color:#fff;margin-bottom:16px;">Выдать подарок</div>
+        <div style="font-size:11px;color:var(--sub);margin-bottom:6px;font-weight:600;">ССЫЛКА НА ПОДАРОК (t.me/nft/...)</div>
+        <input id="ag-url" class="input-box" placeholder="https://t.me/nft/GiftName или пусто" style="margin-bottom:8px;">
+        <div style="font-size:11px;color:var(--sub);margin-bottom:6px;font-weight:600;">НАЗВАНИЕ (если нет ссылки)</div>
+        <input id="ag-name" class="input-box" placeholder="Название подарка" style="margin-bottom:8px;">
+        <div style="font-size:11px;color:var(--sub);margin-bottom:6px;font-weight:600;">URL КАРТИНКИ</div>
+        <input id="ag-img" class="input-box" placeholder="https://...jpg (необязательно)" style="margin-bottom:8px;">
+        <div style="font-size:11px;color:var(--sub);margin-bottom:6px;font-weight:600;">ЦЕНА (TON)</div>
+        <input id="ag-price" class="input-box" type="number" placeholder="0" step="0.1" min="0" style="margin-bottom:16px;">
+        <div style="display:flex;gap:8px;">
+            <button onclick="document.getElementById('admin-gift-form-main').remove()" style="flex:1;padding:12px;background:#1a1a2e;border:1px solid rgba(255,255,255,.1);color:#aaa;border-radius:10px;cursor:pointer;font-weight:700;">Отмена</button>
+            <button onclick="submitAdminGift('${userId}')" style="flex:2;padding:12px;background:linear-gradient(135deg,var(--neon),#00c060);color:#000;border:none;border-radius:10px;cursor:pointer;font-weight:900;">Выдать</button>
+        </div>
+    </div>`;
+    document.body.appendChild(form);
+}
+async function submitAdminGift(userId) {
+    const giftUrl = $('ag-url')?.value?.trim() || '';
+    const name = $('ag-name')?.value?.trim() || '';
+    const imageUrl = $('ag-img')?.value?.trim() || '';
+    const price = parseFloat($('ag-price')?.value) || 0;
+    if (!giftUrl && !name) return showToast('Укажи ссылку или название');
+    const form = document.getElementById('admin-gift-form-main');
+    if (form) { const btn = form.querySelector('button:last-child'); if(btn){btn.disabled=true;btn.innerText='Загрузка...';} }
     const r = await fetch('/api/admin/give_gift', {method:'POST',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({pass:adminPass, userId, name, imageUrl, price})});
+        body:JSON.stringify({pass:adminPass, userId, giftUrl, name: name||undefined, imageUrl: imageUrl||undefined, price})});
     const d = await r.json();
-    if(r.ok) showToast('✅ Подарок выдан');
+    if (form) form.remove();
+    if(r.ok) showToast('✅ Подарок выдан: '+d.gift?.name);
     else showToast('❌ '+(d.error||'Ошибка'));
 }
 async function adminViewGifts() {
@@ -3117,75 +3165,116 @@ function showFreeSpinActivation(count) {
 // ════════════════════════════════════════
 //  GIFTS PAGE
 // ════════════════════════════════════════
+function goToGiftPay() {
+    nav('wallet', document.querySelector('.nav-item:nth-child(4)'));
+    setTimeout(() => {
+        switchWalletTab('dep');
+        setTimeout(() => {
+            const giftTab = document.querySelectorAll('.w-tab')[2];
+            if (giftTab) switchDepTab('gift', giftTab);
+        }, 100);
+    }, 100);
+}
+
 async function loadGiftsPage() {
     const c = $('gifts-content');
     if (!c || !user) return;
-    c.innerHTML = '<div style="text-align:center;padding:40px;color:var(--neon);">Загрузка...</div>';
+    c.innerHTML = `<div style="display:flex;justify-content:center;align-items:center;height:200px;">
+        <div style="width:32px;height:32px;border:3px solid rgba(0,255,136,.2);border-top-color:var(--neon);border-radius:50%;animation:spin 0.9s linear infinite;"></div>
+    </div>`;
     try {
         const r = await fetch('/api/gifts/list', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:user.id})});
         const d = await r.json();
         const gifts = d.gifts || [];
         if (!gifts.length) {
-            c.innerHTML = `<div style="text-align:center;padding:50px 20px;">
-                <div style="font-size:48px;margin-bottom:16px;opacity:.3;">🎁</div>
-                <div style="color:var(--sub);font-size:14px;font-weight:700;margin-bottom:20px;">У вас нет подарков</div>
-                <button class="btn" style="background:var(--neon);color:#000;" onclick="nav('wallet',null);switchWalletTab('dep');switchDepTab('gift',document.querySelector('.w-tab:nth-child(3)'))">Пополнить подарком</button>
+            c.innerHTML = `
+            <div style="padding:0 0 20px;">
+                <div style="text-align:center;padding:48px 20px 32px;">
+                    <div style="width:72px;height:72px;background:rgba(0,229,255,.06);border:1px solid rgba(0,229,255,.12);border-radius:20px;display:flex;align-items:center;justify-content:center;margin:0 auto 18px;">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="rgba(0,229,255,.4)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12v10H4V12"/><path d="M22 7H2v5h20V7z"/><path d="M12 22V7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg>
+                    </div>
+                    <div style="font-size:15px;font-weight:800;color:#fff;margin-bottom:6px;">Нет подарков</div>
+                    <div style="font-size:12px;color:var(--sub);margin-bottom:24px;line-height:1.5;">Отправьте подарок @msgp2p в Telegram,<br>и он появится здесь автоматически</div>
+                    <button onclick="goToGiftPay()" style="background:linear-gradient(135deg,var(--neon),#00c060);color:#000;font-weight:900;border:none;border-radius:12px;padding:14px 32px;font-size:14px;cursor:pointer;letter-spacing:.5px;">Пополнить подарком</button>
+                </div>
             </div>`;
             return;
         }
-        c.innerHTML = `<div style="padding:4px 0 16px;">
-            <div style="font-size:11px;color:var(--sub);font-weight:700;letter-spacing:2px;margin-bottom:12px;">МОИ ПОДАРКИ</div>
+        c.innerHTML = `<div style="padding:0 0 20px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+                <div style="font-size:11px;font-weight:700;color:var(--sub);letter-spacing:2px;">МОИ ПОДАРКИ</div>
+                <div style="font-size:11px;color:var(--sub);">${gifts.length} шт.</div>
+            </div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
                 ${gifts.map(g => `
-                <div onclick="openGiftDetail('${g._id}')" style="background:#080810;border:1px solid rgba(255,255,255,.07);border-radius:14px;padding:12px;cursor:pointer;text-align:center;transition:border-color .15s;" onmouseenter="this.style.borderColor='rgba(0,229,255,.3)'" onmouseleave="this.style.borderColor='rgba(255,255,255,.07)'">
-                    <div style="width:100%;aspect-ratio:1;border-radius:10px;background:#111;margin-bottom:8px;overflow:hidden;display:flex;align-items:center;justify-content:center;">
-                        ${g.imageUrl ? `<img src="${g.imageUrl}" style="width:100%;height:100%;object-fit:cover;border-radius:10px;" onerror="this.style.display='none'">` : '<div style="font-size:36px;">🎁</div>'}
+                <div onclick="openGiftDetail('${g._id}')" style="background:#080810;border:1px solid rgba(255,255,255,.07);border-radius:16px;overflow:hidden;cursor:pointer;transition:transform .12s,border-color .15s;-webkit-tap-highlight-color:transparent;" onmouseenter="this.style.borderColor='rgba(0,229,255,.3)'" onmouseleave="this.style.borderColor='rgba(255,255,255,.07)'" ontouchstart="this.style.transform='scale(.96)'" ontouchend="this.style.transform=''">
+                    <div style="width:100%;aspect-ratio:1;background:linear-gradient(135deg,#0d0d1e,#111);display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden;">
+                        ${g.imageUrl
+                            ? `<img src="${g.imageUrl}" style="width:100%;height:100%;object-fit:cover;" onerror="this.style.display='none';this.parentNode.innerHTML='<div style=\'font-size:42px;\'>🎁</div>'">`
+                            : '<div style="font-size:42px;">🎁</div>'}
+                        ${g.price ? `<div style="position:absolute;bottom:6px;right:6px;background:rgba(0,0,0,.75);border:1px solid rgba(0,255,136,.3);border-radius:6px;padding:2px 7px;font-size:10px;font-weight:800;color:var(--neon);">${g.price} TON</div>` : ''}
                     </div>
-                    <div style="font-size:12px;font-weight:800;color:#fff;margin-bottom:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${g.name}</div>
-                    <div style="font-size:11px;color:var(--neon);font-weight:700;">${g.price ? g.price+' TON' : 'Оценка...'}</div>
+                    <div style="padding:10px 10px 12px;">
+                        <div style="font-size:12px;font-weight:800;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${g.name}</div>
+                        <div style="font-size:10px;color:var(--sub);margin-top:2px;">${g.price ? g.price+' TON' : 'Оценивается...'}</div>
+                    </div>
                 </div>`).join('')}
             </div>
         </div>`;
     } catch(e) {
-        c.innerHTML = '<div style="color:red;text-align:center;padding:30px;">Ошибка загрузки</div>';
+        c.innerHTML = '<div style="text-align:center;padding:40px;color:#ff2255;font-size:13px;">Ошибка загрузки</div>';
     }
 }
 
 async function openGiftDetail(giftId) {
+    const existOv = $('gift-detail-ov'); if (existOv) existOv.remove();
+    const ov = document.createElement('div');
+    ov.id = 'gift-detail-ov';
+    ov.style.cssText = 'position:fixed;inset:0;background:#050508;z-index:99999;display:flex;flex-direction:column;overflow-y:auto;opacity:0;transition:opacity .2s;';
+    ov.innerHTML = `<div style="display:flex;justify-content:center;align-items:center;height:100%;">
+        <div style="width:32px;height:32px;border:3px solid rgba(0,255,136,.2);border-top-color:var(--neon);border-radius:50%;animation:spin .9s linear infinite;"></div>
+    </div>`;
+    document.body.appendChild(ov);
+    requestAnimationFrame(() => { ov.style.opacity='1'; });
     try {
         const r = await fetch('/api/gifts/get', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:user.id,giftId})});
         const d = await r.json();
         const g = d.gift;
-        if (!g) return showToast('Подарок не найден');
-        const ov = document.createElement('div');
-        ov.id = 'gift-detail-ov';
-        ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:99999;display:flex;flex-direction:column;padding:20px;backdrop-filter:blur(6px);overflow-y:auto;';
+        if (!g) { showToast('Подарок не найден'); ov.remove(); return; }
         ov.innerHTML = `
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px;">
-            <button onclick="document.getElementById('gift-detail-ov').remove()" style="background:none;border:1px solid rgba(255,255,255,.15);color:#aaa;border-radius:8px;padding:6px 12px;cursor:pointer;font-size:12px;">← Назад</button>
-            <span style="color:#fff;font-size:14px;font-weight:800;">${g.name}</span>
+        <div style="padding:16px 16px 8px;display:flex;align-items:center;gap:10px;border-bottom:1px solid rgba(255,255,255,.05);">
+            <button onclick="document.getElementById('gift-detail-ov').remove()" style="background:none;border:1px solid rgba(255,255,255,.12);color:rgba(255,255,255,.5);border-radius:8px;padding:7px 12px;cursor:pointer;font-size:12px;font-weight:700;">← Назад</button>
+            <span style="color:#fff;font-size:14px;font-weight:800;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${g.name}</span>
         </div>
-        <div style="width:100%;aspect-ratio:1;max-width:280px;margin:0 auto 20px;background:#111;border-radius:16px;overflow:hidden;display:flex;align-items:center;justify-content:center;">
-            ${g.imageUrl ? `<img src="${g.imageUrl}" style="width:100%;height:100%;object-fit:cover;">` : '<div style="font-size:80px;">🎁</div>'}
-        </div>
-        <div style="background:#0d0d1a;border:1px solid rgba(255,255,255,.07);border-radius:14px;padding:16px;margin-bottom:16px;">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-                <span style="color:var(--sub);font-size:12px;">Название</span>
-                <span style="color:#fff;font-weight:700;font-size:13px;">${g.name}</span>
-            </div>
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-                <span style="color:var(--sub);font-size:12px;">Стоимость</span>
-                <span style="color:var(--neon);font-weight:800;font-size:14px;">${g.price ? g.price+' TON' : 'Уточняется'}</span>
-            </div>
-            <div style="display:flex;justify-content:space-between;align-items:center;">
-                <span style="color:var(--sub);font-size:12px;">Владелец</span>
-                <span style="color:var(--neon-blue);font-weight:700;font-size:12px;">@${user.username||user.id}</span>
+        <!-- NFT Image -->
+        <div style="padding:20px 20px 0;display:flex;justify-content:center;">
+            <div style="width:220px;height:220px;border-radius:20px;background:linear-gradient(135deg,#0d0d2a,#1a1a3a);border:1px solid rgba(255,255,255,.08);overflow:hidden;display:flex;align-items:center;justify-content:center;box-shadow:0 16px 48px rgba(0,0,0,.6);">
+                ${g.imageUrl
+                    ? `<img src="${g.imageUrl}" style="width:100%;height:100%;object-fit:cover;" onerror="this.style.display='none';this.insertAdjacentHTML('afterend','<div style=font-size:72px>🎁</div>')">`
+                    : '<div style="font-size:72px;">🎁</div>'}
             </div>
         </div>
-        <button onclick="withdrawGift('${g._id}')" style="width:100%;padding:16px;background:linear-gradient(135deg,#ff2255,#c00040);color:#fff;border:none;border-radius:12px;font-weight:900;font-size:15px;cursor:pointer;margin-bottom:8px;">Вывести / Продать</button>
-        <p style="text-align:center;color:var(--sub);font-size:11px;">Вывод стоит 0.3 TON с баланса. Подарок перейдёт администратору.</p>`;
-        document.body.appendChild(ov);
-    } catch(e) { showToast('Ошибка'); }
+        <!-- Info block -->
+        <div style="padding:20px 16px;">
+            <div style="background:#0d0d1a;border:1px solid rgba(255,255,255,.07);border-radius:16px;overflow:hidden;margin-bottom:16px;">
+                <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 16px;border-bottom:1px solid rgba(255,255,255,.05);">
+                    <span style="color:rgba(255,255,255,.45);font-size:12px;font-weight:600;">Название</span>
+                    <span style="color:#fff;font-weight:800;font-size:13px;">${g.name}</span>
+                </div>
+                <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 16px;border-bottom:1px solid rgba(255,255,255,.05);">
+                    <span style="color:rgba(255,255,255,.45);font-size:12px;font-weight:600;">Стоимость</span>
+                    <span style="color:var(--neon);font-weight:900;font-size:15px;">${g.price ? g.price+' TON' : '—'}</span>
+                </div>
+                <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 16px;">
+                    <span style="color:rgba(255,255,255,.45);font-size:12px;font-weight:600;">Владелец</span>
+                    <span style="color:rgba(0,229,255,.8);font-weight:700;font-size:12px;">@${user.username||user.id}</span>
+                </div>
+            </div>
+            <!-- Actions -->
+            <button onclick="withdrawGift('${g._id}')" style="width:100%;padding:16px;background:linear-gradient(135deg,#00e5ff,#0097a7);color:#000;border:none;border-radius:14px;font-weight:900;font-size:15px;cursor:pointer;letter-spacing:.5px;margin-bottom:10px;">Вывести / Продать</button>
+            <div style="text-align:center;color:rgba(255,255,255,.3);font-size:11px;line-height:1.5;">Комиссия за вывод 0.3 TON · Подарок передаётся администратору</div>
+        </div>`;
+    } catch(e) { showToast('Ошибка загрузки'); ov.remove(); }
 }
 
 async function withdrawGift(giftId) {
