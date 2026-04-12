@@ -224,6 +224,7 @@ const GiftSchema = new mongoose.Schema({
     ownerUsername:     String,
     name:              String,
     imageUrl:          { type: String, default: '' },
+    giftUrl:           { type: String, default: '' },
     price:             { type: Number, default: 0 },
     withdrawRequested: { type: Boolean, default: false },
     createdAt:         { type: Date, default: Date.now }
@@ -2281,6 +2282,75 @@ app.post('/api/user/history', async (req, res) => {
 // Keep-alive endpoint (for uptime monitors like UptimeRobot)
 // ping removed
 
+
+// ── Resolve Telegram Gift URL → {name, imageUrl, price} ──
+async function resolveTelegramGift(giftUrl) {
+    try {
+        // Telegram gift URLs look like: https://t.me/nft/GiftName-123 or t.me/gifts/...
+        // We fetch the page and extract og:image, og:title
+        const url = giftUrl.startsWith('http') ? giftUrl : 'https://' + giftUrl;
+        const r = await fetch(url, { headers: { 'User-Agent': 'TelegramBot (https://core.telegram.org/bots, 7.0)' } });
+        const html = await r.text();
+        // Extract og:image
+        const imgMatch = html.match(/<meta property="og:image" content="([^"]+)"/i)
+                      || html.match(/<meta name="og:image" content="([^"]+)"/i)
+                      || html.match(/background-image:\s*url\(['"]?([^'")\s]+)/i);
+        const titleMatch = html.match(/<meta property="og:title" content="([^"]+)"/i)
+                        || html.match(/<title>([^<]+)<\/title>/i);
+        return {
+            imageUrl: imgMatch ? imgMatch[1] : '',
+            name: titleMatch ? titleMatch[1].replace(/ on Telegram| — Telegram/gi, '').trim() : giftUrl,
+            price: 0  // price to be set manually or via PriceNFTbot in future
+        };
+    } catch(e) {
+        return { imageUrl: '', name: giftUrl, price: 0 };
+    }
+}
+
+// ════ AUTO GIFT WEBHOOK ════
+// When someone sends a gift to @msgp2p bot, Telegram sends an update.
+// To enable auto-credit: set bot webhook to POST /webhook/gift
+// This requires a bot that can receive gift events (userbot or Fragment API)
+app.post('/webhook/gift', async (req, res) => {
+    try {
+        res.json({ ok: true }); // acknowledge immediately
+        const update = req.body;
+        // Telegram bot gift update: message.gift or message.paid_message_price
+        const msg = update.message || update.channel_post;
+        if (!msg) return;
+        // Check if it's a gift (new_gift, gift, etc.)
+        const giftInfo = msg.gift || msg.new_gift;
+        if (!giftInfo) return;
+        const fromId = msg.from?.id ? String(msg.from.id) : null;
+        if (!fromId) return;
+        const user = await User.findOne({ id: fromId });
+        if (!user) {
+            console.log('[Gift Webhook] Unknown user:', fromId);
+            return;
+        }
+        const giftSticker = giftInfo.sticker;
+        const giftName = giftSticker?.emoji || giftInfo.name || 'Telegram Gift';
+        const imageUrl = giftSticker?.thumb?.file_id
+            ? `https://api.telegram.org/file/bot${process.env.BOT_TOKEN}/${giftSticker.thumb.file_id}`
+            : '';
+        const totalCount = giftInfo.total_count || 0;
+        const price = giftInfo.star_count ? Math.round(giftInfo.star_count / 100 * 100) / 100 : 0;
+        const gift = await Gift.create({
+            userId: fromId,
+            ownerUsername: user.username || fromId,
+            name: giftName,
+            imageUrl,
+            price,
+            giftUrl: ''
+        });
+        await logAdmin(`Авто-зачисление подарка "${giftName}" от @${user.username||fromId} (${price} TON)`);
+        if (bot) bot.sendMessage(fromId, `Ваш подарок "${giftName}" получен и зачислен в раздел Подарки!`).catch(()=>{});
+        console.log('[Gift Webhook] Gift credited:', giftName, 'to user', fromId);
+    } catch(e) {
+        console.error('[Gift Webhook] Error:', e.message);
+    }
+});
+
 // ── Gift: list user gifts ──
 app.post('/api/gifts/list', async (req, res) => {
     try {
@@ -2320,20 +2390,30 @@ app.post('/api/gifts/withdraw', async (req, res) => {
     } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
-// ── Admin: give gift to user ──
+// ── Admin: give gift to user (supports gift URL auto-resolve) ──
 app.post('/api/admin/give_gift', checkAdmin, async (req, res) => {
     try {
-        const { userId, name, imageUrl, price } = req.body;
-        if (!userId || !name) return res.status(400).json({ error: 'userId и name обязательны' });
+        const { userId, giftUrl, name: manualName, imageUrl: manualImg, price: manualPrice } = req.body;
+        if (!userId || (!giftUrl && !manualName)) return res.status(400).json({ error: 'userId и giftUrl или name обязательны' });
         const user = await User.findOne({ id: String(userId) });
         if (!user) return res.status(404).json({ error: 'Пользователь не найден' });
+        let giftData = { name: manualName || giftUrl, imageUrl: manualImg || '', price: Number(manualPrice) || 0 };
+        if (giftUrl) {
+            const resolved = await resolveTelegramGift(giftUrl);
+            giftData = {
+                name: manualName || resolved.name || giftUrl,
+                imageUrl: manualImg || resolved.imageUrl || '',
+                price: Number(manualPrice) || resolved.price || 0,
+                giftUrl
+            };
+        }
         const gift = await Gift.create({
             userId: String(userId),
             ownerUsername: user.username || String(userId),
-            name, imageUrl: imageUrl || '', price: Number(price) || 0
+            ...giftData
         });
-        await logAdmin(`Выдал подарок "${name}" пользователю @${user.username||userId}`);
-        if (bot) bot.sendMessage(userId, `🎁 Вам выдан подарок: "${name}"! Посмотрите в разделе Подарки.`).catch(()=>{});
+        await logAdmin(`Выдал подарок "${giftData.name}" пользователю @${user.username||userId}`);
+        if (bot) bot.sendMessage(userId, `Вам выдан подарок: "${giftData.name}"! Посмотрите в разделе Подарки.`).catch(()=>{});
         res.json({ ok: true, gift });
     } catch(e) { res.status(500).json({ error: e.message }); }
 });
