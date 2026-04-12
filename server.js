@@ -2351,6 +2351,25 @@ app.post('/webhook/gift', async (req, res) => {
     }
 });
 
+
+// ════ GIFT PRICE API PLACEHOLDER ════
+// Future: connect to @PriceNFTbot or Fragment API for automatic pricing
+// Set env var: GIFT_PRICE_API_KEY=your_key when available
+// Set env var: GIFT_PRICE_API_URL=https://api.pricenftbot.com/v1/price
+async function fetchGiftPrice(giftUrl) {
+    const apiUrl  = process.env.GIFT_PRICE_API_URL;
+    const apiKey  = process.env.GIFT_PRICE_API_KEY;
+    if (!apiUrl || !apiKey) return 0;           // placeholder — not configured yet
+    try {
+        const r = await fetch(`${apiUrl}?url=${encodeURIComponent(giftUrl)}`, {
+            headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' }
+        });
+        if (!r.ok) return 0;
+        const d = await r.json();
+        return Number(d.price_ton) || Number(d.price) || 0;
+    } catch(e) { return 0; }
+}
+
 // ── Gift: list user gifts ──
 app.post('/api/gifts/list', async (req, res) => {
     try {
@@ -2390,6 +2409,21 @@ app.post('/api/gifts/withdraw', async (req, res) => {
     } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
+
+// ── Gift: refresh price from API ──
+app.post('/api/gifts/refresh_price', async (req, res) => {
+    try {
+        const { id, giftId } = req.body;
+        const gift = await Gift.findOne({ _id: giftId, userId: String(id) });
+        if (!gift) return res.status(404).json({ error: 'Не найден' });
+        if (gift.giftUrl) {
+            const price = await fetchGiftPrice(gift.giftUrl);
+            if (price > 0) { gift.price = price; await gift.save(); }
+        }
+        res.json({ ok: true, price: gift.price || 0, gift });
+    } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
 // ── Admin: give gift to user (supports gift URL auto-resolve) ──
 app.post('/api/admin/give_gift', checkAdmin, async (req, res) => {
     try {
@@ -2403,7 +2437,7 @@ app.post('/api/admin/give_gift', checkAdmin, async (req, res) => {
             giftData = {
                 name: manualName || resolved.name || giftUrl,
                 imageUrl: manualImg || resolved.imageUrl || '',
-                price: Number(manualPrice) || resolved.price || 0,
+                price: Number(manualPrice) || (await fetchGiftPrice(giftUrl)) || resolved.price || 0,
                 giftUrl
             };
         }
