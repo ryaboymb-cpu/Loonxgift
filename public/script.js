@@ -469,7 +469,7 @@ function toggleMode() {
     showToast(`Включен ${mode} режим`); 
 }
 
-const MAIN_PAGES=new Set(['games','profile','wallet','promo']);
+const MAIN_PAGES=new Set(['games','profile','wallet','promo','gifts']);
 function nav(pageId,el){
     if(pageId!=='mine'&&typeof killAllPickaxes==='function')killAllPickaxes();
     document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
@@ -526,6 +526,7 @@ function switchDepTab(type, el) {
     el.classList.add('active'); el.style.background='var(--neon)'; el.style.color='#000';
     if($('dep-manual')) $('dep-manual').style.display = type === 'manual' ? 'block' : 'none';
     if($('dep-connect')) $('dep-connect').style.display = type === 'connect' ? 'block' : 'none';
+    if($('dep-gift')) $('dep-gift').style.display = type === 'gift' ? 'block' : 'none';
 }
 
 async function payWithTonConnect() {
@@ -709,9 +710,18 @@ function getCrashColor(x) {
 }
 
 socket.on('crashHistoryUpdate', hist => {
-    if($('cr-history')) $('cr-history').innerHTML = hist.map(x => `<div class="cr-badge" style="color:${getCrashColor(x)}; border-color:${getCrashColor(x)};">${x}x</div>`).join('');
+    if($('cr-history')) $('cr-history').innerHTML = hist.slice(0,6).map(x => `<div class="cr-badge" style="color:${getCrashColor(x)};border-color:${getCrashColor(x)};">${x}x</div>`).join('');
 });
 
+
+function adjustAutoCash(delta) {
+    const inp = $('cr-auto');
+    if (!inp) return;
+    let v = parseFloat(inp.value) || 0;
+    v = Math.round((v + delta) * 100) / 100;
+    if (v < 1.01) { inp.value = ''; return; }
+    inp.value = v.toFixed(2);
+}
 socket.on('crashBetsUpdate', bets => {
     if(!$('cr-live-bets')) return;
     if(bets.length === 0) $('cr-live-bets').innerHTML = '<div style="text-align:center; color:#555; padding:10px;">Ставок пока нет</div>';
@@ -749,6 +759,20 @@ function _crashAnimate() {
 
 socket.on('crashData', d => {
     curCrash = d; const btn = $('cr-btn');
+    // Auto cashout check
+    if (d.status === 'running' && myCrashBets.length > 0) {
+        const autoVal = parseFloat($('cr-auto')?.value);
+        if (!isNaN(autoVal) && autoVal >= 1.01 && parseFloat(d.multiplier) >= autoVal) {
+            if (!isCashingOut) {
+                isCashingOut = true;
+                const autoBet = myCrashBets[0];
+                const autoWin = parseFloat((autoBet * parseFloat(d.multiplier)).toFixed(2));
+                fetch('/api/bet', {method:'POST',headers:{'Content-Type':'application/json'},
+                    body:JSON.stringify({id:user.id,game:'Crash',bet:autoBet,win:autoWin,mode:crMode})
+                }).then(r=>r.json()).then(u=>{user=u;updateUI();myCrashBets=[];isCashingOut=false;showToast('АВТО: +'+autoWin.toFixed(2)+' TON');}).catch(()=>{isCashingOut=false;});
+            }
+        }
+    }
     if(!btn) return;
     if(d.status === 'waiting') {
         _crashCurrent = 1.00; _crashTarget = 1.00;
@@ -1299,6 +1323,8 @@ function switchAdminTab(tab) {
         loadAdminLogs(1, '');
     } else if (tab === 'stats') {
         loadAdminGameStats();
+    } else if (tab === 'gifts_admin') {
+        adminViewGifts();
     } else {
         renderAdminContent(tab); 
     }
@@ -1409,6 +1435,7 @@ async function adminViewUser(userId, page = 1) {
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
         <button onclick="adminBan('${u.id}',${!u.isBlocked})" style="${u.isBlocked?'background:linear-gradient(135deg,#00ff88,#00c060);color:#000;':'background:#2a0808;border:1px solid #ff2255;color:#ff2255;'} padding:10px;border-radius:10px;font-weight:800;border:${u.isBlocked?'none':'1px solid #ff2255'};cursor:pointer;">${u.isBlocked?'Разбанить':'Забанить'}</button>
         <button onclick="adminMsgUser('${u.id}')" style="background:#0d2a33;border:1px solid #00e5ff44;color:#00e5ff;padding:10px;border-radius:10px;font-weight:800;cursor:pointer;">Написать в бота</button>
+        <button onclick="adminGiveGift('${u.id}')" style="background:#1a0d2a;border:1px solid rgba(206,147,216,.4);color:#ce93d8;padding:10px;border-radius:10px;font-weight:800;cursor:pointer;grid-column:span 2;">Выдать подарок</button>
     </div>
 </div>
 <div class="adm-block">
@@ -1729,6 +1756,43 @@ function renderLogsUI(logs, totalPages, page) {
             <button class="btn" style="width:48%; background:#333;" onclick="loadAdminLogs(${page + 1}, currentLogsDate)" ${page >= totalPages ? 'disabled' : ''}>Вперед →</button>
         </div>
     `;
+}
+
+
+async function adminGiveGift(userId) {
+    const name = prompt('Название подарка:'); if (!name) return;
+    const imageUrl = prompt('URL картинки (или пусто):') || '';
+    const price = parseFloat(prompt('Цена в TON (или 0):') || '0') || 0;
+    const r = await fetch('/api/admin/give_gift', {method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({pass:adminPass, userId, name, imageUrl, price})});
+    const d = await r.json();
+    if(r.ok) showToast('✅ Подарок выдан');
+    else showToast('❌ '+(d.error||'Ошибка'));
+}
+async function adminViewGifts() {
+    const c = $('admin-content');
+    if(!c) return;
+    c.innerHTML = '<div style="text-align:center;padding:20px;color:var(--neon);">Загрузка...</div>';
+    const r = await fetch('/api/admin/gifts_list', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pass:adminPass})});
+    const d = await r.json();
+    const gifts = d.gifts||[];
+    c.innerHTML = `<div class="adm-block"><div class="adm-block-title">ПОДАРКИ ПОЛЬЗОВАТЕЛЕЙ (${gifts.length})</div>
+    ${gifts.map(g=>`<div style="background:#111;border:1px solid #1a1a1a;border-radius:10px;padding:10px;margin-bottom:8px;display:flex;gap:10px;align-items:center;">
+        ${g.imageUrl?`<img src="${g.imageUrl}" style="width:40px;height:40px;border-radius:8px;object-fit:cover;" onerror="this.style.display='none'">`:'<div style="width:40px;height:40px;background:#222;border-radius:8px;display:flex;align-items:center;justify-content:center;">🎁</div>'}
+        <div style="flex:1;min-width:0;">
+            <div style="font-weight:800;color:#fff;font-size:13px;">${g.name}</div>
+            <div style="font-size:11px;color:var(--sub);">@${g.ownerUsername||g.userId} · ${g.price?g.price+' TON':'—'}</div>
+            ${g.withdrawRequested?'<div style="font-size:10px;color:#ff2255;font-weight:700;">ЗАЯВКА НА ВЫВОД</div>':''}
+        </div>
+        <button onclick="adminDeleteGift('${g._id}')" style="background:#2a0808;border:1px solid #ff2255;color:#ff2255;padding:6px 10px;border-radius:8px;cursor:pointer;font-size:11px;">Удалить</button>
+    </div>`).join('')||'<div class="adm-empty">Нет подарков</div>'}
+    </div>`;
+}
+async function adminDeleteGift(giftId) {
+    if(!confirm('Удалить подарок?')) return;
+    const r = await fetch('/api/admin/delete_gift', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pass:adminPass,giftId})});
+    if(r.ok) { showToast('Удалено'); adminViewGifts(); }
+    else showToast('Ошибка');
 }
 
 async function adminW(wId, action) {
@@ -2181,6 +2245,7 @@ let minePersistGrid   = null;
 let mineLastBet       = 1;
 let mineRunningTotal  = 0;
 let mineIsActive      = false;
+let grid_current      = null; // текущий grid для TNT 2x2
 const _pickaxeEls     = new Set();
 
 // ── Прочность из adminSettings ──────────────────────────────
@@ -2440,57 +2505,53 @@ function spawnPickaxeWorker(blockQueue, pickType, startDelay, onAllDone, onBlock
     setTimeout(processNext, startDelay);
 }
 
-// ── Взрыв ТНТ (область 3×3 вокруг) ────────────────────────
+// ── Взрыв ТНТ (область 2×2 от позиции) ─────────────────────
 function tntExplode(r, c) {
-    // Яркая вспышка на шахте
     const shaft = $('mc-shaft');
     if (shaft) {
         const flash = document.createElement('div');
-        flash.style.cssText = 'position:absolute;inset:0;background:rgba(255,140,0,0.45);z-index:9998;pointer-events:none;border-radius:4px;';
+        flash.style.cssText = 'position:absolute;inset:0;background:rgba(255,140,0,0.55);z-index:9998;pointer-events:none;border-radius:4px;transition:background 0.06s;';
         shaft.appendChild(flash);
-        setTimeout(() => { flash.style.background = 'rgba(255,255,180,0.65)'; }, 60);
-        setTimeout(() => { flash.style.background = 'rgba(255,80,0,0.20)'; }, 130);
-        setTimeout(() => flash.remove(), 280);
+        setTimeout(() => { flash.style.background = 'rgba(255,255,180,0.70)'; }, 60);
+        setTimeout(() => { flash.style.background = 'rgba(255,80,0,0.18)'; }, 140);
+        setTimeout(() => flash.remove(), 320);
     }
-    // Урон соседним блокам
-    for (let dr = -1; dr <= 1; dr++) {
-        for (let dc = -1; dc <= 1; dc++) {
-            if (dr === 0 && dc === 0) continue;
-            const nr = r + dr, nc = c + dc;
-            if (nr < 0 || nr >= MC_ROWS || nc < 0 || nc >= MC_COLS) continue;
-            const adj = $(`mc-blk-${nr}-${nc}`);
-            if (!adj || adj.dataset.revealed === '1') continue;
-            adj.dataset.tntDmg = (parseInt(adj.dataset.tntDmg || '0') + 2).toString();
-            flashBlock(adj);
-            spawnBreakParticles(adj, adj.dataset.blockType || 'stone', 5);
-        }
-    }
-    // Большие взрывные частицы
+    // 2×2 область: [r,c], [r,c+1], [r+1,c], [r+1,c+1] — дамажим соседей
+    const affected = [[r,c],[r,c+1],[r+1,c],[r+1,c+1]];
+    affected.forEach(([nr, nc]) => {
+        if (nr < 0 || nr >= MC_ROWS || nc < 0 || nc >= MC_COLS) return;
+        const adj = $(`mc-blk-${nr}-${nc}`);
+        if (!adj || adj.dataset.revealed === '1') return;
+        adj.dataset.tntDmg = '10'; // instant break
+        flashBlock(adj);
+        spawnBreakParticles(adj, adj.dataset.blockType || 'stone', 7);
+    });
+    // Взрывные частицы
     const blkEl = $(`mc-blk-${r}-${c}`);
     if (blkEl) {
         const rect = blkEl.getBoundingClientRect();
         const cx = rect.left + rect.width / 2, cy = rect.top + rect.height / 2;
-        for (let i = 0; i < 20; i++) {
+        for (let i = 0; i < 24; i++) {
             const p = document.createElement('div');
-            const angle = (i / 20) * Math.PI * 2;
-            const spd = 50 + Math.random() * 90;
-            const vx = Math.cos(angle) * spd, vy = Math.sin(angle) * spd - 30;
-            const sz = 3 + Math.random() * 6;
-            const clr = i % 3 === 0 ? '#ff8800' : i % 3 === 1 ? '#ffcc00' : '#ff3300';
+            const angle = (i / 24) * Math.PI * 2;
+            const spd = 55 + Math.random() * 95;
+            const vx = Math.cos(angle) * spd, vy = Math.sin(angle) * spd - 35;
+            const sz = 3 + Math.random() * 7;
+            const clr = i % 3 === 0 ? '#ff8800' : i % 3 === 1 ? '#ffdd00' : '#ff3300';
             p.style.cssText = `position:fixed;width:${sz}px;height:${sz}px;background:${clr};border-radius:50%;left:${cx}px;top:${cy}px;z-index:9900;pointer-events:none;`;
             document.body.appendChild(p);
             let ms = 0;
             const id = setInterval(() => {
                 ms += 16; const t = ms / 1000;
                 p.style.transform = `translate(${vx*t}px,${vy*t+320*t*t}px)`;
-                p.style.opacity = String(Math.max(0, 1 - ms / 550));
-                if (ms >= 550) { clearInterval(id); p.remove(); }
+                p.style.opacity = String(Math.max(0, 1 - ms / 600));
+                if (ms >= 600) { clearInterval(id); p.remove(); }
             }, 16);
         }
     }
 }
 
-// ── Падение ТНТ ─────────────────────────────────────────────
+// ── Падение ТНТ с 2×2 взрывом ────────────────────────────────
 function dropTNT(col, blk, onDone) {
     const blkEl = $(`mc-blk-${blk.r}-${blk.c}`);
     if (!blkEl || blkEl.dataset.revealed === '1') { if (onDone) onDone(); return; }
@@ -2499,21 +2560,34 @@ function dropTNT(col, blk, onDone) {
 
     const tntEl = document.createElement('img');
     tntEl.src = '/sprites/block_tnt.png';
-    tntEl.style.cssText = `position:fixed;width:${rect.width}px;height:${rect.height}px;z-index:99999;pointer-events:none;image-rendering:pixelated;left:${rect.left}px;top:${rect.top - rect.height - 18}px;`;
+    const startTop = rect.top - rect.height - 24;
+    tntEl.style.cssText = `position:fixed;width:${rect.width}px;height:${rect.height}px;z-index:99999;pointer-events:none;image-rendering:pixelated;left:${rect.left}px;top:${startTop}px;`;
     document.body.appendChild(tntEl);
     _pickaxeEls.add(tntEl);
 
-    _anim(tntEl, 'top', rect.top - rect.height - 18, rect.top, 360, easeBounce, () => {
-        // Два быстрых мигания
-        tntEl.style.filter = 'brightness(4)';
-        setTimeout(() => { tntEl.style.filter = ''; }, 70);
-        setTimeout(() => { tntEl.style.filter = 'brightness(4)'; }, 140);
-        setTimeout(() => {
-            _pickaxeEls.delete(tntEl); tntEl.remove();
-            playSound('explode');
-            tntExplode(blk.r, blk.c);
-            doBreakBlock(blkEl, blk, () => { if (onDone) onDone(); });
-        }, 220);
+    // Падение с отскоком
+    _anim(tntEl, 'top', startTop, rect.top, 480, easeBounce, () => {
+        // Быстрое мигание перед взрывом
+        let blink = 0;
+        const blinkId = setInterval(() => {
+            blink++;
+            tntEl.style.filter = blink % 2 === 0 ? 'brightness(4)' : '';
+            if (blink >= 5) {
+                clearInterval(blinkId);
+                _pickaxeEls.delete(tntEl); tntEl.remove();
+                playSound('explode');
+                // 2×2 взрыв: ломаем блок [r,c] и [r,c+1] если есть
+                const blks2x2 = [blk];
+                // Добавляем второй блок (правый) если есть
+                const blkRight = blk.c + 1 < MC_COLS ? 
+                    { r: blk.r, c: blk.c + 1, type: grid_current ? (grid_current[blk.r]||[])[blk.c+1] : 'stone', win: 0, hits: 1 } : null;
+                tntExplode(blk.r, blk.c);
+                // Ломаем главный блок
+                doBreakBlock(blkEl, blk, () => {
+                    if (onDone) onDone();
+                });
+            }
+        }, 55);
     });
 }
 
@@ -3037,6 +3111,96 @@ function showFreeSpinActivation(count) {
         overlay.style.opacity = '0'; overlay.style.transition = 'opacity 0.4s';
         setTimeout(() => { overlay.style.display = 'none'; overlay.style.opacity = '1'; overlay.style.transition = ''; }, 400);
     }, 2100);
+}
+
+
+// ════════════════════════════════════════
+//  GIFTS PAGE
+// ════════════════════════════════════════
+async function loadGiftsPage() {
+    const c = $('gifts-content');
+    if (!c || !user) return;
+    c.innerHTML = '<div style="text-align:center;padding:40px;color:var(--neon);">Загрузка...</div>';
+    try {
+        const r = await fetch('/api/gifts/list', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:user.id})});
+        const d = await r.json();
+        const gifts = d.gifts || [];
+        if (!gifts.length) {
+            c.innerHTML = `<div style="text-align:center;padding:50px 20px;">
+                <div style="font-size:48px;margin-bottom:16px;opacity:.3;">🎁</div>
+                <div style="color:var(--sub);font-size:14px;font-weight:700;margin-bottom:20px;">У вас нет подарков</div>
+                <button class="btn" style="background:var(--neon);color:#000;" onclick="nav('wallet',null);switchWalletTab('dep');switchDepTab('gift',document.querySelector('.w-tab:nth-child(3)'))">Пополнить подарком</button>
+            </div>`;
+            return;
+        }
+        c.innerHTML = `<div style="padding:4px 0 16px;">
+            <div style="font-size:11px;color:var(--sub);font-weight:700;letter-spacing:2px;margin-bottom:12px;">МОИ ПОДАРКИ</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                ${gifts.map(g => `
+                <div onclick="openGiftDetail('${g._id}')" style="background:#080810;border:1px solid rgba(255,255,255,.07);border-radius:14px;padding:12px;cursor:pointer;text-align:center;transition:border-color .15s;" onmouseenter="this.style.borderColor='rgba(0,229,255,.3)'" onmouseleave="this.style.borderColor='rgba(255,255,255,.07)'">
+                    <div style="width:100%;aspect-ratio:1;border-radius:10px;background:#111;margin-bottom:8px;overflow:hidden;display:flex;align-items:center;justify-content:center;">
+                        ${g.imageUrl ? `<img src="${g.imageUrl}" style="width:100%;height:100%;object-fit:cover;border-radius:10px;" onerror="this.style.display='none'">` : '<div style="font-size:36px;">🎁</div>'}
+                    </div>
+                    <div style="font-size:12px;font-weight:800;color:#fff;margin-bottom:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${g.name}</div>
+                    <div style="font-size:11px;color:var(--neon);font-weight:700;">${g.price ? g.price+' TON' : 'Оценка...'}</div>
+                </div>`).join('')}
+            </div>
+        </div>`;
+    } catch(e) {
+        c.innerHTML = '<div style="color:red;text-align:center;padding:30px;">Ошибка загрузки</div>';
+    }
+}
+
+async function openGiftDetail(giftId) {
+    try {
+        const r = await fetch('/api/gifts/get', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:user.id,giftId})});
+        const d = await r.json();
+        const g = d.gift;
+        if (!g) return showToast('Подарок не найден');
+        const ov = document.createElement('div');
+        ov.id = 'gift-detail-ov';
+        ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:99999;display:flex;flex-direction:column;padding:20px;backdrop-filter:blur(6px);overflow-y:auto;';
+        ov.innerHTML = `
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px;">
+            <button onclick="document.getElementById('gift-detail-ov').remove()" style="background:none;border:1px solid rgba(255,255,255,.15);color:#aaa;border-radius:8px;padding:6px 12px;cursor:pointer;font-size:12px;">← Назад</button>
+            <span style="color:#fff;font-size:14px;font-weight:800;">${g.name}</span>
+        </div>
+        <div style="width:100%;aspect-ratio:1;max-width:280px;margin:0 auto 20px;background:#111;border-radius:16px;overflow:hidden;display:flex;align-items:center;justify-content:center;">
+            ${g.imageUrl ? `<img src="${g.imageUrl}" style="width:100%;height:100%;object-fit:cover;">` : '<div style="font-size:80px;">🎁</div>'}
+        </div>
+        <div style="background:#0d0d1a;border:1px solid rgba(255,255,255,.07);border-radius:14px;padding:16px;margin-bottom:16px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+                <span style="color:var(--sub);font-size:12px;">Название</span>
+                <span style="color:#fff;font-weight:700;font-size:13px;">${g.name}</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+                <span style="color:var(--sub);font-size:12px;">Стоимость</span>
+                <span style="color:var(--neon);font-weight:800;font-size:14px;">${g.price ? g.price+' TON' : 'Уточняется'}</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+                <span style="color:var(--sub);font-size:12px;">Владелец</span>
+                <span style="color:var(--neon-blue);font-weight:700;font-size:12px;">@${user.username||user.id}</span>
+            </div>
+        </div>
+        <button onclick="withdrawGift('${g._id}')" style="width:100%;padding:16px;background:linear-gradient(135deg,#ff2255,#c00040);color:#fff;border:none;border-radius:12px;font-weight:900;font-size:15px;cursor:pointer;margin-bottom:8px;">Вывести / Продать</button>
+        <p style="text-align:center;color:var(--sub);font-size:11px;">Вывод стоит 0.3 TON с баланса. Подарок перейдёт администратору.</p>`;
+        document.body.appendChild(ov);
+    } catch(e) { showToast('Ошибка'); }
+}
+
+async function withdrawGift(giftId) {
+    if (!confirm('Вывести подарок? Спишется 0.3 TON')) return;
+    try {
+        const r = await fetch('/api/gifts/withdraw', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:user.id,giftId})});
+        const d = await r.json();
+        if (!r.ok) return showToast(d.error||'Ошибка');
+        user = d.user;
+        updateUI();
+        showToast('Заявка создана!');
+        const ov = $('gift-detail-ov');
+        if (ov) ov.remove();
+        loadGiftsPage();
+    } catch(e) { showToast('Ошибка'); }
 }
 
 function startSpinAnim() {
