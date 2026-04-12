@@ -2509,14 +2509,14 @@ function spawnPickaxeWorker(blockQueue, pickType, startDelay, onAllDone, onBlock
         blkEl.classList.add('cracking-1');
 
         // Небольшая пауза перед первым ударом
-        setTimeout(() => doHits(hitsCanDo, 0), 60);
+        setTimeout(() => doHits(hitsCanDo, 0), 120);
 
         function doHits(left, num) {
             if (!mineIsActive) { removePick(); return; }
-            const swing = num % 2 === 0 ? -22 : 22;
+            const swing = num % 2 === 0 ? -28 : 28;
             pEl.style.transform = `translate(-50%, -100%) rotate(${swing}deg)`;
 
-            _anim(pEl, 'top', hoverY, hitY, 95, easeIn, () => {
+            _anim(pEl, 'top', hoverY, hitY, 170, easeIn, () => {
                 if (!mineIsActive) { removePick(); return; }
                 pEl.style.transform = 'translate(-50%, -100%) rotate(0deg)';
                 playSound('hit');
@@ -2529,21 +2529,20 @@ function spawnPickaxeWorker(blockQueue, pickType, startDelay, onAllDone, onBlock
                 if (left <= 1) {
                     if (willBreak) {
                         doBreakBlock(blkEl, blk, () => { if (onBlockBroken) onBlockBroken(blk.r, blk.c); });
-                        // Отскок назад на hoverY и сразу к следующему блоку (без перемещения)
-                        _anim(pEl, 'top', hitY, hoverY, 110, easeOut, () => {
+                        _anim(pEl, 'top', hitY, hoverY, 190, easeOut, () => {
                             if (!mineIsActive) { removePick(); return; }
-                            setTimeout(processNext, 50);
+                            setTimeout(processNext, 80);
                         });
                     } else {
-                        _anim(pEl, 'top', hitY, hoverY, 95, easeOut, () => {
+                        _anim(pEl, 'top', hitY, hoverY, 170, easeOut, () => {
                             if (!mineIsActive) { removePick(); return; }
                             breakPick(() => { if (onAllDone) onAllDone(); });
                         });
                     }
                 } else {
-                    _anim(pEl, 'top', hitY, hoverY, 120, easeOut, () => {
+                    _anim(pEl, 'top', hitY, hoverY, 200, easeOut, () => {
                         if (!mineIsActive) { removePick(); return; }
-                        setTimeout(() => doHits(left - 1, num + 1), 30);
+                        setTimeout(() => doHits(left - 1, num + 1), 60);
                     });
                 }
             });
@@ -2961,29 +2960,28 @@ function revealMineShaft(grid, blockWins, serverWin, balanceBefore, chestMults, 
         }, i * 480);
     });
 
-    // ── Фаза кирок: несколько в одном столбце падают с задержкой ──
+    // ── Фаза кирок: в одном столбце кирки работают СТРОГО последовательно ──
+    // col0 picks all go one after another, col1 starts after col0, etc.
     setTimeout(() => {
-        // Группируем кирки по столбцам
+        // Группируем кирки по столбцам, сохраняем порядок
         const colGroups = {};
         allPicks.forEach(ps => {
             if (!colGroups[ps.col]) colGroups[ps.col] = [];
             colGroups[ps.col].push(ps);
         });
 
-        let globalWorkerIdx = 0;
-        Object.entries(colGroups).forEach(([colStr, picks]) => {
-            const col = parseInt(colStr);
-            // Кирки в одном столбце падают последовательно (stagger)
-            // Каждая следующая начинает после предыдущей
-            let colDelay = globalWorkerIdx * 160;
-            const q = (colBlocks[col] || []).filter(b => brokenSet.has(`${b.r},${b.c}`) && !tntColSet.has(col));
-            if (!q.length) { globalWorkerIdx++; return; }
+        let globalColDelay = 0;
 
-            // Разбиваем очередь блоков между кирками
+        Object.entries(colGroups).forEach(([colStr]) => {
+            const col = parseInt(colStr);
+            const picks = colGroups[col];
+            const q = (colBlocks[col] || []).filter(b => brokenSet.has(`${b.r},${b.c}`) && !tntColSet.has(col));
+            if (!q.length) return;
+
+            // Каждая кирка в столбце получает свою очередь блоков
             let blockOffset = 0;
-            picks.forEach((ps, pi) => {
+            const pickQueues = picks.map(ps => {
                 const dur = getPickDur(ps.pType);
-                // Считаем сколько блоков заберёт эта кирка
                 let rem = dur, taken = 0;
                 for (let bi = blockOffset; bi < q.length; bi++) {
                     if (rem >= q[bi].hits) { rem -= q[bi].hits; taken++; }
@@ -2991,39 +2989,63 @@ function revealMineShaft(grid, blockWins, serverWin, balanceBefore, chestMults, 
                 }
                 const myQ = q.slice(blockOffset, blockOffset + taken);
                 blockOffset += taken;
+                return { ps, myQ, dur };
+            });
 
-                // Убираем кирку из хотбара когда она "отлетает"
+            // Запускаем кирки ЦЕПОЧКОЙ: следующая стартует когда предыдущая закончила
+            function launchNext(pickIdx, extraDelay) {
+                if (pickIdx >= pickQueues.length) return;
+                const { ps, myQ, dur } = pickQueues[pickIdx];
+                // Убираем кирку из хотбара
                 const ir = Math.floor(ps.idx / MC_COLS), ic = ps.idx % MC_COLS;
                 const iCell = $(`inv-${ir}-${ic}`);
                 if (iCell) { iCell.innerHTML = ''; iCell.className = 'inv-cell'; delete iCell.dataset.slotType; delete iCell.dataset.pickType; }
+                if (!myQ.length) { launchNext(pickIdx + 1, extraDelay); return; }
+                // Запускаем воркер, передаём onAllDone = следующая кирка в цепочке
+                spawnPickaxeWorker(myQ, ps.pType, extraDelay, () => {
+                    setTimeout(() => launchNext(pickIdx + 1, 0), 80);
+                }, onBlockBroken, dur);
+            }
 
-                if (myQ.length > 0) {
-                    spawnPickaxeWorker(myQ, ps.pType, colDelay + pi * 220, null, onBlockBroken, dur);
-                }
+            setTimeout(() => launchNext(0, 0), globalColDelay);
+
+            // Оцениваем суммарное время для этого столбца (для следующего столбца)
+            let colTime = 0;
+            pickQueues.forEach(({ ps, myQ, dur }) => {
+                let rem = dur;
+                myQ.forEach(blk => {
+                    const hc = Math.min(blk.hits, rem);
+                    colTime += hc * (170 + 200) + 380; // hit + return + pause
+                    rem -= hc;
+                });
+                colTime += 200; // gap between picks
             });
-            globalWorkerIdx++;
+            globalColDelay += colTime;
         });
     }, tntPhase);
 
-    // Вычисляем длительность анимации
-    let longestMs = 0;
+    // Вычисляем длительность анимации (sequential chain — columns go one after another)
+    let chainTotalMs = 0;
     Object.entries(colPickGroups || {}).forEach(([colStr, pTypes]) => {
         const col = parseInt(colStr);
         const q = (colBlocks[col] || []).filter(b => brokenSet.has(`${b.r},${b.c}`) && !tntColSet.has(col));
-        let t = 0;
-        pTypes.forEach((pType, pi) => {
-            t += pi * 220;
+        let colMs = 0;
+        let bIdx = 0;
+        pTypes.forEach(pType => {
             const dur = getPickDur(pType);
             let rem = dur;
-            for (const blk of q) {
+            while (rem > 0 && bIdx < q.length) {
+                const blk = q[bIdx];
                 const hc = Math.min(blk.hits, rem);
-                t += hc * (100 + 130) + 280;
-                rem -= hc; if (rem <= 0) break;
+                colMs += hc * 450 + 380; // 170 down + 200 up + 60 pause + overhead
+                rem -= hc; bIdx++;
             }
+            colMs += 280; // gap between sequential picks in column
         });
-        longestMs = Math.max(longestMs, t);
+        chainTotalMs += colMs;
     });
-    const estReveal = tntPhase + longestMs + 550;
+    const longestMs = chainTotalMs;
+    const estReveal = tntPhase + longestMs + 1100;
 
     // ── Финал ──
     setTimeout(() => {
@@ -3166,123 +3188,195 @@ function showFreeSpinActivation(count) {
 //  GIFTS PAGE
 // ════════════════════════════════════════
 function goToGiftPay() {
-    nav('wallet', document.querySelector('.nav-item:nth-child(4)'));
+    // Navigate to wallet → Gift Pay tab
+    const walletNavItem = document.querySelector('.nav-item:nth-child(4)');
+    nav('wallet', walletNavItem);
     setTimeout(() => {
         switchWalletTab('dep');
         setTimeout(() => {
             const giftTab = document.querySelectorAll('.w-tab')[2];
             if (giftTab) switchDepTab('gift', giftTab);
-        }, 100);
+        }, 150);
     }, 100);
 }
 
 async function loadGiftsPage() {
     const c = $('gifts-content');
     if (!c || !user) return;
-    c.innerHTML = `<div style="display:flex;justify-content:center;align-items:center;height:200px;">
-        <div style="width:32px;height:32px;border:3px solid rgba(0,255,136,.2);border-top-color:var(--neon);border-radius:50%;animation:spin 0.9s linear infinite;"></div>
+
+    // Beautiful loading skeleton
+    c.innerHTML = `
+    <div style="padding:0 0 20px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;">
+            <div style="font-size:13px;font-weight:800;color:#fff;letter-spacing:.5px;">Мои подарки</div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+            ${[1,2,3,4].map(()=>`<div style="background:#0d0d1e;border:1px solid rgba(255,255,255,.05);border-radius:16px;aspect-ratio:1;animation:pulse 1.4s ease-in-out infinite;"></div>`).join('')}
+        </div>
     </div>`;
+
     try {
-        const r = await fetch('/api/gifts/list', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:user.id})});
+        const r = await fetch('/api/gifts/list', {
+            method:'POST', headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({ id: user.id })
+        });
         const d = await r.json();
         const gifts = d.gifts || [];
+
         if (!gifts.length) {
             c.innerHTML = `
-            <div style="padding:0 0 20px;">
-                <div style="text-align:center;padding:48px 20px 32px;">
-                    <div style="width:72px;height:72px;background:rgba(0,229,255,.06);border:1px solid rgba(0,229,255,.12);border-radius:20px;display:flex;align-items:center;justify-content:center;margin:0 auto 18px;">
-                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="rgba(0,229,255,.4)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12v10H4V12"/><path d="M22 7H2v5h20V7z"/><path d="M12 22V7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg>
-                    </div>
-                    <div style="font-size:15px;font-weight:800;color:#fff;margin-bottom:6px;">Нет подарков</div>
-                    <div style="font-size:12px;color:var(--sub);margin-bottom:24px;line-height:1.5;">Отправьте подарок @msgp2p в Telegram,<br>и он появится здесь автоматически</div>
-                    <button onclick="goToGiftPay()" style="background:linear-gradient(135deg,var(--neon),#00c060);color:#000;font-weight:900;border:none;border-radius:12px;padding:14px 32px;font-size:14px;cursor:pointer;letter-spacing:.5px;">Пополнить подарком</button>
+            <div style="min-height:65vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px;text-align:center;">
+                <div style="width:88px;height:88px;background:linear-gradient(135deg,rgba(0,229,255,.06),rgba(0,229,255,.02));border:1px solid rgba(0,229,255,.1);border-radius:24px;display:flex;align-items:center;justify-content:center;margin-bottom:20px;">
+                    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="rgba(0,229,255,.35)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M20 12v10H4V12"/><path d="M22 7H2v5h20V7z"/><path d="M12 22V7"/>
+                        <path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/>
+                        <path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/>
+                    </svg>
                 </div>
+                <div style="font-size:17px;font-weight:900;color:#fff;margin-bottom:8px;">Нет подарков</div>
+                <div style="font-size:12px;color:rgba(255,255,255,.35);margin-bottom:28px;line-height:1.6;max-width:240px;">
+                    Отправьте Telegram-подарок на @msgp2p и он появится здесь автоматически
+                </div>
+                <button onclick="goToGiftPay()" style="background:linear-gradient(135deg,#00e5ff,#0097a7);color:#000;font-weight:900;border:none;border-radius:14px;padding:14px 36px;font-size:14px;cursor:pointer;letter-spacing:.5px;box-shadow:0 8px 24px rgba(0,229,255,.2);">Пополнить подарком</button>
             </div>`;
             return;
         }
-        c.innerHTML = `<div style="padding:0 0 20px;">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
-                <div style="font-size:11px;font-weight:700;color:var(--sub);letter-spacing:2px;">МОИ ПОДАРКИ</div>
-                <div style="font-size:11px;color:var(--sub);">${gifts.length} шт.</div>
+
+        c.innerHTML = `
+        <div style="padding:0 0 24px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;">
+                <div style="font-size:13px;font-weight:800;color:#fff;">Мои подарки</div>
+                <div style="font-size:11px;color:rgba(255,255,255,.35);background:rgba(255,255,255,.05);padding:4px 10px;border-radius:20px;">${gifts.length} шт.</div>
             </div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-                ${gifts.map(g => `
-                <div onclick="openGiftDetail('${g._id}')" style="background:#080810;border:1px solid rgba(255,255,255,.07);border-radius:16px;overflow:hidden;cursor:pointer;transition:transform .12s,border-color .15s;-webkit-tap-highlight-color:transparent;" onmouseenter="this.style.borderColor='rgba(0,229,255,.3)'" onmouseleave="this.style.borderColor='rgba(255,255,255,.07)'" ontouchstart="this.style.transform='scale(.96)'" ontouchend="this.style.transform=''">
-                    <div style="width:100%;aspect-ratio:1;background:linear-gradient(135deg,#0d0d1e,#111);display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden;">
-                        ${g.imageUrl
-                            ? `<img src="${g.imageUrl}" style="width:100%;height:100%;object-fit:cover;" onerror="this.style.display='none';this.parentNode.innerHTML='<div style=\'font-size:42px;\'>🎁</div>'">`
-                            : '<div style="font-size:42px;">🎁</div>'}
-                        ${g.price ? `<div style="position:absolute;bottom:6px;right:6px;background:rgba(0,0,0,.75);border:1px solid rgba(0,255,136,.3);border-radius:6px;padding:2px 7px;font-size:10px;font-weight:800;color:var(--neon);">${g.price} TON</div>` : ''}
-                    </div>
-                    <div style="padding:10px 10px 12px;">
-                        <div style="font-size:12px;font-weight:800;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${g.name}</div>
-                        <div style="font-size:10px;color:var(--sub);margin-top:2px;">${g.price ? g.price+' TON' : 'Оценивается...'}</div>
-                    </div>
-                </div>`).join('')}
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+                ${gifts.map(g => {
+                    const priceStr = g.price ? g.price.toFixed(2) + ' TON' : '—';
+                    return `
+                    <div onclick="openGiftDetail('${g._id}')"
+                        style="background:#0a0a18;border:1px solid rgba(255,255,255,.07);border-radius:18px;overflow:hidden;cursor:pointer;transition:transform .12s,border-color .15s,box-shadow .15s;-webkit-tap-highlight-color:transparent;"
+                        ontouchstart="this.style.transform='scale(.95)';this.style.borderColor='rgba(0,229,255,.3)'"
+                        ontouchend="this.style.transform='';this.style.borderColor='rgba(255,255,255,.07)'">
+                        <!-- Image -->
+                        <div style="width:100%;aspect-ratio:1;background:linear-gradient(135deg,#0d0d22,#14142e);position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center;">
+                            ${g.imageUrl
+                                ? `<img src="${g.imageUrl}" style="width:100%;height:100%;object-fit:cover;" loading="lazy" onerror="this.style.display='none';this.parentNode.querySelector('.gift-fallback').style.display='flex'">`
+                                : ''}
+                            <div class="gift-fallback" style="display:${g.imageUrl?'none':'flex'};flex-direction:column;align-items:center;gap:6px;">
+                                <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.2)" stroke-width="1.5"><path d="M20 12v10H4V12"/><path d="M22 7H2v5h20V7z"/><path d="M12 22V7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg>
+                            </div>
+                            ${g.price ? `<div style="position:absolute;bottom:8px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.75);backdrop-filter:blur(4px);border:1px solid rgba(0,255,136,.3);border-radius:20px;padding:3px 10px;font-size:11px;font-weight:800;color:#00ff88;white-space:nowrap;">${priceStr}</div>` : ''}
+                        </div>
+                        <!-- Info -->
+                        <div style="padding:10px 12px 12px;">
+                            <div style="font-size:12px;font-weight:800;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:3px;">${g.name}</div>
+                            <div style="font-size:10px;color:rgba(255,255,255,.35);">${g.price ? priceStr : 'Цена не указана'}</div>
+                        </div>
+                    </div>`;
+                }).join('')}
             </div>
         </div>`;
     } catch(e) {
-        c.innerHTML = '<div style="text-align:center;padding:40px;color:#ff2255;font-size:13px;">Ошибка загрузки</div>';
+        c.innerHTML = `<div style="text-align:center;padding:40px;color:rgba(255,34,85,.7);font-size:13px;">Ошибка загрузки</div>`;
     }
 }
 
 async function openGiftDetail(giftId) {
-    const existOv = $('gift-detail-ov'); if (existOv) existOv.remove();
+    const existOv = $('gift-detail-ov');
+    if (existOv) existOv.remove();
+
+    // Create overlay with loading state
     const ov = document.createElement('div');
     ov.id = 'gift-detail-ov';
-    ov.style.cssText = 'position:fixed;inset:0;background:#050508;z-index:99999;display:flex;flex-direction:column;overflow-y:auto;opacity:0;transition:opacity .2s;';
-    ov.innerHTML = `<div style="display:flex;justify-content:center;align-items:center;height:100%;">
-        <div style="width:32px;height:32px;border:3px solid rgba(0,255,136,.2);border-top-color:var(--neon);border-radius:50%;animation:spin .9s linear infinite;"></div>
+    ov.style.cssText = 'position:fixed;inset:0;background:#050508;z-index:99999;display:flex;flex-direction:column;overflow-y:auto;opacity:0;transition:opacity .18s;';
+    ov.innerHTML = `<div style="height:100%;display:flex;align-items:center;justify-content:center;">
+        <div style="width:36px;height:36px;border:3px solid rgba(0,229,255,.15);border-top-color:#00e5ff;border-radius:50%;animation:spin .8s linear infinite;"></div>
     </div>`;
     document.body.appendChild(ov);
-    requestAnimationFrame(() => { ov.style.opacity='1'; });
+    requestAnimationFrame(() => { ov.style.opacity = '1'; });
+
     try {
-        const r = await fetch('/api/gifts/get', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:user.id,giftId})});
+        const r = await fetch('/api/gifts/get', {
+            method:'POST', headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({ id: user.id, giftId })
+        });
         const d = await r.json();
         const g = d.gift;
         if (!g) { showToast('Подарок не найден'); ov.remove(); return; }
+
+        const priceStr = g.price ? g.price.toFixed(2) + ' TON' : '—';
+
         ov.innerHTML = `
-        <div style="padding:16px 16px 8px;display:flex;align-items:center;gap:10px;border-bottom:1px solid rgba(255,255,255,.05);">
-            <button onclick="document.getElementById('gift-detail-ov').remove()" style="background:none;border:1px solid rgba(255,255,255,.12);color:rgba(255,255,255,.5);border-radius:8px;padding:7px 12px;cursor:pointer;font-size:12px;font-weight:700;">← Назад</button>
-            <span style="color:#fff;font-size:14px;font-weight:800;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${g.name}</span>
+        <!-- Header -->
+        <div style="position:sticky;top:0;background:#050508;border-bottom:1px solid rgba(255,255,255,.05);padding:14px 16px;display:flex;align-items:center;gap:12px;z-index:10;">
+            <button onclick="document.getElementById('gift-detail-ov').remove()"
+                style="background:none;border:1px solid rgba(255,255,255,.1);color:rgba(255,255,255,.5);border-radius:10px;padding:8px 14px;cursor:pointer;font-size:12px;font-weight:700;flex-shrink:0;">← Назад</button>
+            <span style="font-size:14px;font-weight:800;color:#fff;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${g.name}</span>
         </div>
-        <!-- NFT Image -->
-        <div style="padding:20px 20px 0;display:flex;justify-content:center;">
-            <div style="width:220px;height:220px;border-radius:20px;background:linear-gradient(135deg,#0d0d2a,#1a1a3a);border:1px solid rgba(255,255,255,.08);overflow:hidden;display:flex;align-items:center;justify-content:center;box-shadow:0 16px 48px rgba(0,0,0,.6);">
+
+        <!-- NFT Image block -->
+        <div style="padding:24px 20px 0;display:flex;justify-content:center;">
+            <div style="width:min(260px,80vw);height:min(260px,80vw);border-radius:22px;background:linear-gradient(135deg,#0d0d22,#14142e);border:1px solid rgba(255,255,255,.08);overflow:hidden;display:flex;align-items:center;justify-content:center;box-shadow:0 20px 60px rgba(0,0,0,.6),0 0 0 1px rgba(255,255,255,.04);">
                 ${g.imageUrl
-                    ? `<img src="${g.imageUrl}" style="width:100%;height:100%;object-fit:cover;" onerror="this.style.display='none';this.insertAdjacentHTML('afterend','<div style=font-size:72px>🎁</div>')">`
-                    : '<div style="font-size:72px;">🎁</div>'}
+                    ? `<img src="${g.imageUrl}" style="width:100%;height:100%;object-fit:cover;" onerror="this.src='';this.parentNode.innerHTML='<div style=font-size:80px;opacity:.3>🎁</div>'">`
+                    : `<div style="font-size:80px;opacity:.3;">🎁</div>`}
             </div>
         </div>
+
+        <!-- Price highlight -->
+        <div style="padding:20px 20px 0;display:flex;justify-content:center;">
+            <div style="background:linear-gradient(135deg,rgba(0,255,136,.08),rgba(0,229,255,.05));border:1px solid rgba(0,255,136,.2);border-radius:14px;padding:14px 28px;text-align:center;">
+                <div style="font-size:10px;color:rgba(255,255,255,.35);font-weight:700;letter-spacing:2px;margin-bottom:4px;">СТОИМОСТЬ</div>
+                <div style="font-size:24px;font-weight:900;color:#00ff88;line-height:1;">${priceStr}</div>
+                ${!g.price ? '<div style="font-size:10px;color:rgba(255,255,255,.25);margin-top:4px;">Цена будет добавлена</div>' : ''}
+            </div>
+        </div>
+
         <!-- Info block -->
-        <div style="padding:20px 16px;">
-            <div style="background:#0d0d1a;border:1px solid rgba(255,255,255,.07);border-radius:16px;overflow:hidden;margin-bottom:16px;">
-                <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 16px;border-bottom:1px solid rgba(255,255,255,.05);">
-                    <span style="color:rgba(255,255,255,.45);font-size:12px;font-weight:600;">Название</span>
-                    <span style="color:#fff;font-weight:800;font-size:13px;">${g.name}</span>
+        <div style="padding:16px 20px;">
+            <div style="background:#0a0a18;border:1px solid rgba(255,255,255,.06);border-radius:16px;overflow:hidden;margin-bottom:16px;">
+                <div style="padding:14px 16px;border-bottom:1px solid rgba(255,255,255,.04);display:flex;justify-content:space-between;align-items:center;">
+                    <span style="color:rgba(255,255,255,.4);font-size:12px;">Название</span>
+                    <span style="color:#fff;font-weight:700;font-size:13px;max-width:55%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:right;">${g.name}</span>
                 </div>
-                <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 16px;border-bottom:1px solid rgba(255,255,255,.05);">
-                    <span style="color:rgba(255,255,255,.45);font-size:12px;font-weight:600;">Стоимость</span>
-                    <span style="color:var(--neon);font-weight:900;font-size:15px;">${g.price ? g.price+' TON' : '—'}</span>
+                <div style="padding:14px 16px;border-bottom:1px solid rgba(255,255,255,.04);display:flex;justify-content:space-between;align-items:center;">
+                    <span style="color:rgba(255,255,255,.4);font-size:12px;">Владелец</span>
+                    <span style="color:#00e5ff;font-weight:700;font-size:12px;">@${user.username || user.id}</span>
                 </div>
-                <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 16px;">
-                    <span style="color:rgba(255,255,255,.45);font-size:12px;font-weight:600;">Владелец</span>
-                    <span style="color:rgba(0,229,255,.8);font-weight:700;font-size:12px;">@${user.username||user.id}</span>
+                <div style="padding:14px 16px;display:flex;justify-content:space-between;align-items:center;">
+                    <span style="color:rgba(255,255,255,.4);font-size:12px;">Статус</span>
+                    <span style="color:#00ff88;font-weight:700;font-size:12px;display:flex;align-items:center;gap:6px;">
+                        <span style="width:6px;height:6px;background:#00ff88;border-radius:50%;display:inline-block;"></span>
+                        В кошельке
+                    </span>
                 </div>
             </div>
-            <!-- Actions -->
-            <button onclick="withdrawGift('${g._id}')" style="width:100%;padding:16px;background:linear-gradient(135deg,#00e5ff,#0097a7);color:#000;border:none;border-radius:14px;font-weight:900;font-size:15px;cursor:pointer;letter-spacing:.5px;margin-bottom:10px;">Вывести / Продать</button>
-            <div style="text-align:center;color:rgba(255,255,255,.3);font-size:11px;line-height:1.5;">Комиссия за вывод 0.3 TON · Подарок передаётся администратору</div>
+
+            <!-- Action buttons -->
+            <button onclick="withdrawGift('${g._id}')"
+                style="width:100%;padding:17px;background:linear-gradient(135deg,#00e5ff,#0097a7);color:#000;border:none;border-radius:14px;font-weight:900;font-size:15px;cursor:pointer;letter-spacing:.5px;box-shadow:0 8px 24px rgba(0,229,255,.2);margin-bottom:10px;">
+                Вывести / Продать
+            </button>
+            <div style="text-align:center;color:rgba(255,255,255,.2);font-size:11px;line-height:1.5;padding:0 10px;">
+                Комиссия 0.3 TON · Подарок передаётся администратору для вывода
+            </div>
         </div>`;
-    } catch(e) { showToast('Ошибка загрузки'); ov.remove(); }
+    } catch(e) {
+        showToast('Ошибка загрузки');
+        ov.remove();
+    }
 }
 
 async function withdrawGift(giftId) {
+    const bal = mode === 'real' ? user.balance : user.demo_balance;
+    if (bal < 0.3) return showToast('Нужно 0.3 TON на балансе');
     if (!confirm('Вывести подарок? Спишется 0.3 TON')) return;
     try {
-        const r = await fetch('/api/gifts/withdraw', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:user.id,giftId})});
+        const r = await fetch('/api/gifts/withdraw', {
+            method:'POST', headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({ id: user.id, giftId })
+        });
         const d = await r.json();
-        if (!r.ok) return showToast(d.error||'Ошибка');
+        if (!r.ok) return showToast(d.error || 'Ошибка');
         user = d.user;
         updateUI();
         showToast('Заявка создана!');
