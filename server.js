@@ -218,6 +218,19 @@ const Settings = mongoose.model('Settings', SettingsSchema);
 const Battle = mongoose.model('Battle', BattleSchema);
 const AdminLog = mongoose.model('AdminLog', AdminLogSchema);
 
+// ════ GIFT SYSTEM ════
+const GiftSchema = new mongoose.Schema({
+    userId:            String,  // owner telegram ID
+    ownerUsername:     String,
+    name:              String,
+    imageUrl:          { type: String, default: '' },
+    price:             { type: Number, default: 0 },
+    withdrawRequested: { type: Boolean, default: false },
+    createdAt:         { type: Date, default: Date.now }
+});
+const Gift = mongoose.model('Gift', GiftSchema);
+
+
 async function logAdmin(action) {
     try { await AdminLog.create({ action }); } catch(e) {}
 }
@@ -1078,28 +1091,52 @@ app.post('/api/mine', async (req, res) => {
         for (let c = 0; c < 5; c++) chestMults.push(pickChestMult());
         const effectiveBet = isFreeAutoSpin ? 0.5 : betAmount;
 
-        const SRV_DUR={wooden:1,stone:2,iron:3,golden:4,diamond:5};const colPick={};
-        (hotbar||[]).forEach((slot,idx)=>{const col=idx%5;
-            if(slot&&slot.type==='pickaxe'){const pt=slot.pickaxeType||'wooden';const rank={wooden:0,stone:1,iron:2,golden:3,diamond:4};if(colPick[col]===undefined||rank[pt]>rank[colPick[col]])colPick[col]=pt;}
-            if(slot&&slot.type==='tnt'&&colPick[col]===undefined)colPick[col]='tnt';
+        const SRV_DUR={wooden:1,stone:2,iron:3,golden:4,diamond:5};
+        // Build per-column best pickaxe (or tnt)
+        const colTool={}; // col -> {type:'pickaxe'|'tnt', pType}
+        (hotbar||[]).forEach((slot,idx)=>{
+            const col=idx%5;
+            if(slot&&slot.type==='tnt'){
+                // TNT takes priority
+                if(!colTool[col]||colTool[col].type!=='tnt') colTool[col]={type:'tnt'};
+            } else if(slot&&slot.type==='pickaxe'){
+                const pt=slot.pickaxeType||'wooden';
+                const rank={wooden:0,stone:1,iron:2,golden:3,diamond:4};
+                if(!colTool[col]||colTool[col].type==='tnt') return; // TNT wins
+                if(!colTool[col]||rank[pt]>(rank[colTool[col].pType]||0)) colTool[col]={type:'pickaxe',pType:pt};
+            }
         });
+
         const adjustedBlockWins=[];for(let r=0;r<6;r++)adjustedBlockWins.push([0,0,0,0,0]);
         let blockWinSum=0;
-        for(const[colStr,pType]of Object.entries(colPick)){
-            const col=parseInt(colStr),maxB=pType==='tnt'?3:(SRV_DUR[pType]||1);let broken=0;
-            for(let r=0;r<6&&broken<maxB;r++){if(!grid[r][col])continue;const mult=dynBlockMults[grid[r][col]]||0;const bw=parseFloat((effectiveBet*mult).toFixed(3));adjustedBlockWins[r][col]=bw;blockWinSum+=bw;broken++;}
+        for(const[colStr,tool]of Object.entries(colTool)){
+            const col=parseInt(colStr);
+            // TNT: 10 durability, breaks 2 rows in the column (first 2 intact blocks)
+            // Pickaxe: durability from settings
+            const maxB = tool.type==='tnt' ? 2 : (SRV_DUR[tool.pType]||1);
+            let broken=0;
+            for(let r=0;r<6&&broken<maxB;r++){
+                if(!grid[r][col])continue;
+                const mult=dynBlockMults[grid[r][col]]||0;
+                const bw=parseFloat((effectiveBet*mult).toFixed(3));
+                adjustedBlockWins[r][col]=bw;
+                blockWinSum+=bw;
+                broken++;
+            }
         }
         let actualWin=Number(blockWinSum.toFixed(2));
-        // CHESTS: multiply ENTIRE user balance (not just block wins)
-        // Reaching a chest = clearing entire column = very rare (~0.5% per column)
-        // Chest activation is determined server-side based on probability
+
+        // CHESTS: if column fully cleared, chest multiplies the TOTAL blockWinSum
         const chestActivated = [];
         for (let c = 0; c < 5; c++) {
-            // 0.5% chance per column that the chest "activates" (column gets fully mined)
             chestActivated.push(Math.random() < 0.005);
         }
-
-        let chestBonusWin=0;for(let c=0;c<5;c++){if(chestActivated[c])chestBonusWin+=effectiveBet*(chestMults[c]-1);}actualWin=Number((actualWin+chestBonusWin).toFixed(2));
+        // Apply chest mult to running total (not a flat bonus)
+        let chestMultApplied = 1;
+        for(let c=0;c<5;c++){
+            if(chestActivated[c]) chestMultApplied = Math.max(chestMultApplied, chestMults[c]);
+        }
+        if(chestMultApplied > 1) actualWin = Number((actualWin * chestMultApplied).toFixed(2));
 
         let bookCount = hotbar.filter(s => s.type === 'book').length;
         if (bookCount >= 3) {
@@ -1122,7 +1159,7 @@ app.post('/api/mine', async (req, res) => {
             pushToGlobalHistory(betEntry);
         }
 
-        res.json({ grid, blockWins: adjustedBlockWins, hotbar, chestMults, chestActivated, win: actualWin, user, freeSpinsLeft: user.mineFreeSpins || 0 });
+        res.json({ grid, blockWins: adjustedBlockWins, hotbar, chestMults, chestActivated, win: actualWin, blockWinSum: Number(blockWinSum.toFixed(2)), user, freeSpinsLeft: user.mineFreeSpins || 0 });
     } catch (err) {
         console.error('Mine error:', err);
         res.status(500).json({ error: 'Ошибка сервера' });
@@ -2083,6 +2120,25 @@ app.post('/api/cases/open', async (req, res) => {
                     return res.status(400).json({error:`Кейс доступен через ${hoursLeft} ч`});
                 }
             }
+            // Проверяем подписку на каналы (server-side enforcement)
+            const channels = cfg.channels || [];
+            if (channels.length > 0) {
+                const token = process.env.BOT_TOKEN;
+                if (token) {
+                    for (const ch of channels) {
+                        try {
+                            const chId = ch.startsWith('@') ? ch : '@'+ch;
+                            const r = await fetch(`https://api.telegram.org/bot${token}/getChatMember?chat_id=${encodeURIComponent(chId)}&user_id=${id}`);
+                            const d = await r.json();
+                            if (d.ok) {
+                                const status = d.result?.status;
+                                const isIn = ['creator','administrator','member'].includes(status);
+                                if (!isIn) return res.status(400).json({error:`Подпишитесь на ${chId} чтобы открыть кейс`});
+                            }
+                        } catch(e) { /* network error - skip check */ }
+                    }
+                }
+            }
         }
         
         const maintSetting = await Settings.findOne({ key: 'maintenance_case' });
@@ -2224,6 +2280,80 @@ app.post('/api/user/history', async (req, res) => {
 
 // Keep-alive endpoint (for uptime monitors like UptimeRobot)
 // ping removed
+
+// ── Gift: list user gifts ──
+app.post('/api/gifts/list', async (req, res) => {
+    try {
+        const { id } = req.body;
+        const gifts = await Gift.find({ userId: String(id), withdrawRequested: false }).sort({ createdAt: -1 });
+        res.json({ gifts });
+    } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Gift: get single gift ──
+app.post('/api/gifts/get', async (req, res) => {
+    try {
+        const { id, giftId } = req.body;
+        const gift = await Gift.findOne({ _id: giftId, userId: String(id) });
+        if (!gift) return res.status(404).json({ error: 'Не найден' });
+        res.json({ gift });
+    } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Gift: withdraw request (costs 0.3 TON) ──
+app.post('/api/gifts/withdraw', async (req, res) => {
+    try {
+        const { id, giftId } = req.body;
+        const user = await User.findOne({ id: String(id) });
+        if (!user || user.isBlocked) return res.status(403).json({ error: 'Заблокирован' });
+        if (user.balance < 0.3) return res.status(400).json({ error: 'Нужно 0.3 TON на балансе' });
+        const gift = await Gift.findOne({ _id: giftId, userId: String(id) });
+        if (!gift) return res.status(404).json({ error: 'Подарок не найден' });
+        if (gift.withdrawRequested) return res.status(400).json({ error: 'Уже подана заявка' });
+        user.balance = Number((user.balance - 0.3).toFixed(2));
+        await user.save();
+        gift.withdrawRequested = true;
+        await gift.save();
+        await logAdmin(`Заявка на вывод подарка "${gift.name}" от @${user.username||id}`);
+        if (bot) bot.sendMessage(id, `Заявка на вывод подарка "${gift.name}" принята. Ожидайте.`).catch(()=>{});
+        res.json({ ok: true, user });
+    } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Admin: give gift to user ──
+app.post('/api/admin/give_gift', checkAdmin, async (req, res) => {
+    try {
+        const { userId, name, imageUrl, price } = req.body;
+        if (!userId || !name) return res.status(400).json({ error: 'userId и name обязательны' });
+        const user = await User.findOne({ id: String(userId) });
+        if (!user) return res.status(404).json({ error: 'Пользователь не найден' });
+        const gift = await Gift.create({
+            userId: String(userId),
+            ownerUsername: user.username || String(userId),
+            name, imageUrl: imageUrl || '', price: Number(price) || 0
+        });
+        await logAdmin(`Выдал подарок "${name}" пользователю @${user.username||userId}`);
+        if (bot) bot.sendMessage(userId, `🎁 Вам выдан подарок: "${name}"! Посмотрите в разделе Подарки.`).catch(()=>{});
+        res.json({ ok: true, gift });
+    } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Admin: list all gifts ──
+app.post('/api/admin/gifts_list', checkAdmin, async (req, res) => {
+    try {
+        const gifts = await Gift.find().sort({ createdAt: -1 }).limit(200);
+        res.json({ gifts });
+    } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Admin: delete gift ──
+app.post('/api/admin/delete_gift', checkAdmin, async (req, res) => {
+    try {
+        const { giftId } = req.body;
+        await Gift.findByIdAndDelete(giftId);
+        res.json({ ok: true });
+    } catch(e) { res.status(500).json({ error: e.message }); }
+});
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, '0.0.0.0', () => {
