@@ -1657,3 +1657,10 @@ body {
 .hotbar {
     grid-template-columns: repeat(5, 1fr) !important;
 }
+.nav-item svg {
+    width: 20px !important;
+    height: 20px !important;
+}
+.nav-item {
+    font-size: 9px !important;
+}
