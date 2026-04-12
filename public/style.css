@@ -1606,3 +1606,54 @@ body {
     0%   { opacity: 1; transform: translate(-50%, 0); }
     100% { opacity: 0; transform: translate(-50%, -32px); }
 }
+
+/* ════ CRASH: 6 history badges ════ */
+.cr-history {
+    display: flex !important;
+    gap: 5px !important;
+    justify-content: center !important;
+    flex-wrap: nowrap !important;
+    overflow: hidden !important;
+    margin-bottom: 8px !important;
+}
+.cr-badge {
+    flex: 1;
+    min-width: 0;
+    text-align: center;
+    font-size: 12px;
+    font-weight: 900;
+    padding: 4px 2px;
+    border-radius: 7px;
+    border: 1px solid;
+    letter-spacing: 0;
+    white-space: nowrap;
+}
+
+/* ════ CRASH: auto cashout input row ════ */
+#cr-auto {
+    font-weight: 800;
+    color: var(--neon);
+    background: #080810;
+    border-color: rgba(0,229,255,.25);
+}
+#cr-auto:focus { border-color: var(--neon); }
+
+/* ════ GIFTS PAGE ════ */
+.gift-card {
+    background: #080810;
+    border: 1px solid rgba(255,255,255,.07);
+    border-radius: 14px;
+    padding: 12px;
+    cursor: pointer;
+    text-align: center;
+    transition: border-color .15s;
+}
+.gift-card:active { transform: scale(0.96); }
+
+/* ════ WALLET: Gift Pay tab ════ */
+.w-tab { font-size: 12px !important; padding: 8px 10px !important; }
+
+/* ════ HOTBAR: 5 items ════ */
+.hotbar {
+    grid-template-columns: repeat(5, 1fr) !important;
+}
