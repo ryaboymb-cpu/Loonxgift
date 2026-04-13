@@ -1707,3 +1707,67 @@ body {
 .hotbar .nav-item {
     font-size: 9.5px;
 }
+
+/* ════════════════════════════════════════════════════
+   BUTTON SYSTEM — единый стиль для всего приложения
+   Primary (зелёный) = игровые действия
+   Blue = депозит/кошелёк  
+   Red = вывод/опасное
+   Ghost = закрыть/отмена
+════════════════════════════════════════════════════ */
+
+/* Base btn — reset */
+.btn {
+    display: block;
+    width: 100%;
+    padding: 15px 20px;
+    border-radius: 14px;
+    border: none;
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 900;
+    letter-spacing: 0.5px;
+    cursor: pointer;
+    text-align: center;
+    transition: opacity .12s, transform .1s;
+    -webkit-tap-highlight-color: transparent;
+    /* Default = зелёный (игровые) */
+    background: var(--neon);
+    color: #000;
+    margin-bottom: 10px;
+    box-shadow: 0 4px 20px rgba(0,255,136,.15);
+}
+.btn:active { opacity: .82; transform: scale(.97); }
+.btn:disabled { opacity: .4; cursor: not-allowed; transform: none; }
+
+/* Deposit/Wallet actions = синий */
+.btn-blue,
+button.btn[style*="neon-blue"] {
+    background: var(--neon-blue) !important;
+    color: #000 !important;
+    box-shadow: 0 4px 20px rgba(0,229,255,.15) !important;
+}
+
+/* Danger / Withdraw = красный */
+.btn-withdraw,
+.btn-danger {
+    background: linear-gradient(135deg,#ff2255,#c00040) !important;
+    color: #fff !important;
+    box-shadow: 0 4px 20px rgba(255,34,85,.2) !important;
+}
+
+/* Ghost / Secondary = тёмный */
+.btn-ghost {
+    background: rgba(255,255,255,.06) !important;
+    color: rgba(255,255,255,.55) !important;
+    font-weight: 700 !important;
+    box-shadow: none !important;
+    border: 1px solid rgba(255,255,255,.1) !important;
+}
+
+/* Spin/Mine keep their own class overrides */
+.sp-btn-style {
+    background: var(--neon) !important;
+    color: #000 !important;
+    font-weight: 900 !important;
+}
