@@ -478,6 +478,7 @@ function nav(pageId,el){
     try{if(tg&&tg.BackButton){if(MAIN_PAGES.has(pageId))tg.BackButton.hide();else tg.BackButton.show();}}catch(e){}
     if(pageId==='wallet') setTimeout(()=>renderWithdrawHistory(),50);
     if(pageId==='promo') setTimeout(()=>loadRefDetails(),50);
+    if(pageId==='gifts') setTimeout(()=>loadGiftsPage(),50);
     // Сохраняем последнюю страницу
     try{ if(MAIN_PAGES.has(pageId)) localStorage.setItem('lx_lastPage', pageId); }catch(e){}
 }
@@ -1092,9 +1093,9 @@ async function renderBattleLobbies() {
         if(l.status === 'finished') {
             actionBtn = `<button class="btn" style="background:#444; color:#aaa; padding:5px 10px; font-size:12px;" disabled>ЗАВЕРШЕНО</button>`;
         } else if(isMine && l.players.length === 1) {
-            actionBtn = `<button class="btn" style="background:var(--neon-red); padding:5px; font-size:12px;" onclick="cancelBattle('${l._id}')">ОТМЕНА</button>`;
+            actionBtn = `<button class="btn" style="background:rgba(255,34,85,.15);border:1px solid rgba(255,34,85,.4);color:#ff2255;padding:7px 14px;font-size:12px;font-weight:800;border-radius:10px;" onclick="cancelBattle('${l._id}')">Отмена</button>`;
         } else {
-            actionBtn = `<button class="btn" style="background:var(--neon); color:#000; padding:5px 10px; font-size:12px; font-weight:bold;" onclick="openBattleGame('${l._id}')">${imIn ? 'СМОТРЕТЬ' : 'ВОЙТИ / СМОТРЕТЬ'}</button>`;
+            actionBtn = `<button class="btn" style="background:var(--neon);color:#000;padding:8px 14px;font-size:12px;font-weight:900;border-radius:10px;" onclick="openBattleGame('${l._id}')">${imIn ? 'Смотреть' : 'Войти'}</button>`;
         }
 
         const timeStr = new Date(l.createdAt).toLocaleTimeString("ru-RU", {timeZone:"Europe/Moscow", hour:"2-digit", minute:"2-digit"});
@@ -2817,6 +2818,9 @@ function initMineShaft(keepPersist, idlePreview) {
 
 // ── Сундук ──────────────────────────────────────────────────
 function openChest(col, mult, isActivated) {
+    openChestWithAnim(col, mult, isActivated, 0);
+}
+function openChestWithAnim(col, mult, isActivated, baseWin) {
     const ch = $(`mc-chest-${col}`);
     playSound('chest');
     if (ch) { ch.classList.add('open', 'open-anim'); setTimeout(() => ch.classList.remove('open-anim'), 600); }
@@ -2838,231 +2842,216 @@ function openChest(col, mult, isActivated) {
 }
 
 // ── ОСНОВНОЕ РАСКРЫТИЕ шахты ────────────────────────────────
+// Простая надёжная логика: доверяем серверу полностью.
+// blockWins[r][c] > 0 → этот блок сломан и имеет выигрыш.
+// Кирки назначаются по столбцам согласно hotbar.
+// Stagger 200ms между кирками в одном столбце.
 function revealMineShaft(grid, blockWins, serverWin, balanceBefore, chestMults, isAutoSpin, chestActivated) {
-    const BLOCK_HITS = { grass:1, dirt:1, stone:1, redstone:2, gold:2, gold_block:2, diamond:3, diamond_block:3, obsidian:4 };
+    const HITS = { grass:1, dirt:1, stone:1, redstone:2, gold:2, gold_block:2, diamond:3, diamond_block:3, obsidian:4 };
+    grid_current = grid;
 
-    // Расставляем блоки по grid
+    // 1. Обновляем вид блоков
     for (let r = 0; r < MC_ROWS; r++) {
         for (let c = 0; c < MC_COLS; c++) {
             const el = $(`mc-blk-${r}-${c}`);
             if (!el) continue;
             const type = grid[r][c];
-            if (!type) { el.dataset.revealed = '1'; el.style.visibility = 'hidden'; continue; }
-            if (isAutoSpin && el.dataset.revealed === '1') continue;
-            el.className = `mc-blk ${MINE_BLOCK_CLASS[type] || 'stone-blk'}`;
-            el.dataset.revealed = '0'; el.dataset.blockType = type; el.dataset.tntDmg = '0';
-            el.style.cssText = ''; el.style.visibility = 'visible';
+            if (!type) { el.dataset.revealed='1'; el.style.visibility='hidden'; continue; }
+            if (isAutoSpin && el.dataset.revealed==='1') continue;
+            el.className = `mc-blk ${MINE_BLOCK_CLASS[type]||'stone-blk'}`;
+            el.dataset.revealed='0'; el.dataset.blockType=type; el.dataset.tntDmg='0';
+            el.style.cssText=''; el.style.visibility='visible';
         }
     }
 
-    // Читаем хотбар: все кирки и ТНТ (без дедупликации по столбцам)
+    // 2. Читаем hotbar — кирки и ТНТ
     const hotbar = currentHotbar || [];
-    const allPicks = []; // [{col, idx, pType}] — все кирки, включая дубли в столбце
-    const allTnt   = []; // [{col, idx}]
-    let bookCount  = 0;
+    const picks = [], tnts = [];
+    let bookCount = 0;
     hotbar.forEach((slot, idx) => {
         if (!slot) return;
         const col = idx % MC_COLS;
-        if (slot.type === 'pickaxe') allPicks.push({ col, idx, pType: slot.pickaxeType || 'wooden' });
-        else if (slot.type === 'tnt')  allTnt.push({ col, idx });
+        if (slot.type === 'pickaxe') picks.push({ col, idx, pType: slot.pickaxeType || 'wooden' });
+        else if (slot.type === 'tnt') tnts.push({ col, idx });
         else if (slot.type === 'book') bookCount++;
     });
-
     if (bookCount > 0) mineBookCount += bookCount;
 
-    // Блоки по столбцам (сверху вниз)
-    const allBlocks = [];
+    // 3. Строим карту выигрышей из сервера
+    // Блок сломан если blockWins[r][c] > 0 ИЛИ он в списке TNT-сломанных
+    const winMap = {}; // "r,c" → win
     for (let r = 0; r < MC_ROWS; r++) {
         for (let c = 0; c < MC_COLS; c++) {
-            const el = $(`mc-blk-${r}-${c}`);
-            if (!el || el.dataset.revealed === '1') continue;
-            const type = grid[r][c]; if (!type) continue;
-            const bwin = blockWins && blockWins[r] ? (blockWins[r][c] || 0) : 0;
-            allBlocks.push({ r, c, type, win: bwin, hits: Math.max(1, BLOCK_HITS[type] || 1) });
+            const bw = (blockWins && blockWins[r]) ? Number(blockWins[r][c]) : 0;
+            winMap[`${r},${c}`] = bw;
         }
     }
-    const colBlocks = Array.from({ length: MC_COLS }, (_, c) =>
-        allBlocks.filter(b => b.c === c).sort((a, b) => a.r - b.r)
-    );
 
-    // Определяем брокенные блоки (для обнуления win)
+    // 4. Для кирок — строим очередь блоков по столбцу
+    // Берём блоки сверху вниз согласно прочности кирки
     const RANK = { wooden:0, stone:1, iron:2, golden:3, diamond:4 };
-    const brokenSet = new Set();
-    const tntColSet = new Set();
+    const tntCols = new Set(tnts.map(t => t.col));
 
-    // ТНТ всегда ломают первый блок в столбце
-    allTnt.forEach(ts => {
-        tntColSet.add(ts.col);
-        const q = colBlocks[ts.col] || [];
-        if (q.length > 0) brokenSet.add(`${q[0].r},${q[0].c}`);
+    // Группируем кирки по столбцам
+    const pickByCol = {};
+    picks.forEach(ps => {
+        if (!pickByCol[ps.col]) pickByCol[ps.col] = [];
+        pickByCol[ps.col].push(ps);
     });
 
-    // Кирки: группируем по столбцу, каждая продолжает после предыдущей
-    const colPickGroups = {}; // col -> [pType sorted by rank desc]
-    allPicks.forEach(ps => {
-        if (!colPickGroups[ps.col]) colPickGroups[ps.col] = [];
-        colPickGroups[ps.col].push(ps.pType);
-    });
-    Object.entries(colPickGroups).forEach(([colStr, pTypes]) => {
+    // Для каждого столбца с кирками строим очереди блоков
+    // Кирки в одном столбце работают последовательно: pick1 берёт первые N блоков, pick2 — следующие
+    const colWork = {}; // col → [{pType, blocks:[{r,c,type,win,hits}], dur}]
+    Object.entries(pickByCol).forEach(([colStr, colPicks]) => {
         const col = parseInt(colStr);
-        // Сортируем по силе (слабые первыми — они расходуются быстрее)
-        pTypes.sort((a, b) => RANK[a] - RANK[b]);
-        let blockIdx = 0;
-        const q = (colBlocks[col] || []).filter(b => !brokenSet.has(`${b.r},${b.c}`));
-        for (const pType of pTypes) {
-            let rem = getPickDur(pType);
-            while (rem > 0 && blockIdx < q.length) {
-                const blk = q[blockIdx];
-                if (rem >= blk.hits) { rem -= blk.hits; brokenSet.add(`${blk.r},${blk.c}`); blockIdx++; }
-                else break;
-            }
+        if (tntCols.has(col)) return; // TNT занял этот столбец
+
+        // Все блоки в столбце (сверху вниз), только не-revealed
+        const colQ = [];
+        for (let r = 0; r < MC_ROWS; r++) {
+            const el = $(`mc-blk-${r}-${col}`);
+            if (!el || el.dataset.revealed==='1') continue;
+            const type = grid[r][col]; if (!type) continue;
+            colQ.push({ r, c: col, type, win: winMap[`${r},${col}`] || 0, hits: HITS[type] || 1 });
         }
+        if (!colQ.length) return;
+
+        // Назначаем блоки кирками
+        colWork[col] = [];
+        let bIdx = 0;
+        colPicks.forEach(ps => {
+            const dur = getPickDur(ps.pType);
+            let rem = dur, myBlocks = [];
+            while (rem > 0 && bIdx < colQ.length) {
+                const blk = colQ[bIdx];
+                const hc = Math.min(blk.hits, rem);
+                myBlocks.push({ ...blk });
+                rem -= hc; bIdx++;
+            }
+            colWork[col].push({ pType: ps.pType, blocks: myBlocks, dur, ps });
+        });
     });
 
-    // Обнуляем win у неломаных блоков
-    allBlocks.forEach(b => { if (!brokenSet.has(`${b.r},${b.c}`)) b.win = 0; });
-
-    // Сундуки: трекаем сломанные блоки
+    // 5. Трекаем сломанные блоки для сундуков
     const liveColBroken = Array(MC_COLS).fill(0);
     for (let c = 0; c < MC_COLS; c++) {
         for (let r = 0; r < MC_ROWS; r++) {
             const el = $(`mc-blk-${r}-${c}`);
-            if (el && el.dataset.revealed === '1') liveColBroken[c]++;
+            if (el && el.dataset.revealed==='1') liveColBroken[c]++;
         }
     }
     const openedChests = new Set();
-    const colChestMults = chestMults || [2,2,2,2,2];
-    const srvChestAct   = chestActivated || [];
+    const colMults = chestMults || [2,2,2,2,2];
+    const srvAct   = chestActivated || [];
 
     function onBlockBroken(r, c) {
         liveColBroken[c]++;
         if (liveColBroken[c] >= MC_ROWS && !openedChests.has(c)) {
             openedChests.add(c);
-            setTimeout(() => openChest(c, colChestMults[c] || 2, srvChestAct[c] === true), 200);
+            setTimeout(() => openChestWithAnim(c, colMults[c]||2, srvAct[c]===true, serverWin), 350);
         }
     }
 
     mineIsActive = true;
     mineRunningTotal = 0;
 
-    // ── Фаза ТНТ ──
-    const tntPhase = allTnt.length > 0 ? allTnt.length * 480 + 300 : 0;
-    allTnt.forEach((ts, i) => {
+    // 6. Фаза ТНТ — 2×2 взрыв во все стороны
+    const tntPhase = tnts.length > 0 ? tnts.length * 600 + 400 : 0;
+    tnts.forEach((ts, i) => {
         setTimeout(() => {
             if (!mineIsActive) return;
-            // Убираем ТНТ из хотбара
+            // Убираем из хотбара
             const ir = Math.floor(ts.idx / MC_COLS), ic = ts.idx % MC_COLS;
             const iCell = $(`inv-${ir}-${ic}`);
-            if (iCell) { iCell.innerHTML = ''; iCell.className = 'inv-cell'; delete iCell.dataset.slotType; }
-            const q = colBlocks[ts.col] || [];
-            if (!q[0]) { playSound('explode'); return; }
-            dropTNT(ts.col, q[0], () => onBlockBroken(q[0].r, q[0].c));
-        }, i * 480);
+            if (iCell) { iCell.innerHTML=''; iCell.className='inv-cell'; delete iCell.dataset.slotType; }
+
+            // Находим целевые блоки 2×2 вокруг TNT-позиции (не ограничено одним столбцом)
+            // TNT падает в первый блок столбца, взрывает 2×2 вокруг него
+            const colQ = [];
+            for (let r = 0; r < MC_ROWS; r++) {
+                const el = $(`mc-blk-${r}-${ts.col}`);
+                if (!el || el.dataset.revealed==='1') continue;
+                const type = grid[r][ts.col]; if (!type) continue;
+                colQ.push({ r, c: ts.col, type, win: winMap[`${r},${ts.col}`] || 0, hits:1 });
+                break; // первый нетронутый блок
+            }
+            if (!colQ[0]) { playSound('explode'); return; }
+            const targetR = colQ[0].r;
+            const targetC = ts.col;
+
+            dropTNT(ts.col, colQ[0], () => {
+                // Взрыв 2×2: все 4 блока вокруг
+                const blast = [
+                    [targetR, targetC],
+                    [targetR, targetC+1],
+                    [targetR+1, targetC],
+                    [targetR+1, targetC+1],
+                ];
+                blast.forEach(([br, bc], bi) => {
+                    if (br < 0 || br >= MC_ROWS || bc < 0 || bc >= MC_COLS) return;
+                    const blkEl = $(`mc-blk-${br}-${bc}`);
+                    if (!blkEl || blkEl.dataset.revealed==='1') return;
+                    const type = grid[br][bc]; if (!type) return;
+                    const blk = { r:br, c:bc, type, win: winMap[`${br},${bc}`] || 0, hits:1 };
+                    setTimeout(() => {
+                        doBreakBlock(blkEl, blk, () => onBlockBroken(br, bc));
+                    }, bi * 80);
+                });
+            });
+        }, i * 600);
     });
 
-    // ── Фаза кирок: в одном столбце кирки работают СТРОГО последовательно ──
-    // col0 picks all go one after another, col1 starts after col0, etc.
+    // 7. Фаза кирок: все столбцы параллельно, внутри столбца — stagger 200ms
     setTimeout(() => {
-        // Группируем кирки по столбцам, сохраняем порядок
-        const colGroups = {};
-        allPicks.forEach(ps => {
-            if (!colGroups[ps.col]) colGroups[ps.col] = [];
-            colGroups[ps.col].push(ps);
-        });
-
-        let globalColDelay = 0;
-
-        Object.entries(colGroups).forEach(([colStr]) => {
-            const col = parseInt(colStr);
-            const picks = colGroups[col];
-            const q = (colBlocks[col] || []).filter(b => brokenSet.has(`${b.r},${b.c}`) && !tntColSet.has(col));
-            if (!q.length) return;
-
-            // Каждая кирка в столбце получает свою очередь блоков
-            let blockOffset = 0;
-            const pickQueues = picks.map(ps => {
-                const dur = getPickDur(ps.pType);
-                let rem = dur, taken = 0;
-                for (let bi = blockOffset; bi < q.length; bi++) {
-                    if (rem >= q[bi].hits) { rem -= q[bi].hits; taken++; }
-                    else break;
-                }
-                const myQ = q.slice(blockOffset, blockOffset + taken);
-                blockOffset += taken;
-                return { ps, myQ, dur };
-            });
-
-            // Запускаем кирки ЦЕПОЧКОЙ: следующая стартует когда предыдущая закончила
-            function launchNext(pickIdx, extraDelay) {
-                if (pickIdx >= pickQueues.length) return;
-                const { ps, myQ, dur } = pickQueues[pickIdx];
+        Object.entries(colWork).forEach(([colStr, workList]) => {
+            workList.forEach(({ pType, blocks, dur, ps }, pi) => {
                 // Убираем кирку из хотбара
                 const ir = Math.floor(ps.idx / MC_COLS), ic = ps.idx % MC_COLS;
                 const iCell = $(`inv-${ir}-${ic}`);
-                if (iCell) { iCell.innerHTML = ''; iCell.className = 'inv-cell'; delete iCell.dataset.slotType; delete iCell.dataset.pickType; }
-                if (!myQ.length) { launchNext(pickIdx + 1, extraDelay); return; }
-                // Запускаем воркер, передаём onAllDone = следующая кирка в цепочке
-                spawnPickaxeWorker(myQ, ps.pType, extraDelay, () => {
-                    setTimeout(() => launchNext(pickIdx + 1, 0), 80);
-                }, onBlockBroken, dur);
-            }
+                if (iCell) { iCell.innerHTML=''; iCell.className='inv-cell'; delete iCell.dataset.slotType; delete iCell.dataset.pickType; }
 
-            setTimeout(() => launchNext(0, 0), globalColDelay);
-
-            // Оцениваем суммарное время для этого столбца (для следующего столбца)
-            let colTime = 0;
-            pickQueues.forEach(({ ps, myQ, dur }) => {
-                let rem = dur;
-                myQ.forEach(blk => {
-                    const hc = Math.min(blk.hits, rem);
-                    colTime += hc * (170 + 200) + 380; // hit + return + pause
-                    rem -= hc;
-                });
-                colTime += 200; // gap between picks
+                const delay = pi * 200; // stagger между кирками в одном столбце
+                if (blocks.length > 0) {
+                    spawnPickaxeWorker(blocks, pType, delay, null, onBlockBroken, dur);
+                }
             });
-            globalColDelay += colTime;
         });
     }, tntPhase);
 
-    // Вычисляем длительность анимации (sequential chain — columns go one after another)
-    let chainTotalMs = 0;
-    Object.entries(colPickGroups || {}).forEach(([colStr, pTypes]) => {
-        const col = parseInt(colStr);
-        const q = (colBlocks[col] || []).filter(b => brokenSet.has(`${b.r},${b.c}`) && !tntColSet.has(col));
-        let colMs = 0;
-        let bIdx = 0;
-        pTypes.forEach(pType => {
-            const dur = getPickDur(pType);
-            let rem = dur;
-            while (rem > 0 && bIdx < q.length) {
-                const blk = q[bIdx];
+    // 8. Длительность: максимальное время по всем столбцам
+    let maxMs = 0;
+    Object.values(colWork).forEach(workList => {
+        let t = 0;
+        workList.forEach(({ blocks, dur }, pi) => {
+            let sub = pi * 200, rem = dur;
+            blocks.forEach(blk => {
                 const hc = Math.min(blk.hits, rem);
-                colMs += hc * 450 + 380; // 170 down + 200 up + 60 pause + overhead
-                rem -= hc; bIdx++;
-            }
-            colMs += 280; // gap between sequential picks in column
+                sub += hc * (170 + 200 + 60) + 400;
+                rem -= hc;
+            });
+            t = Math.max(t, sub);
         });
-        chainTotalMs += colMs;
+        maxMs = Math.max(maxMs, t);
     });
-    const longestMs = chainTotalMs;
-    const estReveal = tntPhase + longestMs + 1100;
+    const estReveal = tntPhase + maxMs + 1400;
 
-    // ── Финал ──
+    // 9. Финал
     setTimeout(() => {
         if (!mineIsActive) return;
-        // Итоговый вин = serverWin (100% точный)
         mineRunningTotal = serverWin;
         const rt = $('mine-running-total');
-        if (rt && serverWin > 0) { rt.classList.add('has-win'); rt.textContent = serverWin.toFixed(2); }
+        if (rt) {
+            if (serverWin > 0) { rt.classList.add('has-win'); rt.textContent = serverWin.toFixed(2); }
+            else { rt.textContent = '0.00'; rt.classList.remove('has-win'); }
+        }
         if (serverWin > 0) {
             playSound('win');
             const balSpan = $('bal-val');
-            if (balSpan) animateCounter(balSpan, balanceBefore, balanceBefore + serverWin, 900);
+            if (balSpan) animateCounter(balSpan, balanceBefore, balanceBefore + serverWin, 1000);
             flyToBalance(serverWin);
             showToast('+' + serverWin.toFixed(2) + ' TON');
         }
         updateUI();
-        // Авто-спин от книг — показываем оверлей как в спинах
         if (mineBookCount >= 3 || mineAutoRemaining > 0) {
             if (mineBookCount >= 3) { mineBookCount -= 3; mineAutoRemaining = Math.max(mineAutoRemaining, 1); }
             showMineBonusOverlay(mineAutoRemaining, () => autoSpinMine());
@@ -3074,6 +3063,7 @@ function revealMineShaft(grid, blockWins, serverWin, balanceBefore, chestMults, 
 
     return estReveal + 400;
 }
+
 
 function setupMineTextures() {
     ['/sprites/block_grass.png','/sprites/block_dirt.png','/sprites/block_stone.png',
@@ -3745,7 +3735,7 @@ function renderCaseDetail(cfg) {
         <!-- Кнопка открытия -->
         ${isFree
             ? (avail
-                ? `<button id="case-open-btn" class="btn case-open-btn case-open-btn-free" onclick="openFreeCase('${cfg.id}')">Открыть Лоникс Гифт</button>`
+                ? `<button id="case-open-btn" class="btn" style="background:var(--neon);color:#000;font-weight:900;" onclick="openFreeCase('${cfg.id}')">Открыть Лоникс Гифт</button>`
                 : `<button id="case-open-btn" class="btn" disabled style="background:#1a1a2e;color:#555;cursor:not-allowed;">Недоступно — ждите таймера</button>`)
             : `<button id="case-open-btn" class="btn case-open-btn" onclick="playCaseOpen('${cfg.id}', ${cfg.price})">Открыть за ${cost} TON</button>`
         }
@@ -3957,7 +3947,7 @@ async function playCaseOpen(caseId, price) {
             </div>`;
         }
         
-        resHtml += `<button class="btn cr-collect-btn" onclick="caseCollect('${caseId}', ${price})" style="grid-column:1/-1;">Забрать кэш</button>`;
+        resHtml += `<button class="btn cr-collect-btn" onclick="caseCollect('${caseId}', ${price})" style="grid-column:1/-1;background:var(--neon);color:#000;font-weight:900;">Забрать ${price > 0 ? price.toFixed(2) + ' TON' : 'кэш'}</button>`;
         resGrid.innerHTML = resHtml;
     }
     
@@ -4184,7 +4174,7 @@ function upgSetChance(v){if(isUpgrading)return;upgChance=Math.max(1,Math.min(90,
 function upgSetBet(v){if($('up-bet'))$('up-bet').value=v;upgRefresh();playSound('click');}
 function initUpgradePage(){upgChance=50;if($('upg-slider'))$('upg-slider').value=50;upgRefresh();}
 function upgSpinDisk(winPct,isWin,onDone){const disk=document.querySelector('.upg-disk');if(!disk){if(onDone)onDone();return;}const winA=(Math.min(winPct,90)/100)*360;let targetR;if(isWin){const lo=360-winA,hi=360,mg=Math.max(4,winA*0.07);targetR=(lo+mg)+Math.random()*((hi-mg)-(lo+mg));}else{const lo=0,hi=360-winA,mg=Math.max(4,(360-winA)*0.07);targetR=(lo+mg)+Math.random()*((hi-mg)-(lo+mg));}const spinMs=2500+Math.random()*3000,totalRot=(3+Math.floor(spinMs/1000))*360+targetR;disk.style.transition='none';disk.style.transform='rotate(0deg)';requestAnimationFrame(()=>requestAnimationFrame(()=>{disk.style.transition='transform '+spinMs+'ms cubic-bezier(0.15,0.0,0.08,1.0)';disk.style.transform='rotate('+totalRot+'deg)';}));setTimeout(()=>{disk.style.transition='none';disk.style.transform='rotate('+targetR+'deg)';if(onDone)onDone();},spinMs+80);}
-async function playUpgrade(){if(isUpgrading)return;const betVal=parseFloat($('up-bet')?.value);if(isNaN(betVal)||betVal<0.1||betVal>25)return showToast('Мин 0.1, Макс 25 TON');if(betVal>(mode==='demo'?user.demo_balance:user.balance))return showToast('Недостаточно средств');isUpgrading=true;const btn=$('up-btn'),sldr=$('upg-slider'),resEl=$('upgrade-result');if(btn){btn.disabled=true;btn.innerText='...';}if(sldr)sldr.disabled=true;if(resEl){resEl.innerText='';resEl.style.color='';}playSound('click');try{const r=await fetch('/api/upgrade',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:user.id,bet:betVal,chance:upgChance,mode})});const data=await r.json();if(!r.ok){showToast(data.error||'Ошибка');return;}upgSpinDisk(upgChance,data.win>0,()=>{user=data.user;updateUI();upgRefresh();const profit=data.profit!==undefined?data.profit:(data.win>0?data.win-betVal:-betVal);if(resEl){resEl.innerText=data.win>0?'+'+profit.toFixed(2)+' TON (x'+data.multiplier+')':'-'+betVal.toFixed(2)+' TON';resEl.style.color=data.win>0?'#00ff88':'#ff0055';}if(data.win>0){playSound('win');flyToBalance(profit);showToast('+'+profit.toFixed(2)+' TON');}else showToast('-'+betVal.toFixed(2)+' TON');});}catch(e){showToast('Ошибка соединения');}finally{setTimeout(()=>{isUpgrading=false;if(btn){btn.disabled=false;btn.innerText='Играть ⬆️';}if(sldr)sldr.disabled=false;},7000);}
+async function playUpgrade(){if(isUpgrading)return;const betVal=parseFloat($('up-bet')?.value);if(isNaN(betVal)||betVal<0.1||betVal>25)return showToast('Мин 0.1, Макс 25 TON');if(betVal>(mode==='demo'?user.demo_balance:user.balance))return showToast('Недостаточно средств');isUpgrading=true;const btn=$('up-btn'),sldr=$('upg-slider'),resEl=$('upgrade-result');if(btn){btn.disabled=true;btn.innerText='...';}if(sldr)sldr.disabled=true;if(resEl){resEl.innerText='';resEl.style.color='';}playSound('click');try{const r=await fetch('/api/upgrade',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:user.id,bet:betVal,chance:upgChance,mode})});const data=await r.json();if(!r.ok){showToast(data.error||'Ошибка');return;}upgSpinDisk(upgChance,data.win>0,()=>{user=data.user;updateUI();upgRefresh();const profit=data.profit!==undefined?data.profit:(data.win>0?data.win-betVal:-betVal);if(resEl){resEl.innerText=data.win>0?'+'+profit.toFixed(2)+' TON (x'+data.multiplier+')':'-'+betVal.toFixed(2)+' TON';resEl.style.color=data.win>0?'#00ff88':'#ff0055';}if(data.win>0){playSound('win');flyToBalance(profit);showToast('+'+profit.toFixed(2)+' TON');}else showToast('-'+betVal.toFixed(2)+' TON');});}catch(e){showToast('Ошибка соединения');}finally{setTimeout(()=>{isUpgrading=false;if(btn){btn.disabled=false;btn.innerText='АПГРЕЙД ⬆️';}if(sldr)sldr.disabled=false;},7000);}
 }
 // ===================== PLINKO GAME =====================
 let plinkoRisk = 'medium';
