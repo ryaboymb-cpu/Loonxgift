@@ -194,7 +194,7 @@ const BetSchema = new mongoose.Schema({
 });
 
 const PromoSchema = new mongoose.Schema({ code: String, amount: Number, limit: Number, usedBy: [String] });
-const WithdrawSchema = new mongoose.Schema({ userId: String, address: String, amount: Number, status: { type: String, default: 'pending' }, reason: String, time: String });
+const WithdrawSchema = new mongoose.Schema({ userId: String, address: String, amount: Number, status: { type: String, default: 'pending' }, reason: String, time: String, isGift: { type: Boolean, default: false }, giftId: String, giftName: String, giftUrl: String });
 const DepositSchema = new mongoose.Schema({ hash: { type: String, unique: true }, userId: String, amount: Number, time: String });
 const SettingsSchema = new mongoose.Schema({ key: String, value: mongoose.Schema.Types.Mixed });
 const AdminLogSchema = new mongoose.Schema({ action: String, createdAt: { type: Date, default: Date.now } });
@@ -1474,7 +1474,14 @@ const checkAdmin = (req, res, next) => {
 };
 
 app.post('/api/admin/data', checkAdmin, async (req, res) => {
-    const withdraws = await Withdraw.find({status: 'pending'});
+    const withdraws = await Withdraw.find({status: 'pending'}).sort({_id: -1});
+    // Enrich withdraws with username
+    for (let w of withdraws) {
+        if (!w.username) {
+            const wu = await User.findOne({id: w.userId});
+            w.username = wu ? wu.username : w.userId;
+        }
+    }
     const promos = await Promo.find().sort({_id: -1}).limit(10);
     const users = await User.find().sort({balance: -1}).limit(100);
     const totalUsers = await User.countDocuments();
@@ -2392,20 +2399,49 @@ app.post('/api/gifts/get', async (req, res) => {
 // ── Gift: withdraw request (costs 0.3 TON) ──
 app.post('/api/gifts/withdraw', async (req, res) => {
     try {
-        const { id, giftId } = req.body;
+        const { id, giftId, action } = req.body; // action: 'withdraw' | 'sell'
         const user = await User.findOne({ id: String(id) });
         if (!user || user.isBlocked) return res.status(403).json({ error: 'Заблокирован' });
         if (user.balance < 0.3) return res.status(400).json({ error: 'Нужно 0.3 TON на балансе' });
         const gift = await Gift.findOne({ _id: giftId, userId: String(id) });
         if (!gift) return res.status(404).json({ error: 'Подарок не найден' });
-        if (gift.withdrawRequested) return res.status(400).json({ error: 'Уже подана заявка' });
+        if (gift.withdrawRequested) return res.status(400).json({ error: 'Заявка уже подана' });
+
+        // Списываем комиссию
         user.balance = Number((user.balance - 0.3).toFixed(2));
         await user.save();
+
+        // Создаём запись в Withdraw (видна в админке как обычный вывод)
+        const actionText = action === 'sell' ? 'Продажа' : 'Вывод';
+        const w = await Withdraw.create({
+            userId: String(id),
+            address: gift.giftUrl || `gift:${giftId}`,   // ссылка на подарок
+            amount: gift.price || 0,
+            status: 'pending',
+            time: getMskTime(),
+            isGift: true,
+            giftId: String(giftId),
+            giftName: gift.name,
+            giftUrl: gift.giftUrl || ''
+        });
+
+        // Добавляем в историю выводов юзера
+        user.withdrawHistory.unshift({
+            withdrawId: w._id.toString(),
+            amount: gift.price || 0,
+            address: gift.giftUrl || `gift:${giftId}`,
+            status: 'Ожидание',
+            reason: '',
+            time: getMskTime()
+        });
+        await user.save();
+
         gift.withdrawRequested = true;
         await gift.save();
-        await logAdmin(`Заявка на вывод подарка "${gift.name}" от @${user.username||id}`);
-        if (bot) bot.sendMessage(id, `Заявка на вывод подарка "${gift.name}" принята. Ожидайте.`).catch(()=>{});
-        res.json({ ok: true, user });
+
+        await logAdmin(`${actionText} подарка "${gift.name}" от @${user.username||id} (комиссия 0.3 TON)`);
+        if (bot) bot.sendMessage(id, `Заявка на ${actionText.toLowerCase()} подарка "${gift.name}" принята. Ожидайте ответа.`).catch(()=>{});
+        res.json({ ok: true, user, withdrawId: w._id });
     } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
