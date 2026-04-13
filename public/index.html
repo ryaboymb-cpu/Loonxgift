@@ -100,8 +100,8 @@
             <!-- Депозит панель -->
             <div id="wallet-dep-panel" class="card">
                 <div style="display:flex;gap:8px;margin-bottom:16px;">
-                    <button class="w-tab active" onclick="switchDepTab('manual', this)">РУЧНОЙ ДЕП.</button>
-                    <button class="w-tab" onclick="switchDepTab('connect', this)">TON CONNECT</button>
+                    <button class="w-tab active" onclick="switchDepTab('manual', this)" style="font-size:11px;">РУЧНОЙ ДЕП.</button>
+                    <button class="w-tab" onclick="switchDepTab('connect', this)" style="font-size:11px;">TON CONNECT</button>
                     <button class="w-tab" onclick="switchDepTab('gift', this)" style="font-size:11px;">GIFT PAY</button>
                 </div>
                 <div id="dep-manual">
@@ -113,12 +113,12 @@
                         <b id="dep-memo" onclick="copyText(this.innerText)">-</b>
                     </div>
                     <p style="font-size:11px;color:var(--sub);text-align:center;margin-bottom:15px;font-weight:bold;">Нажмите на текст, чтобы скопировать. Переводите TON только в сети The Open Network.</p>
-                    <button class="btn" style="background:var(--neon-blue);" onclick="checkRealDeposit(this)">ПРОВЕРИТЬ ОПЛАТУ</button>
+                    <button class="btn" style="background:var(--neon-blue);color:#000;font-weight:900;" onclick="checkRealDeposit(this)">ПРОВЕРИТЬ ОПЛАТУ</button>
                 </div>
                 <div id="dep-connect" style="display:none;text-align:center;">
                     <h3 style="margin-bottom:15px;color:var(--neon);">Авто-Депозит</h3>
                     <input type="number" id="tc-amount" class="input-box" placeholder="Сумма в TON (Мин 0.5)">
-                    <button class="btn btn-connect" onclick="payWithTonConnect()">ОПЛАТИТЬ ЧЕРЕЗ TON CONNECT</button>
+                    <button class="btn" style="background:var(--neon-blue);color:#000;font-weight:900;" onclick="payWithTonConnect()">ОПЛАТИТЬ ЧЕРЕЗ TON CONNECT</button>
                 </div>
                 <div id="dep-gift" style="display:none;text-align:center;">
                     <h3 style="margin-bottom:8px;color:var(--neon);">Пополнение подарком</h3>
@@ -146,7 +146,7 @@
                 <h3 style="margin-bottom:15px;color:var(--neon-red);text-align:center;">Вывод средств</h3>
                 <input type="number" id="with-amount" class="input-box" placeholder="Сумма (Мин 5 TON)">
                 <input type="text" id="with-addr" class="input-box" placeholder="Ваш TON адрес">
-                <button class="btn btn-withdraw" onclick="withdraw()">СОЗДАТЬ ЗАЯВКУ</button>
+                <button class="btn btn-withdraw" onclick="withdraw()" style="background:linear-gradient(135deg,#ff2255,#c00040);color:#fff;font-weight:900;">СОЗДАТЬ ЗАЯВКУ</button>
             </div>
 
             <!-- История -->
@@ -198,7 +198,7 @@
                 <input type="number" id="cr-auto" class="input-box" placeholder="Выкл" step="0.1" min="1.01" style="margin:0;flex:1;height:36px;text-align:center;font-size:15px;font-weight:800;">
                 <button onclick="adjustAutoCash(0.1)" style="width:32px;height:36px;background:#111;border:1px solid #333;color:#aaa;border-radius:8px;font-size:18px;cursor:pointer;flex-shrink:0;line-height:1;">+</button>
             </div>
-            <button id="cr-btn" class="btn" onclick="playCrash()">ПОСТАВИТЬ</button>
+            <button id="cr-btn" class="btn" style="background:var(--neon);color:#000;font-weight:900;" onclick="playCrash()">ПОСТАВИТЬ</button>
             <div class="live-bets-container" id="cr-live-bets"></div>
         </div>
 
@@ -206,7 +206,7 @@
             <div class="mines-grid" id="mine-grid"></div>
             <div class="quick-bets" id="qb-mines" style="display:flex; justify-content:center; gap:5px; flex-wrap:wrap; margin-bottom:10px;"></div>
             <input type="number" id="mi-bet" class="input-box" placeholder="Сумма ставки (TON)">
-            <button id="mi-btn" class="btn" onclick="playMines()">ИГРАТЬ</button>
+            <button id="mi-btn" class="btn" style="background:var(--neon);color:#000;font-weight:900;" onclick="playMines()">ИГРАТЬ</button>
         </div>
 
         <div id="page-coinflip" class="page">
@@ -222,7 +222,7 @@
             </div>
             <div class="quick-bets" id="qb-coinflip" style="display:flex; justify-content:center; gap:5px; flex-wrap:wrap; margin-bottom:10px;"></div>
             <input type="number" id="co-bet" class="input-box" placeholder="Сумма ставки (TON)">
-            <button id="co-btn" class="btn" onclick="playCoin()">КРУТИТЬ</button>
+            <button id="co-btn" class="btn" style="background:var(--neon);color:#000;font-weight:900;" onclick="playCoin()">КРУТИТЬ</button>
         </div>
 
         <div id="page-spin" class="page">
@@ -319,11 +319,10 @@
             </label>
             <div id="battle-lobbies" style="display:flex; flex-direction:column; gap:10px;"></div>
         </div>
-    </div>
-
-    <!-- GIFTS PAGE -->
-    <div id="page-gifts" class="page" style="display:none;">
-        <div id="gifts-content"></div>
+        <!-- GIFTS PAGE -->
+        <div id="page-gifts" class="page">
+            <div id="gifts-content" style="min-height:60vh;"></div>
+        </div>
     </div>
 
     <div class="hotbar">
@@ -337,7 +336,7 @@
             </svg>
             Промо
         </div>
-        <div class="nav-item" onclick="nav('gifts', this); loadGiftsPage();">
+        <div class="nav-item" onclick="nav('gifts', this)">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12v10H4V12"/><path d="M22 7H2v5h20V7z"/><path d="M12 22V7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg>
             Подарки
         </div>
