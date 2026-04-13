@@ -1771,3 +1771,45 @@ button.btn[style*="neon-blue"] {
     color: #000 !important;
     font-weight: 900 !important;
 }
+
+/* ════ MINE BUTTON v3 ════ */
+.mine-btn {
+    background: linear-gradient(180deg,#00dd55 0%,#007a2a 100%) !important;
+    box-shadow: 0 0 0 2px #00ff66, 0 3px 10px rgba(0,0,0,.6), inset 0 1px 0 rgba(180,255,180,.35) !important;
+    color: #fff !important;
+    font-weight: 900 !important;
+    letter-spacing: 1.5px !important;
+    border: 2px solid !important;
+    border-color: #44ff88 #004422 #004422 #44ff88 !important;
+    height: 30px !important;
+    padding: 0 10px !important;
+    white-space: nowrap !important;
+    font-size: 12px !important;
+    border-radius: 4px !important;
+    text-shadow: 0 1px 3px rgba(0,0,0,.5) !important;
+    text-transform: uppercase !important;
+}
+.mine-btn:active {
+    transform: translateY(2px) !important;
+    box-shadow: 0 0 0 2px #00ff66, 0 1px 4px rgba(0,0,0,.5), inset 0 1px 0 rgba(180,255,180,.2) !important;
+}
+.mine-btn:disabled {
+    background: linear-gradient(180deg,#1a3a1a,#0d1f0d) !important;
+    border-color: #333 !important;
+    box-shadow: none !important;
+    color: #3a6a3a !important;
+    text-shadow: none !important;
+}
+
+/* ════ GIFT EMPTY STATE — animated glow ════ */
+@keyframes gift-glow-pulse {
+    0%, 100% { box-shadow: 0 0 20px rgba(0,229,255,.2), 0 0 40px rgba(0,229,255,.08); border-color: rgba(0,229,255,.2); }
+    50%       { box-shadow: 0 0 30px rgba(0,229,255,.45), 0 0 60px rgba(0,229,255,.18); border-color: rgba(0,229,255,.5); }
+}
+@keyframes gift-icon-float {
+    0%, 100% { transform: translateY(0px); }
+    50%       { transform: translateY(-6px); }
+}
+.gift-empty-icon {
+    animation: gift-glow-pulse 2.4s ease-in-out infinite, gift-icon-float 3s ease-in-out infinite;
+}
