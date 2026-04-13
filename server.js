@@ -2367,22 +2367,55 @@ app.post('/webhook/gift', async (req, res) => {
 });
 
 
-// ════ GIFT PRICE API PLACEHOLDER ════
-// Future: connect to @PriceNFTbot or Fragment API for automatic pricing
-// Set env var: GIFT_PRICE_API_KEY=your_key when available
-// Set env var: GIFT_PRICE_API_URL=https://api.pricenftbot.com/v1/price
+// ════ FRAGMENT API — Gift Price Fetching ════
+// ENV VARS TO ADD IN RENDER:
+//   FRAGMENT_API_KEY = ваш ключ от Fragment API
+//   (GIFT_PRICE_API_URL и GIFT_PRICE_API_KEY тоже работают как алиасы)
 async function fetchGiftPrice(giftUrl) {
-    const apiUrl  = process.env.GIFT_PRICE_API_URL;
-    const apiKey  = process.env.GIFT_PRICE_API_KEY;
-    if (!apiUrl || !apiKey) return 0;           // placeholder — not configured yet
+    const apiKey = process.env.FRAGMENT_API_KEY
+                || process.env.GIFT_PRICE_API_KEY;
+    if (!apiKey) return 0;
     try {
-        const r = await fetch(`${apiUrl}?url=${encodeURIComponent(giftUrl)}`, {
-            headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' }
+        // Fragment API endpoint для NFT gifts
+        // Документация: https://fragment.com/api
+        // Метод: getCollectionInfo или getNftItem по slug
+        // Извлекаем slug из ссылки: t.me/nft/GiftName-123 → GiftName-123
+        const slugMatch = giftUrl.match(/t\.me\/nft\/([^/?&#]+)/i)
+                       || giftUrl.match(/fragment\.com\/gift\/([^/?&#]+)/i);
+        if (!slugMatch) return 0;
+        const slug = slugMatch[1];
+
+        // Fragment JSON API
+        const r = await fetch('https://api.fragment.com/api', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${apiKey}`
+            },
+            body: JSON.stringify({
+                '@type': 'getCollectionInfo',
+                'collection': slug
+            })
         });
         if (!r.ok) return 0;
         const d = await r.json();
-        return Number(d.price_ton) || Number(d.price) || 0;
-    } catch(e) { return 0; }
+        // Fragment returns floor price in nanotons
+        const nanotons = d?.floor_price || d?.floorPrice || d?.price || 0;
+        if (nanotons > 0) return Math.round(Number(nanotons) / 1e9 * 100) / 100; // nanotons → TON
+        // Fallback: try getCollectionItems
+        const r2 = await fetch('https://api.fragment.com/api', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+            body: JSON.stringify({ '@type': 'getNftCollectionItems', 'collection': slug, 'count': 1, 'sort': 'price_asc' })
+        });
+        if (!r2.ok) return 0;
+        const d2 = await r2.json();
+        const itemPrice = d2?.items?.[0]?.price || 0;
+        return itemPrice > 0 ? Math.round(Number(itemPrice) / 1e9 * 100) / 100 : 0;
+    } catch(e) {
+        console.log('[Fragment API] Error:', e.message);
+        return 0;
+    }
 }
 
 // ── Gift: list user gifts ──
