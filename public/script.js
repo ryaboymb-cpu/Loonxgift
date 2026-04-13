@@ -1418,7 +1418,7 @@ async function adminViewUser(userId, page = 1) {
         <a href="https://t.me/${u.username||''}" target="_blank" style="font-size:16px;font-weight:900;color:#fff;margin-bottom:2px;text-decoration:none;display:block;">
             ${u.username||'Без имени'} <span style="font-size:11px;color:#00e5ff;opacity:0.7;">↗</span>
         </a>
-        <a href="tg://user?id=${u.id}" style="font-size:12px;color:#00e5ff;text-decoration:none;">ID: ${u.id} ↗</a>
+        <div style="font-size:12px;color:#888;">ID: ${u.id}</div>
         ${u.isBlocked?'<span class="adm-badge-ban" style="font-size:11px;">ЗАБЛОКИРОВАН</span>':''}
     </div>
     <div style="text-align:right;flex-shrink:0;">
@@ -1549,12 +1549,8 @@ function renderAdminContent(tab) {
                 <span class="adm-wd-amount">${w.amount} TON</span>
             </div>
             ${w.isGift
-    ? \`<div class="adm-wd-addr" style="color:#ce93d8;line-height:1.6;">
-        NFT подарок: <b style="color:#fff;">\${w.giftName||'—'}</b><br>
-        Юзер: <a href="tg://user?id=\${w.userId}" style="color:#00e5ff;">\${w.username||w.userId} (\${w.userId})</a>
-        \${w.giftUrl ? '<br><a href="'+w.giftUrl+'" target="_blank" style="color:#ce93d8;font-size:10px;">Открыть подарок →</a>' : ''}
-      </div>\`
-    : \`<div class="adm-wd-addr">\${w.address}</div>\`
+    ? `<div class="adm-wd-addr" style="color:#ce93d8;">${w.giftName ? '🎁 '+w.giftName : 'Подарок'} · ID: <a href="tg://user?id=${w.userId}" style="color:#ce93d8;">${w.userId}</a>${w.giftUrl ? ' · <a href="'+w.giftUrl+'" target="_blank" style="color:#00e5ff;">Ссылка</a>' : ''}</div>`
+    : `<div class="adm-wd-addr">${w.address}</div>`
 }
             <div class="adm-wd-time">${w.time||''}</div>
             <div style="display:flex;gap:6px;margin-top:8px;">
@@ -1793,14 +1789,17 @@ async function adminGiveGift(userId) {
     form.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:999999;display:flex;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(4px);';
     form.innerHTML = `
     <div style="background:#0d0d1e;border:1px solid rgba(255,255,255,.1);border-radius:18px;padding:20px;width:100%;max-width:360px;">
-        <div style="font-size:14px;font-weight:800;color:#fff;margin-bottom:4px;">Выдать NFT подарок</div>
-        <div style="font-size:11px;color:rgba(255,255,255,.35);margin-bottom:16px;">Название, фото и цена берутся из ссылки автоматически</div>
-        <div style="font-size:11px;color:var(--sub);margin-bottom:6px;font-weight:600;letter-spacing:.5px;">ССЫЛКА НА ПОДАРОК</div>
-        <input id="ag-url" class="input-box" placeholder="https://t.me/nft/GiftName" style="margin-bottom:12px;">
-        <div style="font-size:11px;color:var(--sub);margin-bottom:6px;font-weight:600;letter-spacing:.5px;">ЦЕНА TON (если не указана — авто)</div>
-        <input id="ag-price" class="input-box" type="number" placeholder="Авто из Telegram" step="0.01" min="0" style="margin-bottom:16px;">
+        <div style="font-size:14px;font-weight:800;color:#fff;margin-bottom:16px;">Выдать подарок</div>
+        <div style="font-size:11px;color:var(--sub);margin-bottom:6px;font-weight:600;">ССЫЛКА НА ПОДАРОК (t.me/nft/...)</div>
+        <input id="ag-url" class="input-box" placeholder="https://t.me/nft/GiftName или пусто" style="margin-bottom:8px;">
+        <div style="font-size:11px;color:var(--sub);margin-bottom:6px;font-weight:600;">НАЗВАНИЕ (если нет ссылки)</div>
+        <input id="ag-name" class="input-box" placeholder="Название подарка" style="margin-bottom:8px;">
+        <div style="font-size:11px;color:var(--sub);margin-bottom:6px;font-weight:600;">URL КАРТИНКИ</div>
+        <input id="ag-img" class="input-box" placeholder="https://...jpg (необязательно)" style="margin-bottom:8px;">
+        <div style="font-size:11px;color:var(--sub);margin-bottom:6px;font-weight:600;">ЦЕНА (TON)</div>
+        <input id="ag-price" class="input-box" type="number" placeholder="0" step="0.1" min="0" style="margin-bottom:16px;">
         <div style="display:flex;gap:8px;">
-            <button onclick="document.getElementById('admin-gift-form-main').remove()" style="flex:1;padding:12px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);color:rgba(255,255,255,.5);border-radius:10px;cursor:pointer;font-weight:700;">Отмена</button>
+            <button onclick="document.getElementById('admin-gift-form-main').remove()" style="flex:1;padding:12px;background:#1a1a2e;border:1px solid rgba(255,255,255,.1);color:#aaa;border-radius:10px;cursor:pointer;font-weight:700;">Отмена</button>
             <button onclick="submitAdminGift('${userId}')" style="flex:2;padding:12px;background:linear-gradient(135deg,var(--neon),#00c060);color:#000;border:none;border-radius:10px;cursor:pointer;font-weight:900;">Выдать</button>
         </div>
     </div>`;
@@ -1808,9 +1807,10 @@ async function adminGiveGift(userId) {
 }
 async function submitAdminGift(userId) {
     const giftUrl = $('ag-url')?.value?.trim() || '';
+    const name = $('ag-name')?.value?.trim() || '';
+    const imageUrl = $('ag-img')?.value?.trim() || '';
     const price = parseFloat($('ag-price')?.value) || 0;
-    if (!giftUrl) return showToast('Укажи ссылку на подарок');
-    const name = '', imageUrl = '';
+    if (!giftUrl && !name) return showToast('Укажи ссылку или название');
     const form = document.getElementById('admin-gift-form-main');
     if (form) { const btn = form.querySelector('button:last-child'); if(btn){btn.disabled=true;btn.innerText='Загрузка...';} }
     const r = await fetch('/api/admin/give_gift', {method:'POST',headers:{'Content-Type':'application/json'},
@@ -2512,14 +2512,14 @@ function spawnPickaxeWorker(blockQueue, pickType, startDelay, onAllDone, onBlock
         blkEl.classList.add('cracking-1');
 
         // Небольшая пауза перед первым ударом
-        setTimeout(() => doHits(hitsCanDo, 0), 200);
+        setTimeout(() => doHits(hitsCanDo, 0), 160);
 
         function doHits(left, num) {
             if (!mineIsActive) { removePick(); return; }
             const swing = num % 2 === 0 ? -28 : 28;
             pEl.style.transform = `translate(-50%, -100%) rotate(${swing}deg)`;
 
-            _anim(pEl, 'top', hoverY, hitY, 240, easeIn, () => {
+            _anim(pEl, 'top', hoverY, hitY, 210, easeIn, () => {
                 if (!mineIsActive) { removePick(); return; }
                 pEl.style.transform = 'translate(-50%, -100%) rotate(0deg)';
                 playSound('hit');
@@ -2532,20 +2532,20 @@ function spawnPickaxeWorker(blockQueue, pickType, startDelay, onAllDone, onBlock
                 if (left <= 1) {
                     if (willBreak) {
                         doBreakBlock(blkEl, blk, () => { if (onBlockBroken) onBlockBroken(blk.r, blk.c); });
-                        _anim(pEl, 'top', hitY, hoverY, 260, easeOut, () => {
+                        _anim(pEl, 'top', hitY, hoverY, 230, easeOut, () => {
                             if (!mineIsActive) { removePick(); return; }
-                            setTimeout(processNext, 120);
+                            setTimeout(processNext, 100);
                         });
                     } else {
-                        _anim(pEl, 'top', hitY, hoverY, 250, easeOut, () => {
+                        _anim(pEl, 'top', hitY, hoverY, 210, easeOut, () => {
                             if (!mineIsActive) { removePick(); return; }
                             breakPick(() => { if (onAllDone) onAllDone(); });
                         });
                     }
                 } else {
-                    _anim(pEl, 'top', hitY, hoverY, 270, easeOut, () => {
+                    _anim(pEl, 'top', hitY, hoverY, 240, easeOut, () => {
                         if (!mineIsActive) { removePick(); return; }
-                        setTimeout(() => doHits(left - 1, num + 1), 100);
+                        setTimeout(() => doHits(left - 1, num + 1), 80);
                     });
                 }
             });
@@ -2848,7 +2848,7 @@ function openChestWithAnim(col, mult, isActivated, baseWin) {
 // blockWins[r][c] > 0 → этот блок сломан и имеет выигрыш.
 // Кирки назначаются по столбцам согласно hotbar.
 // Stagger 200ms между кирками в одном столбце.
-function revealMineShaft(grid, blockWins, serverWin, balanceBefore, chestMults, isAutoSpin, chestActivated, blockWinSum) {
+function revealMineShaft(grid, blockWins, serverWin, balanceBefore, chestMults, isAutoSpin, chestActivated) {
     const HITS = { grass:1, dirt:1, stone:1, redstone:2, gold:2, gold_block:2, diamond:3, diamond_block:3, obsidian:4 };
     grid_current = grid;
 
@@ -3207,22 +3207,20 @@ async function loadGiftsPage() {
 
         if (!gifts.length) {
             c.innerHTML = `
-            <div style="min-height:72vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center;">
-                <div class="gift-empty-icon" style="width:100px;height:100px;background:linear-gradient(135deg,rgba(0,229,255,.12),rgba(0,180,255,.06));border:1.5px solid rgba(0,229,255,.25);border-radius:26px;display:flex;align-items:center;justify-content:center;margin-bottom:24px;">
-                    <svg width="54" height="54" viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M20 12v10H4V12" stroke="#00e5ff" stroke-width="1.6"/>
-                        <path d="M22 7H2v5h20V7z" stroke="#00e5ff" stroke-width="1.6"/>
-                        <path d="M12 22V7" stroke="#00e5ff" stroke-width="1.6"/>
-                        <path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z" stroke="#5dd8ff" stroke-width="1.4"/>
-                        <path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z" stroke="#5dd8ff" stroke-width="1.4"/>
-                        <path d="M20 12v10H4V12" stroke="rgba(0,229,255,.2)" stroke-width="4" fill="rgba(0,229,255,.04)"/>
+            <div style="min-height:70vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center;">
+                <div style="width:90px;height:90px;background:rgba(0,229,255,.05);border:1px solid rgba(0,229,255,.12);border-radius:22px;display:flex;align-items:center;justify-content:center;margin-bottom:22px;">
+                    <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="rgba(0,229,255,.4)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M20 12v10H4V12"/><path d="M22 7H2v5h20V7z"/>
+                        <path d="M12 22V7"/>
+                        <path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/>
+                        <path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/>
                     </svg>
                 </div>
-                <div style="font-size:19px;font-weight:900;color:#fff;margin-bottom:8px;letter-spacing:.3px;">Нет подарков</div>
-                <div style="font-size:13px;color:rgba(255,255,255,.35);margin-bottom:28px;line-height:1.65;max-width:220px;">
-                    Отправьте NFT подарок и он появится здесь автоматически
+                <div style="font-size:18px;font-weight:900;color:#fff;margin-bottom:8px;">Нет подарков</div>
+                <div style="font-size:13px;color:rgba(255,255,255,.38);margin-bottom:28px;line-height:1.6;max-width:240px;">
+                    Отправьте Telegram-подарок и он появится здесь автоматически
                 </div>
-                <button onclick="goToGiftPay()" style="background:linear-gradient(135deg,#00e5ff,#0097a7);color:#000;font-weight:900;border:none;border-radius:14px;padding:15px 44px;font-size:14px;cursor:pointer;box-shadow:0 8px 28px rgba(0,229,255,.25);letter-spacing:.5px;">Пополнить подарком</button>
+                <button onclick="goToGiftPay()" style="background:var(--neon-blue);color:#000;font-weight:900;border:none;border-radius:14px;padding:15px 40px;font-size:14px;cursor:pointer;box-shadow:0 8px 24px rgba(0,229,255,.18);">Пополнить подарком</button>
             </div>`;
             return;
         }
