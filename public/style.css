@@ -1664,3 +1664,46 @@ body {
 .nav-item {
     font-size: 9px !important;
 }
+
+/* ════ CONSISTENT BUTTON STYLES ════ */
+/* Primary action button — blue throughout deposit/wallet */
+.btn-primary {
+    background: var(--neon-blue) !important;
+    color: #000 !important;
+    font-weight: 900 !important;
+}
+/* All .btn defaults — dark with border */
+.btn {
+    background: var(--neon-blue);
+    color: #000;
+    font-weight: 900;
+}
+/* Wallet action buttons specifically */
+#dep-manual .btn,
+#dep-connect .btn,
+.wallet-dep-panel .btn {
+    background: var(--neon-blue) !important;
+    color: #000 !important;
+    font-weight: 900 !important;
+}
+/* Game play buttons — keep neon green for games */
+#cr-btn, #mi-btn, #co-btn, #sp-btn, #mn-btn {
+    background: var(--neon) !important;
+    color: #000 !important;
+}
+/* Withdraw button — red */
+.btn-withdraw {
+    background: linear-gradient(135deg, #ff2255, #c00040) !important;
+    color: #fff !important;
+}
+/* Smaller nav icon for 5 items */
+.hotbar .nav-item {
+    padding: 6px 2px 2px;
+}
+.hotbar .nav-item svg {
+    width: 20px;
+    height: 20px;
+}
+.hotbar .nav-item {
+    font-size: 9.5px;
+}
