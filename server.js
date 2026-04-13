@@ -2293,21 +2293,29 @@ app.post('/api/user/history', async (req, res) => {
 // ── Resolve Telegram Gift URL → {name, imageUrl, price} ──
 async function resolveTelegramGift(giftUrl) {
     try {
-        // Telegram gift URLs look like: https://t.me/nft/GiftName-123 or t.me/gifts/...
-        // We fetch the page and extract og:image, og:title
         const url = giftUrl.startsWith('http') ? giftUrl : 'https://' + giftUrl;
-        const r = await fetch(url, { headers: { 'User-Agent': 'TelegramBot (https://core.telegram.org/bots, 7.0)' } });
+        const r = await fetch(url, {
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (compatible; TelegramBot/1.0)',
+                'Accept': 'text/html'
+            },
+            timeout: 8000
+        });
         const html = await r.text();
-        // Extract og:image
-        const imgMatch = html.match(/<meta property="og:image" content="([^"]+)"/i)
-                      || html.match(/<meta name="og:image" content="([^"]+)"/i)
-                      || html.match(/background-image:\s*url\(['"]?([^'")\s]+)/i);
+        const imgMatch  = html.match(/<meta property="og:image" content="([^"]+)"/i)
+                       || html.match(/<meta name="og:image" content="([^"]+)"/i)
+                       || html.match(/thumbnail_url.*?([https][^"\s<>]+\.(?:jpg|png|webp|gif))/i);
         const titleMatch = html.match(/<meta property="og:title" content="([^"]+)"/i)
                         || html.match(/<title>([^<]+)<\/title>/i);
+        // Try to extract floor price from page (Fragment shows it)
+        const priceMatch = html.match(/floor[^>]*?([\d.]+)\s*TON/i)
+                        || html.match(/([\d.]+)\s*TON[^<]*floor/i)
+                        || html.match(/"price"\s*:\s*"?([\d.]+)"?/i);
+        const price = priceMatch ? parseFloat(priceMatch[1]) : 0;
         return {
-            imageUrl: imgMatch ? imgMatch[1] : '',
-            name: titleMatch ? titleMatch[1].replace(/ on Telegram| — Telegram/gi, '').trim() : giftUrl,
-            price: 0  // price to be set manually or via PriceNFTbot in future
+            imageUrl:  imgMatch   ? imgMatch[1]   : '',
+            name:      titleMatch ? titleMatch[1].replace(/ on Telegram| — Telegram|NFT /gi, '').trim() : giftUrl,
+            price
         };
     } catch(e) {
         return { imageUrl: '', name: giftUrl, price: 0 };
