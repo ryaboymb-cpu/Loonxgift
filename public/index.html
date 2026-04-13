@@ -93,8 +93,8 @@
 
             <!-- Вкладки Депозит / Вывод -->
             <div style="display:flex;gap:8px;margin-bottom:8px;padding:0 2px;">
-                <button id="wt-dep" class="wtab-btn wtab-active" onclick="switchWalletTab('dep')">Депозит</button>
-                <button id="wt-wd" class="wtab-btn wtab-inactive" onclick="switchWalletTab('wd')">Вывод</button>
+                <button id="wt-dep" class="wtab-btn wtab-active" onclick="switchWalletTab('dep')" style="font-weight:800;font-size:13px;">Депозит</button>
+                <button id="wt-wd" class="wtab-btn wtab-inactive" onclick="switchWalletTab('wd')" style="font-weight:800;font-size:13px;">Вывод</button>
             </div>
 
             <!-- Депозит панель -->
@@ -137,7 +137,7 @@
                             <div style="color:#ccc;font-size:13px;line-height:1.4;">Подарок зачислится после перезахода в игру</div>
                         </div>
                     </div>
-                    <a href="https://t.me/msgp2p" target="_blank" class="btn" style="background:linear-gradient(135deg,#00ff88,#00c060);color:#000;font-weight:900;display:block;text-decoration:none;padding:14px;border-radius:12px;text-align:center;">Открыть чат</a>
+                    <a href="https://t.me/msgp2p" target="_blank" class="btn" style="background:var(--neon-blue);color:#000;font-weight:900;display:block;text-decoration:none;padding:14px;border-radius:12px;text-align:center;">Открыть чат</a>
                 </div>
             </div>
 
@@ -158,7 +158,7 @@
                 <h2 style="margin-bottom:10px; color:var(--neon);">Промокоды</h2>
                 <p style="color:var(--sub); font-size:13px; font-weight:bold; margin-bottom:20px;">Введи промокод и получи бонус</p>
                 <input type="text" id="promo-code" class="input-box" placeholder="ВВЕДИТЕ КОД" style="text-transform:uppercase;">
-                <button class="btn" onclick="activatePromo()">АКТИВИРОВАТЬ</button>
+                <button class="btn" style="background:var(--neon-blue);color:#000;font-weight:900;" onclick="activatePromo()">АКТИВИРОВАТЬ</button>
             </div>
 
             <div class="card" style="margin-top:20px; text-align:center;">
@@ -246,7 +246,7 @@
                     <input type="number" id="sp-bet" class="input-box" placeholder="Ставка (0.1–25 TON)" step="0.1" min="0.1" max="25" style="margin-bottom:8px;">
                     <div id="sp-bet-lock" style="display:none; position:absolute; inset:0; border-radius:14px; background:rgba(0,0,0,0.5); cursor:not-allowed; z-index:2;"></div>
                 </div>
-                <button id="sp-btn" class="btn sp-btn-style" onclick="playSpin()">Играть 🎰</button>
+                <button id="sp-btn" class="btn" style="background:var(--neon);color:#000;font-weight:900;" onclick="playSpin()">СПИН 🎰</button>
             </div>
         </div>
 
@@ -289,7 +289,7 @@
                 </div>
                 <div class="mine-bet-row" style="gap:6px;">
                     <input type="number" id="mn-bet" class="input-box" placeholder="0.1–25 TON" step="0.1" min="0.1" max="25" style="flex:1;margin:0;">
-                    <button id="mn-btn" class="btn mine-btn" onclick="playMine()" style="flex:0 0 auto;width:120px;margin:0;">Играть ⛏</button>
+                    <button id="mn-btn" class="btn mine-btn" onclick="playMine()" style="flex:0 0 auto;width:120px;margin:0;font-weight:900;">МАЙНИТЬ ⛏</button>
                 </div>
             </div>
         </div>
@@ -304,7 +304,7 @@
                 <div class="quick-bets" style="margin-bottom:5px;"><div class="qb-btn" onclick="upgSetBet(0.1)">0.1</div><div class="qb-btn" onclick="upgSetBet(0.5)">0.5</div><div class="qb-btn" onclick="upgSetBet(1)">1</div><div class="qb-btn" onclick="upgSetBet(5)">5</div><div class="qb-btn" onclick="upgSetBet(10)">10</div><div class="qb-btn" onclick="upgSetBet(25)">25</div></div>
                 <input type="number" id="up-bet" class="input-box" placeholder="Ставка TON" oninput="upgRefresh()" style="margin-bottom:5px;">
                 <div id="upgrade-result" style="text-align:center;font-size:14px;font-weight:bold;min-height:18px;margin-bottom:5px;"></div>
-                <button id="up-btn" class="btn" onclick="playUpgrade()" style="background:linear-gradient(135deg,#0097a7,#00e5ff);color:#fff;font-weight:900;">Играть ⬆️</button>
+                <button id="up-btn" class="btn" onclick="playUpgrade()" style="background:var(--neon);color:#000;font-weight:900;">АПГРЕЙД ⬆️</button>
             </div>
         </div>
         <div id="page-cases" class="page"></div>
@@ -312,7 +312,7 @@
         <div id="page-battle"  class="page">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
                 <h3 style="color:var(--text); font-weight:900;">BATTLE LOBBIES</h3>
-                <button class="btn" style="width:auto; padding:8px 15px; font-size:12px; background:var(--neon-blue);" onclick="openBattleModal()">СОЗДАТЬ</button>
+                <button class="btn" style="width:auto;padding:8px 18px;font-size:12px;background:var(--neon);color:#000;font-weight:900;" onclick="openBattleModal()">+ ЛОББИ</button>
             </div>
             <label style="color:var(--sub); font-size:12px; font-weight:bold; margin-bottom:10px; display:block;">
                 <input type="checkbox" id="my-lobbies-chk" onchange="renderBattleLobbies()"> Сначала мои лобби
@@ -355,8 +355,8 @@
         <div class="card" style="border-color:var(--neon-blue);">
             <h3 style="color:var(--neon-blue); margin-bottom:15px; text-align:center;">Создать Лобби</h3>
             <input type="number" id="b-bet" class="input-box" placeholder="Сумма ставки (от 0.5 до 150 TON)">
-            <button class="btn" style="background:var(--neon-blue); box-shadow:0 0 15px rgba(0,210,255,0.3);" onclick="createBattleLobby()">СОЗДАТЬ</button>
-            <button class="btn" style="background:#333; margin-top:10px;" onclick="document.getElementById('battle-modal').style.display='none'">ОТМЕНА</button>
+            <button class="btn" style="background:var(--neon);color:#000;font-weight:900;" onclick="createBattleLobby()">СОЗДАТЬ ЛОББИ</button>
+            <button class="btn" style="background:rgba(255,255,255,.07);color:rgba(255,255,255,.5);font-weight:700;margin-top:8px;" onclick="document.getElementById('battle-modal').style.display='none'">Отмена</button>
         </div>
     </div>
 
@@ -368,13 +368,13 @@
         </div>
         
         <div id="battle-join-area" style="display:none; text-align:center; margin-bottom:15px; background:#1a1a1a; padding:15px; border-radius:12px; border:1px solid var(--neon);">
-            <h4 style="color:#fff; margin-bottom:10px;">Присоединиться к битве</h4>
+            <h4 style="color:#fff;margin-bottom:10px;font-size:14px;">Присоединиться к битве</h4>
             <input type="number" id="battle-join-bet" class="input-box" placeholder="Сумма ставки">
-            <button class="btn" style="background:var(--neon); color:#000;" onclick="submitBattleJoin()">ВНЕСТИ СТАВКУ</button>
+            <button class="btn" style="background:var(--neon);color:#000;font-weight:900;" onclick="submitBattleJoin()">ВОЙТИ В БОЙ</button>
         </div>
 
         <div id="battle-players" style="display:flex; flex-wrap:wrap; gap:10px; justify-content:center; margin-bottom:20px;"></div>
-        <button class="btn" style="background:#333; margin-bottom: 30px;" onclick="closeBattleGame()">ЗАКРЫТЬ И СМОТРЕТЬ В ФОНЕ</button>
+        <button class="btn" style="background:rgba(255,255,255,.07);color:rgba(255,255,255,.5);font-weight:700;margin-bottom:30px;" onclick="closeBattleGame()">Смотреть в фоне</button>
     </div>
 
     <div id="admin-modal" class="modal-full" style="display:none; position:fixed; inset:0; background:#000; z-index:9999; flex-direction:column; padding:20px;">
