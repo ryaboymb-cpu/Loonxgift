@@ -301,11 +301,35 @@ window.onload = async () => {
     renderQuickBets();
     loadBanner();
     loadGameSettings(); // Загружаем настройки механик из админки
-    const res = await fetch('/api/auth', {
-        method: 'POST', headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify(tg.initDataUnsafe.user || {id: "1", first_name: "Dev", username: "DevUser", photo_url: ""})
-    });
-    const data = await res.json();
+    // ── AUTH with retry ──
+    let data = null;
+    let authAttempts = 0;
+    while (authAttempts < 3) {
+        try {
+            const res = await fetch('/api/auth', {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(tg.initDataUnsafe?.user || {id: '1', first_name: 'Dev', username: 'DevUser', photo_url: ''})
+            });
+            if (res.ok) { data = await res.json(); break; }
+        } catch(e) {}
+        authAttempts++;
+        if (authAttempts < 3) await new Promise(r => setTimeout(r, 1500));
+    }
+
+    if (!data || !data.user) {
+        // Сервер недоступен — показываем кнопку перезагрузки
+        if($('loader')) {
+            $('loader').innerHTML = `
+            <div style="text-align:center;padding:40px;">
+                <div style="font-size:32px;margin-bottom:16px;">⚠️</div>
+                <div style="color:#fff;font-weight:800;font-size:16px;margin-bottom:8px;">Сервер недоступен</div>
+                <div style="color:rgba(255,255,255,.45);font-size:13px;margin-bottom:24px;">Проверьте настройки или попробуйте позже</div>
+                <button onclick="location.reload()" style="background:var(--neon);color:#000;border:none;border-radius:12px;padding:14px 32px;font-weight:900;font-size:14px;cursor:pointer;">Перезагрузить</button>
+            </div>`;
+        }
+        return;
+    }
+
     if(data.error === "BLOCKED") {
         document.body.innerHTML = "<h1 style='color:red; text-align:center; margin-top:50px;'>ВЫ ЗАБЛОКИРОВАНЫ</h1>";
         return;
@@ -314,32 +338,30 @@ window.onload = async () => {
     user = data.user;
     rtpObj = data.rtp || { crash: 90, mines: 90, coinflip: 90, spin: 94, upgrade: 85, cases: 78 };
     maintenance = data.maintenance || {};
-    // Нормализуем ключи (сервер может вернуть maintenance_mine вместо mine)
     if(maintenance.maintenance_mine !== undefined) maintenance.mine = maintenance.maintenance_mine;
     if(maintenance.maintenance_mines !== undefined) maintenance.mines = maintenance.maintenance_mines;
     isShowDemo = data.config ? data.config.showDemo : false;
-    
-    adminWalletAddress=data.adminWallet||'';
-    adminWallet48=data.wallet48||'';
-    // Регистрируем юзера в онлайн-трекере
-    socket.emit('register_online', data.user?.id || user?.id);
-    // Восстанавливаем последнюю страницу
-    try{
+    adminWalletAddress = data.adminWallet || '';
+    adminWallet48 = data.wallet48 || '';
+
+    socket.emit('register_online', user.id);
+
+    try {
         const lastPage = localStorage.getItem('lx_lastPage');
         if(lastPage && MAIN_PAGES.has(lastPage) && lastPage !== 'games') {
             const navEl = document.querySelector(`.nav-item[onclick*="${lastPage}"]`);
             nav(lastPage, navEl);
         }
-    }catch(e){}
-    if($('dep-wallet')) $('dep-wallet').innerText = adminWalletAddress || 'Кошелек не настроен на сервере';
-    if($('dep-memo')) $('dep-memo').innerText = user.id;
+    } catch(e) {}
 
+    if($('dep-wallet')) $('dep-wallet').innerText = adminWalletAddress || 'Кошелек не настроен';
+    if($('dep-memo'))   $('dep-memo').innerText   = user.id;
     if($('loader')) { $('loader').style.opacity = '0'; setTimeout(() => $('loader').style.display = 'none', 500); }
-    
+
     const avaUrl = user.photo || 'https://cdn-icons-png.flaticon.com/512/149/149071.png';
-    if($('user-ava')) $('user-ava').src = avaUrl; 
+    if($('user-ava'))    $('user-ava').src = avaUrl;
     if($('profile-ava')) $('profile-ava').src = avaUrl;
-    if($('profile-name')) $('profile-name').innerText = user.username || 'Игрок';
+    if($('profile-name')) $('profile-name').innerText = user.username || user.first_name || 'Игрок';
     if($('profile-id')) {
         $('profile-id').innerText = user.id;
         $('profile-id').style.cursor = 'pointer';
@@ -351,7 +373,7 @@ window.onload = async () => {
             });
         };
     }
-    
+
     updateUI();
     renderWithdrawHistory();
     renderBattleLobbies();
