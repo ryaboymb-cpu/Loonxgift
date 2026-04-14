@@ -1570,14 +1570,11 @@ function renderAdminContent(tab) {
                 <a href="tg://user?id=${w.userId}" class="adm-wd-user">@${w.username||w.userId}</a>
                 <span class="adm-wd-amount">${w.amount} TON</span>
             </div>
-            ${w.isGift
-    ? \`<div class="adm-wd-addr" style="color:#ce93d8;line-height:1.6;">
-        NFT подарок: <b style="color:#fff;">\${w.giftName||'—'}</b><br>
-        Юзер: <a href="tg://user?id=\${w.userId}" style="color:#00e5ff;">\${w.username||w.userId} (\${w.userId})</a>
-        \${w.giftUrl ? '<br><a href="'+w.giftUrl+'" target="_blank" style="color:#ce93d8;font-size:10px;">Открыть подарок →</a>' : ''}
-      </div>\`
-    : \`<div class="adm-wd-addr">\${w.address}</div>\`
-}
+            <div class="adm-wd-addr" style="${w.isGift?'color:#ce93d8;line-height:1.6;':''}">
+                ${w.isGift
+                    ? '🎁 ' + (w.giftName||'NFT подарок') + (w.giftUrl ? ' <a href="' + w.giftUrl + '" target="_blank" style="color:#ce93d8;font-size:10px;">→</a>' : '')
+                    : w.address}
+            </div>
             <div class="adm-wd-time">${w.time||''}</div>
             <div style="display:flex;gap:6px;margin-top:8px;">
                 <button class="adm-approve-btn" onclick="adminW('${w._id}','approve')">Одобрить</button>
