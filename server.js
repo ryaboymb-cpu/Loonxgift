@@ -2373,7 +2373,8 @@ app.post('/webhook/gift', async (req, res) => {
 //   (GIFT_PRICE_API_URL и GIFT_PRICE_API_KEY тоже работают как алиасы)
 async function fetchGiftPrice(giftUrl) {
     const apiKey = process.env.FRAGMENT_API_KEY
-                || process.env.GIFT_PRICE_API_KEY;
+                || process.env.GIFT_PRICE_API_KEY
+                || process.env.GIFT_PRICE_API_URL;  // legacy alias
     if (!apiKey) return 0;
     try {
         // Fragment API endpoint для NFT gifts
