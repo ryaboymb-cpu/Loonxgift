@@ -2537,7 +2537,7 @@ function spawnPickaxeWorker(blockQueue, pickType, startDelay, onAllDone, onBlock
             pEl.style.top = hoverY + 'px';
             pEl.style.opacity = '1';
         });
-        setTimeout(() => doHits(hitsCanDo, 0), 250);
+        setTimeout(() => doHits(hitsCanDo, 0), 160);
 
         function doHits(left, num) {
             if (!mineIsActive) { removePick(); return; }
@@ -2546,7 +2546,7 @@ function spawnPickaxeWorker(blockQueue, pickType, startDelay, onAllDone, onBlock
             pEl.style.transition = 'transform 0.18s ease-out';
             pEl.style.transform = `translate(-50%, -100%) rotate(${swing}deg)`;
 
-            _anim(pEl, 'top', hoverY, hitY, 260, easeIn, () => {
+            _anim(pEl, 'top', hoverY, hitY, 180, easeIn, () => {
                 if (!mineIsActive) { removePick(); return; }
                 pEl.style.transition = 'transform 0.12s ease-in';
                 pEl.style.transform = 'translate(-50%, -100%) rotate(0deg)';
@@ -2560,9 +2560,9 @@ function spawnPickaxeWorker(blockQueue, pickType, startDelay, onAllDone, onBlock
                 if (left <= 1) {
                     if (willBreak) {
                         doBreakBlock(blkEl, blk, () => { if (onBlockBroken) onBlockBroken(blk.r, blk.c); });
-                        _anim(pEl, 'top', hitY, hoverY, 260, easeOut, () => {
+                        _anim(pEl, 'top', hitY, hoverY, 200, easeOut, () => {
                             if (!mineIsActive) { removePick(); return; }
-                            setTimeout(processNext, 120);
+                            setTimeout(processNext, 80);
                         });
                     } else {
                         _anim(pEl, 'top', hitY, hoverY, 250, easeOut, () => {
@@ -2571,9 +2571,9 @@ function spawnPickaxeWorker(blockQueue, pickType, startDelay, onAllDone, onBlock
                         });
                     }
                 } else {
-                    _anim(pEl, 'top', hitY, hoverY, 270, easeOut, () => {
+                    _anim(pEl, 'top', hitY, hoverY, 190, easeOut, () => {
                         if (!mineIsActive) { removePick(); return; }
-                        setTimeout(() => doHits(left - 1, num + 1), 100);
+                        setTimeout(() => doHits(left - 1, num + 1), 60);
                     });
                 }
             });
@@ -2894,7 +2894,7 @@ function revealMineShaft(grid, blockWins, serverWin, balanceBefore, chestMults, 
         }
     }
 
-    // 2. Читаем hotbar — кирки и ТНТ
+    // 2. Читаем hotbar
     const hotbar = currentHotbar || [];
     const picks = [], tnts = [];
     let bookCount = 0;
@@ -2907,59 +2907,68 @@ function revealMineShaft(grid, blockWins, serverWin, balanceBefore, chestMults, 
     });
     if (bookCount > 0) mineBookCount += bookCount;
 
-    // 3. Строим карту выигрышей из сервера
-    // Блок сломан если blockWins[r][c] > 0 ИЛИ он в списке TNT-сломанных
-    const winMap = {}; // "r,c" → win
+    // 3. winMap — точно какие блоки сломал СЕРВЕР
+    const winMap = {};
     for (let r = 0; r < MC_ROWS; r++) {
         for (let c = 0; c < MC_COLS; c++) {
-            const bw = (blockWins && blockWins[r] && blockWins[r][c] != null) ? Number(blockWins[r][c]) : 0;
+            const bw = (blockWins && blockWins[r] != null && blockWins[r][c] != null) ? Number(blockWins[r][c]) : 0;
             winMap[`${r},${c}`] = bw;
         }
     }
 
-    // 4. Для кирок — строим очередь блоков по столбцу
-    // Берём блоки сверху вниз согласно прочности кирки
-    const RANK = { wooden:0, stone:1, iron:2, golden:3, diamond:4 };
+    // 4. ★ КЛЮЧЕВОЙ ФИЧ: строим блоки для анимации ТОЛЬКО из того что сервер сломал
+    // НЕ используем client-side durability — она может отличаться от серверной
     const tntCols = new Set(tnts.map(t => t.col));
 
-    // Группируем кирки по столбцам
+    // Группируем кирки по столбцам (для выбора типа анимации)
     const pickByCol = {};
     picks.forEach(ps => {
         if (!pickByCol[ps.col]) pickByCol[ps.col] = [];
         pickByCol[ps.col].push(ps);
     });
 
-    // Для каждого столбца с кирками строим очереди блоков
-    // Кирки в одном столбце работают последовательно: pick1 берёт первые N блоков, pick2 — следующие
-    const colWork = {}; // col → [{pType, blocks:[{r,c,type,win,hits}], dur}]
+    // Для каждого столбца: берём ВСЕ блоки которые сервер пометил как сломанные (win>=0 но блок должен быть в hotbar-column)
+    // Если у столбца есть кирка — анимируем её
+    // Если win=0 но блок в столбце с киркой — тоже анимируем (визуальный удар)
+    const colWork = {};
     Object.entries(pickByCol).forEach(([colStr, colPicks]) => {
         const col = parseInt(colStr);
-        if (tntCols.has(col)) return; // TNT занял этот столбец
+        if (tntCols.has(col)) return;
 
-        // Все блоки в столбце (сверху вниз), только не-revealed
-        const colQ = [];
+        // Блоки которые сервер сломал в этом столбце (win > 0)
+        // ПЛЮС блоки которые должна визуально сломать кирка (первые N по прочности)
+        const serverBrokenInCol = [];
         for (let r = 0; r < MC_ROWS; r++) {
-            const el = $(`mc-blk-${r}-${col}`);
-            if (!el || el.dataset.revealed==='1') continue;
-            const type = grid[r][col]; if (!type) continue;
-            colQ.push({ r, c: col, type, win: winMap[`${r},${col}`] || 0, hits: HITS[type] || 1 });
-        }
-        if (!colQ.length) return;
-
-        // Назначаем блоки кирками
-        colWork[col] = [];
-        let bIdx = 0;
-        colPicks.forEach(ps => {
-            const dur = getPickDur(ps.pType);
-            let rem = dur, myBlocks = [];
-            while (rem > 0 && bIdx < colQ.length) {
-                const blk = colQ[bIdx];
-                const hc = Math.min(blk.hits, rem);
-                myBlocks.push({ ...blk });
-                rem -= hc; bIdx++;
+            if ((winMap[`${r},${col}`] || 0) > 0) {
+                const el = $(`mc-blk-${r}-${col}`);
+                if (el && el.dataset.revealed !== '1') {
+                    const type = grid[r][col];
+                    serverBrokenInCol.push({ r, c: col, type: type||'stone', win: winMap[`${r},${col}`], hits: HITS[type||'stone']||1 });
+                }
             }
-            colWork[col].push({ pType: ps.pType, blocks: myBlocks, dur, ps });
-        });
+        }
+
+        if (!serverBrokenInCol.length) return;
+
+        // Назначаем ВСЕ сломанные блоки первой (лучшей) кирке в столбце
+        // Если кирок несколько — делим поровну для красивой анимации
+        colWork[col] = [];
+        const bestPick = colPicks.sort((a,b) => {
+            const RANK = {wooden:0,stone:1,iron:2,golden:3,diamond:4};
+            return (RANK[b.pType]||0) - (RANK[a.pType]||0);
+        })[0];
+
+        // Если одна кирка — все блоки ей
+        // Если несколько — делим
+        if (colPicks.length === 1) {
+            colWork[col].push({ pType: bestPick.pType, blocks: serverBrokenInCol, dur: 999, ps: bestPick });
+        } else {
+            const chunkSize = Math.ceil(serverBrokenInCol.length / colPicks.length);
+            colPicks.forEach((ps, pi) => {
+                const myBlocks = serverBrokenInCol.slice(pi * chunkSize, (pi + 1) * chunkSize);
+                if (myBlocks.length) colWork[col].push({ pType: ps.pType, blocks: myBlocks, dur: 999, ps });
+            });
+        }
     });
 
     // 5. Трекаем сломанные блоки для сундуков
@@ -3588,17 +3597,26 @@ function showAddNFTGiftForm() {
     document.body.appendChild(form);
 }
 
+function extractNFTModelName(url) {
+    // t.me/nft/PoolFloat-112463 → PoolFloat (without item number)
+    const match = url.match(/t\.me\/nft\/([^/?&#]+)/i);
+    if (!match) return null;
+    // Remove trailing -DIGITS (item ID) to get model name
+    return match[1].replace(/-\d+$/, '');
+}
+
 async function addNFTToCatalog() {
     const url = document.getElementById('nft-add-url')?.value?.trim();
     const price = parseFloat(document.getElementById('nft-add-price')?.value) || 0;
     if (!url) return showToast('Укажи ссылку');
+    const modelName = extractNFTModelName(url);
     const btn = document.querySelector('#add-nft-form button:last-child');
-    if (btn) { btn.disabled=true; btn.innerText='...'; }
+    if (btn) { btn.disabled=true; btn.innerText='Загрузка...'; }
     try {
-        const r = await fetch('/api/admin/nft_catalog_add', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pass:adminPass, giftUrl:url, price})});
+        const r = await fetch('/api/admin/nft_catalog_add', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pass:adminPass, giftUrl:url, modelName, price})});
         const d = await r.json();
         document.getElementById('add-nft-form')?.remove();
-        if (r.ok) { showToast('✅ Добавлено: ' + (d.gift?.name||'')); loadAdminNFTGifts(); }
+        if (r.ok) { showToast('✅ ' + (d.gift?.name||'Добавлено')); loadAdminNFTGifts(); }
         else showToast('❌ ' + (d.error||'Ошибка'));
     } catch(e) { showToast('Ошибка'); }
 }
