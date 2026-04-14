@@ -1803,13 +1803,33 @@ button.btn[style*="neon-blue"] {
 
 /* ════ GIFT EMPTY STATE — animated glow ════ */
 @keyframes gift-glow-pulse {
-    0%, 100% { box-shadow: 0 0 20px rgba(0,229,255,.2), 0 0 40px rgba(0,229,255,.08); border-color: rgba(0,229,255,.2); }
-    50%       { box-shadow: 0 0 30px rgba(0,229,255,.45), 0 0 60px rgba(0,229,255,.18); border-color: rgba(0,229,255,.5); }
+    0%,100% {
+        box-shadow: 0 0 0 1px rgba(0,229,255,.2),
+                    0 0 22px rgba(0,229,255,.25),
+                    0 0 44px rgba(0,229,255,.1);
+        border-color: rgba(0,229,255,.45);
+    }
+    50% {
+        box-shadow: 0 0 0 1px rgba(0,229,255,.5),
+                    0 0 34px rgba(0,229,255,.5),
+                    0 0 70px rgba(0,229,255,.22);
+        border-color: rgba(0,229,255,.85);
+    }
 }
 @keyframes gift-icon-float {
-    0%, 100% { transform: translateY(0px); }
-    50%       { transform: translateY(-6px); }
+    0%,100% { transform: translateY(0px); }
+    50%      { transform: translateY(-8px); }
 }
 .gift-empty-icon {
-    animation: gift-glow-pulse 2.4s ease-in-out infinite, gift-icon-float 3s ease-in-out infinite;
+    animation: gift-glow-pulse 2.2s ease-in-out infinite,
+               gift-icon-float 3.2s ease-in-out infinite;
+}
+
+/* ════ GIFT CARDS ════ */
+.gift-card-item {
+    transition: transform .12s ease, border-color .15s ease, box-shadow .15s ease;
+}
+.gift-card-item:hover {
+    border-color: rgba(0,229,255,.3) !important;
+    box-shadow: 0 4px 20px rgba(0,0,0,.4);
 }
