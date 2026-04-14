@@ -1360,7 +1360,8 @@ function switchAdminTab(tab) {
         loadAdminLogs(1, '');
     } else if (tab === 'stats') {
         loadAdminGameStats();
-    // gifts_admin tab removed
+    } else if (tab === 'nft_gifts') {
+        loadAdminNFTGifts();
     } else {
         renderAdminContent(tab); 
     }
@@ -2516,30 +2517,38 @@ function spawnPickaxeWorker(blockQueue, pickType, startDelay, onAllDone, onBlock
         if (rect.width === 0) { setTimeout(processNext, 80); return; }
 
         const bx     = rect.left + rect.width / 2;
-        const hoverY = rect.top - 6;
-        const hitY   = rect.top + rect.height * 0.28;
+        const hoverY = rect.top - 14;   // 14px above block top
+        const hitY   = rect.top + rect.height * 0.18;  // hits upper portion of block
 
-        // Появляемся над блоком мгновенно (уже в своём столбце)
+        // Кирка плавно появляется сверху вниз к блоку
         pEl.style.transition = 'none';
         pEl.style.left    = bx + 'px';
-        pEl.style.top     = hoverY + 'px';
-        pEl.style.opacity = '1';
+        pEl.style.top     = (hoverY - 30) + 'px';  // start 30px higher
+        pEl.style.opacity = '0';
         pEl.style.transform = 'translate(-50%, -100%) rotate(0deg)';
 
         qi++;
         remainDur -= hitsCanDo;
         blkEl.classList.add('cracking-1');
 
-        // Небольшая пауза перед первым ударом
-        setTimeout(() => doHits(hitsCanDo, 0), 200);
+        // Плавное появление кирки и движение к позиции удара
+        requestAnimationFrame(() => {
+            pEl.style.transition = 'top 0.22s ease-out, opacity 0.18s ease';
+            pEl.style.top = hoverY + 'px';
+            pEl.style.opacity = '1';
+        });
+        setTimeout(() => doHits(hitsCanDo, 0), 250);
 
         function doHits(left, num) {
             if (!mineIsActive) { removePick(); return; }
-            const swing = num % 2 === 0 ? -28 : 28;
+            const swing = num % 2 === 0 ? -22 : 22;
+            // Smooth swing via CSS transition
+            pEl.style.transition = 'transform 0.18s ease-out';
             pEl.style.transform = `translate(-50%, -100%) rotate(${swing}deg)`;
 
-            _anim(pEl, 'top', hoverY, hitY, 240, easeIn, () => {
+            _anim(pEl, 'top', hoverY, hitY, 260, easeIn, () => {
                 if (!mineIsActive) { removePick(); return; }
+                pEl.style.transition = 'transform 0.12s ease-in';
                 pEl.style.transform = 'translate(-50%, -100%) rotate(0deg)';
                 playSound('hit');
                 flashBlock(blkEl);
@@ -2903,7 +2912,7 @@ function revealMineShaft(grid, blockWins, serverWin, balanceBefore, chestMults, 
     const winMap = {}; // "r,c" → win
     for (let r = 0; r < MC_ROWS; r++) {
         for (let c = 0; c < MC_COLS; c++) {
-            const bw = (blockWins && blockWins[r]) ? Number(blockWins[r][c]) : 0;
+            const bw = (blockWins && blockWins[r] && blockWins[r][c] != null) ? Number(blockWins[r][c]) : 0;
             winMap[`${r},${c}`] = bw;
         }
     }
@@ -3337,12 +3346,10 @@ async function openGiftDetail(giftId) {
         if (!g) { showToast('Подарок не найден'); ov.remove(); return; }
 
         const priceStr = g.price ? g.price.toFixed(2) + ' TON' : '—';
-        const isAnimated = g.imageUrl && (g.imageUrl.includes('.webm') || g.imageUrl.includes('.gif'));
+        // Gift media — static image, crisp display
         const mediaContent = g.imageUrl
-            ? (isAnimated
-                ? `<video src="${g.imageUrl}" autoplay loop muted playsinline style="width:100%;height:100%;object-fit:cover;"></video>`
-                : `<img src="${g.imageUrl}" style="width:100%;height:100%;object-fit:cover;" onerror="this.parentNode.innerHTML='<div style=font-size:68px;opacity:.3;display:flex;align-items:center;justify-content:center;width:100%;height:100%;>🎁</div>'">`)
-            : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:72px;opacity:.25;">🎁</div>`;
+            ? `<img src="${g.imageUrl}" style="width:100%;height:100%;object-fit:contain;border-radius:18px;" onerror="this.style.display='none';this.parentNode.querySelector('.gift-fallback-big').style.display='flex'">`
+            : '';
 
         ov.innerHTML = `
         <!-- Header bar -->
@@ -3350,13 +3357,16 @@ async function openGiftDetail(giftId) {
             <button onclick="document.getElementById('gift-detail-ov').remove()"
                 style="background:rgba(255,255,255,.07);border:none;color:rgba(255,255,255,.6);border-radius:10px;padding:8px 14px;cursor:pointer;font-size:12px;font-weight:700;flex-shrink:0;">← Назад</button>
             <span style="font-size:14px;font-weight:800;color:#fff;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${g.name||'NFT Подарок'}</span>
-            ${g.giftUrl ? `<a href="${g.giftUrl}" target="_blank" style="color:#00e5ff;font-size:11px;font-weight:700;text-decoration:none;flex-shrink:0;">Fragment ↗</a>` : ''}
+
         </div>
 
         <!-- Gift image / animation -->
         <div style="padding:24px 20px 0;display:flex;justify-content:center;">
-            <div style="width:min(250px,78vw);height:min(250px,78vw);border-radius:22px;background:linear-gradient(135deg,#0d0d22,#13132e);border:1px solid rgba(255,255,255,.08);overflow:hidden;display:flex;align-items:center;justify-content:center;box-shadow:0 20px 60px rgba(0,0,0,.6),0 0 0 1px rgba(255,255,255,.04);">
+            <div style="width:min(250px,78vw);height:min(250px,78vw);border-radius:22px;background:linear-gradient(135deg,#0d0d22,#13132e);border:1px solid rgba(255,255,255,.09);overflow:hidden;display:flex;align-items:center;justify-content:center;box-shadow:0 20px 60px rgba(0,0,0,.6);position:relative;">
                 ${mediaContent}
+                <div class="gift-fallback-big" style="display:${g.imageUrl?'none':'flex'};flex-direction:column;align-items:center;justify-content:center;width:100%;height:100%;position:absolute;inset:0;">
+                    <svg width="80" height="80" viewBox="0 0 24 24" fill="none"><rect x="2" y="7" width="20" height="5" rx="1.5" fill="rgba(0,229,255,.2)" stroke="#00e5ff" stroke-width="1.2"/><rect x="4" y="12" width="16" height="10" rx="1.5" fill="rgba(0,180,255,.12)" stroke="#5dd8ff" stroke-width="1.2"/><line x1="12" y1="7" x2="12" y2="22" stroke="#00e5ff" stroke-width="1.4"/><path d="M12 7 C12 7 9 2 7 2 C5.3 2 4 3.3 4 5 C4 6.7 5.3 8 7 8 C9 8 12 7 12 7Z" fill="rgba(0,229,255,.2)" stroke="#5dd8ff" stroke-width="1.1"/><path d="M12 7 C12 7 15 2 17 2 C18.7 2 20 3.3 20 5 C20 6.7 18.7 8 17 8 C15 8 12 7 12 7Z" fill="rgba(0,229,255,.2)" stroke="#5dd8ff" stroke-width="1.1"/></svg>
+                </div>
             </div>
         </div>
 
@@ -3412,34 +3422,202 @@ async function openGiftDetail(giftId) {
 }
 
 async function doGiftAction(giftId, action) {
-    const label = action === 'sell' ? 'Продать' : 'Вывести';
-    if (!confirm(`${label} подарок? Спишется 0.3 TON с баланса`)) return;
     const ov = $('gift-detail-ov');
-    // Disable buttons in overlay
-    if (ov) ov.querySelectorAll('button').forEach(b => { b.disabled = true; b.style.opacity = '.5'; });
+
+    if (action === 'sell') {
+        // Показываем красивый диалог подтверждения продажи
+        await showSellConfirmDialog(giftId, ov);
+        return;
+    }
+
+    // Вывод — стандартная логика
+    if (!confirm('Вывести подарок? Потребуется комиссия 0.3 TON')) return;
+    if (ov) ov.querySelectorAll('button').forEach(b => { b.disabled=true; b.style.opacity='.5'; });
     try {
         const r = await fetch('/api/gifts/withdraw', {
             method:'POST', headers:{'Content-Type':'application/json'},
-            body: JSON.stringify({ id: user.id, giftId, action })
+            body: JSON.stringify({ id: user.id, giftId, action: 'withdraw' })
         });
         const d = await r.json();
         if (!r.ok) {
-            if (ov) ov.querySelectorAll('button').forEach(b => { b.disabled = false; b.style.opacity = ''; });
+            if (ov) ov.querySelectorAll('button').forEach(b => { b.disabled=false; b.style.opacity=''; });
             return showToast(d.error || 'Ошибка');
         }
-        user = d.user;
-        updateUI();
-        showToast(`✅ Заявка на ${action === 'sell' ? 'продажу' : 'вывод'} создана!`);
+        user = d.user; updateUI();
+        showToast('✅ Заявка на вывод создана!');
         if (ov) ov.remove();
         loadGiftsPage();
     } catch(e) {
-        if (ov) ov.querySelectorAll('button').forEach(b => { b.disabled = false; b.style.opacity = ''; });
+        if (ov) ov.querySelectorAll('button').forEach(b => { b.disabled=false; b.style.opacity=''; });
         showToast('Ошибка соединения');
     }
 }
 
+async function showSellConfirmDialog(giftId, parentOv) {
+    // Получаем инфо о подарке
+    let gift = null;
+    try {
+        const r = await fetch('/api/gifts/get', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({id: user.id, giftId}) });
+        const d = await r.json();
+        gift = d.gift;
+    } catch(e) {}
+    if (!gift) return showToast('Ошибка загрузки');
+
+    const priceStr = gift.price ? gift.price.toFixed(2) + ' TON' : '0 TON';
+
+    // Создаём стильный диалог
+    const dlg = document.createElement('div');
+    dlg.style.cssText = 'position:fixed;inset:0;z-index:999999;background:rgba(0,0,0,.75);backdrop-filter:blur(8px);display:flex;align-items:flex-end;justify-content:center;animation:fadeIn .2s ease;';
+    dlg.innerHTML = `
+    <div style="background:#0d0d1e;border:1px solid rgba(255,255,255,.1);border-radius:24px 24px 0 0;padding:28px 20px 36px;width:100%;max-width:420px;">
+        <div style="width:36px;height:4px;background:rgba(255,255,255,.15);border-radius:2px;margin:0 auto 24px;"></div>
+        <div style="text-align:center;margin-bottom:20px;">
+            <div style="font-size:15px;font-weight:800;color:#fff;margin-bottom:6px;">Продать подарок</div>
+            <div style="font-size:13px;color:rgba(255,255,255,.45);">${gift.name}</div>
+        </div>
+        <div style="background:linear-gradient(135deg,rgba(0,255,136,.07),rgba(0,229,255,.04));border:1px solid rgba(0,255,136,.2);border-radius:16px;padding:20px;text-align:center;margin-bottom:20px;">
+            <div style="font-size:11px;color:rgba(255,255,255,.35);font-weight:700;letter-spacing:2px;margin-bottom:8px;">ВЫ ПОЛУЧИТЕ</div>
+            <div style="font-size:34px;font-weight:900;color:#00ff88;line-height:1;">${priceStr}</div>
+            ${!gift.price ? '<div style="font-size:11px;color:rgba(255,255,255,.3);margin-top:6px;">Цена не задана — установите в админке</div>' : '<div style="font-size:11px;color:rgba(255,255,255,.3);margin-top:6px;">Без комиссии · Мгновенно на баланс</div>'}
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+            <button id="sell-cancel-btn" style="padding:16px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);color:rgba(255,255,255,.6);border-radius:14px;font-weight:700;font-size:14px;cursor:pointer;">Отмена</button>
+            <button id="sell-confirm-btn" style="padding:16px;background:linear-gradient(135deg,#7b1fa2,#9c27b0);color:#fff;border:none;border-radius:14px;font-weight:900;font-size:14px;cursor:pointer;box-shadow:0 6px 20px rgba(123,31,162,.3);">Продать</button>
+        </div>
+    </div>`;
+
+    document.body.appendChild(dlg);
+    dlg.querySelector('#sell-cancel-btn').onclick = () => dlg.remove();
+    dlg.querySelector('#sell-confirm-btn').onclick = async () => {
+        const btn = dlg.querySelector('#sell-confirm-btn');
+        btn.disabled = true; btn.innerText = '...';
+        try {
+            const r = await fetch('/api/gifts/sell', {
+                method:'POST', headers:{'Content-Type':'application/json'},
+                body: JSON.stringify({ id: user.id, giftId })
+            });
+            const d = await r.json();
+            dlg.remove();
+            if (!r.ok) return showToast(d.error || 'Ошибка');
+            user = d.user; updateUI();
+            showToast('✅ Продано! +' + priceStr);
+            flyToBalance(gift.price || 0);
+            if (parentOv) parentOv.remove();
+            loadGiftsPage();
+        } catch(e) { dlg.remove(); showToast('Ошибка'); }
+    };
+}
+
 // Backward compat
 async function withdrawGift(giftId) { return doGiftAction(giftId, 'withdraw'); }
+
+
+// ════════════════════════════════════════
+//  ADMIN — NFT GIFTS CATALOG
+// ════════════════════════════════════════
+let adminNFTGiftsData = [];
+let adminNFTGiftsSearch = '';
+
+async function loadAdminNFTGifts() {
+    const c = $('admin-content');
+    if (!c) return;
+    c.innerHTML = '<div style="text-align:center;padding:20px;color:var(--neon);">Загрузка...</div>';
+    try {
+        const r = await fetch('/api/admin/nft_gifts_catalog', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pass:adminPass})});
+        const d = await r.json();
+        adminNFTGiftsData = d.gifts || [];
+        renderAdminNFTGifts();
+    } catch(e) { c.innerHTML = '<div style="color:red;text-align:center;padding:20px;">Ошибка загрузки</div>'; }
+}
+
+function renderAdminNFTGifts() {
+    const c = $('admin-content');
+    if (!c) return;
+    const filtered = adminNFTGiftsSearch
+        ? adminNFTGiftsData.filter(g => g.name.toLowerCase().includes(adminNFTGiftsSearch.toLowerCase()))
+        : adminNFTGiftsData;
+
+    c.innerHTML = `
+    <div class="adm-block">
+        <div style="display:flex;gap:8px;margin-bottom:12px;">
+            <input id="nft-search" class="input-box" placeholder="🔍 Поиск подарка..." value="${adminNFTGiftsSearch}" oninput="adminNFTGiftsSearch=this.value;renderAdminNFTGifts()" style="margin:0;flex:1;">
+            <button onclick="showAddNFTGiftForm()" style="background:var(--neon);color:#000;border:none;border-radius:10px;padding:0 14px;font-weight:900;cursor:pointer;font-size:20px;flex-shrink:0;">+</button>
+        </div>
+        <div style="font-size:11px;color:rgba(255,255,255,.35);">Всего: ${adminNFTGiftsData.length} · Показано: ${filtered.length}</div>
+    </div>
+    <div class="adm-block" id="nft-gifts-list" style="padding:8px;">
+        ${filtered.map(g => `
+        <div style="display:flex;align-items:center;gap:10px;padding:10px;background:#0d0d1e;border:1px solid rgba(255,255,255,.07);border-radius:12px;margin-bottom:8px;">
+            <div style="width:46px;height:46px;border-radius:10px;background:#111;overflow:hidden;flex-shrink:0;display:flex;align-items:center;justify-content:center;">
+                ${g.imageUrl ? `<img src="${g.imageUrl}" style="width:100%;height:100%;object-fit:cover;" onerror="this.style.display='none'">` : '<div style="font-size:22px;">🎁</div>'}
+            </div>
+            <div style="flex:1;min-width:0;">
+                <div style="font-size:12px;font-weight:800;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${g.name}</div>
+                <div style="font-size:10px;color:rgba(255,255,255,.35);margin-top:2px;">${g.giftUrl ? '<a href="'+g.giftUrl+'" target="_blank" style="color:#00e5ff;">t.me/nft ↗</a>' : 'нет ссылки'}</div>
+            </div>
+            <div style="text-align:right;flex-shrink:0;">
+                <input type="number" value="${g.price||0}" min="0" step="0.01"
+                    onchange="updateNFTGiftPrice('${g._id}', this.value)"
+                    style="width:70px;background:#111;border:1px solid rgba(0,255,136,.3);color:#00ff88;border-radius:8px;padding:5px 7px;font-size:12px;font-weight:800;text-align:right;">
+                <div style="font-size:9px;color:rgba(255,255,255,.25);margin-top:2px;">TON</div>
+            </div>
+            <button onclick="deleteNFTGiftFromCatalog('${g._id}')" style="background:rgba(255,34,85,.12);border:1px solid rgba(255,34,85,.3);color:#ff2255;border-radius:8px;padding:6px 8px;cursor:pointer;font-size:12px;flex-shrink:0;">✕</button>
+        </div>`).join('') || '<div style="text-align:center;padding:20px;color:rgba(255,255,255,.3);">Нет подарков в каталоге</div>'}
+    </div>`;
+}
+
+function showAddNFTGiftForm() {
+    const existing = document.getElementById('add-nft-form');
+    if (existing) { existing.remove(); return; }
+    const form = document.createElement('div');
+    form.id = 'add-nft-form';
+    form.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:999999;display:flex;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(6px);';
+    form.innerHTML = `
+    <div style="background:#0d0d1e;border:1px solid rgba(255,255,255,.1);border-radius:18px;padding:20px;width:100%;max-width:360px;">
+        <div style="font-size:14px;font-weight:800;color:#fff;margin-bottom:4px;">Добавить NFT в каталог</div>
+        <div style="font-size:11px;color:rgba(255,255,255,.35);margin-bottom:16px;">Название и фото берутся из ссылки автоматически</div>
+        <div style="font-size:11px;color:var(--sub);margin-bottom:6px;font-weight:600;">ССЫЛКА (t.me/nft/...)</div>
+        <input id="nft-add-url" class="input-box" placeholder="https://t.me/nft/GiftName" style="margin-bottom:12px;">
+        <div style="font-size:11px;color:var(--sub);margin-bottom:6px;font-weight:600;">ЦЕНА TON (0 = авто с Fragment)</div>
+        <input id="nft-add-price" class="input-box" type="number" placeholder="0.00" step="0.01" min="0" style="margin-bottom:16px;">
+        <div style="display:flex;gap:8px;">
+            <button onclick="document.getElementById('add-nft-form').remove()" style="flex:1;padding:12px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);color:rgba(255,255,255,.5);border-radius:10px;cursor:pointer;font-weight:700;">Отмена</button>
+            <button onclick="addNFTToCatalog()" style="flex:2;padding:12px;background:var(--neon);color:#000;border:none;border-radius:10px;cursor:pointer;font-weight:900;">Добавить</button>
+        </div>
+    </div>`;
+    document.body.appendChild(form);
+}
+
+async function addNFTToCatalog() {
+    const url = document.getElementById('nft-add-url')?.value?.trim();
+    const price = parseFloat(document.getElementById('nft-add-price')?.value) || 0;
+    if (!url) return showToast('Укажи ссылку');
+    const btn = document.querySelector('#add-nft-form button:last-child');
+    if (btn) { btn.disabled=true; btn.innerText='...'; }
+    try {
+        const r = await fetch('/api/admin/nft_catalog_add', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pass:adminPass, giftUrl:url, price})});
+        const d = await r.json();
+        document.getElementById('add-nft-form')?.remove();
+        if (r.ok) { showToast('✅ Добавлено: ' + (d.gift?.name||'')); loadAdminNFTGifts(); }
+        else showToast('❌ ' + (d.error||'Ошибка'));
+    } catch(e) { showToast('Ошибка'); }
+}
+
+async function updateNFTGiftPrice(giftId, newPrice) {
+    try {
+        const r = await fetch('/api/admin/nft_catalog_price', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pass:adminPass, giftId, price: parseFloat(newPrice)||0})});
+        if (r.ok) showToast('✅ Цена обновлена');
+        else showToast('❌ Ошибка сохранения');
+    } catch(e) {}
+}
+
+async function deleteNFTGiftFromCatalog(giftId) {
+    if (!confirm('Удалить из каталога?')) return;
+    try {
+        const r = await fetch('/api/admin/nft_catalog_delete', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pass:adminPass, giftId})});
+        if (r.ok) { showToast('Удалено'); loadAdminNFTGifts(); }
+    } catch(e) {}
+}
 
 function startSpinAnim() {
     let frame = 0;
