@@ -231,6 +231,17 @@ const GiftSchema = new mongoose.Schema({
 });
 const Gift = mongoose.model('Gift', GiftSchema);
 
+// ════ NFT CATALOG (Admin-managed list of all Telegram gifts) ════
+const NFTCatalogSchema = new mongoose.Schema({
+    name:      String,
+    imageUrl:  { type: String, default: '' },
+    giftUrl:   { type: String, default: '' },
+    price:     { type: Number, default: 0 },   // 0 = auto from Fragment
+    createdAt: { type: Date, default: Date.now }
+});
+const NFTCatalog = mongoose.model('NFTCatalog', NFTCatalogSchema);
+
+
 
 async function logAdmin(action) {
     try { await AdminLog.create({ action }); } catch(e) {}
@@ -2367,56 +2378,26 @@ app.post('/webhook/gift', async (req, res) => {
 });
 
 
-// ════ FRAGMENT API — Gift Price Fetching ════
-// ENV VARS TO ADD IN RENDER:
-//   FRAGMENT_API_KEY = ваш ключ от Fragment API
-//   (GIFT_PRICE_API_URL и GIFT_PRICE_API_KEY тоже работают как алиасы)
+// ════ GIFT PRICE — From Fragment API (optional) ════
+// Set FRAGMENT_API_KEY in Render Environment to enable auto-pricing
+// If not set, price = 0 (set manually in admin NFT Catalog)
 async function fetchGiftPrice(giftUrl) {
-    const apiKey = process.env.FRAGMENT_API_KEY
-                || process.env.GIFT_PRICE_API_KEY
-                || process.env.GIFT_PRICE_API_URL;  // legacy alias
-    if (!apiKey) return 0;
+    const apiKey = process.env.FRAGMENT_API_KEY || process.env.GIFT_PRICE_API_KEY;
+    if (!apiKey || !giftUrl) return 0;
     try {
-        // Fragment API endpoint для NFT gifts
-        // Документация: https://fragment.com/api
-        // Метод: getCollectionInfo или getNftItem по slug
-        // Извлекаем slug из ссылки: t.me/nft/GiftName-123 → GiftName-123
-        const slugMatch = giftUrl.match(/t\.me\/nft\/([^/?&#]+)/i)
-                       || giftUrl.match(/fragment\.com\/gift\/([^/?&#]+)/i);
+        const slugMatch = giftUrl.match(/t\.me\/nft\/([^/?&#]+)/i) || giftUrl.match(/fragment\.com\/gift\/([^/?&#]+)/i);
         if (!slugMatch) return 0;
         const slug = slugMatch[1];
-
-        // Fragment JSON API
         const r = await fetch('https://api.fragment.com/api', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${apiKey}`
-            },
-            body: JSON.stringify({
-                '@type': 'getCollectionInfo',
-                'collection': slug
-            })
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+            body: JSON.stringify({ '@type': 'getCollectionInfo', 'collection': slug })
         });
         if (!r.ok) return 0;
         const d = await r.json();
-        // Fragment returns floor price in nanotons
         const nanotons = d?.floor_price || d?.floorPrice || d?.price || 0;
-        if (nanotons > 0) return Math.round(Number(nanotons) / 1e9 * 100) / 100; // nanotons → TON
-        // Fallback: try getCollectionItems
-        const r2 = await fetch('https://api.fragment.com/api', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-            body: JSON.stringify({ '@type': 'getNftCollectionItems', 'collection': slug, 'count': 1, 'sort': 'price_asc' })
-        });
-        if (!r2.ok) return 0;
-        const d2 = await r2.json();
-        const itemPrice = d2?.items?.[0]?.price || 0;
-        return itemPrice > 0 ? Math.round(Number(itemPrice) / 1e9 * 100) / 100 : 0;
-    } catch(e) {
-        console.log('[Fragment API] Error:', e.message);
-        return 0;
-    }
+        return nanotons > 0 ? Math.round(Number(nanotons) / 1e9 * 100) / 100 : 0;
+    } catch(e) { return 0; }
 }
 
 // ── Gift: list user gifts ──
@@ -2544,6 +2525,83 @@ app.post('/api/admin/delete_gift', checkAdmin, async (req, res) => {
         const { giftId } = req.body;
         await Gift.findByIdAndDelete(giftId);
         res.json({ ok: true });
+    } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Admin: NFT Catalog list ──
+app.post('/api/admin/nft_gifts_catalog', checkAdmin, async (req, res) => {
+    try {
+        const gifts = await NFTCatalog.find().sort({ name: 1 });
+        res.json({ gifts });
+    } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Admin: Add NFT to catalog ──
+app.post('/api/admin/nft_catalog_add', checkAdmin, async (req, res) => {
+    try {
+        const { giftUrl, price } = req.body;
+        if (!giftUrl) return res.status(400).json({ error: 'giftUrl required' });
+        // Check if already exists
+        const existing = await NFTCatalog.findOne({ giftUrl });
+        if (existing) return res.status(400).json({ error: 'Уже в каталоге' });
+        // Resolve name + image from URL
+        const resolved = await resolveTelegramGift(giftUrl);
+        const autoPrice = (price && price > 0) ? Number(price) : (await fetchGiftPrice(giftUrl));
+        const gift = await NFTCatalog.create({
+            name: resolved.name || giftUrl,
+            imageUrl: resolved.imageUrl || '',
+            giftUrl,
+            price: autoPrice || resolved.price || 0
+        });
+        res.json({ ok: true, gift });
+    } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Admin: Update NFT price in catalog ──
+app.post('/api/admin/nft_catalog_price', checkAdmin, async (req, res) => {
+    try {
+        const { giftId, price } = req.body;
+        await NFTCatalog.findByIdAndUpdate(giftId, { price: Number(price) || 0 });
+        res.json({ ok: true });
+    } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Admin: Delete NFT from catalog ──
+app.post('/api/admin/nft_catalog_delete', checkAdmin, async (req, res) => {
+    try {
+        await NFTCatalog.findByIdAndDelete(req.body.giftId);
+        res.json({ ok: true });
+    } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Gift: Sell gift — credit price to balance ──
+app.post('/api/gifts/sell', async (req, res) => {
+    try {
+        const { id, giftId } = req.body;
+        const user = await User.findOne({ id: String(id) });
+        if (!user || user.isBlocked) return res.status(403).json({ error: 'Заблокирован' });
+        const gift = await Gift.findOne({ _id: giftId, userId: String(id) });
+        if (!gift) return res.status(404).json({ error: 'Подарок не найден' });
+        if (gift.withdrawRequested) return res.status(400).json({ error: 'Уже обрабатывается' });
+        // Price from catalog if available, else from gift itself
+        let sellPrice = gift.price || 0;
+        if (!sellPrice && gift.giftUrl) {
+            const catItem = await NFTCatalog.findOne({ giftUrl: gift.giftUrl });
+            if (catItem && catItem.price > 0) sellPrice = catItem.price;
+        }
+        if (sellPrice <= 0) return res.status(400).json({ error: 'Цена не задана. Обратитесь к администратору.' });
+        // Credit balance
+        user.balance = Number((user.balance + sellPrice).toFixed(2));
+        if (!user.stats) user.stats = {};
+        user.stats.wins = (user.stats.wins || 0) + 1;
+        user.stats.plus = Number(((user.stats.plus || 0) + sellPrice).toFixed(2));
+        await user.save();
+        // Mark gift as sold
+        gift.withdrawRequested = true;
+        await gift.save();
+        await logAdmin(`Продажа подарка "${gift.name}" от @${user.username||id} за ${sellPrice} TON`);
+        if (bot) bot.sendMessage(id, `Подарок "${gift.name}" продан за ${sellPrice} TON! Баланс пополнен.`).catch(()=>{});
+        res.json({ ok: true, user, soldFor: sellPrice });
     } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
