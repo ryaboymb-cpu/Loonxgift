@@ -64,15 +64,15 @@
         </div>
 
         <div id="page-profile" class="page">
-            <div style="display:flex;justify-content:flex-end;margin-bottom:8px;">
-                <button onclick="openProfileSettings()" style="background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);color:rgba(255,255,255,.7);border-radius:12px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:6px;">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-                    Настройки
-                </button>
-            </div>
             <div class="card" style="text-align:center; padding: 30px 15px;">
                 <img src="" id="profile-ava" style="width:80px; height:80px; border-radius:50%; border:3px solid var(--neon); margin-bottom:15px; object-fit:cover;" onclick="checkAdmin()">
-                <h2 id="profile-name" style="margin-bottom:5px;">-</h2>
+                <div style="display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:5px;">
+                    <h2 id="profile-name" style="margin:0;">-</h2>
+                    <button onclick="openProfileSettings()" style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);color:rgba(255,255,255,.55);border-radius:8px;padding:5px 8px;cursor:pointer;display:flex;align-items:center;gap:4px;font-size:11px;font-weight:700;">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                        Настройки
+                    </button>
+                </div>
                 <div style="color:var(--sub); font-size:12px; font-weight:bold; margin-bottom: 20px; display:flex; align-items:center; justify-content:center; gap:5px;">
                     ID: <span id="profile-id"></span>
                 </div>
@@ -342,10 +342,8 @@
             </svg>
             Промо
         </div>
-        <div class="nav-item" id="nav-gifts" onclick="nav('gifts', this)">
-            <svg viewBox="0 0 24 24" fill="currentColor" stroke="none" style="color:#00ff88;">
-                <path d="M22 7H2v5h20V7zm-9 5v10H4V12h9zm2 0h7v10h-7V12zm-1-5H9.5a2.5 2.5 0 0 1 0-5C11 2 14 7 14 7zm0 0h4.5a2.5 2.5 0 0 0 0-5C17 2 14 7 14 7z" opacity=".9"/>
-            </svg>
+        <div class="nav-item" onclick="nav('gifts', this)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12v10H4V12"/><path d="M22 7H2v5h20V7z"/><path d="M12 22V7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg>
             Подарки
         </div>
         <div class="nav-item" onclick="nav('wallet', this)">
