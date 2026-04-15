@@ -1549,13 +1549,13 @@ function renderAdminContent(tab) {
         const profit = (adData.totalDeposited||0) - (adData.totalWithdrawn||0);
         c.innerHTML = `
 <div class="adm-block" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;text-align:center;">
-    <div class="adm-stat-card" style="border-color:rgba(0,229,255,.2);">
-        <div class="adm-stat-label">Всего депозитов</div>
+    <div class="adm-stat-card" style="border-color:rgba(0,229,255,.2);cursor:pointer;" onclick="adminAdjustStat('deposit')">
+        <div class="adm-stat-label">Депозиты <span style="font-size:14px;color:rgba(0,229,255,.5);">⊕</span></div>
         <div class="adm-stat-val" style="color:var(--neon);">${(adData.totalDeposited||0).toFixed(2)}</div>
         <div class="adm-stat-sub">TON</div>
     </div>
-    <div class="adm-stat-card" style="border-color:rgba(255,34,85,.2);">
-        <div class="adm-stat-label">Всего выводов</div>
+    <div class="adm-stat-card" style="border-color:rgba(255,34,85,.2);cursor:pointer;" onclick="adminAdjustStat('withdraw')">
+        <div class="adm-stat-label">Выводы <span style="font-size:14px;color:rgba(255,34,85,.5);">⊕</span></div>
         <div class="adm-stat-val" style="color:#ff2255;">${(adData.totalWithdrawn||0).toFixed(2)}</div>
         <div class="adm-stat-sub">TON</div>
     </div>
@@ -1873,6 +1873,22 @@ async function adminDeleteGift(giftId) {
     else showToast('Ошибка');
 }
 
+
+
+async function adminAdjustStat(type) {
+    const action = confirm('OK = Прибавить, Отмена = Вычесть') ? 'add' : 'sub';
+    const amount = parseFloat(prompt('Сумма TON для ' + (type==='deposit'?'депозитов':'выводов') + ':'));
+    if (isNaN(amount) || amount <= 0) return;
+    try {
+        const r = await fetch('/api/admin/adjust_stat', {
+            method:'POST', headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({ pass: adminPass, type, action, amount })
+        });
+        const d = await r.json();
+        if (r.ok) { showToast('✅ Обновлено'); loadAdminData(); }
+        else showToast('❌ ' + (d.error||'Ошибка'));
+    } catch(e) { showToast('Ошибка'); }
+}
 
 async function clearLiveBetsAdmin() {
     if (!confirm('Очистить лайв ставки?')) return;
@@ -2507,111 +2523,105 @@ function doBreakBlock(blkEl, blk, onFullyGone) {
 // Несколько кирок в одном столбце падают с задержкой (stagger).
 // Нет дедупликации — каждая кирка работает независимо.
 function spawnPickaxeWorker(blockQueue, pickType, startDelay, onAllDone, onBlockBroken, maxDur) {
-    if (!blockQueue.length) { if (onAllDone) setTimeout(onAllDone, startDelay); return; }
+    if (!blockQueue || !blockQueue.length) { if (onAllDone) setTimeout(onAllDone, startDelay||0); return; }
 
-    // Создаём элемент кирки — позиционируется над первым блоком
     const pEl = document.createElement('img');
     pEl.src = getPickaxeImg(pickType);
-    pEl.style.cssText = 'position:fixed;width:24px;height:24px;z-index:99999;pointer-events:none;image-rendering:pixelated;opacity:0;transform:translate(-50%,-100%) rotate(0deg);transform-origin:bottom center;transition:none;';
+    pEl.style.cssText = 'position:fixed;width:26px;height:26px;z-index:99999;pointer-events:none;image-rendering:pixelated;opacity:0;transform:translate(-50%,-100%) rotate(-20deg);transform-origin:bottom center;';
     document.body.appendChild(pEl);
     _pickaxeEls.add(pEl);
 
-    const removePick = () => { _pickaxeEls.delete(pEl); if (pEl.parentNode) pEl.remove(); };
+    const removePick = () => {
+        _pickaxeEls.delete(pEl);
+        pEl.style.transition = 'opacity 0.12s';
+        pEl.style.opacity = '0';
+        setTimeout(() => { if (pEl.parentNode) pEl.remove(); }, 140);
+    };
 
     let qi = 0;
-    let remainDur = maxDur > 0 ? maxDur : 999;
 
-    // Уничтожить кирку: просто исчезает на месте
-    function breakPick(cb) {
-        pEl.style.transition = 'opacity 0.12s ease';
-        pEl.style.opacity = '0';
-        setTimeout(() => { removePick(); if (cb) cb(); }, 130);
-    }
-
-    function processNext() {
+    function next() {
         if (!mineIsActive) { removePick(); return; }
-        if (qi >= blockQueue.length || remainDur <= 0) {
-            breakPick(() => { if (onAllDone) onAllDone(); });
+        if (qi >= blockQueue.length) { removePick(); if (onAllDone) setTimeout(onAllDone, 60); return; }
+
+        const blk = blockQueue[qi++];
+        if (!blk) { next(); return; }
+
+        const id = 'mc-blk-' + blk.r + '-' + blk.c;
+        const blkEl = document.getElementById(id);
+        if (!blkEl || blkEl.dataset.revealed === '1') {
+            if (onBlockBroken) onBlockBroken(blk.r, blk.c);
+            setTimeout(next, 40);
             return;
         }
 
-        const blk = blockQueue[qi];
-        const blkEl = $(`mc-blk-${blk.r}-${blk.c}`);
-        if (!blkEl || blkEl.dataset.revealed === '1') { qi++; setTimeout(processNext, 20); return; }
-
-        const tntDmg = parseInt(blkEl.dataset.tntDmg || '0');
-        const adjHits = Math.max(1, blk.hits - tntDmg);
-        const hitsCanDo = Math.min(adjHits, remainDur);
-        const willBreak = hitsCanDo >= adjHits;
-
         const rect = blkEl.getBoundingClientRect();
-        if (rect.width === 0) { setTimeout(processNext, 80); return; }
+        if (!rect || rect.width < 1) {
+            // Not yet painted - retry once
+            setTimeout(() => {
+                const rect2 = blkEl.getBoundingClientRect();
+                if (rect2 && rect2.width > 0) {
+                    qi--; next();
+                } else {
+                    // Block not visible - skip it
+                    if (onBlockBroken) onBlockBroken(blk.r, blk.c);
+                    next();
+                }
+            }, 100);
+            return;
+        }
 
-        const bx     = rect.left + rect.width / 2;
-        const hoverY = rect.top - 14;   // 14px above block top
-        const hitY   = rect.top + rect.height * 0.18;  // hits upper portion of block
+        const cx   = rect.left + rect.width / 2;
+        const topY = rect.top - 8;
+        const hitY = rect.top + rect.height * 0.25;
 
-        // Кирка плавно появляется сверху вниз к блоку
+        // Position above block and fade in
         pEl.style.transition = 'none';
-        pEl.style.left    = bx + 'px';
-        pEl.style.top     = (hoverY - 30) + 'px';  // start 30px higher
+        pEl.style.left = cx + 'px';
+        pEl.style.top  = (topY - 18) + 'px';
         pEl.style.opacity = '0';
-        pEl.style.transform = 'translate(-50%, -100%) rotate(0deg)';
+        pEl.style.transform = 'translate(-50%,-100%) rotate(-20deg)';
 
-        qi++;
-        remainDur -= hitsCanDo;
-        blkEl.classList.add('cracking-1');
-
-        // Плавное появление кирки и движение к позиции удара
         requestAnimationFrame(() => {
-            pEl.style.transition = 'top 0.22s ease-out, opacity 0.18s ease';
-            pEl.style.top = hoverY + 'px';
-            pEl.style.opacity = '1';
+            requestAnimationFrame(() => {
+                pEl.style.transition = 'top 0.15s ease-out, opacity 0.12s';
+                pEl.style.top = topY + 'px';
+                pEl.style.opacity = '1';
+            });
         });
-        setTimeout(() => doHits(hitsCanDo, 0), 160);
 
-        function doHits(left, num) {
+        const hits = Math.max(1, blk.hits || 1);
+        setTimeout(() => strike(hits, 0), 180);
+
+        function strike(rem, n) {
             if (!mineIsActive) { removePick(); return; }
-            const swing = num % 2 === 0 ? -22 : 22;
-            // Smooth swing via CSS transition
-            pEl.style.transition = 'transform 0.18s ease-out';
-            pEl.style.transform = `translate(-50%, -100%) rotate(${swing}deg)`;
+            pEl.style.transition = 'transform 0.1s ease-in';
+            pEl.style.transform = 'translate(-50%,-100%) rotate(' + (n%2===0?25:-25) + 'deg)';
 
-            _anim(pEl, 'top', hoverY, hitY, 180, easeIn, () => {
+            _anim(pEl, 'top', topY, hitY, 150, easeIn, () => {
                 if (!mineIsActive) { removePick(); return; }
-                pEl.style.transition = 'transform 0.12s ease-in';
-                pEl.style.transform = 'translate(-50%, -100%) rotate(0deg)';
+                pEl.style.transition = 'transform 0.08s ease-out';
+                pEl.style.transform = 'translate(-50%,-100%) rotate(0deg)';
                 playSound('hit');
                 flashBlock(blkEl);
+                blkEl.classList.remove('cracking-1','cracking-2','cracking-3');
+                if (rem > 1) blkEl.classList.add((n+1)/hits > 0.5 ? 'cracking-2' : 'cracking-1');
+                else         blkEl.classList.add('cracking-3');
 
-                blkEl.classList.remove('cracking-1', 'cracking-2', 'cracking-3');
-                const prog = (num + 1) / adjHits;
-                blkEl.classList.add(prog >= 0.75 && willBreak ? 'cracking-3' : prog >= 0.4 ? 'cracking-2' : 'cracking-1');
-
-                if (left <= 1) {
-                    if (willBreak) {
+                _anim(pEl, 'top', hitY, topY, 170, easeOut, () => {
+                    if (!mineIsActive) { removePick(); return; }
+                    if (rem <= 1) {
                         doBreakBlock(blkEl, blk, () => { if (onBlockBroken) onBlockBroken(blk.r, blk.c); });
-                        _anim(pEl, 'top', hitY, hoverY, 200, easeOut, () => {
-                            if (!mineIsActive) { removePick(); return; }
-                            setTimeout(processNext, 80);
-                        });
+                        setTimeout(next, 80);
                     } else {
-                        _anim(pEl, 'top', hitY, hoverY, 250, easeOut, () => {
-                            if (!mineIsActive) { removePick(); return; }
-                            breakPick(() => { if (onAllDone) onAllDone(); });
-                        });
+                        setTimeout(() => strike(rem-1, n+1), 30);
                     }
-                } else {
-                    _anim(pEl, 'top', hitY, hoverY, 190, easeOut, () => {
-                        if (!mineIsActive) { removePick(); return; }
-                        setTimeout(() => doHits(left - 1, num + 1), 60);
-                    });
-                }
+                });
             });
         }
     }
 
-    setTimeout(processNext, startDelay);
+    setTimeout(next, startDelay || 0);
 }
 
 // ── Взрыв ТНТ (область 2×2 от позиции) ─────────────────────
@@ -3281,18 +3291,21 @@ function openProfileSettings() {
 
 async function toggleUserSetting(key) {
     userSettings[key] = !userSettings[key];
-    // Save locally
     try { localStorage.setItem('lx_user_settings', JSON.stringify(userSettings)); } catch(e) {}
     // Apply immediately
     if (key === 'muteSound') {
         _soundEnabled = !userSettings.muteSound;
+        showToast(userSettings.muteSound ? '🔇 Звук выключен' : '🔊 Звук включён');
     }
-    // Sync to server
+    if (key === 'hideFromLive') {
+        showToast(userSettings.hideFromLive ? '👁 Скрыто из лайва' : '👁 Видно в лайве');
+    }
+    // Sync to server silently
     if (user) {
         fetch('/api/user/settings', {method:'POST',headers:{'Content-Type':'application/json'},
-            body:JSON.stringify({id:user.id, [key]: userSettings[key]})}).catch(()=>{});
+            body:JSON.stringify({id:user.id, hideFromLive: userSettings.hideFromLive, muteSound: userSettings.muteSound})}).catch(()=>{});
     }
-    // Re-render settings panel
+    // Re-render panel
     const ov = document.getElementById('profile-settings-ov');
     if (ov) { ov.remove(); openProfileSettings(); }
 }
@@ -3338,22 +3351,13 @@ async function loadGiftsPage() {
         if (!gifts.length) {
             c.innerHTML = `
             <div style="min-height:72vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center;">
-                <div class="gift-empty-icon" style="
-                    width:108px;height:108px;
-                    background:linear-gradient(145deg,#003d5c 0%,#00608a 50%,#00476b 100%);
-                    border:2px solid rgba(0,229,255,.55);
-                    border-radius:28px;
-                    display:flex;align-items:center;justify-content:center;
-                    margin-bottom:26px;
-                    box-shadow:0 0 0 1px rgba(0,229,255,.15), 0 0 30px rgba(0,229,255,.2);
-                ">
-                    <svg width="58" height="58" viewBox="0 0 24 24" fill="none">
-                        <rect x="2" y="7" width="20" height="5" rx="1.5" fill="rgba(0,229,255,.25)" stroke="#00e5ff" stroke-width="1.4"/>
-                        <rect x="4" y="12" width="16" height="10" rx="1.5" fill="rgba(0,180,255,.18)" stroke="#5dd8ff" stroke-width="1.4"/>
-                        <line x1="12" y1="7" x2="12" y2="22" stroke="#00e5ff" stroke-width="1.5"/>
-                        <path d="M12 7 C12 7 9 2 7 2 C5.3 2 4 3.3 4 5 C4 6.7 5.3 8 7 8 C9 8 12 7 12 7Z" fill="rgba(0,229,255,.3)" stroke="#5dd8ff" stroke-width="1.3"/>
-                        <path d="M12 7 C12 7 15 2 17 2 C18.7 2 20 3.3 20 5 C20 6.7 18.7 8 17 8 C15 8 12 7 12 7Z" fill="rgba(0,229,255,.3)" stroke="#5dd8ff" stroke-width="1.3"/>
-                        <line x1="7" y1="12" x2="17" y2="12" stroke="rgba(0,229,255,.4)" stroke-width="1" stroke-dasharray="2 1.5"/>
+                <div style="margin-bottom:26px;display:flex;align-items:center;justify-content:center;">
+                    <svg width="90" height="90" viewBox="0 0 24 24" fill="none" stroke="#00ff88" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M20 12v10H4V12"/>
+                        <path d="M22 7H2v5h20V7z"/>
+                        <path d="M12 22V7"/>
+                        <path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/>
+                        <path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/>
                     </svg>
                 </div>
                 <div style="font-size:20px;font-weight:900;color:#fff;margin-bottom:8px;">Нет подарков</div>
@@ -3384,10 +3388,18 @@ async function loadGiftsPage() {
                     return `
                     <div onclick="openGiftDetail('${g._id}')" class="gift-card-item"
                         style="background:#0a0a18;border:1px solid rgba(255,255,255,.09);border-radius:16px;overflow:hidden;cursor:pointer;animation:fadeIn .3s ease ${idx*0.05}s both;">
-                        <div class="gift-img-container">
+                        <div class="gift-img-container" style="background:linear-gradient(135deg,#0d1520,#162030);">
                             ${g.imageUrl
-                                ? `<img src="${g.imageUrl}" alt="${g.name}" style="width:100%;height:100%;object-fit:cover;" loading="lazy" onerror="this.style.display='none'">`
-                                : `<svg width="42" height="42" viewBox="0 0 24 24" fill="none"><rect x="2" y="7" width="20" height="5" rx="1.5" fill="#1a2a3a" stroke="#00e5ff" stroke-width="1.2"/><rect x="4" y="12" width="16" height="10" rx="1.5" fill="#111e2e" stroke="#5dd8ff" stroke-width="1.2"/><line x1="12" y1="7" x2="12" y2="22" stroke="#00e5ff" stroke-width="1.4"/><path d="M12 7C12 7 9 2.5 7 2.5C5.5 2.5 4.5 3.5 4.5 5C4.5 6.5 5.5 7.5 7 7.5C9 7.5 12 7 12 7Z" fill="#1a3a4a" stroke="#00e5ff" stroke-width="1"/><path d="M12 7C12 7 15 2.5 17 2.5C18.5 2.5 19.5 3.5 19.5 5C19.5 6.5 18.5 7.5 17 7.5C15 7.5 12 7 12 7Z" fill="#1a3a4a" stroke="#00e5ff" stroke-width="1"/></svg>`}
+                                ? `<img src="${g.imageUrl}" alt="${g.name}" style="width:100%;height:100%;object-fit:cover;" loading="lazy" onerror="this.src='';this.style.display='none';this.parentNode.querySelector('.nft-ph').style.display='flex'">`
+                                : ''}
+                            <div class="nft-ph" style="display:${g.imageUrl?'none':'flex'};flex-direction:column;align-items:center;justify-content:center;width:100%;height:100%;position:absolute;inset:0;">
+                                <svg width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="rgba(0,229,255,.6)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M20 12v10H4V12"/><path d="M22 7H2v5h20V7z"/><path d="M12 22V7"/>
+                                    <path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/>
+                                    <path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/>
+                                </svg>
+                                <div style="font-size:9px;color:rgba(0,229,255,.4);margin-top:5px;font-weight:700;letter-spacing:1px;">NFT</div>
+                            </div>
                             ${priceStr ? `<div class="gift-price-badge">${priceStr}</div>` : ''}
                         </div>
                         <div style="padding:9px 11px 11px;">
