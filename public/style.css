@@ -1833,3 +1833,54 @@ button.btn[style*="neon-blue"] {
     border-color: rgba(0,229,255,.3) !important;
     box-shadow: 0 4px 20px rgba(0,0,0,.4);
 }
+
+/* ════ GIFT PAGE — clean static card ════ */
+.gift-card-item {
+    transition: transform .1s ease, border-color .12s ease;
+    -webkit-tap-highlight-color: transparent;
+}
+.gift-card-item:active { transform: scale(.94); }
+
+/* Gift card image container - no transparency, solid dark bg */
+.gift-img-container {
+    width: 100%;
+    aspect-ratio: 1;
+    background: #0e0e22;
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.gift-img-container img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+/* Price badge on gift card - does NOT overlap content below */
+.gift-price-badge {
+    position: absolute;
+    bottom: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0,0,0,.78);
+    backdrop-filter: blur(6px);
+    border: 1px solid rgba(0,255,136,.35);
+    border-radius: 20px;
+    padding: 3px 12px;
+    font-size: 11px;
+    font-weight: 800;
+    color: #00ff88;
+    white-space: nowrap;
+    pointer-events: none;
+}
+
+/* ════ GIFT DETAIL — clean image, no overlap ════ */
+.gift-detail-img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    display: block;
+    border-radius: 18px;
+}
