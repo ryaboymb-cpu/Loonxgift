@@ -181,6 +181,8 @@ const UserSchema = new mongoose.Schema({
     mineFreeSpins: { type: Number, default: 0 },
     wagerRequired: { type: Number, default: 0 },
     wagerCompleted: { type: Number, default: 0 },
+    hideFromLive: { type: Boolean, default: false },
+    muteSound: { type: Boolean, default: false },
     totalDeposited: { type: Number, default: 0 },
     totalWagered: { type: Number, default: 0 }
 });
@@ -2391,7 +2393,20 @@ app.post('/api/gifts/list', async (req, res) => {
     try {
         const { id } = req.body;
         const gifts = await Gift.find({ userId: String(id), withdrawRequested: false }).sort({ createdAt: -1 });
-        res.json({ gifts });
+        // Enrich each gift with catalog price if gift.price === 0
+        const catalog = await NFTCatalog.find({});
+        const enriched = gifts.map(g => {
+            const obj = g.toObject();
+            if (!obj.price && obj.giftUrl) {
+                const slug = (obj.giftUrl.match(/t\.me\/nft\/([^/?&#]+)/i)||[])[1] || '';
+                const modelN = slug.replace(/-\d+$/, '');
+                const catEntry = catalog.find(c => c.modelName === modelN || c.giftUrl === obj.giftUrl);
+                if (catEntry && catEntry.price > 0) obj.price = catEntry.price;
+                if (catEntry && catEntry.imageUrl && !obj.imageUrl) obj.imageUrl = catEntry.imageUrl;
+            }
+            return obj;
+        });
+        res.json({ gifts: enriched });
     } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -2401,7 +2416,17 @@ app.post('/api/gifts/get', async (req, res) => {
         const { id, giftId } = req.body;
         const gift = await Gift.findOne({ _id: giftId, userId: String(id) });
         if (!gift) return res.status(404).json({ error: 'Не найден' });
-        res.json({ gift });
+        const obj = gift.toObject();
+        if (!obj.price && obj.giftUrl) {
+            const slug = (obj.giftUrl.match(/t\.me\/nft\/([^/?&#]+)/i)||[])[1] || '';
+            const modelN = slug.replace(/-\d+$/, '');
+            const catEntry = await NFTCatalog.findOne({ $or: [{ modelName: modelN }, { giftUrl: obj.giftUrl }] });
+            if (catEntry) {
+                if (catEntry.price > 0) obj.price = catEntry.price;
+                if (catEntry.imageUrl && !obj.imageUrl) obj.imageUrl = catEntry.imageUrl;
+            }
+        }
+        res.json({ gift: obj });
     } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -2607,6 +2632,31 @@ app.post('/api/gifts/sell', async (req, res) => {
         await logAdmin(`Продажа подарка "${gift.name}" от @${user.username||id} за ${sellPrice} TON`);
         if (bot) bot.sendMessage(id, `Подарок "${gift.name}" продан за ${sellPrice} TON! Баланс пополнен.`).catch(()=>{});
         res.json({ ok: true, user, soldFor: sellPrice });
+    } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Admin: clear live bets feed ──
+app.post('/api/admin/clear_live_bets', checkAdmin, async (req, res) => {
+    try {
+        // Delete recent bets from DB (last 200 entries)
+        const recent = await Bet.find().sort({createdAt: -1}).limit(200).select('_id');
+        // We just clear the in-memory live history (server restart clears it anyway)
+        // Client will clear on next reload
+        globalBetHistory = [];
+        res.json({ ok: true });
+    } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── User settings: hide from live, mute ──
+app.post('/api/user/settings', async (req, res) => {
+    try {
+        const { id, hideFromLive, muteSound } = req.body;
+        const user = await User.findOne({ id: String(id) });
+        if (!user) return res.status(404).json({ error: 'Не найден' });
+        if (hideFromLive !== undefined) user.hideFromLive = Boolean(hideFromLive);
+        if (muteSound !== undefined) user.muteSound = Boolean(muteSound);
+        await user.save();
+        res.json({ ok: true, user });
     } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
