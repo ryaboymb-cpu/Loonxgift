@@ -2660,6 +2660,31 @@ app.post('/api/user/settings', async (req, res) => {
     } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
+// ── Admin: adjust deposit/withdraw stats ──
+app.post('/api/admin/adjust_stat', checkAdmin, async (req, res) => {
+    try {
+        const { type, action, amount } = req.body;
+        const amt = Number(amount) || 0;
+        if (amt <= 0) return res.status(400).json({ error: 'Неверная сумма' });
+        // We create a fake deposit or withdraw record to adjust the aggregate
+        if (type === 'deposit') {
+            if (action === 'add') {
+                await Deposit.create({ hash: 'ADJ_'+Date.now(), userId: 'admin', amount: amt, time: getMskTime() });
+            } else {
+                await Deposit.create({ hash: 'ADJ_'+Date.now(), userId: 'admin', amount: -amt, time: getMskTime() });
+            }
+        } else if (type === 'withdraw') {
+            if (action === 'add') {
+                await Withdraw.create({ userId: 'admin', address: 'adjustment', amount: amt, status: 'approved', time: getMskTime() });
+            } else {
+                await Withdraw.create({ userId: 'admin', address: 'adjustment', amount: -amt, status: 'approved', time: getMskTime() });
+            }
+        }
+        await logAdmin(`Корректировка статистики: ${type} ${action} ${amt} TON`);
+        res.json({ ok: true });
+    } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 Server Running on port ${PORT}`);
