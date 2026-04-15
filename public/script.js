@@ -297,7 +297,7 @@ window.onload = async () => {
     applySafeArea(); setTimeout(applySafeArea,300); setTimeout(applySafeArea,1000);
     try{tg.onEvent('safeAreaChanged',applySafeArea);}catch(e){}
     try{tg.onEvent('contentSafeAreaChanged',applySafeArea);}catch(e){}
-    loadBanner(); loadCasinoSound();
+    loadBanner(); loadCasinoSound(); loadUserSettings();
     renderQuickBets();
     loadBanner();
     loadGameSettings(); // Загружаем настройки механик из админки
@@ -366,6 +366,7 @@ window.onload = async () => {
         $('profile-id').innerText = user.id;
         $('profile-id').style.cursor = 'pointer';
         $('profile-id').onclick = () => {
+            // Long press: open TG profile; short tap: copy ID
             navigator.clipboard.writeText(user.id).then(() => showToast('ID скопирован!')).catch(() => {
                 const t = document.createElement('textarea');
                 t.value = user.id; document.body.appendChild(t); t.select(); document.execCommand('copy'); t.remove();
@@ -1438,7 +1439,7 @@ async function adminViewUser(userId, page = 1) {
 <div class="adm-block" style="display:flex;align-items:center;gap:12px;">
     <img src="${u.photo||'https://cdn-icons-png.flaticon.com/512/149/149071.png'}" style="width:52px;height:52px;border-radius:50%;border:2px solid var(--neon);object-fit:cover;flex-shrink:0;">
     <div style="flex:1;min-width:0;">
-        <a href="tg://user?id=${u.id}" style="font-size:16px;font-weight:900;color:#fff;margin-bottom:2px;text-decoration:none;display:block;">
+        <a href="${/iphone|ipad|ipod/i.test(navigator.userAgent)?'https://t.me/@id'+u.id:'tg://openmessage?user_id='+u.id}" style="font-size:16px;font-weight:900;color:#fff;margin-bottom:2px;text-decoration:none;display:block;">
             ${u.username||u.id||'Без имени'} <span style="font-size:11px;color:#00e5ff;">↗</span>
         </a>
         <a href="tg://user?id=${u.id}" style="font-size:12px;color:#00e5ff;text-decoration:none;">ID: ${u.id} ↗</a>
@@ -1645,6 +1646,12 @@ function renderAdminContent(tab) {
         ];
         const maintGames=['crash','mines','coinflip','battle','spin','mine','upgrade','case'];
         c.innerHTML = `
+<div class="adm-block" style="margin-bottom:10px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0;">
+        <div class="adm-block-title" style="margin:0;">УПРАВЛЕНИЕ</div>
+    </div>
+    <button onclick="clearLiveBetsAdmin()" style="margin-top:10px;background:rgba(255,100,0,.1);border:1px solid rgba(255,100,0,.3);color:#ff6400;border-radius:10px;padding:11px 16px;font-size:12px;font-weight:800;cursor:pointer;width:100%;">🗑 Очистить лайв ставки</button>
+</div>
 <div class="adm-block">
     <div class="adm-block-title">RTP ПО ИГРАМ</div>
     <div class="adm-rtp-grid">
@@ -1866,6 +1873,17 @@ async function adminDeleteGift(giftId) {
     else showToast('Ошибка');
 }
 
+
+async function clearLiveBetsAdmin() {
+    if (!confirm('Очистить лайв ставки?')) return;
+    try {
+        const r = await fetch('/api/admin/clear_live_bets', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pass:adminPass})});
+        if(r.ok) {
+            if($('feed-list')) $('feed-list').innerHTML = '';
+            showToast('✅ Лайв ставки очищены');
+        }
+    } catch(e) { showToast('Ошибка'); }
+}
 
 async function showAdminBalanceAdjust() {
     const uid = prompt('ID пользователя:');
@@ -2938,10 +2956,20 @@ function revealMineShaft(grid, blockWins, serverWin, balanceBefore, chestMults, 
     let totalServerWins = 0;
     for (let r = 0; r < MC_ROWS; r++) {
         for (let c = 0; c < MC_COLS; c++) {
-            const bw = (blockWins && Array.isArray(blockWins[r])) ? (Number(blockWins[r][c]) || 0) : 0;
+            let bw = 0;
+            if (blockWins) {
+                const row = Array.isArray(blockWins) ? blockWins[r] : (blockWins[r] || null);
+                if (row != null) {
+                    bw = Array.isArray(row) ? (Number(row[c]) || 0) : (Number(row[c]) || 0);
+                }
+            }
             winMap[`${r},${c}`] = bw;
             if (bw > 0) totalServerWins += bw;
         }
+    }
+    // Debug: log if we got wins from server
+    if (serverWin > 0 && totalServerWins === 0) {
+        console.warn('[Mine] Server win =', serverWin, 'but no winning blocks in blockWins!', blockWins);
     }
 
     // STEP 4: Group winning blocks by column (EXACTLY what server broke)
@@ -3202,6 +3230,80 @@ function extractNFTSlug(url) {
     if (!url) return '';
     const m = url.match(/t\.me\/nft\/([^/?&#]+)/i) || url.match(/\/nft\/([^/?&#]+)/i);
     return m ? m[1] : '';
+}
+
+
+let userSettings = { hideFromLive: false, muteSound: false };
+
+function openProfileSettings() {
+    const existing = document.getElementById('profile-settings-ov');
+    if (existing) { existing.remove(); return; }
+    
+    // Load saved settings
+    try {
+        const saved = JSON.parse(localStorage.getItem('lx_user_settings') || '{}');
+        userSettings = { ...userSettings, ...saved };
+    } catch(e) {}
+    
+    const ov = document.createElement('div');
+    ov.id = 'profile-settings-ov';
+    ov.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.75);backdrop-filter:blur(8px);display:flex;align-items:flex-end;justify-content:center;animation:fadeIn .2s;';
+    ov.innerHTML = `
+    <div style="background:#0d0d1e;border:1px solid rgba(255,255,255,.1);border-radius:24px 24px 0 0;padding:24px 20px 36px;width:100%;max-width:420px;">
+        <div style="width:36px;height:4px;background:rgba(255,255,255,.15);border-radius:2px;margin:0 auto 20px;"></div>
+        <div style="font-size:15px;font-weight:800;color:#fff;margin-bottom:18px;">Настройки</div>
+        
+        <div style="display:flex;flex-direction:column;gap:4px;">
+            <label style="display:flex;justify-content:space-between;align-items:center;padding:14px 16px;background:#111;border-radius:12px;cursor:pointer;">
+                <div>
+                    <div style="font-size:13px;font-weight:700;color:#fff;margin-bottom:2px;">Скрыть из лайв ставок</div>
+                    <div style="font-size:11px;color:rgba(255,255,255,.4);">Ваши ставки не будут видны другим</div>
+                </div>
+                <div onclick="toggleUserSetting('hideFromLive')" id="toggle-hideFromLive" style="width:44px;height:24px;background:${userSettings.hideFromLive?'var(--neon)':'rgba(255,255,255,.15)'};border-radius:12px;position:relative;transition:background .2s;cursor:pointer;">
+                    <div style="position:absolute;top:2px;left:${userSettings.hideFromLive?'22':'2'}px;width:20px;height:20px;background:#fff;border-radius:50%;transition:left .2s;box-shadow:0 1px 4px rgba(0,0,0,.3);"></div>
+                </div>
+            </label>
+            <label style="display:flex;justify-content:space-between;align-items:center;padding:14px 16px;background:#111;border-radius:12px;cursor:pointer;">
+                <div>
+                    <div style="font-size:13px;font-weight:700;color:#fff;margin-bottom:2px;">Выключить звук</div>
+                    <div style="font-size:11px;color:rgba(255,255,255,.4);">Отключить все звуки игры</div>
+                </div>
+                <div onclick="toggleUserSetting('muteSound')" id="toggle-muteSound" style="width:44px;height:24px;background:${userSettings.muteSound?'var(--neon)':'rgba(255,255,255,.15)'};border-radius:12px;position:relative;transition:background .2s;cursor:pointer;">
+                    <div style="position:absolute;top:2px;left:${userSettings.muteSound?'22':'2'}px;width:20px;height:20px;background:#fff;border-radius:50%;transition:left .2s;box-shadow:0 1px 4px rgba(0,0,0,.3);"></div>
+                </div>
+            </label>
+        </div>
+        <button onclick="document.getElementById('profile-settings-ov').remove()" style="width:100%;margin-top:16px;padding:14px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);color:rgba(255,255,255,.6);border-radius:14px;font-weight:700;font-size:14px;cursor:pointer;">Закрыть</button>
+    </div>`;
+    ov.addEventListener('click', e => { if (e.target === ov) ov.remove(); });
+    document.body.appendChild(ov);
+}
+
+async function toggleUserSetting(key) {
+    userSettings[key] = !userSettings[key];
+    // Save locally
+    try { localStorage.setItem('lx_user_settings', JSON.stringify(userSettings)); } catch(e) {}
+    // Apply immediately
+    if (key === 'muteSound') {
+        _soundEnabled = !userSettings.muteSound;
+    }
+    // Sync to server
+    if (user) {
+        fetch('/api/user/settings', {method:'POST',headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({id:user.id, [key]: userSettings[key]})}).catch(()=>{});
+    }
+    // Re-render settings panel
+    const ov = document.getElementById('profile-settings-ov');
+    if (ov) { ov.remove(); openProfileSettings(); }
+}
+
+// Load settings on startup
+function loadUserSettings() {
+    try {
+        const saved = JSON.parse(localStorage.getItem('lx_user_settings') || '{}');
+        userSettings = { ...userSettings, ...saved };
+        if (userSettings.muteSound) _soundEnabled = false;
+    } catch(e) {}
 }
 
 function goToGiftPay() {
