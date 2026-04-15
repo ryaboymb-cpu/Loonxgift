@@ -1438,8 +1438,8 @@ async function adminViewUser(userId, page = 1) {
 <div class="adm-block" style="display:flex;align-items:center;gap:12px;">
     <img src="${u.photo||'https://cdn-icons-png.flaticon.com/512/149/149071.png'}" style="width:52px;height:52px;border-radius:50%;border:2px solid var(--neon);object-fit:cover;flex-shrink:0;">
     <div style="flex:1;min-width:0;">
-        <a href="https://t.me/${u.username||''}" target="_blank" style="font-size:16px;font-weight:900;color:#fff;margin-bottom:2px;text-decoration:none;display:block;">
-            ${u.username||'Без имени'} <span style="font-size:11px;color:#00e5ff;opacity:0.7;">↗</span>
+        <a href="tg://user?id=${u.id}" style="font-size:16px;font-weight:900;color:#fff;margin-bottom:2px;text-decoration:none;display:block;">
+            ${u.username||u.id||'Без имени'} <span style="font-size:11px;color:#00e5ff;">↗</span>
         </a>
         <a href="tg://user?id=${u.id}" style="font-size:12px;color:#00e5ff;text-decoration:none;">ID: ${u.id} ↗</a>
         ${u.isBlocked?'<span class="adm-badge-ban" style="font-size:11px;">ЗАБЛОКИРОВАН</span>':''}
@@ -1864,6 +1864,19 @@ async function adminDeleteGift(giftId) {
     const r = await fetch('/api/admin/delete_gift', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pass:adminPass,giftId})});
     if(r.ok) { showToast('Удалено'); adminViewGifts(); }
     else showToast('Ошибка');
+}
+
+
+async function showAdminBalanceAdjust() {
+    const uid = prompt('ID пользователя:');
+    if (!uid) return;
+    const action = confirm('OK = Выдать, Отмена = Списать') ? 'add' : 'sub';
+    const amount = parseFloat(prompt('Сумма TON:'));
+    if (isNaN(amount) || amount <= 0) return showToast('Неверная сумма');
+    const r = await fetch('/api/admin/edit_balance', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pass:adminPass,userId:uid,action,amount})});
+    const d = await r.json();
+    if(r.ok) showToast('✅ ' + (action==='add'?'+':'-') + amount + ' TON → ' + uid);
+    else showToast('❌ ' + (d.error||'Ошибка'));
 }
 
 async function adminW(wId, action) {
@@ -2880,7 +2893,7 @@ function revealMineShaft(grid, blockWins, serverWin, balanceBefore, chestMults, 
     const HITS = { grass:1, dirt:1, stone:1, redstone:2, gold:2, gold_block:2, diamond:3, diamond_block:3, obsidian:4 };
     grid_current = grid;
 
-    // 1. Обновляем вид блоков
+    // STEP 1: Reset all blocks visually
     for (let r = 0; r < MC_ROWS; r++) {
         for (let c = 0; c < MC_COLS; c++) {
             const el = $(`mc-blk-${r}-${c}`);
@@ -2894,84 +2907,58 @@ function revealMineShaft(grid, blockWins, serverWin, balanceBefore, chestMults, 
         }
     }
 
-    // 2. Читаем hotbar
+    // STEP 2: Read hotbar for books/tnt/pick types (visual only)
     const hotbar = currentHotbar || [];
-    const picks = [], tnts = [];
+    const tnts = [];
     let bookCount = 0;
+    const colPickType = {}; // col -> best pickaxe type string
+    const colPickIdx  = {}; // col -> hotbar slot index (for removing from display)
+    const RANK = {wooden:0,stone:1,iron:2,golden:3,diamond:4};
+
     hotbar.forEach((slot, idx) => {
         if (!slot) return;
         const col = idx % MC_COLS;
-        if (slot.type === 'pickaxe') picks.push({ col, idx, pType: slot.pickaxeType || 'wooden' });
-        else if (slot.type === 'tnt') tnts.push({ col, idx });
-        else if (slot.type === 'book') bookCount++;
+        if (slot.type === 'tnt') {
+            tnts.push({ col, idx });
+        } else if (slot.type === 'pickaxe') {
+            const pt = slot.pickaxeType || 'wooden';
+            if (colPickType[col] === undefined || (RANK[pt]||0) > (RANK[colPickType[col]]||0)) {
+                colPickType[col] = pt;
+                colPickIdx[col] = idx;
+            }
+        } else if (slot.type === 'book') {
+            bookCount++;
+        }
     });
     if (bookCount > 0) mineBookCount += bookCount;
 
-    // 3. winMap — точно какие блоки сломал СЕРВЕР
+    // STEP 3: Build winMap from server data
+    // blockWins[r][c] = win amount (> 0 means this block was broken and earns this much)
     const winMap = {};
+    let totalServerWins = 0;
     for (let r = 0; r < MC_ROWS; r++) {
         for (let c = 0; c < MC_COLS; c++) {
-            const bw = (blockWins && blockWins[r] != null && blockWins[r][c] != null) ? Number(blockWins[r][c]) : 0;
+            const bw = (blockWins && Array.isArray(blockWins[r])) ? (Number(blockWins[r][c]) || 0) : 0;
             winMap[`${r},${c}`] = bw;
+            if (bw > 0) totalServerWins += bw;
         }
     }
 
-    // 4. ★ КЛЮЧЕВОЙ ФИЧ: строим блоки для анимации ТОЛЬКО из того что сервер сломал
-    // НЕ используем client-side durability — она может отличаться от серверной
-    const tntCols = new Set(tnts.map(t => t.col));
-
-    // Группируем кирки по столбцам (для выбора типа анимации)
-    const pickByCol = {};
-    picks.forEach(ps => {
-        if (!pickByCol[ps.col]) pickByCol[ps.col] = [];
-        pickByCol[ps.col].push(ps);
-    });
-
-    // Для каждого столбца: берём ВСЕ блоки которые сервер пометил как сломанные (win>=0 но блок должен быть в hotbar-column)
-    // Если у столбца есть кирка — анимируем её
-    // Если win=0 но блок в столбце с киркой — тоже анимируем (визуальный удар)
-    const colWork = {};
-    Object.entries(pickByCol).forEach(([colStr, colPicks]) => {
-        const col = parseInt(colStr);
-        if (tntCols.has(col)) return;
-
-        // Блоки которые сервер сломал в этом столбце (win > 0)
-        // ПЛЮС блоки которые должна визуально сломать кирка (первые N по прочности)
-        const serverBrokenInCol = [];
+    // STEP 4: Group winning blocks by column (EXACTLY what server broke)
+    // Column key exists only if there's at least one winning block in it
+    const colWinBlocks = {}; // col -> [{r,c,type,win,hits}]
+    for (let c = 0; c < MC_COLS; c++) {
         for (let r = 0; r < MC_ROWS; r++) {
-            if ((winMap[`${r},${col}`] || 0) > 0) {
-                const el = $(`mc-blk-${r}-${col}`);
-                if (el && el.dataset.revealed !== '1') {
-                    const type = grid[r][col];
-                    serverBrokenInCol.push({ r, c: col, type: type||'stone', win: winMap[`${r},${col}`], hits: HITS[type||'stone']||1 });
-                }
+            const bw = winMap[`${r},${c}`];
+            if (bw > 0) {
+                if (!colWinBlocks[c]) colWinBlocks[c] = [];
+                const type = grid[r][c] || 'stone';
+                colWinBlocks[c].push({ r, c, type, win: bw, hits: HITS[type]||1 });
             }
         }
+    }
 
-        if (!serverBrokenInCol.length) return;
-
-        // Назначаем ВСЕ сломанные блоки первой (лучшей) кирке в столбце
-        // Если кирок несколько — делим поровну для красивой анимации
-        colWork[col] = [];
-        const bestPick = colPicks.sort((a,b) => {
-            const RANK = {wooden:0,stone:1,iron:2,golden:3,diamond:4};
-            return (RANK[b.pType]||0) - (RANK[a.pType]||0);
-        })[0];
-
-        // Если одна кирка — все блоки ей
-        // Если несколько — делим
-        if (colPicks.length === 1) {
-            colWork[col].push({ pType: bestPick.pType, blocks: serverBrokenInCol, dur: 999, ps: bestPick });
-        } else {
-            const chunkSize = Math.ceil(serverBrokenInCol.length / colPicks.length);
-            colPicks.forEach((ps, pi) => {
-                const myBlocks = serverBrokenInCol.slice(pi * chunkSize, (pi + 1) * chunkSize);
-                if (myBlocks.length) colWork[col].push({ pType: ps.pType, blocks: myBlocks, dur: 999, ps });
-            });
-        }
-    });
-
-    // 5. Трекаем сломанные блоки для сундуков
+    // STEP 5: Track broken blocks for chests
     const liveColBroken = Array(MC_COLS).fill(0);
     for (let c = 0; c < MC_COLS; c++) {
         for (let r = 0; r < MC_ROWS; r++) {
@@ -2994,89 +2981,84 @@ function revealMineShaft(grid, blockWins, serverWin, balanceBefore, chestMults, 
     mineIsActive = true;
     mineRunningTotal = 0;
 
-    // 6. Фаза ТНТ — 2×2 взрыв во все стороны
-    const tntPhase = tnts.length > 0 ? tnts.length * 600 + 400 : 0;
+    // STEP 6: TNT phase
+    const tntPhase = tnts.length > 0 ? tnts.length * 560 + 300 : 0;
     tnts.forEach((ts, i) => {
         setTimeout(() => {
             if (!mineIsActive) return;
-            // Убираем из хотбара
             const ir = Math.floor(ts.idx / MC_COLS), ic = ts.idx % MC_COLS;
             const iCell = $(`inv-${ir}-${ic}`);
             if (iCell) { iCell.innerHTML=''; iCell.className='inv-cell'; delete iCell.dataset.slotType; }
 
-            // Находим целевые блоки 2×2 вокруг TNT-позиции (не ограничено одним столбцом)
-            // TNT падает в первый блок столбца, взрывает 2×2 вокруг него
-            const colQ = [];
+            // Find first unrevealed block in column
+            let firstBlk = null;
             for (let r = 0; r < MC_ROWS; r++) {
                 const el = $(`mc-blk-${r}-${ts.col}`);
-                if (!el || el.dataset.revealed==='1') continue;
-                const type = grid[r][ts.col]; if (!type) continue;
-                colQ.push({ r, c: ts.col, type, win: winMap[`${r},${ts.col}`] || 0, hits:1 });
-                break; // первый нетронутый блок
+                if (el && el.dataset.revealed !== '1' && grid[r][ts.col]) {
+                    firstBlk = { r, c: ts.col, type: grid[r][ts.col], win: winMap[`${r},${ts.col}`]||0, hits:1 };
+                    break;
+                }
             }
-            if (!colQ[0]) { playSound('explode'); return; }
-            const targetR = colQ[0].r;
-            const targetC = ts.col;
+            if (!firstBlk) { playSound('explode'); return; }
 
-            dropTNT(ts.col, colQ[0], () => {
-                // Взрыв 2×2: все 4 блока вокруг
+            dropTNT(ts.col, firstBlk, () => {
+                // Break 2x2 area around first block
                 const blast = [
-                    [targetR, targetC],
-                    [targetR, targetC+1],
-                    [targetR+1, targetC],
-                    [targetR+1, targetC+1],
+                    [firstBlk.r, firstBlk.c],
+                    [firstBlk.r, firstBlk.c+1],
+                    [firstBlk.r+1, firstBlk.c],
+                    [firstBlk.r+1, firstBlk.c+1],
                 ];
                 blast.forEach(([br, bc], bi) => {
-                    if (br < 0 || br >= MC_ROWS || bc < 0 || bc >= MC_COLS) return;
+                    if (br < 0||br>=MC_ROWS||bc<0||bc>=MC_COLS) return;
                     const blkEl = $(`mc-blk-${br}-${bc}`);
-                    if (!blkEl || blkEl.dataset.revealed==='1') return;
-                    const type = grid[br][bc]; if (!type) return;
-                    const blk = { r:br, c:bc, type, win: winMap[`${br},${bc}`] || 0, hits:1 };
-                    setTimeout(() => {
-                        doBreakBlock(blkEl, blk, () => onBlockBroken(br, bc));
-                    }, bi * 80);
+                    if (!blkEl||blkEl.dataset.revealed==='1'||!grid[br][bc]) return;
+                    const blk = {r:br,c:bc,type:grid[br][bc],win:winMap[`${br},${bc}`]||0,hits:1};
+                    setTimeout(()=>{ doBreakBlock(blkEl,blk,()=>onBlockBroken(br,bc)); }, bi*90);
                 });
             });
-        }, i * 600);
+        }, i * 560);
     });
 
-    // 7. Фаза кирок: все столбцы параллельно, внутри столбца — stagger 200ms
+    // STEP 7: Pickaxe phase - ONE pickaxe per column with winning blocks
+    // Start all columns in parallel (natural feel)
     setTimeout(() => {
-        Object.entries(colWork).forEach(([colStr, workList]) => {
-            workList.forEach(({ pType, blocks, dur, ps }, pi) => {
-                // Убираем кирку из хотбара
-                const ir = Math.floor(ps.idx / MC_COLS), ic = ps.idx % MC_COLS;
+        let colDelay = 0;
+        Object.entries(colWinBlocks).forEach(([colStr, winBlocks]) => {
+            const col = parseInt(colStr);
+            // Skip TNT columns (already handled)
+            if (tnts.some(t => t.col === col)) return;
+
+            const pType = colPickType[col] || 'wooden';
+            const pIdx  = colPickIdx[col];
+
+            // Remove pickaxe from hotbar display
+            if (pIdx !== undefined) {
+                const ir = Math.floor(pIdx / MC_COLS), ic = pIdx % MC_COLS;
                 const iCell = $(`inv-${ir}-${ic}`);
                 if (iCell) { iCell.innerHTML=''; iCell.className='inv-cell'; delete iCell.dataset.slotType; delete iCell.dataset.pickType; }
+            }
 
-                const delay = pi * 200; // stagger между кирками в одном столбце
-                if (blocks.length > 0) {
-                    spawnPickaxeWorker(blocks, pType, delay, null, onBlockBroken, dur);
-                }
-            });
+            // Spawn pickaxe for this column - hits all winning blocks in sequence
+            spawnPickaxeWorker(winBlocks, pType, colDelay, null, onBlockBroken, 999);
+            colDelay += 80; // stagger columns slightly for visual variety
         });
     }, tntPhase);
 
-    // 8. Длительность: максимальное время по всем столбцам
-    let maxMs = 0;
-    Object.values(colWork).forEach(workList => {
-        let t = 0;
-        workList.forEach(({ blocks, dur }, pi) => {
-            let sub = pi * 200, rem = dur;
-            blocks.forEach(blk => {
-                const hc = Math.min(blk.hits, rem);
-                sub += hc * (170 + 200 + 60) + 400;
-                rem -= hc;
-            });
-            t = Math.max(t, sub);
-        });
-        maxMs = Math.max(maxMs, t);
+    // STEP 8: Calculate animation duration
+    let maxAnim = 0;
+    Object.values(colWinBlocks).forEach(winBlocks => {
+        // Each block: 160ms appear + hits*(180+200+60) + 80ms finish
+        let t = 200;
+        winBlocks.forEach(blk => { t += blk.hits * 440 + 200; });
+        maxAnim = Math.max(maxAnim, t);
     });
-    const estReveal = tntPhase + maxMs + 1400;
+    const estReveal = tntPhase + maxAnim + 1000;
 
-    // 9. Финал
+    // STEP 9: Final - sync win display with server
     setTimeout(() => {
         if (!mineIsActive) return;
+        // Force sync to server win (in case any blocks were missed visually)
         mineRunningTotal = serverWin;
         const rt = $('mine-running-total');
         if (rt) {
@@ -3086,7 +3068,7 @@ function revealMineShaft(grid, blockWins, serverWin, balanceBefore, chestMults, 
         if (serverWin > 0) {
             playSound('win');
             const balSpan = $('bal-val');
-            if (balSpan) animateCounter(balSpan, balanceBefore, balanceBefore + serverWin, 1000);
+            if (balSpan) animateCounter(balSpan, balanceBefore, balanceBefore + serverWin, 900);
             flyToBalance(serverWin);
             showToast('+' + serverWin.toFixed(2) + ' TON');
         }
@@ -3102,7 +3084,6 @@ function revealMineShaft(grid, blockWins, serverWin, balanceBefore, chestMults, 
 
     return estReveal + 400;
 }
-
 
 function setupMineTextures() {
     ['/sprites/block_grass.png','/sprites/block_dirt.png','/sprites/block_stone.png',
@@ -3216,6 +3197,13 @@ function showFreeSpinActivation(count) {
 // ════════════════════════════════════════
 //  GIFTS PAGE
 // ════════════════════════════════════════
+
+function extractNFTSlug(url) {
+    if (!url) return '';
+    const m = url.match(/t\.me\/nft\/([^/?&#]+)/i) || url.match(/\/nft\/([^/?&#]+)/i);
+    return m ? m[1] : '';
+}
+
 function goToGiftPay() {
     const walletNav = document.querySelector('.nav-item:nth-child(4)');
     nav('wallet', walletNav);
@@ -3290,32 +3278,19 @@ async function loadGiftsPage() {
                 ${gifts.map((g, idx) => {
                     const priceStr = g.price ? g.price.toFixed(2) + ' TON' : '';
                     // Try to detect animated gift (webm/gif)
-                    const isAnimated = g.imageUrl && (g.imageUrl.includes('.webm') || g.imageUrl.includes('.gif') || g.imageUrl.includes('.tgs'));
-                    const mediaTag = g.imageUrl
-                        ? (isAnimated
-                            ? `<video src="${g.imageUrl}" autoplay loop muted playsinline style="width:100%;height:100%;object-fit:cover;" onerror="this.style.display='none'"></video>`
-                            : `<img src="${g.imageUrl}" style="width:100%;height:100%;object-fit:cover;" loading="lazy" onerror="this.style.display='none';this.parentNode.querySelector('.gift-fallback-icon').style.display='flex'">`)
-                        : '';
+
                     return `
-                    <div onclick="openGiftDetail('${g._id}')"
-                        class="gift-card-item"
-                        style="background:#090916;border:1px solid rgba(255,255,255,.09);border-radius:18px;overflow:hidden;cursor:pointer;-webkit-tap-highlight-color:transparent;animation:fadeIn .35s ease ${idx*0.06}s both;transition:transform .12s,border-color .15s;">
-                        <div style="width:100%;aspect-ratio:1;background:linear-gradient(135deg,#0d0d22,#111230);position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center;">
-                            ${mediaTag}
-                            <div class="gift-fallback-icon" style="display:${g.imageUrl?'none':'flex'};flex-direction:column;align-items:center;justify-content:center;width:100%;height:100%;position:absolute;inset:0;">
-                                <svg width="38" height="38" viewBox="0 0 24 24" fill="none">
-                                    <rect x="2" y="7" width="20" height="5" rx="1" fill="rgba(0,229,255,.15)" stroke="rgba(0,229,255,.5)" stroke-width="1.2"/>
-                                    <rect x="4" y="12" width="16" height="9" rx="1" fill="rgba(0,180,255,.1)" stroke="rgba(0,229,255,.4)" stroke-width="1.2"/>
-                                    <line x1="12" y1="7" x2="12" y2="21" stroke="rgba(0,229,255,.5)" stroke-width="1.3"/>
-                                    <path d="M12 7 C12 7 9.5 3 7.5 3 C6 3 5 4 5 5.5 C5 7 6 7.5 7.5 7.5 C9.5 7.5 12 7 12 7Z" fill="rgba(0,229,255,.2)" stroke="rgba(0,229,255,.5)" stroke-width="1"/>
-                                    <path d="M12 7 C12 7 14.5 3 16.5 3 C18 3 19 4 19 5.5 C19 7 18 7.5 16.5 7.5 C14.5 7.5 12 7 12 7Z" fill="rgba(0,229,255,.2)" stroke="rgba(0,229,255,.5)" stroke-width="1"/>
-                                </svg>
-                            </div>
-                            ${priceStr ? `<div style="position:absolute;bottom:7px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.75);backdrop-filter:blur(8px);border:1px solid rgba(0,255,136,.3);border-radius:20px;padding:3px 10px;font-size:11px;font-weight:800;color:#00ff88;white-space:nowrap;">${priceStr}</div>` : ''}
+                    <div onclick="openGiftDetail('${g._id}')" class="gift-card-item"
+                        style="background:#0a0a18;border:1px solid rgba(255,255,255,.09);border-radius:16px;overflow:hidden;cursor:pointer;animation:fadeIn .3s ease ${idx*0.05}s both;">
+                        <div class="gift-img-container">
+                            ${g.imageUrl
+                                ? `<img src="${g.imageUrl}" alt="${g.name}" style="width:100%;height:100%;object-fit:cover;" loading="lazy" onerror="this.style.display='none'">`
+                                : `<svg width="42" height="42" viewBox="0 0 24 24" fill="none"><rect x="2" y="7" width="20" height="5" rx="1.5" fill="#1a2a3a" stroke="#00e5ff" stroke-width="1.2"/><rect x="4" y="12" width="16" height="10" rx="1.5" fill="#111e2e" stroke="#5dd8ff" stroke-width="1.2"/><line x1="12" y1="7" x2="12" y2="22" stroke="#00e5ff" stroke-width="1.4"/><path d="M12 7C12 7 9 2.5 7 2.5C5.5 2.5 4.5 3.5 4.5 5C4.5 6.5 5.5 7.5 7 7.5C9 7.5 12 7 12 7Z" fill="#1a3a4a" stroke="#00e5ff" stroke-width="1"/><path d="M12 7C12 7 15 2.5 17 2.5C18.5 2.5 19.5 3.5 19.5 5C19.5 6.5 18.5 7.5 17 7.5C15 7.5 12 7 12 7Z" fill="#1a3a4a" stroke="#00e5ff" stroke-width="1"/></svg>`}
+                            ${priceStr ? `<div class="gift-price-badge">${priceStr}</div>` : ''}
                         </div>
-                        <div style="padding:10px 12px 13px;">
-                            <div style="font-size:12px;font-weight:800;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:3px;">${g.name||'NFT Подарок'}</div>
-                            <div style="font-size:10px;color:${priceStr ? 'rgba(0,255,136,.6)' : 'rgba(255,255,255,.28)'};">${priceStr || 'Цена уточняется'}</div>
+                        <div style="padding:9px 11px 11px;">
+                            <div style="font-size:12px;font-weight:800;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${g.name||'NFT Подарок'}</div>
+                            <div style="font-size:10px;color:${priceStr?'rgba(0,255,136,.55)':'rgba(255,255,255,.28)'};margin-top:2px;">${priceStr||'—'}</div>
                         </div>
                     </div>`;
                 }).join('')}
@@ -3562,7 +3537,7 @@ function renderAdminNFTGifts() {
             </div>
             <div style="flex:1;min-width:0;">
                 <div style="font-size:12px;font-weight:800;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${g.name}</div>
-                <div style="font-size:10px;color:rgba(255,255,255,.35);margin-top:2px;">${g.giftUrl ? '<a href="'+g.giftUrl+'" target="_blank" style="color:#00e5ff;">t.me/nft ↗</a>' : 'нет ссылки'}</div>
+                <div style="font-size:10px;color:rgba(255,255,255,.35);margin-top:2px;">${g.giftUrl ? '<a href="https://t.me/nft/'+extractNFTSlug(g.giftUrl)+'" target="_blank" style="color:#00e5ff;">t.me/nft ↗</a>' : 'нет ссылки'}</div>
             </div>
             <div style="text-align:right;flex-shrink:0;">
                 <input type="number" value="${g.price||0}" min="0" step="0.01"
