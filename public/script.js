@@ -698,7 +698,9 @@ socket.on('newHistoryEntry', b => addLiveBetToDOM(b, false));
 function addLiveBetToDOM(b, isInit) {
     const list = $('feed-list');
     if(!list) return;
-    if(b.mode === 'Demo' && !isShowDemo) return; 
+    if(b.mode === 'Demo' && !isShowDemo) return;
+    // Hide current user from live if setting enabled
+    if (userSettings && userSettings.hideFromLive && user && String(b.userId) === String(user.id)) return; 
 
     const d = document.createElement('div'); d.className = 'live-bet-item';
     const isWin = b.result > 0;
@@ -2522,106 +2524,148 @@ function doBreakBlock(blkEl, blk, onFullyGone) {
 // Каждая кирка — отдельный элемент, отдельный воркер.
 // Несколько кирок в одном столбце падают с задержкой (stagger).
 // Нет дедупликации — каждая кирка работает независимо.
-function spawnPickaxeWorker(blockQueue, pickType, startDelay, onAllDone, onBlockBroken, maxDur) {
-    if (!blockQueue || !blockQueue.length) { if (onAllDone) setTimeout(onAllDone, startDelay||0); return; }
+function spawnPickaxeWorker(blocks, pickType, delay, onDone, onBreak, _unused) {
+    if (!blocks || !blocks.length) { if (onDone) setTimeout(onDone, delay); return; }
 
-    const pEl = document.createElement('img');
-    pEl.src = getPickaxeImg(pickType);
-    pEl.style.cssText = 'position:fixed;width:26px;height:26px;z-index:99999;pointer-events:none;image-rendering:pixelated;opacity:0;transform:translate(-50%,-100%) rotate(-20deg);transform-origin:bottom center;';
-    document.body.appendChild(pEl);
-    _pickaxeEls.add(pEl);
+    // Create the pickaxe image
+    const img = document.createElement('img');
+    img.src = getPickaxeImg(pickType || 'wooden');
+    img.style.cssText = [
+        'position:fixed',
+        'width:28px',
+        'height:28px',
+        'z-index:99999',
+        'pointer-events:none',
+        'image-rendering:pixelated',
+        'opacity:0',
+        'left:0',
+        'top:0',
+        'transform:translate(-50%,-100%)',
+        'transform-origin:bottom center',
+        'transition:none'
+    ].join(';');
+    document.body.appendChild(img);
+    _pickaxeEls.add(img);
 
-    const removePick = () => {
-        _pickaxeEls.delete(pEl);
-        pEl.style.transition = 'opacity 0.12s';
-        pEl.style.opacity = '0';
-        setTimeout(() => { if (pEl.parentNode) pEl.remove(); }, 140);
-    };
+    let idx = 0;
 
-    let qi = 0;
+    function finish() {
+        _pickaxeEls.delete(img);
+        img.style.transition = 'opacity 0.15s';
+        img.style.opacity = '0';
+        setTimeout(() => { if (img.parentNode) img.remove(); }, 160);
+        if (onDone) setTimeout(onDone, 50);
+    }
 
-    function next() {
-        if (!mineIsActive) { removePick(); return; }
-        if (qi >= blockQueue.length) { removePick(); if (onAllDone) setTimeout(onAllDone, 60); return; }
+    function hitBlock() {
+        if (!mineIsActive) { finish(); return; }
+        if (idx >= blocks.length) { finish(); return; }
 
-        const blk = blockQueue[qi++];
-        if (!blk) { next(); return; }
+        const blk = blocks[idx++];
+        const el = document.getElementById('mc-blk-' + blk.r + '-' + blk.c);
 
-        const id = 'mc-blk-' + blk.r + '-' + blk.c;
-        const blkEl = document.getElementById(id);
-        if (!blkEl || blkEl.dataset.revealed === '1') {
-            if (onBlockBroken) onBlockBroken(blk.r, blk.c);
-            setTimeout(next, 40);
+        if (!el || el.dataset.revealed === '1') {
+            // Block already gone — count it and move on
+            if (onBreak) onBreak(blk.r, blk.c);
+            setTimeout(hitBlock, 30);
             return;
         }
 
-        const rect = blkEl.getBoundingClientRect();
-        if (!rect || rect.width < 1) {
-            // Not yet painted - retry once
+        const r = el.getBoundingClientRect();
+        if (!r || r.width < 2) {
+            // Element not visible yet — skip
+            if (onBreak) onBreak(blk.r, blk.c);
+            setTimeout(hitBlock, 60);
+            return;
+        }
+
+        const cx    = Math.round(r.left + r.width / 2);
+        const above = Math.round(r.top - 6);
+        const hit   = Math.round(r.top + r.height * 0.3);
+        const totalHits = Math.max(1, blk.hits || 1);
+
+        // Position pickaxe above block
+        img.style.transition = 'none';
+        img.style.left = cx + 'px';
+        img.style.top  = (above - 16) + 'px';
+        img.style.opacity = '0';
+        img.style.transform = 'translate(-50%,-100%) rotate(-18deg)';
+
+        // Small delay then fade in
+        setTimeout(() => {
+            if (!mineIsActive) { finish(); return; }
+            img.style.transition = 'top 0.14s ease-out, opacity 0.1s';
+            img.style.top = above + 'px';
+            img.style.opacity = '1';
+
+            // Wait for fade-in then start hitting
+            setTimeout(() => doSwing(totalHits, 0), 160);
+        }, 20);
+
+        function doSwing(left, n) {
+            if (!mineIsActive) { finish(); return; }
+
+            // Swing animation using CSS transition
+            img.style.transition = 'transform 0.08s ease-in';
+            img.style.transform = 'translate(-50%,-100%) rotate(' + (n%2===0 ? 22 : -22) + 'deg)';
+
+            // After swing, drive down
             setTimeout(() => {
-                const rect2 = blkEl.getBoundingClientRect();
-                if (rect2 && rect2.width > 0) {
-                    qi--; next();
-                } else {
-                    // Block not visible - skip it
-                    if (onBlockBroken) onBlockBroken(blk.r, blk.c);
-                    next();
-                }
-            }, 100);
-            return;
-        }
+                if (!mineIsActive) { finish(); return; }
+                // Animate down (use simple JS loop for reliability)
+                let start_top = above;
+                let end_top   = hit;
+                let dur       = 130; // ms
+                let t0        = performance.now();
 
-        const cx   = rect.left + rect.width / 2;
-        const topY = rect.top - 8;
-        const hitY = rect.top + rect.height * 0.25;
+                function animDown(now) {
+                    if (!mineIsActive) { finish(); return; }
+                    let p = Math.min((now - t0) / dur, 1);
+                    // ease-in: p*p
+                    img.style.top = (start_top + (end_top - start_top) * p * p) + 'px';
+                    img.style.transition = 'none';
+                    if (p < 1) { requestAnimationFrame(animDown); return; }
 
-        // Position above block and fade in
-        pEl.style.transition = 'none';
-        pEl.style.left = cx + 'px';
-        pEl.style.top  = (topY - 18) + 'px';
-        pEl.style.opacity = '0';
-        pEl.style.transform = 'translate(-50%,-100%) rotate(-20deg)';
+                    // Impact!
+                    img.style.transform = 'translate(-50%,-100%) rotate(0deg)';
+                    img.style.transition = 'transform 0.08s ease-out';
+                    playSound('hit');
+                    flashBlock(el);
 
-        requestAnimationFrame(() => {
-            requestAnimationFrame(() => {
-                pEl.style.transition = 'top 0.15s ease-out, opacity 0.12s';
-                pEl.style.top = topY + 'px';
-                pEl.style.opacity = '1';
-            });
-        });
+                    // Show crack
+                    el.classList.remove('cracking-1','cracking-2','cracking-3');
+                    const progress = (n + 1) / totalHits;
+                    el.classList.add(progress > 0.66 ? 'cracking-3' : progress > 0.33 ? 'cracking-2' : 'cracking-1');
 
-        const hits = Math.max(1, blk.hits || 1);
-        setTimeout(() => strike(hits, 0), 180);
+                    // Bounce back up
+                    let t1 = performance.now();
+                    function animUp(now2) {
+                        if (!mineIsActive) { finish(); return; }
+                        let p2 = Math.min((now2 - t1) / 150, 1);
+                        img.style.top = (hit + (above - hit) * (1 - Math.pow(1 - p2, 2))) + 'px';
+                        img.style.transition = 'none';
+                        if (p2 < 1) { requestAnimationFrame(animUp); return; }
 
-        function strike(rem, n) {
-            if (!mineIsActive) { removePick(); return; }
-            pEl.style.transition = 'transform 0.1s ease-in';
-            pEl.style.transform = 'translate(-50%,-100%) rotate(' + (n%2===0?25:-25) + 'deg)';
+                        // Back to top position
+                        img.style.top = above + 'px';
 
-            _anim(pEl, 'top', topY, hitY, 150, easeIn, () => {
-                if (!mineIsActive) { removePick(); return; }
-                pEl.style.transition = 'transform 0.08s ease-out';
-                pEl.style.transform = 'translate(-50%,-100%) rotate(0deg)';
-                playSound('hit');
-                flashBlock(blkEl);
-                blkEl.classList.remove('cracking-1','cracking-2','cracking-3');
-                if (rem > 1) blkEl.classList.add((n+1)/hits > 0.5 ? 'cracking-2' : 'cracking-1');
-                else         blkEl.classList.add('cracking-3');
-
-                _anim(pEl, 'top', hitY, topY, 170, easeOut, () => {
-                    if (!mineIsActive) { removePick(); return; }
-                    if (rem <= 1) {
-                        doBreakBlock(blkEl, blk, () => { if (onBlockBroken) onBlockBroken(blk.r, blk.c); });
-                        setTimeout(next, 80);
-                    } else {
-                        setTimeout(() => strike(rem-1, n+1), 30);
+                        if (left <= 1) {
+                            // Last hit - break block
+                            doBreakBlock(el, blk, () => { if (onBreak) onBreak(blk.r, blk.c); });
+                            setTimeout(hitBlock, 90);
+                        } else {
+                            // More hits needed
+                            setTimeout(() => doSwing(left - 1, n + 1), 35);
+                        }
                     }
-                });
-            });
+                    requestAnimationFrame(animUp);
+                }
+                requestAnimationFrame(animDown);
+            }, 90); // swing delay
         }
     }
 
-    setTimeout(next, startDelay || 0);
+    setTimeout(hitBlock, delay || 0);
 }
 
 // ── Взрыв ТНТ (область 2×2 от позиции) ─────────────────────
@@ -4143,14 +4187,20 @@ function buildRouletteStrip(drops, winVal) {
 
 
 async function openFreeCase(caseId) {
-    // Свежий конфиг для актуальных каналов
-    try{const r=await fetch('/api/cases/config?_t='+Date.now());const d=await r.json();casesConfig=d.cases||casesConfig;}catch(e){}
-    const cfg = casesConfig.find(c=>c.id===caseId);
-    if(!cfg) return;
+    // Always fetch fresh config to get latest channels
+    try {
+        const r = await fetch('/api/cases/config?_t=' + Date.now());
+        const d = await r.json();
+        casesConfig = d.cases || casesConfig;
+    } catch(e) {}
+    const cfg = casesConfig.find(c => c.id === caseId);
+    if (!cfg) return;
     const channels = cfg.channels || [];
-    if(channels.length > 0) {
+    if (channels.length > 0) {
+        // Must show subscription sheet — cannot skip
         showCase6ChannelBottomSheet(cfg);
     } else {
+        // No channels configured — open directly (server will verify cooldown)
         playCaseOpen(caseId, 0);
     }
 }
