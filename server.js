@@ -407,14 +407,20 @@ async function runCrash() {
 startCrash();
 
 function pushToGlobalHistory(betObj) {
-    const betWithTime = {
-        ...(betObj.toObject ? betObj.toObject() : betObj),
-        timeMsk: getMskTime()
-    };
-    
-    globalBetHistory.unshift(betWithTime);
-    if(globalBetHistory.length > 50) globalBetHistory.pop();
-    io.emit('newHistoryEntry', betWithTime);
+    const betData = betObj.toObject ? betObj.toObject() : betObj;
+    // Check hideFromLive asynchronously — don't block
+    User.findOne({ id: String(betData.userId) }, 'hideFromLive').then(u => {
+        if (u && u.hideFromLive) return; // don't push to live feed
+        const betWithTime = { ...betData, timeMsk: getMskTime() };
+        globalBetHistory.unshift(betWithTime);
+        if (globalBetHistory.length > 50) globalBetHistory.pop();
+        io.emit('newHistoryEntry', betWithTime);
+    }).catch(() => {
+        const betWithTime = { ...betData, timeMsk: getMskTime() };
+        globalBetHistory.unshift(betWithTime);
+        if (globalBetHistory.length > 50) globalBetHistory.pop();
+        io.emit('newHistoryEntry', betWithTime);
+    });
 }
 
 // --- BATTLE ROULETTE ENGINE ---
