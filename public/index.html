@@ -49,6 +49,10 @@
             <!-- БАННЕР статический — только здесь -->
             <div id="banner-widget" style="display:none;width:100%;height:62px;border-radius:10px;overflow:hidden;margin-bottom:10px;"></div>
 
+            <!-- Live bets horizontal ribbon -->
+            <div id="live-ribbon" style="overflow-x:auto;overflow-y:hidden;white-space:nowrap;padding:0 0 10px;margin-bottom:4px;scrollbar-width:none;-ms-overflow-style:none;">
+                <div id="feed-list" style="display:inline-flex;gap:8px;padding:2px 0;"></div>
+            </div>
             <div class="games-grid">
                 <div class="gc" onclick="navGame('crash')"><div class="gc-bg" style="background:linear-gradient(145deg,#1a0010,#4a0025);"></div><div class="gc-icon-wrap"><span class="gc-emoji">🚀</span></div><div class="gc-info"><div class="gc-name">Crash</div><div class="gc-desc">Успей забрать множитель</div></div></div>
                 <div class="gc" onclick="navGame('mines')"><div class="gc-bg" style="background:linear-gradient(145deg,#001a10,#003d20);"></div><div class="gc-icon-wrap"><span class="gc-emoji">💣</span></div><div class="gc-info"><div class="gc-name">Mines</div><div class="gc-desc">Ищи кристаллы</div></div></div>
@@ -59,8 +63,7 @@
                 <div class="gc" onclick="navGame('mine')"><div class="gc-bg" style="background:linear-gradient(145deg,#0a0500,#2a1400);"></div><div class="gc-icon-wrap"><span class="gc-emoji">⛏️</span></div><div class="gc-info"><div class="gc-name">Mine</div><div class="gc-desc">Копай и побеждай</div></div></div>
                 <div class="gc" onclick="navGame('upgrade')"><div class="gc-bg" style="background:linear-gradient(145deg,#001020,#002040);"></div><div class="gc-icon-wrap"><span class="gc-emoji">⬆️</span></div><div class="gc-info"><div class="gc-name">Upgrade</div><div class="gc-desc">Удвой свою ставку</div></div></div>
             </div>
-            <div class="live-section-title">ЛАЙВ СТАВКИ</div>
-            <div class="live-bets-container" id="feed-list" style="max-height:300px;"></div>
+
         </div>
 
         <div id="page-profile" class="page">
