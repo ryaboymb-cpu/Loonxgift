@@ -699,7 +699,6 @@ function addLiveBetToDOM(b, isInit) {
     const list = $('feed-list');
     if(!list) return;
     if(b.mode === 'Demo' && !isShowDemo) return;
-    // Hide current user from live if setting enabled
     if (userSettings && userSettings.hideFromLive && user && String(b.userId) === String(user.id)) return; 
 
     const d = document.createElement('div'); d.className = 'live-bet-item';
@@ -711,17 +710,23 @@ function addLiveBetToDOM(b, isInit) {
     d.innerHTML = `
         <div class="live-user">
             <img src="${b.avatar || 'https://cdn-icons-png.flaticon.com/512/149/149071.png'}" class="live-ava">
-            <span>${nameStr} ${timeHtml}<br><b style="color:var(--sub); font-size:10px;">(${b.game})</b> ${modeTag}</span>
+            <span style="font-size:10px;color:rgba(255,255,255,.7);max-width:70px;overflow:hidden;text-overflow:ellipsis;">${b.username.split('_')[0].slice(0,10)}</span>
         </div>
-        <span style="font-weight:bold; color:${isWin?'var(--neon)':'var(--neon-red)'}">${isWin ? '+'+b.result : b.result}</span>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:1px;">
+            <span style="font-size:9px;color:rgba(255,255,255,.38);">${b.game}</span>
+            <span style="font-weight:800;font-size:11px;color:${isWin?'#00ff88':'#ff2255'}">${isWin?'+':''}${Number(b.result||0).toFixed(2)}</span>
+        </div>
     `;
-    
+
     if (isInit) {
         list.appendChild(d);
     } else {
         list.prepend(d);
-        if(list.children.length > 15) list.lastChild.remove();
+        if (list.children.length > 8) list.lastChild.remove();
     }
+    // Auto-scroll to show latest
+    const ribbon = document.getElementById('live-ribbon');
+    if (ribbon && !isInit) ribbon.scrollLeft = 0;
 }
 
 // CRASH
@@ -2524,148 +2529,127 @@ function doBreakBlock(blkEl, blk, onFullyGone) {
 // Каждая кирка — отдельный элемент, отдельный воркер.
 // Несколько кирок в одном столбце падают с задержкой (stagger).
 // Нет дедупликации — каждая кирка работает независимо.
-function spawnPickaxeWorker(blocks, pickType, delay, onDone, onBreak, _unused) {
-    if (!blocks || !blocks.length) { if (onDone) setTimeout(onDone, delay); return; }
+function spawnPickaxeWorker(blocks, pickType, delay, onDone, onBreak, _u) {
+    if (!blocks || !blocks.length) { if (onDone) setTimeout(onDone, delay || 0); return; }
 
-    // Create the pickaxe image
+    // Attach pickaxe to document.body with position:fixed
+    // This bypasses any overflow:hidden on parent containers
     const img = document.createElement('img');
     img.src = getPickaxeImg(pickType || 'wooden');
-    img.style.cssText = [
-        'position:fixed',
-        'width:28px',
-        'height:28px',
-        'z-index:99999',
-        'pointer-events:none',
-        'image-rendering:pixelated',
-        'opacity:0',
-        'left:0',
-        'top:0',
-        'transform:translate(-50%,-100%)',
-        'transform-origin:bottom center',
-        'transition:none'
-    ].join(';');
+    img.style.cssText = 'position:fixed;z-index:100000;width:28px;height:28px;pointer-events:none;image-rendering:pixelated;display:block;';
     document.body.appendChild(img);
     _pickaxeEls.add(img);
 
-    let idx = 0;
+    let qi = 0;
 
-    function finish() {
+    function done() {
         _pickaxeEls.delete(img);
-        img.style.transition = 'opacity 0.15s';
-        img.style.opacity = '0';
-        setTimeout(() => { if (img.parentNode) img.remove(); }, 160);
-        if (onDone) setTimeout(onDone, 50);
+        if (img.parentNode) img.remove();
+        if (onDone) setTimeout(onDone, 30);
     }
 
-    function hitBlock() {
-        if (!mineIsActive) { finish(); return; }
-        if (idx >= blocks.length) { finish(); return; }
+    function next() {
+        if (!mineIsActive) { done(); return; }
+        if (qi >= blocks.length) { done(); return; }
 
-        const blk = blocks[idx++];
+        const blk = blocks[qi++];
         const el = document.getElementById('mc-blk-' + blk.r + '-' + blk.c);
 
         if (!el || el.dataset.revealed === '1') {
-            // Block already gone — count it and move on
             if (onBreak) onBreak(blk.r, blk.c);
-            setTimeout(hitBlock, 30);
+            next(); // skip immediately
             return;
         }
 
-        const r = el.getBoundingClientRect();
-        if (!r || r.width < 2) {
-            // Element not visible yet — skip
+        // Get viewport coordinates of block
+        const R = el.getBoundingClientRect();
+        if (!R || R.width < 2) {
+            // Not visible — still count win
             if (onBreak) onBreak(blk.r, blk.c);
-            setTimeout(hitBlock, 60);
+            next();
             return;
         }
 
-        const cx    = Math.round(r.left + r.width / 2);
-        const above = Math.round(r.top - 6);
-        const hit   = Math.round(r.top + r.height * 0.3);
-        const totalHits = Math.max(1, blk.hits || 1);
+        const cx   = R.left + R.width / 2;
+        const aboveY = R.top - 4;         // hover position (just above block)
+        const hitY   = R.top + R.height * 0.3; // impact point
 
-        // Position pickaxe above block
-        img.style.transition = 'none';
-        img.style.left = cx + 'px';
-        img.style.top  = (above - 16) + 'px';
+        // Place pickaxe at hover position, invisible
+        img.style.left    = cx + 'px';
+        img.style.top     = (aboveY - 20) + 'px';
         img.style.opacity = '0';
-        img.style.transform = 'translate(-50%,-100%) rotate(-18deg)';
+        img.style.transform = 'translate(-50%,-100%) rotate(-20deg)';
 
-        // Small delay then fade in
-        setTimeout(() => {
-            if (!mineIsActive) { finish(); return; }
-            img.style.transition = 'top 0.14s ease-out, opacity 0.1s';
-            img.style.top = above + 'px';
+        // Fade + slide in
+        var t0 = performance.now();
+        var fadeIn = function(ts) {
+            var p = Math.min((ts - t0) / 140, 1);
+            img.style.top = (aboveY - 20 + 20 * p) + 'px';
+            img.style.opacity = String(p);
+            if (p < 1) { requestAnimationFrame(fadeIn); return; }
+            img.style.top = aboveY + 'px';
             img.style.opacity = '1';
+            // Start swinging after appear
+            setTimeout(function() { swing(Math.max(1, blk.hits || 1), 0); }, 30);
+        };
+        requestAnimationFrame(fadeIn);
 
-            // Wait for fade-in then start hitting
-            setTimeout(() => doSwing(totalHits, 0), 160);
-        }, 20);
+        function swing(hitsLeft, hitN) {
+            if (!mineIsActive) { done(); return; }
 
-        function doSwing(left, n) {
-            if (!mineIsActive) { finish(); return; }
+            // Swing pickaxe (rotate then drive down)
+            var angle = (hitN % 2 === 0) ? 25 : -25;
+            img.style.transform = 'translate(-50%,-100%) rotate(' + angle + 'deg)';
 
-            // Swing animation using CSS transition
-            img.style.transition = 'transform 0.08s ease-in';
-            img.style.transform = 'translate(-50%,-100%) rotate(' + (n%2===0 ? 22 : -22) + 'deg)';
+            // Animate DOWN
+            var tDown = performance.now();
+            var goDown = function(ts) {
+                if (!mineIsActive) { done(); return; }
+                var p = Math.min((ts - tDown) / 120, 1);
+                var eased = p * p; // ease-in
+                img.style.top = (aboveY + (hitY - aboveY) * eased) + 'px';
+                if (p < 1) { requestAnimationFrame(goDown); return; }
 
-            // After swing, drive down
-            setTimeout(() => {
-                if (!mineIsActive) { finish(); return; }
-                // Animate down (use simple JS loop for reliability)
-                let start_top = above;
-                let end_top   = hit;
-                let dur       = 130; // ms
-                let t0        = performance.now();
+                // IMPACT
+                img.style.top = hitY + 'px';
+                img.style.transform = 'translate(-50%,-100%) rotate(0deg)';
+                playSound('hit');
+                flashBlock(el);
 
-                function animDown(now) {
-                    if (!mineIsActive) { finish(); return; }
-                    let p = Math.min((now - t0) / dur, 1);
-                    // ease-in: p*p
-                    img.style.top = (start_top + (end_top - start_top) * p * p) + 'px';
-                    img.style.transition = 'none';
-                    if (p < 1) { requestAnimationFrame(animDown); return; }
-
-                    // Impact!
-                    img.style.transform = 'translate(-50%,-100%) rotate(0deg)';
-                    img.style.transition = 'transform 0.08s ease-out';
-                    playSound('hit');
-                    flashBlock(el);
-
-                    // Show crack
-                    el.classList.remove('cracking-1','cracking-2','cracking-3');
-                    const progress = (n + 1) / totalHits;
-                    el.classList.add(progress > 0.66 ? 'cracking-3' : progress > 0.33 ? 'cracking-2' : 'cracking-1');
-
-                    // Bounce back up
-                    let t1 = performance.now();
-                    function animUp(now2) {
-                        if (!mineIsActive) { finish(); return; }
-                        let p2 = Math.min((now2 - t1) / 150, 1);
-                        img.style.top = (hit + (above - hit) * (1 - Math.pow(1 - p2, 2))) + 'px';
-                        img.style.transition = 'none';
-                        if (p2 < 1) { requestAnimationFrame(animUp); return; }
-
-                        // Back to top position
-                        img.style.top = above + 'px';
-
-                        if (left <= 1) {
-                            // Last hit - break block
-                            doBreakBlock(el, blk, () => { if (onBreak) onBreak(blk.r, blk.c); });
-                            setTimeout(hitBlock, 90);
-                        } else {
-                            // More hits needed
-                            setTimeout(() => doSwing(left - 1, n + 1), 35);
-                        }
-                    }
-                    requestAnimationFrame(animUp);
+                // Crack indicator
+                el.classList.remove('cracking-1','cracking-2','cracking-3');
+                if (hitsLeft > 1) {
+                    el.classList.add((hitN + 1) / Math.max(1, blk.hits || 1) > 0.5 ? 'cracking-2' : 'cracking-1');
+                } else {
+                    el.classList.add('cracking-3');
                 }
-                requestAnimationFrame(animDown);
-            }, 90); // swing delay
+
+                // Animate UP (bounce back)
+                var tUp = performance.now();
+                var goUp = function(ts2) {
+                    if (!mineIsActive) { done(); return; }
+                    var p2 = Math.min((ts2 - tUp) / 140, 1);
+                    var eUp = 1 - Math.pow(1 - p2, 2); // ease-out
+                    img.style.top = (hitY + (aboveY - hitY) * eUp) + 'px';
+                    if (p2 < 1) { requestAnimationFrame(goUp); return; }
+                    img.style.top = aboveY + 'px';
+
+                    if (hitsLeft <= 1) {
+                        // Last hit — break block
+                        doBreakBlock(el, blk, function() { if (onBreak) onBreak(blk.r, blk.c); });
+                        setTimeout(next, 80);
+                    } else {
+                        // More hits — continue
+                        setTimeout(function() { swing(hitsLeft - 1, hitN + 1); }, 25);
+                    }
+                };
+                requestAnimationFrame(goUp);
+            };
+            requestAnimationFrame(goDown);
         }
     }
 
-    setTimeout(hitBlock, delay || 0);
+    setTimeout(next, delay || 0);
 }
 
 // ── Взрыв ТНТ (область 2×2 от позиции) ─────────────────────
@@ -3349,9 +3333,14 @@ async function toggleUserSetting(key) {
         fetch('/api/user/settings', {method:'POST',headers:{'Content-Type':'application/json'},
             body:JSON.stringify({id:user.id, hideFromLive: userSettings.hideFromLive, muteSound: userSettings.muteSound})}).catch(()=>{});
     }
-    // Re-render panel
-    const ov = document.getElementById('profile-settings-ov');
-    if (ov) { ov.remove(); openProfileSettings(); }
+    // Update toggles in-place without re-rendering (no flicker)
+    const toggleEl = document.getElementById('toggle-' + key);
+    if (toggleEl) {
+        const isOn = userSettings[key];
+        toggleEl.style.background = isOn ? 'var(--neon)' : 'rgba(255,255,255,.15)';
+        const thumb = toggleEl.querySelector('div');
+        if (thumb) thumb.style.left = isOn ? '22px' : '2px';
+    }
 }
 
 // Load settings on startup
@@ -3434,7 +3423,7 @@ async function loadGiftsPage() {
                         style="background:#0a0a18;border:1px solid rgba(255,255,255,.09);border-radius:16px;overflow:hidden;cursor:pointer;animation:fadeIn .3s ease ${idx*0.05}s both;">
                         <div class="gift-img-container" style="background:linear-gradient(135deg,#0d1520,#162030);">
                             ${g.imageUrl
-                                ? `<img src="${g.imageUrl}" alt="${g.name}" style="width:100%;height:100%;object-fit:cover;" loading="lazy" onerror="this.src='';this.style.display='none';this.parentNode.querySelector('.nft-ph').style.display='flex'">`
+                                ? `<img src="${g.imageUrl}" alt="${g.name}" crossorigin="anonymous" referrerpolicy="no-referrer" style="width:100%;height:100%;object-fit:cover;" loading="lazy" onerror="this.style.display='none';this.parentNode.querySelector('.nft-ph').style.display='flex'">`
                                 : ''}
                             <div class="nft-ph" style="display:${g.imageUrl?'none':'flex'};flex-direction:column;align-items:center;justify-content:center;width:100%;height:100%;position:absolute;inset:0;">
                                 <svg width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="rgba(0,229,255,.6)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
