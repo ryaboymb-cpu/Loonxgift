@@ -2743,6 +2743,22 @@ app.post('/api/gifts/refresh_image', async (req, res) => {
     } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
+// ── NFT image proxy: fetch og:image from t.me page ──
+app.post('/api/gifts/nft_image', async (req, res) => {
+    try {
+        const { giftUrl } = req.body;
+        if (!giftUrl) return res.status(400).json({ error: 'No URL' });
+        
+        const resolved = await resolveTelegramGift(giftUrl);
+        if (resolved.imageUrl) {
+            // Update gift record if exists
+            await Gift.updateMany({ giftUrl }, { $set: { imageUrl: resolved.imageUrl } });
+            return res.json({ ok: true, imageUrl: resolved.imageUrl, name: resolved.name });
+        }
+        res.json({ ok: false, imageUrl: '' });
+    } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 Server Running on port ${PORT}`);
