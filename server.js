@@ -2312,34 +2312,60 @@ app.post('/api/user/history', async (req, res) => {
 
 // ── Resolve Telegram Gift URL → {name, imageUrl, price} ──
 async function resolveTelegramGift(giftUrl) {
+    // Extract slug: t.me/nft/PoolFloat-112463 → PoolFloat-112463
+    const slugMatch = (giftUrl || '').match(/t\.me\/nft\/([^/?&#\s]+)/i);
+    const slug = slugMatch ? slugMatch[1] : '';
+    const modelName = slug ? slug.replace(/-\d+$/, '') : '';
+
+    // Try to fetch og:image from t.me page
+    let imageUrl = '', name = slug || giftUrl, price = 0;
     try {
         const url = giftUrl.startsWith('http') ? giftUrl : 'https://' + giftUrl;
-        const r = await fetch(url, {
-            headers: {
-                'User-Agent': 'Mozilla/5.0 (compatible; TelegramBot/1.0)',
-                'Accept': 'text/html'
-            },
-            timeout: 8000
-        });
+        // Try with Telegram's own og meta
+        const r = await Promise.race([
+            fetch(url, {
+                headers: {
+                    'User-Agent': 'TelegramBot (https://core.telegram.org/bots, 7.0)',
+                    'Accept': 'text/html,application/xhtml+xml',
+                    'Accept-Language': 'en-US,en;q=0.9',
+                },
+            }),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 6000))
+        ]);
         const html = await r.text();
-        const imgMatch  = html.match(/<meta property="og:image" content="([^"]+)"/i)
-                       || html.match(/<meta name="og:image" content="([^"]+)"/i)
-                       || html.match(/thumbnail_url.*?([https][^"\s<>]+\.(?:jpg|png|webp|gif))/i);
-        const titleMatch = html.match(/<meta property="og:title" content="([^"]+)"/i)
+
+        const imgMatch = html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i)
+                      || html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i)
+                      || html.match(/https:\/\/[^"\s]+cdn-telegram[^"\s]+\.(?:jpg|jpeg|png|webp)/i);
+
+        const titleMatch = html.match(/<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["']/i)
                         || html.match(/<title>([^<]+)<\/title>/i);
-        // Try to extract floor price from page (Fragment shows it)
-        const priceMatch = html.match(/floor[^>]*?([\d.]+)\s*TON/i)
-                        || html.match(/([\d.]+)\s*TON[^<]*floor/i)
-                        || html.match(/"price"\s*:\s*"?([\d.]+)"?/i);
-        const price = priceMatch ? parseFloat(priceMatch[1]) : 0;
-        return {
-            imageUrl:  imgMatch   ? imgMatch[1]   : '',
-            name:      titleMatch ? titleMatch[1].replace(/ on Telegram| — Telegram|NFT /gi, '').trim() : giftUrl,
-            price
-        };
+
+        if (imgMatch) imageUrl = imgMatch[1] || imgMatch[0];
+        if (titleMatch) name = titleMatch[1].replace(/\s+on Telegram.*$/i, '').trim();
+
+        const priceMatch = html.match(/([\d.]+)\s*TON/);
+        if (priceMatch) price = parseFloat(priceMatch[1]) || 0;
     } catch(e) {
-        return { imageUrl: '', name: giftUrl, price: 0 };
+        console.log('[Gift resolve] fetch failed:', e.message);
     }
+
+    // If no image from page, try fragment.com
+    if (!imageUrl && slug) {
+        try {
+            const fragR = await Promise.race([
+                fetch('https://fragment.com/gift/' + slug.toLowerCase(), {
+                    headers: { 'User-Agent': 'Mozilla/5.0 (compatible)' }
+                }),
+                new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 5000))
+            ]);
+            const fragHtml = await fragR.text();
+            const fragImg = fragHtml.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i);
+            if (fragImg) imageUrl = fragImg[1];
+        } catch(e2) {}
+    }
+
+    return { imageUrl, name: name || slug || giftUrl, price, modelName };
 }
 
 // ════ AUTO GIFT WEBHOOK ════
@@ -2573,7 +2599,7 @@ app.post('/api/admin/nft_catalog_add', checkAdmin, async (req, res) => {
         const manualPrice = (price && price > 0) ? Number(price) : 0;
         
         const gift = await NFTCatalog.create({
-            name: resolved.name || finalModelName || giftUrl,
+            name: resolved.name || resolved.modelName || finalModelName || giftUrl,
             modelName: finalModelName,
             imageUrl: resolved.imageUrl || '',
             giftUrl,
