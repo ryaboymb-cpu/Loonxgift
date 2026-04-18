@@ -2717,6 +2717,32 @@ app.post('/api/admin/adjust_stat', checkAdmin, async (req, res) => {
     } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
+// ── Admin: set imageUrl for NFT catalog entry ──
+app.post('/api/admin/nft_catalog_image', checkAdmin, async (req, res) => {
+    try {
+        const { giftId, imageUrl } = req.body;
+        await NFTCatalog.findByIdAndUpdate(giftId, { imageUrl });
+        res.json({ ok: true });
+    } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Re-fetch image for a specific gift by giftUrl ──
+app.post('/api/gifts/refresh_image', async (req, res) => {
+    try {
+        const { id, giftId } = req.body;
+        const gift = await Gift.findOne({ _id: giftId, userId: String(id) });
+        if (!gift) return res.status(404).json({ error: 'Not found' });
+        if (gift.giftUrl) {
+            const resolved = await resolveTelegramGift(gift.giftUrl);
+            if (resolved.imageUrl) {
+                gift.imageUrl = resolved.imageUrl;
+                await gift.save();
+            }
+        }
+        res.json({ ok: true, imageUrl: gift.imageUrl || '' });
+    } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 Server Running on port ${PORT}`);
