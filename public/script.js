@@ -707,14 +707,18 @@ function addLiveBetToDOM(b, isInit) {
     const timeHtml = b.timeMsk ? `<span style="font-size:9px; color:#555; margin-left:5px;">${b.timeMsk}</span>` : '';
     const nameStr = b.username.includes('VS') ? `<span style="font-size:9px;">${b.username}</span>` : `${b.username} <span style="color:var(--neon); font-size:9px;">(${(b.balance||0).toFixed(2)} T)</span>`;
 
-    // Horizontal ribbon card: avatar | name+game | amount+time
+    const timeStr = b.timeMsk ? (String(b.timeMsk).split(' ').pop() || '').slice(0,5) : '';
+    const amtStr  = (isWin ? '+' : '') + Number(b.result || 0).toFixed(2) + ' T';
     d.innerHTML = `
         <img src="${b.avatar || 'https://cdn-icons-png.flaticon.com/512/149/149071.png'}" class="live-ava">
         <div style="flex:1;min-width:0;overflow:hidden;">
-            <div style="font-size:10px;font-weight:700;color:#fff;overflow:hidden;text-overflow:ellipsis;">${b.username.slice(0,11)}</div>
-            <div style="font-size:9px;color:rgba(255,255,255,.38);margin-top:1px;">${b.game} · ${b.timeMsk ? (b.timeMsk.split(' ')[1]||'').slice(0,5) : ''}</div>
+            <div style="font-size:10px;font-weight:700;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${b.username.slice(0,12)}</div>
+            <div style="font-size:9px;color:rgba(255,255,255,.38);margin-top:1px;white-space:nowrap;">${b.game}</div>
         </div>
-        <div style="font-weight:800;font-size:11px;color:${isWin?'#00e676':'#ff4466'};flex-shrink:0;">${isWin?'+':''}${Number(b.result||0).toFixed(2)}</div>
+        <div style="text-align:right;flex-shrink:0;">
+            <div style="font-weight:800;font-size:11px;color:${isWin?'#00e676':'#ff4466'};">${amtStr}</div>
+            <div style="font-size:8px;color:rgba(255,255,255,.28);margin-top:1px;">${timeStr}</div>
+        </div>
     `;
 
     if (isInit) {
@@ -2531,92 +2535,82 @@ function doBreakBlock(blkEl, blk, onFullyGone) {
 function spawnPickaxeWorker(blocks, pickType, delay, onDone, onBreak, _u) {
     if (!blocks || !blocks.length) { if (onDone) setTimeout(onDone, delay || 0); return; }
 
-    const shaft = document.getElementById('mc-shaft');
-    if (!shaft) {
-        blocks.forEach(b => { if (onBreak) onBreak(b.r, b.c); });
-        if (onDone) setTimeout(onDone, 50);
-        return;
-    }
-
-    // Use CSS class (.pick-active) to override overflow:hidden !important
-    shaft.classList.add('pick-active');
-
+    // Exactly like dropTNT: position:fixed on document.body, viewport coords
     const img = document.createElement('img');
     img.src = getPickaxeImg(pickType || 'wooden');
-    img.style.cssText = 'position:absolute;width:22px;height:22px;z-index:50;pointer-events:none;image-rendering:pixelated;opacity:0;transform-origin:bottom center;';
-    shaft.appendChild(img);
+    img.style.cssText = 'position:fixed;z-index:99998;pointer-events:none;image-rendering:pixelated;width:26px;height:26px;opacity:0;transform-origin:bottom center;transform:translate(-50%,-100%) rotate(-18deg);display:block;';
+    document.body.appendChild(img);
     _pickaxeEls.add(img);
+
+    let qi = 0;
 
     function cleanup() {
         _pickaxeEls.delete(img);
-        shaft.classList.remove('pick-active');
         if (img.parentNode) img.remove();
         if (onDone) setTimeout(onDone, 30);
     }
-
-    let qi = 0;
 
     function processBlock() {
         if (!mineIsActive) { cleanup(); return; }
         if (qi >= blocks.length) { cleanup(); return; }
 
         const blk = blocks[qi++];
-        const el = document.getElementById('mc-blk-' + blk.r + '-' + blk.c);
+        const el = $('mc-blk-' + blk.r + '-' + blk.c);
 
         if (!el || el.dataset.revealed === '1') {
             if (onBreak) onBreak(blk.r, blk.c);
-            processBlock(); // immediately next
+            processBlock();
             return;
         }
 
-        // Get fresh shaft rect each time (page may scroll)
-        const sRect = shaft.getBoundingClientRect();
-        const bRect = el.getBoundingClientRect();
-        if (!sRect || sRect.width < 1 || !bRect || bRect.width < 1) {
+        // Use viewport coords (same as TNT)
+        const rect = el.getBoundingClientRect();
+        if (!rect || rect.width < 2) {
             if (onBreak) onBreak(blk.r, blk.c);
-            setTimeout(processBlock, 50);
+            setTimeout(processBlock, 60);
             return;
         }
 
-        // Coordinates relative to shaft
-        const cx    = (bRect.left + bRect.width / 2) - sRect.left;
-        const above = (bRect.top - sRect.top) - 2;        // just above block
-        const hit   = (bRect.top - sRect.top) + bRect.height * 0.25;
+        const cx    = rect.left + rect.width / 2;   // horizontal center of block
+        const above = rect.top - 8;                  // just above block top
+        const hit   = rect.top + rect.height * 0.3; // impact point in block
 
         const numHits = Math.max(1, blk.hits || 1);
 
-        // STEP 1: Place pickaxe above block using CSS transition
+        // Snap pickaxe into position (no transition)
         img.style.transition = 'none';
         img.style.left    = cx + 'px';
-        img.style.top     = (above - 14) + 'px';
+        img.style.top     = (above - 18) + 'px';
         img.style.opacity = '0';
         img.style.transform = 'translate(-50%,-100%) rotate(-18deg)';
 
-        // STEP 2: Slide in (after one paint frame so 'none' transition applies)
+        // Slide + fade in
         setTimeout(function() {
-            img.style.transition = 'top 0.15s ease-out, opacity 0.12s';
+            img.style.transition = 'top 0.15s ease-out, opacity 0.12s linear';
             img.style.top     = above + 'px';
             img.style.opacity = '1';
 
-            // STEP 3: Start swinging after slide-in
-            setTimeout(function() { doHit(numHits, 0); }, 170);
+            // Begin hitting after slide-in
+            setTimeout(function() {
+                swing(numHits, 0);
+            }, 180);
         }, 16);
 
-        function doHit(rem, n) {
+        function swing(rem, n) {
             if (!mineIsActive) { cleanup(); return; }
 
-            // Swing to one side
-            img.style.transition = 'transform 0.1s ease-in';
-            img.style.transform  = 'translate(-50%,-100%) rotate(' + (n%2===0 ? 22 : -22) + 'deg)';
+            // Pre-swing rotation
+            img.style.transition = 'transform 0.09s ease-in';
+            img.style.transform  = 'translate(-50%,-100%) rotate(' + (n%2===0 ? 24 : -24) + 'deg)';
 
-            // Drive DOWN using CSS transition
             setTimeout(function() {
-                img.style.transition = 'top 0.12s ease-in, transform 0.08s';
-                img.style.top       = hit + 'px';
-                img.style.transform = 'translate(-50%,-100%) rotate(0deg)';
+                // Drive DOWN
+                img.style.transition = 'top 0.11s ease-in, transform 0.07s ease-out';
+                img.style.top        = hit + 'px';
+                img.style.transform  = 'translate(-50%,-100%) rotate(0deg)';
 
-                // IMPACT at bottom
                 setTimeout(function() {
+                    // IMPACT
                     if (!mineIsActive) { cleanup(); return; }
                     playSound('hit');
                     flashBlock(el);
@@ -2627,22 +2621,23 @@ function spawnPickaxeWorker(blocks, pickType, delay, onDone, onBreak, _u) {
                         el.classList.add('cracking-3');
                     }
 
-                    // Bounce BACK UP
+                    // Bounce UP
                     img.style.transition = 'top 0.14s ease-out';
-                    img.style.top = above + 'px';
+                    img.style.top        = above + 'px';
 
                     setTimeout(function() {
                         if (!mineIsActive) { cleanup(); return; }
                         if (rem <= 1) {
-                            // Break and move to next block
-                            doBreakBlock(el, blk, function() { if (onBreak) onBreak(blk.r, blk.c); });
+                            doBreakBlock(el, blk, function() {
+                                if (onBreak) onBreak(blk.r, blk.c);
+                            });
                             setTimeout(processBlock, 90);
                         } else {
-                            setTimeout(function() { doHit(rem-1, n+1); }, 25);
+                            setTimeout(function() { swing(rem - 1, n + 1); }, 20);
                         }
                     }, 145);
-                }, 125);
-            }, 100);
+                }, 115);
+            }, 95);
         }
     }
 
@@ -3261,6 +3256,30 @@ function showFreeSpinActivation(count) {
 //  GIFTS PAGE
 // ════════════════════════════════════════
 
+
+// Auto-fetch NFT images for gifts that have a URL but no image
+async function lazyLoadNFTImages() {
+    const lazyImgs = document.querySelectorAll('.nft-lazy-img');
+    for (const img of lazyImgs) {
+        const giftUrl = img.dataset.nftUrl;
+        if (!giftUrl || !user) continue;
+        try {
+            const r = await fetch('/api/gifts/nft_image', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ giftUrl })
+            });
+            const d = await r.json();
+            if (d.ok && d.imageUrl) {
+                img.src = d.imageUrl;
+                img.style.display = 'block';
+                const ph = img.parentNode ? img.parentNode.querySelector('.nft-ph') : null;
+                if (ph) ph.style.display = 'none';
+            }
+        } catch(e) {}
+    }
+}
+
 function extractNFTSlug(url) {
     if (!url) return '';
     const m = url.match(/t\.me\/nft\/([^/?&#]+)/i) || url.match(/\/nft\/([^/?&#]+)/i);
@@ -3421,8 +3440,8 @@ async function loadGiftsPage() {
                         <div class="gift-img-container" style="background:linear-gradient(135deg,#0d1520,#162030);">
                             ${g.imageUrl
                                 ? `<img src="${g.imageUrl}" alt="${g.name}" style="width:100%;height:100%;object-fit:cover;display:block;" loading="lazy"
-                                    onerror="this.onerror=null;this.src='/favicon.ico';this.style.display='none';var ph=this.parentNode.querySelector('.nft-ph');if(ph)ph.style.display='flex';">`
-                                : ''}
+                                    onerror="this.onerror=null;this.style.display='none';var ph=this.parentNode.querySelector('.nft-ph');if(ph)ph.style.display='flex';">`
+                                : (g.giftUrl ? `<img data-nft-url="${g.giftUrl}" data-gift-id="${g._id}" style="width:100%;height:100%;object-fit:cover;display:none;" loading="lazy" class="nft-lazy-img">` : '')}
                             <div class="nft-ph" style="display:${g.imageUrl?'none':'flex'};flex-direction:column;align-items:center;justify-content:center;width:100%;height:100%;position:absolute;inset:0;background:linear-gradient(135deg,#0a1628,#0d1f35);">
                                 <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="rgba(0,200,255,.55)" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
                                     <path d="M20 12v10H4V12"/><path d="M22 7H2v5h20V7z"/><path d="M12 22V7"/>
@@ -3451,6 +3470,8 @@ async function loadGiftsPage() {
     } catch(e) {
         c.innerHTML = `<div style="text-align:center;padding:40px;color:rgba(255,34,85,.6);font-size:13px;">Ошибка загрузки подарков</div>`;
     }
+    // Auto-load NFT images after render
+    setTimeout(lazyLoadNFTImages, 300);
 }
 
 async function openGiftDetail(giftId) {
@@ -4195,9 +4216,24 @@ async function playCaseOpen(caseId, price) {
     if (caseIsOpening) return;
     const cfg = casesConfig.find(c=>c.id===caseId);
     if(!cfg) return;
-    // Бесплатный кейс: только 1, только если доступен
     const realCount = cfg.isFree ? 1 : caseOpenCount;
     const totalCost = Number((price * realCount).toFixed(2));
+    // For free case with channels: MUST verify subscriptions before opening
+    if (cfg.isFree && (cfg.channels||[]).length > 0) {
+        // Verify subscription server-side before opening
+        try {
+            const sr = await fetch('/api/cases/check_subscriptions', {
+                method:'POST', headers:{'Content-Type':'application/json'},
+                body: JSON.stringify({ id: user.id, caseId, channels: cfg.channels })
+            });
+            const sd = await sr.json();
+            if (!sd.allSubscribed) {
+                showToast('Подпишитесь на все каналы!');
+                showCase6ChannelBottomSheet(cfg);
+                return;
+            }
+        } catch(e) { showToast('Ошибка проверки подписки'); return; }
+    }
     if(cfg.isFree && case6Status && !case6Status.available) {
         return showToast('Кейс ещё не доступен');
     }
