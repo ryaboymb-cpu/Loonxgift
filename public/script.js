@@ -710,12 +710,11 @@ function addLiveBetToDOM(b, isInit) {
     d.innerHTML = `
         <div class="live-user">
             <img src="${b.avatar || 'https://cdn-icons-png.flaticon.com/512/149/149071.png'}" class="live-ava">
-            <span style="font-size:10px;color:rgba(255,255,255,.7);max-width:70px;overflow:hidden;text-overflow:ellipsis;">${b.username.split('_')[0].slice(0,10)}</span>
+            <span style="font-size:10px;font-weight:700;color:rgba(255,255,255,.8);max-width:64px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:center;">${b.username.slice(0,9)}</span>
         </div>
-        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:1px;">
-            <span style="font-size:9px;color:rgba(255,255,255,.38);">${b.game}</span>
-            <span style="font-weight:800;font-size:11px;color:${isWin?'#00ff88':'#ff2255'}">${isWin?'+':''}${Number(b.result||0).toFixed(2)}</span>
-        </div>
+        <span style="font-size:9px;color:rgba(255,255,255,.35);">${b.game}</span>
+        <span style="font-weight:800;font-size:12px;color:${isWin?'#00e676':'#ff4444'};">${isWin?'+':''}${Number(b.result||0).toFixed(2)}</span>
+        <span style="font-size:8px;color:rgba(255,255,255,.25);">${b.timeMsk ? b.timeMsk.split(' ')[1]||b.timeMsk : ''}</span>
     `;
 
     if (isInit) {
@@ -2532,120 +2531,137 @@ function doBreakBlock(blkEl, blk, onFullyGone) {
 function spawnPickaxeWorker(blocks, pickType, delay, onDone, onBreak, _u) {
     if (!blocks || !blocks.length) { if (onDone) setTimeout(onDone, delay || 0); return; }
 
-    // Attach pickaxe to document.body with position:fixed
-    // This bypasses any overflow:hidden on parent containers
+    // Get the shaft element — pickaxe lives inside it
+    const shaft = document.getElementById('mc-shaft');
+    if (!shaft) {
+        // Fallback: still call breaks even if shaft missing
+        blocks.forEach(b => { if (onBreak) onBreak(b.r, b.c); });
+        if (onDone) setTimeout(onDone, 100);
+        return;
+    }
+
+    // Temporarily allow overflow so pickaxe can appear above blocks
+    const prevOverflow = shaft.style.overflow;
+    shaft.style.overflow = 'visible';
+
     const img = document.createElement('img');
     img.src = getPickaxeImg(pickType || 'wooden');
-    img.style.cssText = 'position:fixed;z-index:100000;width:28px;height:28px;pointer-events:none;image-rendering:pixelated;display:block;';
-    document.body.appendChild(img);
+    img.style.cssText = [
+        'position:absolute',
+        'width:22px',
+        'height:22px',
+        'z-index:50',
+        'pointer-events:none',
+        'image-rendering:pixelated',
+        'opacity:0',
+        'transform:translate(-50%,-100%) rotate(-15deg)',
+        'transform-origin:bottom center',
+        'left:0',
+        'top:0',
+        'will-change:top,transform,opacity'
+    ].join(';');
+    shaft.appendChild(img);
     _pickaxeEls.add(img);
 
-    let qi = 0;
+    const shaftRect = shaft.getBoundingClientRect();
 
-    function done() {
+    function cleanup() {
         _pickaxeEls.delete(img);
+        shaft.style.overflow = prevOverflow;
         if (img.parentNode) img.remove();
         if (onDone) setTimeout(onDone, 30);
     }
 
+    let qi = 0;
+
     function next() {
-        if (!mineIsActive) { done(); return; }
-        if (qi >= blocks.length) { done(); return; }
+        if (!mineIsActive) { cleanup(); return; }
+        if (qi >= blocks.length) { cleanup(); return; }
 
         const blk = blocks[qi++];
         const el = document.getElementById('mc-blk-' + blk.r + '-' + blk.c);
 
         if (!el || el.dataset.revealed === '1') {
             if (onBreak) onBreak(blk.r, blk.c);
-            next(); // skip immediately
+            setTimeout(next, 20);
             return;
         }
 
-        // Get viewport coordinates of block
-        const R = el.getBoundingClientRect();
-        if (!R || R.width < 2) {
-            // Not visible — still count win
+        // Get block position RELATIVE to shaft
+        const bRect = el.getBoundingClientRect();
+        const cx   = (bRect.left + bRect.width / 2)  - shaftRect.left;
+        const topY = (bRect.top  - 6)                - shaftRect.top;
+        const hitY = (bRect.top  + bRect.height * 0.28) - shaftRect.top;
+
+        if (bRect.width < 1) {
             if (onBreak) onBreak(blk.r, blk.c);
-            next();
+            setTimeout(next, 40);
             return;
         }
 
-        const cx   = R.left + R.width / 2;
-        const aboveY = R.top - 4;         // hover position (just above block)
-        const hitY   = R.top + R.height * 0.3; // impact point
+        const hits = Math.max(1, blk.hits || 1);
 
-        // Place pickaxe at hover position, invisible
+        // Place above block, fade in
         img.style.left    = cx + 'px';
-        img.style.top     = (aboveY - 20) + 'px';
+        img.style.top     = (topY - 16) + 'px';
         img.style.opacity = '0';
-        img.style.transform = 'translate(-50%,-100%) rotate(-20deg)';
+        img.style.transform = 'translate(-50%,-100%) rotate(-15deg)';
 
-        // Fade + slide in
         var t0 = performance.now();
-        var fadeIn = function(ts) {
-            var p = Math.min((ts - t0) / 140, 1);
-            img.style.top = (aboveY - 20 + 20 * p) + 'px';
+        (function fadeIn(ts) {
+            var p = Math.min((ts - t0) / 130, 1);
+            img.style.top     = (topY - 16 + 16 * p) + 'px';
             img.style.opacity = String(p);
-            if (p < 1) { requestAnimationFrame(fadeIn); return; }
-            img.style.top = aboveY + 'px';
-            img.style.opacity = '1';
-            // Start swinging after appear
-            setTimeout(function() { swing(Math.max(1, blk.hits || 1), 0); }, 30);
-        };
-        requestAnimationFrame(fadeIn);
+            if (p < 1) requestAnimationFrame(fadeIn);
+            else {
+                img.style.top = topY + 'px';
+                img.style.opacity = '1';
+                setTimeout(function() { doSwing(hits, 0); }, 20);
+            }
+        })(performance.now());
 
-        function swing(hitsLeft, hitN) {
-            if (!mineIsActive) { done(); return; }
+        function doSwing(left, n) {
+            if (!mineIsActive) { cleanup(); return; }
+            img.style.transform = 'translate(-50%,-100%) rotate(' + (n%2===0 ? 20 : -20) + 'deg)';
 
-            // Swing pickaxe (rotate then drive down)
-            var angle = (hitN % 2 === 0) ? 25 : -25;
-            img.style.transform = 'translate(-50%,-100%) rotate(' + angle + 'deg)';
+            // Down
+            var td = performance.now();
+            (function down(ts) {
+                if (!mineIsActive) { cleanup(); return; }
+                var p = Math.min((ts - td) / 110, 1);
+                img.style.top = (topY + (hitY - topY) * (p * p)) + 'px';
+                if (p < 1) { requestAnimationFrame(down); return; }
 
-            // Animate DOWN
-            var tDown = performance.now();
-            var goDown = function(ts) {
-                if (!mineIsActive) { done(); return; }
-                var p = Math.min((ts - tDown) / 120, 1);
-                var eased = p * p; // ease-in
-                img.style.top = (aboveY + (hitY - aboveY) * eased) + 'px';
-                if (p < 1) { requestAnimationFrame(goDown); return; }
-
-                // IMPACT
+                // Impact
                 img.style.top = hitY + 'px';
                 img.style.transform = 'translate(-50%,-100%) rotate(0deg)';
                 playSound('hit');
                 flashBlock(el);
-
-                // Crack indicator
                 el.classList.remove('cracking-1','cracking-2','cracking-3');
-                if (hitsLeft > 1) {
-                    el.classList.add((hitN + 1) / Math.max(1, blk.hits || 1) > 0.5 ? 'cracking-2' : 'cracking-1');
+                if (left > 1) {
+                    el.classList.add((n+1)/hits > 0.5 ? 'cracking-2' : 'cracking-1');
                 } else {
                     el.classList.add('cracking-3');
                 }
 
-                // Animate UP (bounce back)
-                var tUp = performance.now();
-                var goUp = function(ts2) {
-                    if (!mineIsActive) { done(); return; }
-                    var p2 = Math.min((ts2 - tUp) / 140, 1);
-                    var eUp = 1 - Math.pow(1 - p2, 2); // ease-out
-                    img.style.top = (hitY + (aboveY - hitY) * eUp) + 'px';
-                    if (p2 < 1) { requestAnimationFrame(goUp); return; }
-                    img.style.top = aboveY + 'px';
+                // Up
+                var tu = performance.now();
+                (function up(ts2) {
+                    if (!mineIsActive) { cleanup(); return; }
+                    var p2 = Math.min((ts2 - tu) / 130, 1);
+                    var eu = 1 - Math.pow(1 - p2, 2);
+                    img.style.top = (hitY + (topY - hitY) * eu) + 'px';
+                    if (p2 < 1) { requestAnimationFrame(up); return; }
+                    img.style.top = topY + 'px';
 
-                    if (hitsLeft <= 1) {
-                        // Last hit — break block
+                    if (left <= 1) {
                         doBreakBlock(el, blk, function() { if (onBreak) onBreak(blk.r, blk.c); });
                         setTimeout(next, 80);
                     } else {
-                        // More hits — continue
-                        setTimeout(function() { swing(hitsLeft - 1, hitN + 1); }, 25);
+                        setTimeout(function() { doSwing(left - 1, n + 1); }, 25);
                     }
-                };
-                requestAnimationFrame(goUp);
-            };
-            requestAnimationFrame(goDown);
+                })(performance.now());
+            })(performance.now());
         }
     }
 
@@ -3425,19 +3441,19 @@ async function loadGiftsPage() {
                             ${g.imageUrl
                                 ? `<img src="${g.imageUrl}" alt="${g.name}" crossorigin="anonymous" referrerpolicy="no-referrer" style="width:100%;height:100%;object-fit:cover;" loading="lazy" onerror="this.style.display='none';this.parentNode.querySelector('.nft-ph').style.display='flex'">`
                                 : ''}
-                            <div class="nft-ph" style="display:${g.imageUrl?'none':'flex'};flex-direction:column;align-items:center;justify-content:center;width:100%;height:100%;position:absolute;inset:0;">
-                                <svg width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="rgba(0,229,255,.6)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                            <div class="nft-ph" style="display:${g.imageUrl?'none':'flex'};flex-direction:column;align-items:center;justify-content:center;width:100%;height:100%;position:absolute;inset:0;background:linear-gradient(135deg,#0a1628,#0d1f35);">
+                                <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="rgba(0,200,255,.55)" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
                                     <path d="M20 12v10H4V12"/><path d="M22 7H2v5h20V7z"/><path d="M12 22V7"/>
                                     <path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/>
                                     <path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/>
                                 </svg>
-                                <div style="font-size:9px;color:rgba(0,229,255,.4);margin-top:5px;font-weight:700;letter-spacing:1px;">NFT</div>
+                                <div style="font-size:9px;color:rgba(255,255,255,.35);margin-top:6px;font-weight:600;letter-spacing:.5px;max-width:80%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:center;">${g.name||'NFT'}</div>
                             </div>
                             ${priceStr ? `<div class="gift-price-badge">${priceStr}</div>` : ''}
                         </div>
-                        <div style="padding:9px 11px 11px;">
-                            <div style="font-size:12px;font-weight:800;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${g.name||'NFT Подарок'}</div>
-                            <div style="font-size:10px;color:${priceStr?'rgba(0,255,136,.55)':'rgba(255,255,255,.28)'};margin-top:2px;">${priceStr||'—'}</div>
+                        <div style="padding:8px 10px 10px;">
+                            <div style="font-size:11px;font-weight:800;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${g.name||'NFT Подарок'}</div>
+                            <div style="font-size:10px;font-weight:700;color:${priceStr?'#00e676':'rgba(255,255,255,.3)'};margin-top:2px;">${priceStr||'Цена уточняется'}</div>
                         </div>
                     </div>`;
                 }).join('')}
