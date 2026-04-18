@@ -707,14 +707,14 @@ function addLiveBetToDOM(b, isInit) {
     const timeHtml = b.timeMsk ? `<span style="font-size:9px; color:#555; margin-left:5px;">${b.timeMsk}</span>` : '';
     const nameStr = b.username.includes('VS') ? `<span style="font-size:9px;">${b.username}</span>` : `${b.username} <span style="color:var(--neon); font-size:9px;">(${(b.balance||0).toFixed(2)} T)</span>`;
 
+    // Horizontal ribbon card: avatar | name+game | amount+time
     d.innerHTML = `
-        <div class="live-user">
-            <img src="${b.avatar || 'https://cdn-icons-png.flaticon.com/512/149/149071.png'}" class="live-ava">
-            <span style="font-size:10px;font-weight:700;color:rgba(255,255,255,.8);max-width:64px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:center;">${b.username.slice(0,9)}</span>
+        <img src="${b.avatar || 'https://cdn-icons-png.flaticon.com/512/149/149071.png'}" class="live-ava">
+        <div style="flex:1;min-width:0;overflow:hidden;">
+            <div style="font-size:10px;font-weight:700;color:#fff;overflow:hidden;text-overflow:ellipsis;">${b.username.slice(0,11)}</div>
+            <div style="font-size:9px;color:rgba(255,255,255,.38);margin-top:1px;">${b.game} · ${b.timeMsk ? (b.timeMsk.split(' ')[1]||'').slice(0,5) : ''}</div>
         </div>
-        <span style="font-size:9px;color:rgba(255,255,255,.35);">${b.game}</span>
-        <span style="font-weight:800;font-size:12px;color:${isWin?'#00e676':'#ff4444'};">${isWin?'+':''}${Number(b.result||0).toFixed(2)}</span>
-        <span style="font-size:8px;color:rgba(255,255,255,.25);">${b.timeMsk ? b.timeMsk.split(' ')[1]||b.timeMsk : ''}</span>
+        <div style="font-weight:800;font-size:11px;color:${isWin?'#00e676':'#ff4466'};flex-shrink:0;">${isWin?'+':''}${Number(b.result||0).toFixed(2)}</div>
     `;
 
     if (isInit) {
@@ -2531,50 +2531,32 @@ function doBreakBlock(blkEl, blk, onFullyGone) {
 function spawnPickaxeWorker(blocks, pickType, delay, onDone, onBreak, _u) {
     if (!blocks || !blocks.length) { if (onDone) setTimeout(onDone, delay || 0); return; }
 
-    // Get the shaft element — pickaxe lives inside it
     const shaft = document.getElementById('mc-shaft');
     if (!shaft) {
-        // Fallback: still call breaks even if shaft missing
         blocks.forEach(b => { if (onBreak) onBreak(b.r, b.c); });
-        if (onDone) setTimeout(onDone, 100);
+        if (onDone) setTimeout(onDone, 50);
         return;
     }
 
-    // Temporarily allow overflow so pickaxe can appear above blocks
-    const prevOverflow = shaft.style.overflow;
-    shaft.style.overflow = 'visible';
+    // Use CSS class (.pick-active) to override overflow:hidden !important
+    shaft.classList.add('pick-active');
 
     const img = document.createElement('img');
     img.src = getPickaxeImg(pickType || 'wooden');
-    img.style.cssText = [
-        'position:absolute',
-        'width:22px',
-        'height:22px',
-        'z-index:50',
-        'pointer-events:none',
-        'image-rendering:pixelated',
-        'opacity:0',
-        'transform:translate(-50%,-100%) rotate(-15deg)',
-        'transform-origin:bottom center',
-        'left:0',
-        'top:0',
-        'will-change:top,transform,opacity'
-    ].join(';');
+    img.style.cssText = 'position:absolute;width:22px;height:22px;z-index:50;pointer-events:none;image-rendering:pixelated;opacity:0;transform-origin:bottom center;';
     shaft.appendChild(img);
     _pickaxeEls.add(img);
 
-    const shaftRect = shaft.getBoundingClientRect();
-
     function cleanup() {
         _pickaxeEls.delete(img);
-        shaft.style.overflow = prevOverflow;
+        shaft.classList.remove('pick-active');
         if (img.parentNode) img.remove();
         if (onDone) setTimeout(onDone, 30);
     }
 
     let qi = 0;
 
-    function next() {
+    function processBlock() {
         if (!mineIsActive) { cleanup(); return; }
         if (qi >= blocks.length) { cleanup(); return; }
 
@@ -2583,89 +2565,88 @@ function spawnPickaxeWorker(blocks, pickType, delay, onDone, onBreak, _u) {
 
         if (!el || el.dataset.revealed === '1') {
             if (onBreak) onBreak(blk.r, blk.c);
-            setTimeout(next, 20);
+            processBlock(); // immediately next
             return;
         }
 
-        // Get block position RELATIVE to shaft
+        // Get fresh shaft rect each time (page may scroll)
+        const sRect = shaft.getBoundingClientRect();
         const bRect = el.getBoundingClientRect();
-        const cx   = (bRect.left + bRect.width / 2)  - shaftRect.left;
-        const topY = (bRect.top  - 6)                - shaftRect.top;
-        const hitY = (bRect.top  + bRect.height * 0.28) - shaftRect.top;
-
-        if (bRect.width < 1) {
+        if (!sRect || sRect.width < 1 || !bRect || bRect.width < 1) {
             if (onBreak) onBreak(blk.r, blk.c);
-            setTimeout(next, 40);
+            setTimeout(processBlock, 50);
             return;
         }
 
-        const hits = Math.max(1, blk.hits || 1);
+        // Coordinates relative to shaft
+        const cx    = (bRect.left + bRect.width / 2) - sRect.left;
+        const above = (bRect.top - sRect.top) - 2;        // just above block
+        const hit   = (bRect.top - sRect.top) + bRect.height * 0.25;
 
-        // Place above block, fade in
+        const numHits = Math.max(1, blk.hits || 1);
+
+        // STEP 1: Place pickaxe above block using CSS transition
+        img.style.transition = 'none';
         img.style.left    = cx + 'px';
-        img.style.top     = (topY - 16) + 'px';
+        img.style.top     = (above - 14) + 'px';
         img.style.opacity = '0';
-        img.style.transform = 'translate(-50%,-100%) rotate(-15deg)';
+        img.style.transform = 'translate(-50%,-100%) rotate(-18deg)';
 
-        var t0 = performance.now();
-        (function fadeIn(ts) {
-            var p = Math.min((ts - t0) / 130, 1);
-            img.style.top     = (topY - 16 + 16 * p) + 'px';
-            img.style.opacity = String(p);
-            if (p < 1) requestAnimationFrame(fadeIn);
-            else {
-                img.style.top = topY + 'px';
-                img.style.opacity = '1';
-                setTimeout(function() { doSwing(hits, 0); }, 20);
-            }
-        })(performance.now());
+        // STEP 2: Slide in (after one paint frame so 'none' transition applies)
+        setTimeout(function() {
+            img.style.transition = 'top 0.15s ease-out, opacity 0.12s';
+            img.style.top     = above + 'px';
+            img.style.opacity = '1';
 
-        function doSwing(left, n) {
+            // STEP 3: Start swinging after slide-in
+            setTimeout(function() { doHit(numHits, 0); }, 170);
+        }, 16);
+
+        function doHit(rem, n) {
             if (!mineIsActive) { cleanup(); return; }
-            img.style.transform = 'translate(-50%,-100%) rotate(' + (n%2===0 ? 20 : -20) + 'deg)';
 
-            // Down
-            var td = performance.now();
-            (function down(ts) {
-                if (!mineIsActive) { cleanup(); return; }
-                var p = Math.min((ts - td) / 110, 1);
-                img.style.top = (topY + (hitY - topY) * (p * p)) + 'px';
-                if (p < 1) { requestAnimationFrame(down); return; }
+            // Swing to one side
+            img.style.transition = 'transform 0.1s ease-in';
+            img.style.transform  = 'translate(-50%,-100%) rotate(' + (n%2===0 ? 22 : -22) + 'deg)';
 
-                // Impact
-                img.style.top = hitY + 'px';
+            // Drive DOWN using CSS transition
+            setTimeout(function() {
+                img.style.transition = 'top 0.12s ease-in, transform 0.08s';
+                img.style.top       = hit + 'px';
                 img.style.transform = 'translate(-50%,-100%) rotate(0deg)';
-                playSound('hit');
-                flashBlock(el);
-                el.classList.remove('cracking-1','cracking-2','cracking-3');
-                if (left > 1) {
-                    el.classList.add((n+1)/hits > 0.5 ? 'cracking-2' : 'cracking-1');
-                } else {
-                    el.classList.add('cracking-3');
-                }
 
-                // Up
-                var tu = performance.now();
-                (function up(ts2) {
+                // IMPACT at bottom
+                setTimeout(function() {
                     if (!mineIsActive) { cleanup(); return; }
-                    var p2 = Math.min((ts2 - tu) / 130, 1);
-                    var eu = 1 - Math.pow(1 - p2, 2);
-                    img.style.top = (hitY + (topY - hitY) * eu) + 'px';
-                    if (p2 < 1) { requestAnimationFrame(up); return; }
-                    img.style.top = topY + 'px';
-
-                    if (left <= 1) {
-                        doBreakBlock(el, blk, function() { if (onBreak) onBreak(blk.r, blk.c); });
-                        setTimeout(next, 80);
+                    playSound('hit');
+                    flashBlock(el);
+                    el.classList.remove('cracking-1','cracking-2','cracking-3');
+                    if (rem > 1) {
+                        el.classList.add((n+1)/numHits > 0.5 ? 'cracking-2' : 'cracking-1');
                     } else {
-                        setTimeout(function() { doSwing(left - 1, n + 1); }, 25);
+                        el.classList.add('cracking-3');
                     }
-                })(performance.now());
-            })(performance.now());
+
+                    // Bounce BACK UP
+                    img.style.transition = 'top 0.14s ease-out';
+                    img.style.top = above + 'px';
+
+                    setTimeout(function() {
+                        if (!mineIsActive) { cleanup(); return; }
+                        if (rem <= 1) {
+                            // Break and move to next block
+                            doBreakBlock(el, blk, function() { if (onBreak) onBreak(blk.r, blk.c); });
+                            setTimeout(processBlock, 90);
+                        } else {
+                            setTimeout(function() { doHit(rem-1, n+1); }, 25);
+                        }
+                    }, 145);
+                }, 125);
+            }, 100);
         }
     }
 
-    setTimeout(next, delay || 0);
+    setTimeout(processBlock, delay || 0);
 }
 
 // ── Взрыв ТНТ (область 2×2 от позиции) ─────────────────────
@@ -3439,7 +3420,8 @@ async function loadGiftsPage() {
                         style="background:#0a0a18;border:1px solid rgba(255,255,255,.09);border-radius:16px;overflow:hidden;cursor:pointer;animation:fadeIn .3s ease ${idx*0.05}s both;">
                         <div class="gift-img-container" style="background:linear-gradient(135deg,#0d1520,#162030);">
                             ${g.imageUrl
-                                ? `<img src="${g.imageUrl}" alt="${g.name}" crossorigin="anonymous" referrerpolicy="no-referrer" style="width:100%;height:100%;object-fit:cover;" loading="lazy" onerror="this.style.display='none';this.parentNode.querySelector('.nft-ph').style.display='flex'">`
+                                ? `<img src="${g.imageUrl}" alt="${g.name}" style="width:100%;height:100%;object-fit:cover;display:block;" loading="lazy"
+                                    onerror="this.onerror=null;this.src='/favicon.ico';this.style.display='none';var ph=this.parentNode.querySelector('.nft-ph');if(ph)ph.style.display='flex';">`
                                 : ''}
                             <div class="nft-ph" style="display:${g.imageUrl?'none':'flex'};flex-direction:column;align-items:center;justify-content:center;width:100%;height:100%;position:absolute;inset:0;background:linear-gradient(135deg,#0a1628,#0d1f35);">
                                 <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="rgba(0,200,255,.55)" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
