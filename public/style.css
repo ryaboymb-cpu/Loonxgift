@@ -2076,7 +2076,7 @@ button.btn[style*="neon-blue"] {
     z-index: 2 !important;
 }
 .gc-name {
-    font-size: 13px !important;
+    font-size: 12px !important;
     font-weight: 800 !important;
     color: #fff !important;
     text-shadow: 0 1px 5px rgba(0,0,0,.9);
@@ -2117,10 +2117,10 @@ button.btn[style*="neon-blue"] {
     backdrop-filter: blur(12px) !important;
     -webkit-backdrop-filter: blur(12px) !important;
     border: 1px solid rgba(255,255,255,.09) !important;
-    border-radius: 20px !important;
-    padding: 5px 10px 5px 5px !important;
-    min-width: 130px !important;
-    max-width: 165px !important;
+    border-radius: 12px !important;
+    padding: 6px 10px 6px 7px !important;
+    min-width: 145px !important;
+    max-width: 175px !important;
     flex-shrink: 0 !important;
     cursor: default;
     white-space: nowrap;
