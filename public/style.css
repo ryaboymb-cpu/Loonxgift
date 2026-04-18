@@ -1885,93 +1885,137 @@ button.btn[style*="neon-blue"] {
     border-radius: 18px;
 }
 
-/* ════ LIVE RIBBON ════ */
-#live-ribbon::-webkit-scrollbar { display: none; }
-#live-ribbon #feed-list .live-bet-item {
-    display: inline-flex !important;
-    flex-direction: row !important;
-    align-items: center;
-    gap: 7px;
-    background: rgba(255,255,255,.05);
-    backdrop-filter: blur(10px);
-    border: 1px solid rgba(255,255,255,.09);
-    border-radius: 22px;
-    padding: 5px 10px 5px 5px;
-    white-space: nowrap;
-    min-width: 120px;
-    font-size: 11px;
-}
-#live-ribbon #feed-list .live-bet-item .live-user {
-    display: flex;
-    align-items: center;
-    gap: 5px;
-}
-#live-ribbon #feed-list .live-ava {
-    width: 22px !important;
-    height: 22px !important;
-    border-radius: 50%;
-    object-fit: cover;
-    border: 1px solid rgba(255,255,255,.15);
-}
 
-/* ════ GAME CARDS — bigger glass ════ */
+
+/* ════ GAME CARDS REDESIGN ════ */
 .games-grid {
     display: grid !important;
     grid-template-columns: 1fr 1fr !important;
-    gap: 10px !important;
-    margin-bottom: 8px;
+    gap: 9px !important;
 }
 .gc {
     position: relative;
-    border-radius: 18px !important;
+    border-radius: 16px !important;
     overflow: hidden;
     cursor: pointer;
-    min-height: 100px !important;
-    padding: 14px 14px 16px !important;
+    height: 88px !important;
+    padding: 0 !important;
     -webkit-tap-highlight-color: transparent;
-    transition: transform .1s, box-shadow .15s;
-    background: rgba(255,255,255,.04) !important;
-    backdrop-filter: blur(12px);
-    border: 1px solid rgba(255,255,255,.09) !important;
-    box-shadow: 0 4px 20px rgba(0,0,0,.3), inset 0 1px 0 rgba(255,255,255,.07);
-    display: flex !important;
-    flex-direction: column !important;
-    justify-content: flex-end !important;
+    transition: transform .12s ease, box-shadow .12s ease;
+    border: 1px solid rgba(255,255,255,.08) !important;
+    box-shadow: 0 4px 16px rgba(0,0,0,.4);
 }
-.gc:active {
-    transform: scale(.95) !important;
-    box-shadow: 0 2px 10px rgba(0,0,0,.4) !important;
+.gc:active { transform: scale(.94) !important; }
+
+/* Each game gets its own gradient bg color via data-game attribute */
+.gc[data-game="crash"]   { background: linear-gradient(135deg, #1a0a28 0%, #2d0e42 100%); }
+.gc[data-game="mines"]   { background: linear-gradient(135deg, #001a0a 0%, #003318 100%); }
+.gc[data-game="coinflip"]{ background: linear-gradient(135deg, #1a1400 0%, #332a00 100%); }
+.gc[data-game="case"]    { background: linear-gradient(135deg, #1a0018 0%, #2e0030 100%); }
+.gc[data-game="battle"]  { background: linear-gradient(135deg, #0a001a 0%, #1a003a 100%); }
+.gc[data-game="spin"]    { background: linear-gradient(135deg, #1a0a00 0%, #331800 100%); }
+.gc[data-game="mine"]    { background: linear-gradient(135deg, #001a0a 0%, #0a2a14 100%); }
+.gc[data-game="upgrade"] { background: linear-gradient(135deg, #001020 0%, #002040 100%); }
+
+/* Glass shimmer overlay */
+.gc::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, rgba(255,255,255,.06) 0%, transparent 60%);
+    z-index: 1;
+    pointer-events: none;
+}
+/* Bottom gradient so text is always readable */
+.gc::after {
+    content: '';
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 60%;
+    background: linear-gradient(to top, rgba(0,0,0,.7) 0%, transparent 100%);
+    z-index: 1;
+    pointer-events: none;
 }
 .gc-bg {
     position: absolute !important;
     inset: 0 !important;
-    opacity: .85;
-    z-index: 0;
-    border-radius: inherit;
+    opacity: .22 !important;
+    z-index: 0 !important;
+    background-size: cover !important;
+    background-position: center !important;
 }
 .gc-icon-wrap {
-    position: relative;
-    z-index: 2;
-    font-size: 28px !important;
-    line-height: 1;
-    margin-bottom: 6px !important;
-    filter: drop-shadow(0 2px 6px rgba(0,0,0,.5));
+    position: absolute !important;
+    top: 10px !important;
+    right: 12px !important;
+    z-index: 2 !important;
+    font-size: 26px !important;
+    line-height: 1 !important;
+    opacity: .9;
 }
-.gc-emoji { font-size: 32px !important; }
 .gc-info {
-    position: relative;
-    z-index: 2;
+    position: absolute !important;
+    bottom: 11px !important;
+    left: 12px !important;
+    z-index: 2 !important;
+    right: 8px;
 }
 .gc-name {
-    font-size: 14px !important;
-    font-weight: 900 !important;
-    color: #fff;
-    text-shadow: 0 1px 4px rgba(0,0,0,.6);
-    letter-spacing: .3px;
+    font-size: 13px !important;
+    font-weight: 800 !important;
+    color: #fff !important;
+    letter-spacing: .2px;
+    text-shadow: 0 1px 4px rgba(0,0,0,.8);
+    display: block;
 }
 .gc-desc {
     font-size: 10px !important;
-    color: rgba(255,255,255,.55);
-    margin-top: 2px !important;
-    text-shadow: 0 1px 3px rgba(0,0,0,.5);
+    color: rgba(255,255,255,.5) !important;
+    margin-top: 1px !important;
+    display: block;
+}
+
+/* ════ LIVE RIBBON ════ */
+#live-ribbon {
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+    padding-bottom: 8px;
+    margin-bottom: 6px;
+}
+#live-ribbon::-webkit-scrollbar { display: none; }
+#live-ribbon #feed-list {
+    display: inline-flex;
+    gap: 7px;
+    padding: 2px 0;
+}
+.live-bet-item {
+    display: inline-flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    gap: 4px !important;
+    background: rgba(255,255,255,.055) !important;
+    backdrop-filter: blur(14px) !important;
+    -webkit-backdrop-filter: blur(14px) !important;
+    border: 1px solid rgba(255,255,255,.1) !important;
+    border-radius: 14px !important;
+    padding: 8px 10px !important;
+    min-width: 68px !important;
+    max-width: 80px !important;
+    flex-shrink: 0 !important;
+    cursor: default;
+}
+.live-ava {
+    width: 28px !important;
+    height: 28px !important;
+    border-radius: 50% !important;
+    object-fit: cover !important;
+    border: 1.5px solid rgba(255,255,255,.18) !important;
+    display: block !important;
+}
+.live-bet-item .live-user {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    gap: 3px !important;
 }
