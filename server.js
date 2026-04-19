@@ -2759,6 +2759,59 @@ app.post('/api/gifts/nft_image', async (req, res) => {
     } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
+// ── Admin: list users with NFTs ──
+app.post('/api/admin/nft_users', checkAdmin, async (req, res) => {
+    try {
+        const allGifts = await Gift.find({ withdrawRequested: false }).sort({ createdAt: -1 });
+        const byUser = {};
+        for (const g of allGifts) {
+            if (!byUser[g.userId]) byUser[g.userId] = [];
+            byUser[g.userId].push(g.toObject());
+        }
+        const userIds = Object.keys(byUser);
+        const users = await User.find({ id: { $in: userIds } }, 'id username photo');
+        const result = users.map(u => ({
+            id: u.id, username: u.username, photo: u.photo,
+            gifts: byUser[u.id] || []
+        })).sort((a,b) => b.gifts.length - a.gifts.length);
+        res.json({ users: result });
+    } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Admin: user NFT inventory ──
+app.post('/api/admin/nft_user_gifts', checkAdmin, async (req, res) => {
+    try {
+        const { userId } = req.body;
+        const user  = await User.findOne({ id: String(userId) }, 'id username photo balance');
+        const gifts = await Gift.find({ userId: String(userId) }).sort({ createdAt: -1 });
+        // Enrich with catalog prices
+        const catalog = await NFTCatalog.find({});
+        const enriched = gifts.map(g => {
+            const obj = g.toObject();
+            if (!obj.price && obj.giftUrl) {
+                const slug = (obj.giftUrl.match(/t\.me\/nft\/([^/?&#]+)/i)||[])[1]||'';
+                const modelN = slug.replace(/-\d+$/, '');
+                const cat = catalog.find(c => c.modelName === modelN || c.giftUrl === obj.giftUrl);
+                if (cat && cat.price > 0) obj.price = cat.price;
+                if (cat && cat.imageUrl && !obj.imageUrl) obj.imageUrl = cat.imageUrl;
+            }
+            return obj;
+        });
+        res.json({ user: user ? user.toObject() : {id:userId}, gifts: enriched });
+    } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Admin: delete specific NFT gift ──
+app.post('/api/admin/nft_delete_gift', checkAdmin, async (req, res) => {
+    try {
+        const { giftId } = req.body;
+        const gift = await Gift.findByIdAndDelete(giftId);
+        if (!gift) return res.status(404).json({ error: 'Не найден' });
+        await logAdmin(`Удалён NFT "${gift.name}" у пользователя ${gift.userId}`);
+        res.json({ ok: true });
+    } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 Server Running on port ${PORT}`);
