@@ -2259,9 +2259,9 @@ app.post('/api/cases/check_subscriptions', async (req, res) => {
                 const r = await fetch(`https://api.telegram.org/bot${token}/getChatMember?chat_id=${encodeURIComponent(chId)}&user_id=${id}`);
                 const d = await r.json();
                 if (!d.ok) {
-                    // Канал недоступен боту — логируем и пропускаем (для публичных каналов должно работать)
-                    console.warn(`[Sub check] Бот не может проверить ${chId}: ${d.description||'нет доступа'}. Добавьте бота в канал.`);
-                    continue;
+                    console.warn(`[Sub check] Cannot check ${chId}: ${d.description}`);
+                    // If bot not in channel — block access (bot must be admin of channel)
+                    return res.json({ok:false, subscribed:false, error:`Бот не добавлен в ${chId}. Добавьте бота как администратора.`});
                 }
                 const status = d.result?.status;
                 const isIn = ['creator','administrator','member'].includes(status);
