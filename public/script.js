@@ -2531,19 +2531,32 @@ function doBreakBlock(blkEl, blk, onFullyGone) {
 }
 
 // ── ВОРКЕР-КИРКА ──────────────────────────────────────────────
-// Зеркальная копия dropTNT — position:fixed на body, координаты viewport
+// ФИНАЛЬНАЯ ВЕРСИЯ: убираем overflow:hidden у родителей на время анимации
+// чтобы position:fixed не обрезалось в Telegram WebView
 function spawnPickaxeWorker(blocks, pickType, startDelay, onAllDone, onBlockBroken, _u) {
     if (!blocks || !blocks.length) { if (onAllDone) setTimeout(onAllDone, 50); return; }
 
+    // Временно убираем overflow у всех контейнеров (это обходит баг Telegram WebView)
+    const overflowTargets = [
+        document.querySelector('.app-wrapper'),
+        document.querySelector('.content'),
+        document.getElementById('page-mine'),
+        document.querySelector('.mine-card'),
+    ].filter(Boolean);
+    const savedOverflow = overflowTargets.map(el => ({ el, ov: el.style.overflow }));
+    overflowTargets.forEach(el => { el.style.overflow = 'visible'; });
+
     const img = document.createElement('img');
     img.src   = getPickaxeImg(pickType || 'wooden');
-    img.style.cssText = 'position:fixed;z-index:99999;pointer-events:none;image-rendering:pixelated;width:28px;height:28px;display:block;';
+    img.style.cssText = 'position:fixed;z-index:2147483647;pointer-events:none;image-rendering:pixelated;width:28px;height:28px;display:block;left:-200px;top:-200px;';
     document.body.appendChild(img);
     _pickaxeEls.add(img);
 
     function removePick() {
         _pickaxeEls.delete(img);
         if (img.parentNode) img.remove();
+        // Восстанавливаем overflow
+        savedOverflow.forEach(function(o) { o.el.style.overflow = o.ov; });
         if (onAllDone) setTimeout(onAllDone, 30);
     }
 
@@ -2553,7 +2566,7 @@ function spawnPickaxeWorker(blocks, pickType, startDelay, onAllDone, onBlockBrok
         if (!mineIsActive) { removePick(); return; }
         if (qi >= blocks.length) { removePick(); return; }
 
-        const blk  = blocks[qi++];
+        const blk   = blocks[qi++];
         const blkEl = document.getElementById('mc-blk-' + blk.r + '-' + blk.c);
 
         if (!blkEl || blkEl.dataset.revealed === '1') {
@@ -2569,45 +2582,45 @@ function spawnPickaxeWorker(blocks, pickType, startDelay, onAllDone, onBlockBrok
             return;
         }
 
-        // Mirror TNT: left = rect.left, top starts ABOVE block
-        const lft      = rect.left + (rect.width - 28) / 2;
-        const dropFrom = rect.top - 36;
-        const hoverAt  = rect.top - 6;
-        const hitAt    = rect.top + rect.height * 0.25;
-        const numHits  = Math.max(1, blk.hits || 1);
+        const lft     = rect.left + (rect.width - 28) / 2;
+        const fromTop = rect.top - 40;
+        const hoverY  = rect.top - 4;
+        const hitY    = rect.top + rect.height * 0.28;
+        const numHits = Math.max(1, blk.hits || 1);
 
-        img.style.left = lft + 'px';
-        img.style.top  = dropFrom + 'px';
+        // НАЧАЛЬНАЯ ПОЗИЦИЯ — точно как TNT
+        img.style.left      = lft + 'px';
+        img.style.top       = fromTop + 'px';
         img.style.transform = 'rotate(-20deg)';
 
-        // Drop in — same as TNT (easeBounce, 320ms)
-        _anim(img, 'top', dropFrom, hoverAt, 320, easeBounce, function() {
+        // ПАДЕНИЕ С ОТСКОКОМ — точно как TNT
+        _anim(img, 'top', fromTop, hoverY, 350, easeBounce, function() {
             img.style.transform = 'rotate(0deg)';
-            setTimeout(function() { doSwing(numHits, 0); }, 60);
+            setTimeout(function() { doStrike(numHits, 0); }, 60);
         });
 
-        function doSwing(rem, n) {
+        function doStrike(rem, n) {
             if (!mineIsActive) { removePick(); return; }
             img.style.transform = 'rotate(' + (n % 2 === 0 ? 28 : -28) + 'deg)';
             setTimeout(function() {
-                _anim(img, 'top', hoverAt, hitAt, 110, easeIn, function() {
+                _anim(img, 'top', hoverY, hitY, 120, easeIn, function() {
                     img.style.transform = 'rotate(0deg)';
                     playSound('hit');
                     flashBlock(blkEl);
                     blkEl.classList.remove('cracking-1','cracking-2','cracking-3');
                     if (rem > 1) blkEl.classList.add((n+1)/numHits > 0.5 ? 'cracking-2' : 'cracking-1');
                     else         blkEl.classList.add('cracking-3');
-                    _anim(img, 'top', hitAt, hoverAt, 150, easeOut, function() {
+                    _anim(img, 'top', hitY, hoverY, 160, easeOut, function() {
                         if (!mineIsActive) { removePick(); return; }
                         if (rem <= 1) {
                             doBreakBlock(blkEl, blk, function() { if (onBlockBroken) onBlockBroken(blk.r, blk.c); });
                             setTimeout(goNext, 100);
                         } else {
-                            setTimeout(function() { doSwing(rem-1, n+1); }, 25);
+                            setTimeout(function() { doStrike(rem-1, n+1); }, 25);
                         }
                     });
                 });
-            }, 95);
+            }, 90);
         }
     }
 
@@ -3377,9 +3390,10 @@ async function loadGiftsPage() {
                         style="background:#0a0a18;border:1px solid rgba(255,255,255,.09);border-radius:16px;overflow:hidden;cursor:pointer;animation:fadeIn .3s ease ${idx*0.05}s both;">
                         <div class="gift-img-container" style="background:linear-gradient(135deg,#0d1520,#162030);">
                             ${g.imageUrl
-                                ? `<img src="${g.imageUrl}" alt="${g.name}" style="width:100%;height:100%;object-fit:cover;display:block;" loading="lazy"
+                                ? `<img src="${g.imageUrl}" alt="${g.name}" crossorigin="anonymous" referrerpolicy="no-referrer" style="width:100%;height:100%;object-fit:cover;display:block;" loading="lazy"
                                     onerror="this.onerror=null;this.style.display='none';var ph=this.parentNode.querySelector('.nft-ph');if(ph)ph.style.display='flex';">`
-                                : (g.giftUrl ? `<img data-nft-url="${g.giftUrl}" data-gift-id="${g._id}" style="width:100%;height:100%;object-fit:cover;display:none;" loading="lazy" class="nft-lazy-img">` : '')}
+                                : ''}
+                            ${!g.imageUrl && g.giftUrl ? `<img data-nft-url="${g.giftUrl}" data-gift-id="${g._id}" style="width:100%;height:100%;object-fit:cover;display:none;position:absolute;inset:0;" loading="lazy" class="nft-lazy-img">` : ''}
                             <div class="nft-ph" style="display:${g.imageUrl?'none':'flex'};flex-direction:column;align-items:center;justify-content:center;width:100%;height:100%;position:absolute;inset:0;background:linear-gradient(135deg,#0a1628,#0d1f35);">
                                 <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="rgba(0,200,255,.55)" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
                                     <path d="M20 12v10H4V12"/><path d="M22 7H2v5h20V7z"/><path d="M12 22V7"/>
@@ -3662,11 +3676,13 @@ async function adminViewNFTInventory(userId) {
             ${gifts.map(g => `
             <div style="background:#0d0d1e;border:1px solid rgba(255,255,255,.08);border-radius:14px;overflow:hidden;">
                 <div style="width:100%;aspect-ratio:1;background:#0a1628;display:flex;align-items:center;justify-content:center;position:relative;">
-                    ${g.imageUrl ? `<img src="${g.imageUrl}" style="width:100%;height:100%;object-fit:cover;">` : '<div style="font-size:32px;">🎁</div>'}
-                    <div style="position:absolute;bottom:6px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.75);border-radius:12px;padding:2px 8px;font-size:10px;font-weight:800;color:#00ff88;">${g.price ? g.price.toFixed(2)+' TON' : '—'}</div>
+                    ${g.imageUrl ? `<img src="${g.imageUrl}" crossorigin="anonymous" style="width:100%;height:100%;object-fit:cover;" onerror="this.style.display='none'">` : '<div style="font-size:32px;opacity:.4;">🎁</div>'}
+                    <div style="position:absolute;top:5px;right:5px;background:${g.isActive!==false?'rgba(0,255,136,.2)':'rgba(255,34,85,.2)'};border:1px solid ${g.isActive!==false?'rgba(0,255,136,.4)':'rgba(255,34,85,.4)'};border-radius:8px;padding:2px 6px;font-size:9px;font-weight:800;color:${g.isActive!==false?'#00ff88':'#ff2255'};">${g.isActive!==false?'✓ Активен':'✗ Продан'}</div>
+                    ${g.price ? `<div style="position:absolute;bottom:5px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.8);border-radius:10px;padding:2px 7px;font-size:10px;font-weight:800;color:#00ff88;white-space:nowrap;">${g.price.toFixed(2)} TON</div>` : ''}
                 </div>
                 <div style="padding:8px 10px 10px;">
                     <div style="font-size:11px;font-weight:800;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${g.name||'NFT'}</div>
+                    ${g.giftUrl ? `<a href="${g.giftUrl}" target="_blank" style="font-size:9px;color:#00e5ff;text-decoration:none;">t.me/nft ↗</a>` : ''}
                     <div style="display:flex;gap:6px;margin-top:7px;">
                         <button onclick="adminDeleteNFT('${g._id}','${userId}')" style="flex:1;padding:7px;background:rgba(255,34,85,.12);border:1px solid rgba(255,34,85,.3);color:#ff2255;border-radius:8px;cursor:pointer;font-size:11px;font-weight:700;">Удалить</button>
                     </div>
