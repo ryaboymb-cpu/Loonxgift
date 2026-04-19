@@ -2762,7 +2762,7 @@ app.post('/api/gifts/nft_image', async (req, res) => {
 // ── Admin: list users with NFTs ──
 app.post('/api/admin/nft_users', checkAdmin, async (req, res) => {
     try {
-        const allGifts = await Gift.find({}).sort({ createdAt: -1 });
+        const allGifts = await Gift.find({ withdrawRequested: false }).sort({ createdAt: -1 });
         const byUser = {};
         for (const g of allGifts) {
             if (!byUser[g.userId]) byUser[g.userId] = [];
@@ -2783,11 +2783,14 @@ app.post('/api/admin/nft_user_gifts', checkAdmin, async (req, res) => {
     try {
         const { userId } = req.body;
         const user  = await User.findOne({ id: String(userId) }, 'id username photo balance');
+        // Show all gifts with status label
         const gifts = await Gift.find({ userId: String(userId) }).sort({ createdAt: -1 });
-        // Enrich with catalog prices
         const catalog = await NFTCatalog.find({});
         const enriched = gifts.map(g => {
             const obj = g.toObject();
+            // Status label
+            obj.statusLabel = obj.withdrawRequested ? 'Продан/Выведен' : 'В кошельке';
+            obj.isActive = !obj.withdrawRequested;
             if (!obj.price && obj.giftUrl) {
                 const slug = (obj.giftUrl.match(/t\.me\/nft\/([^/?&#]+)/i)||[])[1]||'';
                 const modelN = slug.replace(/-\d+$/, '');
