@@ -1373,6 +1373,8 @@ function switchAdminTab(tab) {
         loadAdminGameStats();
     } else if (tab === 'nft_gifts') {
         loadAdminNFTGifts();
+    } else if (tab === 'nft_users') {
+        loadAdminNFTUsers();
     } else {
         renderAdminContent(tab); 
     }
@@ -2533,79 +2535,81 @@ function doBreakBlock(blkEl, blk, onFullyGone) {
 // Несколько кирок в одном столбце падают с задержкой (stagger).
 // Нет дедупликации — каждая кирка работает независимо.
 function spawnPickaxeWorker(blocks, pickType, delay, onDone, onBreak, _u) {
-    if (!blocks || !blocks.length) { if (onDone) setTimeout(onDone, delay || 0); return; }
+    if (!blocks || !blocks.length) { if (onDone) setTimeout(onDone, delay||0); return; }
+    console.log('[Pick] spawning for', blocks.length, 'blocks, type:', pickType, 'delay:', delay);
 
-    // Exactly like dropTNT: position:fixed on document.body with real viewport coords
+    // IDENTICAL approach to dropTNT which is proven to work
+    const PICK_W = 26, PICK_H = 26;
     const img = document.createElement('img');
     img.src = getPickaxeImg(pickType || 'wooden');
-    img.style.cssText = 'position:fixed;z-index:99998;pointer-events:none;image-rendering:pixelated;width:26px;height:26px;display:block;left:0px;top:0px;';
+    // No transform — position by left edge directly
+    img.style.cssText = 'position:fixed;width:' + PICK_W + 'px;height:' + PICK_H + 'px;z-index:99998;pointer-events:none;image-rendering:pixelated;opacity:1;';
     document.body.appendChild(img);
     _pickaxeEls.add(img);
+    console.log('[Pick] img appended to body, src:', img.src);
 
-    function done() {
+    let qi = 0;
+
+    function removePick() {
         _pickaxeEls.delete(img);
         if (img.parentNode) img.remove();
         if (onDone) setTimeout(onDone, 30);
     }
 
-    let qi = 0;
+    function nextBlock() {
+        if (!mineIsActive) { removePick(); return; }
+        if (qi >= blocks.length) { removePick(); return; }
 
-    function hitNext() {
-        if (!mineIsActive) { done(); return; }
-        if (qi >= blocks.length) { done(); return; }
+        const blk = blocks[qi++];
+        const el  = document.getElementById('mc-blk-' + blk.r + '-' + blk.c);
+        console.log('[Pick] hitting block', blk.r, blk.c, 'el:', !!el, 'revealed:', el && el.dataset.revealed);
 
-        const blk  = blocks[qi++];
-        const el   = $('mc-blk-' + blk.r + '-' + blk.c);
         if (!el || el.dataset.revealed === '1') {
             if (onBreak) onBreak(blk.r, blk.c);
-            hitNext();
+            nextBlock();
             return;
         }
 
         const rect = el.getBoundingClientRect();
+        console.log('[Pick] block rect:', Math.round(rect.left), Math.round(rect.top), Math.round(rect.width));
         if (!rect || rect.width < 2) {
             if (onBreak) onBreak(blk.r, blk.c);
-            setTimeout(hitNext, 50);
+            setTimeout(nextBlock, 60);
             return;
         }
 
-        // Viewport positions — same as TNT
-        const cx      = rect.left + rect.width / 2;
-        const startY  = rect.top - rect.height;     // one block-height above
-        const hoverY  = rect.top - 4;               // just above block
-        const impactY = rect.top + rect.height * 0.3;
+        // Horizontal center, positioned by left edge (like TNT uses rect.left)
+        const imgLeft  = rect.left + rect.width / 2 - PICK_W / 2;
+        const startTop = rect.top - PICK_H - 10;   // start one pick-height above block
+        const hoverTop = rect.top - PICK_H / 2;    // hover position
+        const hitTop   = rect.top + rect.height * 0.2; // impact point
 
         const numHits = Math.max(1, blk.hits || 1);
 
-        // Position above, invisible
-        img.style.left      = cx + 'px';
-        img.style.top       = startY + 'px';
-        img.style.opacity   = '0';
-        img.style.transform = 'translate(-50%,-50%) rotate(-20deg)';
+        // Place pickaxe at start position (same as TNT: left:${rect.left}px; top:${startTop}px)
+        img.style.left = imgLeft + 'px';
+        img.style.top  = startTop + 'px';
+        img.style.opacity = '1';
+        img.style.transform = 'rotate(-20deg)';
 
-        // Drop in from above using _anim (same easing as TNT drop)
-        _anim(img, 'top', startY, hoverY, 280, easeBounce, function() {
-            img.style.opacity   = '1';
-            img.style.transform = 'translate(-50%,-50%) rotate(0deg)';
-            // Begin striking
-            setTimeout(function() { doStrike(numHits, 0); }, 80);
+        // Drop in from above — exactly like TNT's drop
+        _anim(img, 'top', startTop, hoverTop, 300, easeBounce, function() {
+            img.style.transform = 'rotate(0deg)';
+            // Small pause then strike
+            setTimeout(function() { strike(numHits, 0); }, 80);
         });
-        // Fade in during drop
-        setTimeout(function() { img.style.opacity = '1'; }, 60);
 
-        function doStrike(rem, n) {
-            if (!mineIsActive) { done(); return; }
+        function strike(rem, n) {
+            if (!mineIsActive) { removePick(); return; }
 
-            // Swing back
-            img.style.transition = 'transform 0.1s ease-out';
-            img.style.transform  = 'translate(-50%,-50%) rotate(' + (n%2===0?-28:28) + 'deg)';
+            // Swing: tilt before striking
+            img.style.transform = 'rotate(' + (n%2===0 ? 25 : -25) + 'deg)';
 
             setTimeout(function() {
-                // Strike down using _anim
-                _anim(img, 'top', hoverY, impactY, 120, easeIn, function() {
-                    // Impact
-                    img.style.transform = 'translate(-50%,-50%) rotate(0deg)';
-                    img.style.transition = '';
+                // Strike DOWN (fast, like real pickaxe hit)
+                _anim(img, 'top', hoverTop, hitTop, 100, easeIn, function() {
+                    // IMPACT
+                    img.style.transform = 'rotate(0deg)';
                     playSound('hit');
                     flashBlock(el);
                     el.classList.remove('cracking-1','cracking-2','cracking-3');
@@ -2615,22 +2619,27 @@ function spawnPickaxeWorker(blocks, pickType, delay, onDone, onBreak, _u) {
                         el.classList.add('cracking-3');
                     }
 
-                    // Bounce back up using _anim
-                    _anim(img, 'top', impactY, hoverY, 150, easeOut, function() {
-                        if (!mineIsActive) { done(); return; }
+                    // Bounce BACK UP
+                    _anim(img, 'top', hitTop, hoverTop, 140, easeOut, function() {
+                        if (!mineIsActive) { removePick(); return; }
                         if (rem <= 1) {
-                            doBreakBlock(el, blk, function() { if (onBreak) onBreak(blk.r, blk.c); });
-                            setTimeout(hitNext, 100);
+                            // Last hit — break block
+                            doBreakBlock(el, blk, function() {
+                                if (onBreak) onBreak(blk.r, blk.c);
+                            });
+                            // Wait for break animation then do next block
+                            setTimeout(nextBlock, 120);
                         } else {
-                            setTimeout(function() { doStrike(rem-1, n+1); }, 30);
+                            // More hits — continue
+                            setTimeout(function() { strike(rem-1, n+1); }, 30);
                         }
                     });
                 });
-            }, 110); // swing delay
+            }, 90); // swing delay before striking
         }
     }
 
-    setTimeout(hitNext, delay || 0);
+    setTimeout(nextBlock, delay || 0);
 }
 
 // ── Взрыв ТНТ (область 2×2 от позиции) ─────────────────────
@@ -3067,29 +3076,31 @@ function revealMineShaft(grid, blockWins, serverWin, balanceBefore, chestMults, 
         }, i * 560);
     });
 
-    // STEP 7: Pickaxe phase - ONE pickaxe per column with winning blocks
-    // Start all columns in parallel (natural feel)
+    // STEP 7: Pickaxe phase
     setTimeout(() => {
+        const cols = Object.keys(colWinBlocks);
+        console.log('[Mine] Spawning pickaxes for cols:', cols, 'mineIsActive:', mineIsActive);
         let colDelay = 0;
-        Object.entries(colWinBlocks).forEach(([colStr, winBlocks]) => {
+        cols.forEach(colStr => {
             const col = parseInt(colStr);
-            // Skip TNT columns (already handled)
+            const winBlocks = colWinBlocks[col];
+            if (!winBlocks || !winBlocks.length) return;
             if (tnts.some(t => t.col === col)) return;
 
             const pType = colPickType[col] || 'wooden';
             const pIdx  = colPickIdx[col];
+            console.log('[Mine] Col', col, 'pType:', pType, 'blocks:', winBlocks.length);
 
-            // Remove pickaxe from hotbar display
             if (pIdx !== undefined) {
                 const ir = Math.floor(pIdx / MC_COLS), ic = pIdx % MC_COLS;
                 const iCell = $(`inv-${ir}-${ic}`);
                 if (iCell) { iCell.innerHTML=''; iCell.className='inv-cell'; delete iCell.dataset.slotType; delete iCell.dataset.pickType; }
             }
 
-            // Spawn pickaxe for this column - hits all winning blocks in sequence
             spawnPickaxeWorker(winBlocks, pType, colDelay, null, onBlockBroken, 999);
-            colDelay += 80; // stagger columns slightly for visual variety
+            colDelay += 80;
         });
+        if (!cols.length) console.warn('[Mine] No winning columns! colWinBlocks empty. serverWin=', serverWin, 'blockWins=', JSON.stringify(blockWins));
     }, tntPhase);
 
     // STEP 8: Calculate animation duration
@@ -3656,6 +3667,105 @@ async function withdrawGift(giftId) { return doGiftAction(giftId, 'withdraw'); }
 // ════════════════════════════════════════
 let adminNFTGiftsData = [];
 let adminNFTGiftsSearch = '';
+
+
+// ════════════════════════════════════════
+// ADMIN — NFT USERS LIST
+// ════════════════════════════════════════
+async function loadAdminNFTUsers() {
+    const c = $('admin-content');
+    if (!c) return;
+    c.innerHTML = '<div style="text-align:center;padding:20px;color:var(--neon);">Загрузка...</div>';
+    try {
+        const r = await fetch('/api/admin/nft_users', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pass:adminPass})});
+        const d = await r.json();
+        const users = d.users || [];
+        c.innerHTML = `
+        <div class="adm-block">
+            <div class="adm-block-title">ПОЛЬЗОВАТЕЛИ С NFT (${users.length})</div>
+            <div style="font-size:11px;color:rgba(255,255,255,.4);margin-bottom:10px;">Кликни на пользователя чтобы посмотреть инвентарь</div>
+        </div>
+        <div id="nft-users-list">
+        ${users.map(u => {
+            const totalVal = u.gifts.reduce((sum, g) => sum + (g.price||0), 0);
+            return `<div class="adm-user-card" onclick="adminViewNFTInventory('${u.id}')" style="cursor:pointer;">
+                <img src="${u.photo||'https://cdn-icons-png.flaticon.com/512/149/149071.png'}" class="adm-user-ava">
+                <div class="adm-user-info">
+                    <div class="adm-user-name">${u.username||u.id}</div>
+                    <div style="font-size:11px;color:rgba(255,255,255,.4);">NFT: ${u.gifts.length} шт. · ${totalVal.toFixed(2)} TON</div>
+                </div>
+                <div style="text-align:right;flex-shrink:0;">
+                    <div style="font-size:13px;font-weight:800;color:#ce93d8;">${u.gifts.length} NFT</div>
+                    <div style="font-size:11px;color:rgba(0,255,136,.6);">${totalVal.toFixed(2)} T</div>
+                </div>
+            </div>`;
+        }).join('') || '<div class="adm-empty" style="padding:20px;">Нет пользователей с NFT</div>'}
+        </div>`;
+    } catch(e) {
+        c.innerHTML = '<div style="color:red;text-align:center;padding:20px;">Ошибка загрузки</div>';
+    }
+}
+
+async function adminViewNFTInventory(userId) {
+    const c = $('admin-content');
+    if (!c) return;
+    c.innerHTML = '<div style="text-align:center;padding:20px;color:var(--neon);">Загрузка инвентаря...</div>';
+    try {
+        const r = await fetch('/api/admin/nft_user_gifts', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pass:adminPass, userId})});
+        const d = await r.json();
+        const gifts = d.gifts || [];
+        const user  = d.user  || {};
+        c.innerHTML = `
+        <div class="adm-block" style="display:flex;align-items:center;gap:12px;">
+            <button onclick="loadAdminNFTUsers()" style="background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);color:rgba(255,255,255,.6);border-radius:10px;padding:8px 14px;cursor:pointer;font-weight:700;font-size:12px;">← Назад</button>
+            <div style="font-size:14px;font-weight:800;color:#fff;">NFT инвентарь: @${user.username||userId}</div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:0 0 12px;">
+            ${gifts.map(g => `
+            <div style="background:#0d0d1e;border:1px solid rgba(255,255,255,.08);border-radius:14px;overflow:hidden;">
+                <div style="width:100%;aspect-ratio:1;background:#0a1628;display:flex;align-items:center;justify-content:center;position:relative;">
+                    ${g.imageUrl ? `<img src="${g.imageUrl}" style="width:100%;height:100%;object-fit:cover;">` : '<div style="font-size:32px;">🎁</div>'}
+                    <div style="position:absolute;bottom:6px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.75);border-radius:12px;padding:2px 8px;font-size:10px;font-weight:800;color:#00ff88;">${g.price ? g.price.toFixed(2)+' TON' : '—'}</div>
+                </div>
+                <div style="padding:8px 10px 10px;">
+                    <div style="font-size:11px;font-weight:800;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${g.name||'NFT'}</div>
+                    <div style="display:flex;gap:6px;margin-top:7px;">
+                        <button onclick="adminDeleteNFT('${g._id}','${userId}')" style="flex:1;padding:7px;background:rgba(255,34,85,.12);border:1px solid rgba(255,34,85,.3);color:#ff2255;border-radius:8px;cursor:pointer;font-size:11px;font-weight:700;">Удалить</button>
+                    </div>
+                </div>
+            </div>`).join('') || '<div style="grid-column:1/-1;text-align:center;padding:20px;color:rgba(255,255,255,.3);">Нет NFT</div>'}
+        </div>
+        <div class="adm-block">
+            <div class="adm-block-title">ВЫДАТЬ NFT</div>
+            <input id="give-nft-url" class="input-box" placeholder="https://t.me/nft/GiftName" style="margin-bottom:8px;">
+            <input id="give-nft-price" class="input-box" type="number" placeholder="Цена TON" step="0.01" min="0" style="margin-bottom:10px;">
+            <button onclick="adminGiveNFTToUser('${userId}')" style="background:var(--neon);color:#000;border:none;border-radius:10px;padding:12px;font-weight:900;cursor:pointer;width:100%;">Выдать NFT</button>
+        </div>`;
+    } catch(e) {
+        c.innerHTML = '<div style="color:red;text-align:center;padding:20px;">Ошибка</div>';
+    }
+}
+
+async function adminDeleteNFT(giftId, userId) {
+    if (!confirm('Удалить NFT?')) return;
+    try {
+        const r = await fetch('/api/admin/nft_delete_gift', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pass:adminPass, giftId})});
+        if (r.ok) { showToast('NFT удалён'); adminViewNFTInventory(userId); }
+        else showToast('Ошибка удаления');
+    } catch(e) { showToast('Ошибка'); }
+}
+
+async function adminGiveNFTToUser(userId) {
+    const url   = $('give-nft-url')?.value?.trim();
+    const price = parseFloat($('give-nft-price')?.value) || 0;
+    if (!url) return showToast('Укажи ссылку');
+    try {
+        const r = await fetch('/api/admin/give_gift', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pass:adminPass, userId, giftUrl:url, price})});
+        const d = await r.json();
+        if (r.ok) { showToast('NFT выдан'); adminViewNFTInventory(userId); }
+        else showToast(d.error||'Ошибка');
+    } catch(e) { showToast('Ошибка'); }
+}
 
 async function loadAdminNFTGifts() {
     const c = $('admin-content');
