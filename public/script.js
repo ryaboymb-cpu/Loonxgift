@@ -2535,83 +2535,77 @@ function doBreakBlock(blkEl, blk, onFullyGone) {
 function spawnPickaxeWorker(blocks, pickType, delay, onDone, onBreak, _u) {
     if (!blocks || !blocks.length) { if (onDone) setTimeout(onDone, delay || 0); return; }
 
-    // Exactly like dropTNT: position:fixed on document.body, viewport coords
+    // Exactly like dropTNT: position:fixed on document.body with real viewport coords
     const img = document.createElement('img');
     img.src = getPickaxeImg(pickType || 'wooden');
-    img.style.cssText = 'position:fixed;z-index:99998;pointer-events:none;image-rendering:pixelated;width:26px;height:26px;opacity:0;transform-origin:bottom center;transform:translate(-50%,-100%) rotate(-18deg);display:block;';
+    img.style.cssText = 'position:fixed;z-index:99998;pointer-events:none;image-rendering:pixelated;width:26px;height:26px;display:block;left:0px;top:0px;';
     document.body.appendChild(img);
     _pickaxeEls.add(img);
 
-    let qi = 0;
-
-    function cleanup() {
+    function done() {
         _pickaxeEls.delete(img);
         if (img.parentNode) img.remove();
         if (onDone) setTimeout(onDone, 30);
     }
 
-    function processBlock() {
-        if (!mineIsActive) { cleanup(); return; }
-        if (qi >= blocks.length) { cleanup(); return; }
+    let qi = 0;
 
-        const blk = blocks[qi++];
-        const el = $('mc-blk-' + blk.r + '-' + blk.c);
+    function hitNext() {
+        if (!mineIsActive) { done(); return; }
+        if (qi >= blocks.length) { done(); return; }
 
+        const blk  = blocks[qi++];
+        const el   = $('mc-blk-' + blk.r + '-' + blk.c);
         if (!el || el.dataset.revealed === '1') {
             if (onBreak) onBreak(blk.r, blk.c);
-            processBlock();
+            hitNext();
             return;
         }
 
-        // Use viewport coords (same as TNT)
         const rect = el.getBoundingClientRect();
         if (!rect || rect.width < 2) {
             if (onBreak) onBreak(blk.r, blk.c);
-            setTimeout(processBlock, 60);
+            setTimeout(hitNext, 50);
             return;
         }
 
-        const cx    = rect.left + rect.width / 2;   // horizontal center of block
-        const above = rect.top - 8;                  // just above block top
-        const hit   = rect.top + rect.height * 0.3; // impact point in block
+        // Viewport positions — same as TNT
+        const cx      = rect.left + rect.width / 2;
+        const startY  = rect.top - rect.height;     // one block-height above
+        const hoverY  = rect.top - 4;               // just above block
+        const impactY = rect.top + rect.height * 0.3;
 
         const numHits = Math.max(1, blk.hits || 1);
 
-        // Snap pickaxe into position (no transition)
-        img.style.transition = 'none';
-        img.style.left    = cx + 'px';
-        img.style.top     = (above - 18) + 'px';
-        img.style.opacity = '0';
-        img.style.transform = 'translate(-50%,-100%) rotate(-18deg)';
+        // Position above, invisible
+        img.style.left      = cx + 'px';
+        img.style.top       = startY + 'px';
+        img.style.opacity   = '0';
+        img.style.transform = 'translate(-50%,-50%) rotate(-20deg)';
 
-        // Slide + fade in
-        setTimeout(function() {
-            img.style.transition = 'top 0.15s ease-out, opacity 0.12s linear';
-            img.style.top     = above + 'px';
-            img.style.opacity = '1';
+        // Drop in from above using _anim (same easing as TNT drop)
+        _anim(img, 'top', startY, hoverY, 280, easeBounce, function() {
+            img.style.opacity   = '1';
+            img.style.transform = 'translate(-50%,-50%) rotate(0deg)';
+            // Begin striking
+            setTimeout(function() { doStrike(numHits, 0); }, 80);
+        });
+        // Fade in during drop
+        setTimeout(function() { img.style.opacity = '1'; }, 60);
 
-            // Begin hitting after slide-in
-            setTimeout(function() {
-                swing(numHits, 0);
-            }, 180);
-        }, 16);
+        function doStrike(rem, n) {
+            if (!mineIsActive) { done(); return; }
 
-        function swing(rem, n) {
-            if (!mineIsActive) { cleanup(); return; }
-
-            // Pre-swing rotation
-            img.style.transition = 'transform 0.09s ease-in';
-            img.style.transform  = 'translate(-50%,-100%) rotate(' + (n%2===0 ? 24 : -24) + 'deg)';
+            // Swing back
+            img.style.transition = 'transform 0.1s ease-out';
+            img.style.transform  = 'translate(-50%,-50%) rotate(' + (n%2===0?-28:28) + 'deg)';
 
             setTimeout(function() {
-                // Drive DOWN
-                img.style.transition = 'top 0.11s ease-in, transform 0.07s ease-out';
-                img.style.top        = hit + 'px';
-                img.style.transform  = 'translate(-50%,-100%) rotate(0deg)';
-
-                setTimeout(function() {
-                    // IMPACT
-                    if (!mineIsActive) { cleanup(); return; }
+                // Strike down using _anim
+                _anim(img, 'top', hoverY, impactY, 120, easeIn, function() {
+                    // Impact
+                    img.style.transform = 'translate(-50%,-50%) rotate(0deg)';
+                    img.style.transition = '';
                     playSound('hit');
                     flashBlock(el);
                     el.classList.remove('cracking-1','cracking-2','cracking-3');
@@ -2621,27 +2615,22 @@ function spawnPickaxeWorker(blocks, pickType, delay, onDone, onBreak, _u) {
                         el.classList.add('cracking-3');
                     }
 
-                    // Bounce UP
-                    img.style.transition = 'top 0.14s ease-out';
-                    img.style.top        = above + 'px';
-
-                    setTimeout(function() {
-                        if (!mineIsActive) { cleanup(); return; }
+                    // Bounce back up using _anim
+                    _anim(img, 'top', impactY, hoverY, 150, easeOut, function() {
+                        if (!mineIsActive) { done(); return; }
                         if (rem <= 1) {
-                            doBreakBlock(el, blk, function() {
-                                if (onBreak) onBreak(blk.r, blk.c);
-                            });
-                            setTimeout(processBlock, 90);
+                            doBreakBlock(el, blk, function() { if (onBreak) onBreak(blk.r, blk.c); });
+                            setTimeout(hitNext, 100);
                         } else {
-                            setTimeout(function() { swing(rem - 1, n + 1); }, 20);
+                            setTimeout(function() { doStrike(rem-1, n+1); }, 30);
                         }
-                    }, 145);
-                }, 115);
-            }, 95);
+                    });
+                });
+            }, 110); // swing delay
         }
     }
 
-    setTimeout(processBlock, delay || 0);
+    setTimeout(hitNext, delay || 0);
 }
 
 // ── Взрыв ТНТ (область 2×2 от позиции) ─────────────────────
@@ -4227,8 +4216,8 @@ async function playCaseOpen(caseId, price) {
                 body: JSON.stringify({ id: user.id, caseId, channels: cfg.channels })
             });
             const sd = await sr.json();
-            if (!sd.allSubscribed) {
-                showToast('Подпишитесь на все каналы!');
+            if (!sd.ok || !sd.subscribed) {
+                showToast(sd.error || 'Подпишитесь на все каналы!');
                 showCase6ChannelBottomSheet(cfg);
                 return;
             }
@@ -4370,7 +4359,7 @@ async function playCaseOpen(caseId, price) {
             </div>`;
         }
         
-        resHtml += `<button class="btn cr-collect-btn" onclick="caseCollect('${caseId}', ${price})" style="grid-column:1/-1;background:var(--neon);color:#000;font-weight:900;">Забрать ${price > 0 ? price.toFixed(2) + ' TON' : 'кэш'}</button>`;
+        resHtml += `<button class="btn cr-collect-btn" onclick="caseCollect('${caseId}', ${price})" style="grid-column:1/-1;background:var(--neon);color:#000;font-weight:900;">Забрать ${totalWin > 0 ? totalWin.toFixed(2) + ' TON' : 'награду'}</button>`;
         resGrid.innerHTML = resHtml;
     }
     
