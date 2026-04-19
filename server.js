@@ -2762,7 +2762,7 @@ app.post('/api/gifts/nft_image', async (req, res) => {
 // ── Admin: list users with NFTs ──
 app.post('/api/admin/nft_users', checkAdmin, async (req, res) => {
     try {
-        const allGifts = await Gift.find({ withdrawRequested: false }).sort({ createdAt: -1 });
+        const allGifts = await Gift.find({}).sort({ createdAt: -1 });
         const byUser = {};
         for (const g of allGifts) {
             if (!byUser[g.userId]) byUser[g.userId] = [];
