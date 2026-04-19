@@ -2530,162 +2530,88 @@ function doBreakBlock(blkEl, blk, onFullyGone) {
     }, 100);
 }
 
-// ── ВОРКЕР-КИРКА ─────────────────────────────────────────────
-// Каждая кирка — отдельный элемент, отдельный воркер.
-// Несколько кирок в одном столбце падают с задержкой (stagger).
-// Нет дедупликации — каждая кирка работает независимо.
-function spawnPickaxeWorker(blocks, pickType, delay, onDone, onBreak, _u) {
-    if (!blocks || !blocks.length) { if (onDone) setTimeout(onDone, delay||0); return; }
-    console.log('[Pick] spawning for', blocks.length, 'blocks, type:', pickType, 'delay:', delay);
+// ── ВОРКЕР-КИРКА ──────────────────────────────────────────────
+// Зеркальная копия dropTNT — position:fixed на body, координаты viewport
+function spawnPickaxeWorker(blocks, pickType, startDelay, onAllDone, onBlockBroken, _u) {
+    if (!blocks || !blocks.length) { if (onAllDone) setTimeout(onAllDone, 50); return; }
 
-    // IDENTICAL approach to dropTNT which is proven to work
-    const PICK_W = 26, PICK_H = 26;
     const img = document.createElement('img');
-    img.src = getPickaxeImg(pickType || 'wooden');
-    // No transform — position by left edge directly
-    img.style.cssText = 'position:fixed;width:' + PICK_W + 'px;height:' + PICK_H + 'px;z-index:99998;pointer-events:none;image-rendering:pixelated;opacity:1;';
+    img.src   = getPickaxeImg(pickType || 'wooden');
+    img.style.cssText = 'position:fixed;z-index:99999;pointer-events:none;image-rendering:pixelated;width:28px;height:28px;display:block;';
     document.body.appendChild(img);
     _pickaxeEls.add(img);
-    console.log('[Pick] img appended to body, src:', img.src);
-
-    let qi = 0;
 
     function removePick() {
         _pickaxeEls.delete(img);
         if (img.parentNode) img.remove();
-        if (onDone) setTimeout(onDone, 30);
+        if (onAllDone) setTimeout(onAllDone, 30);
     }
 
-    function nextBlock() {
+    let qi = 0;
+
+    function goNext() {
         if (!mineIsActive) { removePick(); return; }
         if (qi >= blocks.length) { removePick(); return; }
 
-        const blk = blocks[qi++];
-        const el  = document.getElementById('mc-blk-' + blk.r + '-' + blk.c);
-        console.log('[Pick] hitting block', blk.r, blk.c, 'el:', !!el, 'revealed:', el && el.dataset.revealed);
+        const blk  = blocks[qi++];
+        const blkEl = document.getElementById('mc-blk-' + blk.r + '-' + blk.c);
 
-        if (!el || el.dataset.revealed === '1') {
-            if (onBreak) onBreak(blk.r, blk.c);
-            nextBlock();
+        if (!blkEl || blkEl.dataset.revealed === '1') {
+            if (onBlockBroken) onBlockBroken(blk.r, blk.c);
+            goNext();
             return;
         }
 
-        const rect = el.getBoundingClientRect();
-        console.log('[Pick] block rect:', Math.round(rect.left), Math.round(rect.top), Math.round(rect.width));
+        const rect = blkEl.getBoundingClientRect();
         if (!rect || rect.width < 2) {
-            if (onBreak) onBreak(blk.r, blk.c);
-            setTimeout(nextBlock, 60);
+            if (onBlockBroken) onBlockBroken(blk.r, blk.c);
+            setTimeout(goNext, 60);
             return;
         }
 
-        // Horizontal center, positioned by left edge (like TNT uses rect.left)
-        const imgLeft  = rect.left + rect.width / 2 - PICK_W / 2;
-        const startTop = rect.top - PICK_H - 10;   // start one pick-height above block
-        const hoverTop = rect.top - PICK_H / 2;    // hover position
-        const hitTop   = rect.top + rect.height * 0.2; // impact point
+        // Mirror TNT: left = rect.left, top starts ABOVE block
+        const lft      = rect.left + (rect.width - 28) / 2;
+        const dropFrom = rect.top - 36;
+        const hoverAt  = rect.top - 6;
+        const hitAt    = rect.top + rect.height * 0.25;
+        const numHits  = Math.max(1, blk.hits || 1);
 
-        const numHits = Math.max(1, blk.hits || 1);
-
-        // Place pickaxe at start position (same as TNT: left:${rect.left}px; top:${startTop}px)
-        img.style.left = imgLeft + 'px';
-        img.style.top  = startTop + 'px';
-        img.style.opacity = '1';
+        img.style.left = lft + 'px';
+        img.style.top  = dropFrom + 'px';
         img.style.transform = 'rotate(-20deg)';
 
-        // Drop in from above — exactly like TNT's drop
-        _anim(img, 'top', startTop, hoverTop, 300, easeBounce, function() {
+        // Drop in — same as TNT (easeBounce, 320ms)
+        _anim(img, 'top', dropFrom, hoverAt, 320, easeBounce, function() {
             img.style.transform = 'rotate(0deg)';
-            // Small pause then strike
-            setTimeout(function() { strike(numHits, 0); }, 80);
+            setTimeout(function() { doSwing(numHits, 0); }, 60);
         });
 
-        function strike(rem, n) {
+        function doSwing(rem, n) {
             if (!mineIsActive) { removePick(); return; }
-
-            // Swing: tilt before striking
-            img.style.transform = 'rotate(' + (n%2===0 ? 25 : -25) + 'deg)';
-
+            img.style.transform = 'rotate(' + (n % 2 === 0 ? 28 : -28) + 'deg)';
             setTimeout(function() {
-                // Strike DOWN (fast, like real pickaxe hit)
-                _anim(img, 'top', hoverTop, hitTop, 100, easeIn, function() {
-                    // IMPACT
+                _anim(img, 'top', hoverAt, hitAt, 110, easeIn, function() {
                     img.style.transform = 'rotate(0deg)';
                     playSound('hit');
-                    flashBlock(el);
-                    el.classList.remove('cracking-1','cracking-2','cracking-3');
-                    if (rem > 1) {
-                        el.classList.add((n+1)/numHits > 0.5 ? 'cracking-2' : 'cracking-1');
-                    } else {
-                        el.classList.add('cracking-3');
-                    }
-
-                    // Bounce BACK UP
-                    _anim(img, 'top', hitTop, hoverTop, 140, easeOut, function() {
+                    flashBlock(blkEl);
+                    blkEl.classList.remove('cracking-1','cracking-2','cracking-3');
+                    if (rem > 1) blkEl.classList.add((n+1)/numHits > 0.5 ? 'cracking-2' : 'cracking-1');
+                    else         blkEl.classList.add('cracking-3');
+                    _anim(img, 'top', hitAt, hoverAt, 150, easeOut, function() {
                         if (!mineIsActive) { removePick(); return; }
                         if (rem <= 1) {
-                            // Last hit — break block
-                            doBreakBlock(el, blk, function() {
-                                if (onBreak) onBreak(blk.r, blk.c);
-                            });
-                            // Wait for break animation then do next block
-                            setTimeout(nextBlock, 120);
+                            doBreakBlock(blkEl, blk, function() { if (onBlockBroken) onBlockBroken(blk.r, blk.c); });
+                            setTimeout(goNext, 100);
                         } else {
-                            // More hits — continue
-                            setTimeout(function() { strike(rem-1, n+1); }, 30);
+                            setTimeout(function() { doSwing(rem-1, n+1); }, 25);
                         }
                     });
                 });
-            }, 90); // swing delay before striking
+            }, 95);
         }
     }
 
-    setTimeout(nextBlock, delay || 0);
-}
-
-// ── Взрыв ТНТ (область 2×2 от позиции) ─────────────────────
-function tntExplode(r, c) {
-    const shaft = $('mc-shaft');
-    if (shaft) {
-        const flash = document.createElement('div');
-        flash.style.cssText = 'position:absolute;inset:0;background:rgba(255,140,0,0.55);z-index:9998;pointer-events:none;border-radius:4px;transition:background 0.06s;';
-        shaft.appendChild(flash);
-        setTimeout(() => { flash.style.background = 'rgba(255,255,180,0.70)'; }, 60);
-        setTimeout(() => { flash.style.background = 'rgba(255,80,0,0.18)'; }, 140);
-        setTimeout(() => flash.remove(), 320);
-    }
-    // 2×2 область: [r,c], [r,c+1], [r+1,c], [r+1,c+1] — дамажим соседей
-    const affected = [[r,c],[r,c+1],[r+1,c],[r+1,c+1]];
-    affected.forEach(([nr, nc]) => {
-        if (nr < 0 || nr >= MC_ROWS || nc < 0 || nc >= MC_COLS) return;
-        const adj = $(`mc-blk-${nr}-${nc}`);
-        if (!adj || adj.dataset.revealed === '1') return;
-        adj.dataset.tntDmg = '10'; // instant break
-        flashBlock(adj);
-        spawnBreakParticles(adj, adj.dataset.blockType || 'stone', 7);
-    });
-    // Взрывные частицы
-    const blkEl = $(`mc-blk-${r}-${c}`);
-    if (blkEl) {
-        const rect = blkEl.getBoundingClientRect();
-        const cx = rect.left + rect.width / 2, cy = rect.top + rect.height / 2;
-        for (let i = 0; i < 24; i++) {
-            const p = document.createElement('div');
-            const angle = (i / 24) * Math.PI * 2;
-            const spd = 55 + Math.random() * 95;
-            const vx = Math.cos(angle) * spd, vy = Math.sin(angle) * spd - 35;
-            const sz = 3 + Math.random() * 7;
-            const clr = i % 3 === 0 ? '#ff8800' : i % 3 === 1 ? '#ffdd00' : '#ff3300';
-            p.style.cssText = `position:fixed;width:${sz}px;height:${sz}px;background:${clr};border-radius:50%;left:${cx}px;top:${cy}px;z-index:9900;pointer-events:none;`;
-            document.body.appendChild(p);
-            let ms = 0;
-            const id = setInterval(() => {
-                ms += 16; const t = ms / 1000;
-                p.style.transform = `translate(${vx*t}px,${vy*t+320*t*t}px)`;
-                p.style.opacity = String(Math.max(0, 1 - ms / 600));
-                if (ms >= 600) { clearInterval(id); p.remove(); }
-            }, 16);
-        }
-    }
+    setTimeout(goNext, startDelay || 0);
 }
 
 // ── Падение ТНТ с 2×2 взрывом ────────────────────────────────
@@ -2939,87 +2865,83 @@ function revealMineShaft(grid, blockWins, serverWin, balanceBefore, chestMults, 
     const HITS = { grass:1, dirt:1, stone:1, redstone:2, gold:2, gold_block:2, diamond:3, diamond_block:3, obsidian:4 };
     grid_current = grid;
 
-    // STEP 1: Reset all blocks visually
+    // ── Сбрасываем все блоки ──
     for (let r = 0; r < MC_ROWS; r++) {
         for (let c = 0; c < MC_COLS; c++) {
-            const el = $(`mc-blk-${r}-${c}`);
+            const el = document.getElementById('mc-blk-' + r + '-' + c);
             if (!el) continue;
-            const type = grid[r][c];
-            if (!type) { el.dataset.revealed='1'; el.style.visibility='hidden'; continue; }
-            if (isAutoSpin && el.dataset.revealed==='1') continue;
-            el.className = `mc-blk ${MINE_BLOCK_CLASS[type]||'stone-blk'}`;
-            el.dataset.revealed='0'; el.dataset.blockType=type; el.dataset.tntDmg='0';
-            el.style.cssText=''; el.style.visibility='visible';
+            const type = grid[r] && grid[r][c];
+            if (!type) { el.dataset.revealed = '1'; el.style.visibility = 'hidden'; continue; }
+            if (isAutoSpin && el.dataset.revealed === '1') continue;
+            el.className = 'mc-blk ' + (MINE_BLOCK_CLASS[type] || 'stone-blk');
+            el.dataset.revealed = '0';
+            el.dataset.blockType = type;
+            el.dataset.tntDmg = '0';
+            el.style.cssText = '';
+            el.style.visibility = 'visible';
         }
     }
 
-    // STEP 2: Read hotbar for books/tnt/pick types (visual only)
+    // ── Читаем hotbar ──
     const hotbar = currentHotbar || [];
-    const tnts = [];
+    const RANK = { wooden:0, stone:1, iron:2, golden:3, diamond:4 };
+    const picks = []; // { col, idx, pType }
+    const tnts  = []; // { col, idx }
     let bookCount = 0;
-    const colPickType = {}; // col -> best pickaxe type string
-    const colPickIdx  = {}; // col -> hotbar slot index (for removing from display)
-    const RANK = {wooden:0,stone:1,iron:2,golden:3,diamond:4};
-
-    hotbar.forEach((slot, idx) => {
+    hotbar.forEach(function(slot, idx) {
         if (!slot) return;
         const col = idx % MC_COLS;
-        if (slot.type === 'tnt') {
+        if (slot.type === 'pickaxe') {
+            picks.push({ col, idx, pType: slot.pickaxeType || 'wooden' });
+        } else if (slot.type === 'tnt') {
             tnts.push({ col, idx });
-        } else if (slot.type === 'pickaxe') {
-            const pt = slot.pickaxeType || 'wooden';
-            if (colPickType[col] === undefined || (RANK[pt]||0) > (RANK[colPickType[col]]||0)) {
-                colPickType[col] = pt;
-                colPickIdx[col] = idx;
-            }
         } else if (slot.type === 'book') {
             bookCount++;
         }
     });
     if (bookCount > 0) mineBookCount += bookCount;
 
-    // STEP 3: Build winMap from server data
-    // blockWins[r][c] = win amount (> 0 means this block was broken and earns this much)
+    // ── Карта выигрышей от сервера ──
     const winMap = {};
-    let totalServerWins = 0;
     for (let r = 0; r < MC_ROWS; r++) {
         for (let c = 0; c < MC_COLS; c++) {
             let bw = 0;
-            if (blockWins) {
-                const row = Array.isArray(blockWins) ? blockWins[r] : (blockWins[r] || null);
-                if (row != null) {
-                    bw = Array.isArray(row) ? (Number(row[c]) || 0) : (Number(row[c]) || 0);
-                }
+            if (blockWins && blockWins[r] != null) {
+                bw = Number(blockWins[r][c]) || 0;
             }
-            winMap[`${r},${c}`] = bw;
-            if (bw > 0) totalServerWins += bw;
+            winMap[r + ',' + c] = bw;
         }
     }
-    // Debug: log if we got wins from server
-    if (serverWin > 0 && totalServerWins === 0) {
-        console.warn('[Mine] Server win =', serverWin, 'but no winning blocks in blockWins!', blockWins);
-    }
 
-    // STEP 4: Group winning blocks by column (EXACTLY what server broke)
-    // Column key exists only if there's at least one winning block in it
-    const colWinBlocks = {}; // col -> [{r,c,type,win,hits}]
+    // ── Для каждой кирки — список блоков которые сервер сломал ──
+    // Берём колонки пикакс, находим блоки с win > 0 в той колонке
+    const colWinBlocks = {}; // col -> blocks[]
+    // Сначала собираем все колонки где есть победные блоки
     for (let c = 0; c < MC_COLS; c++) {
         for (let r = 0; r < MC_ROWS; r++) {
-            const bw = winMap[`${r},${c}`];
-            if (bw > 0) {
+            if (winMap[r + ',' + c] > 0) {
                 if (!colWinBlocks[c]) colWinBlocks[c] = [];
-                const type = grid[r][c] || 'stone';
-                colWinBlocks[c].push({ r, c, type, win: bw, hits: HITS[type]||1 });
+                const type = (grid[r] && grid[r][c]) || 'stone';
+                colWinBlocks[c].push({ r, c, type, win: winMap[r + ',' + c], hits: HITS[type] || 1 });
             }
         }
     }
 
-    // STEP 5: Track broken blocks for chests
-    const liveColBroken = Array(MC_COLS).fill(0);
+    // Лучшая кирка для каждой колонки
+    const bestPick = {}; // col -> { pType, idx }
+    picks.forEach(function(p) {
+        const cur = bestPick[p.col];
+        if (!cur || (RANK[p.pType] || 0) > (RANK[cur.pType] || 0)) {
+            bestPick[p.col] = { pType: p.pType, idx: p.idx };
+        }
+    });
+
+    // ── Отслеживание сломанных блоков для сундуков ──
+    const colBroken = Array(MC_COLS).fill(0);
     for (let c = 0; c < MC_COLS; c++) {
         for (let r = 0; r < MC_ROWS; r++) {
-            const el = $(`mc-blk-${r}-${c}`);
-            if (el && el.dataset.revealed==='1') liveColBroken[c]++;
+            const el = document.getElementById('mc-blk-' + r + '-' + c);
+            if (el && el.dataset.revealed === '1') colBroken[c]++;
         }
     }
     const openedChests = new Set();
@@ -3027,105 +2949,121 @@ function revealMineShaft(grid, blockWins, serverWin, balanceBefore, chestMults, 
     const srvAct   = chestActivated || [];
 
     function onBlockBroken(r, c) {
-        liveColBroken[c]++;
-        if (liveColBroken[c] >= MC_ROWS && !openedChests.has(c)) {
+        colBroken[c]++;
+        if (colBroken[c] >= MC_ROWS && !openedChests.has(c)) {
             openedChests.add(c);
-            setTimeout(() => openChestWithAnim(c, colMults[c]||2, srvAct[c]===true, serverWin), 350);
+            setTimeout(function() { openChestWithAnim(c, colMults[c]||2, srvAct[c]===true, serverWin); }, 350);
         }
     }
 
-    mineIsActive = true;
+    mineIsActive    = true;
     mineRunningTotal = 0;
 
-    // STEP 6: TNT phase
-    const tntPhase = tnts.length > 0 ? tnts.length * 560 + 300 : 0;
-    tnts.forEach((ts, i) => {
-        setTimeout(() => {
-            if (!mineIsActive) return;
-            const ir = Math.floor(ts.idx / MC_COLS), ic = ts.idx % MC_COLS;
-            const iCell = $(`inv-${ir}-${ic}`);
-            if (iCell) { iCell.innerHTML=''; iCell.className='inv-cell'; delete iCell.dataset.slotType; }
+    // ════════════════════════════════════
+    // ФАЗА 1: ТНТ (последовательно с паузами)
+    // ════════════════════════════════════
+    const tntColsSet = new Set(tnts.map(function(t) { return t.col; }));
 
-            // Find first unrevealed block in column
-            let firstBlk = null;
-            for (let r = 0; r < MC_ROWS; r++) {
-                const el = $(`mc-blk-${r}-${ts.col}`);
-                if (el && el.dataset.revealed !== '1' && grid[r][ts.col]) {
-                    firstBlk = { r, c: ts.col, type: grid[r][ts.col], win: winMap[`${r},${ts.col}`]||0, hits:1 };
+    // Убираем ТНТ из хотбара сразу
+    tnts.forEach(function(ts) {
+        const ir = Math.floor(ts.idx / MC_COLS), ic = ts.idx % MC_COLS;
+        const cell = document.getElementById('inv-' + ir + '-' + ic);
+        if (cell) { cell.innerHTML = ''; cell.className = 'inv-cell'; delete cell.dataset.slotType; }
+    });
+
+    // Запускаем ТНТ последовательно
+    let tntTotalTime = 0;
+    const TNT_DROP_MS = 480 + 5*55 + 50; // drop + blink + buffer ≈ 800ms
+    tnts.forEach(function(ts, i) {
+        const tntDelay = i * (TNT_DROP_MS + 100);
+        tntTotalTime = tntDelay + TNT_DROP_MS;
+        setTimeout(function() {
+            if (!mineIsActive) return;
+            // Найдём первый нетронутый блок в колонке
+            var targetBlk = null;
+            for (var r = 0; r < MC_ROWS; r++) {
+                var el = document.getElementById('mc-blk-' + r + '-' + ts.col);
+                if (el && el.dataset.revealed !== '1' && grid[r] && grid[r][ts.col]) {
+                    targetBlk = { r: r, c: ts.col, type: grid[r][ts.col], win: winMap[r+','+ts.col]||0, hits:1 };
                     break;
                 }
             }
-            if (!firstBlk) { playSound('explode'); return; }
+            if (!targetBlk) return;
 
-            dropTNT(ts.col, firstBlk, () => {
-                // Break 2x2 area around first block
-                const blast = [
-                    [firstBlk.r, firstBlk.c],
-                    [firstBlk.r, firstBlk.c+1],
-                    [firstBlk.r+1, firstBlk.c],
-                    [firstBlk.r+1, firstBlk.c+1],
+            dropTNT(ts.col, targetBlk, function() {
+                // Взрываем 2×2 вокруг targetBlk — ВСЕ 4 блока
+                var blast = [
+                    [targetBlk.r,   targetBlk.c  ],
+                    [targetBlk.r,   targetBlk.c+1],
+                    [targetBlk.r+1, targetBlk.c  ],
+                    [targetBlk.r+1, targetBlk.c+1],
                 ];
-                blast.forEach(([br, bc], bi) => {
-                    if (br < 0||br>=MC_ROWS||bc<0||bc>=MC_COLS) return;
-                    const blkEl = $(`mc-blk-${br}-${bc}`);
-                    if (!blkEl||blkEl.dataset.revealed==='1'||!grid[br][bc]) return;
-                    const blk = {r:br,c:bc,type:grid[br][bc],win:winMap[`${br},${bc}`]||0,hits:1};
-                    setTimeout(()=>{ doBreakBlock(blkEl,blk,()=>onBlockBroken(br,bc)); }, bi*90);
+                blast.forEach(function(coord, bi) {
+                    var br = coord[0], bc = coord[1];
+                    if (br < 0 || br >= MC_ROWS || bc < 0 || bc >= MC_COLS) return;
+                    var blkEl = document.getElementById('mc-blk-' + br + '-' + bc);
+                    if (!blkEl || blkEl.dataset.revealed === '1' || !(grid[br] && grid[br][bc])) return;
+                    var bblk = { r:br, c:bc, type: grid[br][bc], win: winMap[br+','+bc]||0, hits:1 };
+                    setTimeout(function() {
+                        doBreakBlock(blkEl, bblk, function() { onBlockBroken(br, bc); });
+                    }, bi * 80);
                 });
             });
-        }, i * 560);
+        }, tntDelay);
     });
 
-    // STEP 7: Pickaxe phase
-    setTimeout(() => {
-        const cols = Object.keys(colWinBlocks);
-        console.log('[Mine] Spawning pickaxes for cols:', cols, 'mineIsActive:', mineIsActive);
-        let colDelay = 0;
-        cols.forEach(colStr => {
-            const col = parseInt(colStr);
-            const winBlocks = colWinBlocks[col];
+    // ════════════════════════════════════
+    // ФАЗА 2: Кирки (после всех ТНТ)
+    // ════════════════════════════════════
+    const pickPhaseStart = tnts.length > 0 ? tntTotalTime + 200 : 0;
+
+    setTimeout(function() {
+        if (!mineIsActive) return;
+
+        var colDelay = 0;
+        Object.keys(colWinBlocks).forEach(function(colStr) {
+            var col = parseInt(colStr);
+            var winBlocks = colWinBlocks[col];
             if (!winBlocks || !winBlocks.length) return;
-            if (tnts.some(t => t.col === col)) return;
+            if (tntColsSet.has(col)) return; // ТНТ уже обработал
 
-            const pType = colPickType[col] || 'wooden';
-            const pIdx  = colPickIdx[col];
-            console.log('[Mine] Col', col, 'pType:', pType, 'blocks:', winBlocks.length);
+            var pick = bestPick[col] || { pType: 'wooden', idx: -1 };
 
-            if (pIdx !== undefined) {
-                const ir = Math.floor(pIdx / MC_COLS), ic = pIdx % MC_COLS;
-                const iCell = $(`inv-${ir}-${ic}`);
-                if (iCell) { iCell.innerHTML=''; iCell.className='inv-cell'; delete iCell.dataset.slotType; delete iCell.dataset.pickType; }
+            // Убираем кирку из хотбара
+            if (pick.idx >= 0) {
+                var ir = Math.floor(pick.idx / MC_COLS), ic = pick.idx % MC_COLS;
+                var cell = document.getElementById('inv-' + ir + '-' + ic);
+                if (cell) { cell.innerHTML=''; cell.className='inv-cell'; delete cell.dataset.slotType; delete cell.dataset.pickType; }
             }
 
-            spawnPickaxeWorker(winBlocks, pType, colDelay, null, onBlockBroken, 999);
-            colDelay += 80;
+            spawnPickaxeWorker(winBlocks, pick.pType, colDelay, null, onBlockBroken, 999);
+            colDelay += 100;
         });
-        if (!cols.length) console.warn('[Mine] No winning columns! colWinBlocks empty. serverWin=', serverWin, 'blockWins=', JSON.stringify(blockWins));
-    }, tntPhase);
+    }, pickPhaseStart);
 
-    // STEP 8: Calculate animation duration
-    let maxAnim = 0;
-    Object.values(colWinBlocks).forEach(winBlocks => {
-        // Each block: 160ms appear + hits*(180+200+60) + 80ms finish
-        let t = 200;
-        winBlocks.forEach(blk => { t += blk.hits * 440 + 200; });
-        maxAnim = Math.max(maxAnim, t);
+    // ════════════════════════════════════
+    // ФИНАЛ: синхронизация с сервером
+    // ════════════════════════════════════
+    // Оцениваем длину анимации
+    var maxPickMs = 0;
+    Object.values(colWinBlocks).forEach(function(winBlocks) {
+        var t = 0;
+        winBlocks.forEach(function(blk) { t += blk.hits * (110+150+95+25) + 320 + 100; });
+        if (t > maxPickMs) maxPickMs = t;
     });
-    const estReveal = tntPhase + maxAnim + 1000;
+    var estReveal = pickPhaseStart + maxPickMs + 800;
 
-    // STEP 9: Final - sync win display with server
-    setTimeout(() => {
+    setTimeout(function() {
         if (!mineIsActive) return;
-        // Force sync to server win (in case any blocks were missed visually)
         mineRunningTotal = serverWin;
-        const rt = $('mine-running-total');
+        var rt = document.getElementById('mine-running-total');
         if (rt) {
             if (serverWin > 0) { rt.classList.add('has-win'); rt.textContent = serverWin.toFixed(2); }
             else { rt.textContent = '0.00'; rt.classList.remove('has-win'); }
         }
         if (serverWin > 0) {
             playSound('win');
-            const balSpan = $('bal-val');
+            var balSpan = document.getElementById('bal-val');
             if (balSpan) animateCounter(balSpan, balanceBefore, balanceBefore + serverWin, 900);
             flyToBalance(serverWin);
             showToast('+' + serverWin.toFixed(2) + ' TON');
@@ -3133,9 +3071,9 @@ function revealMineShaft(grid, blockWins, serverWin, balanceBefore, chestMults, 
         updateUI();
         if (mineBookCount >= 3 || mineAutoRemaining > 0) {
             if (mineBookCount >= 3) { mineBookCount -= 3; mineAutoRemaining = Math.max(mineAutoRemaining, 1); }
-            showMineBonusOverlay(mineAutoRemaining, () => autoSpinMine());
+            showMineBonusOverlay(mineAutoRemaining, function() { autoSpinMine(); });
         } else {
-            const sEl = $('mine-book-status');
+            var sEl = document.getElementById('mine-book-status');
             if (sEl) sEl.style.display = 'none';
         }
     }, estReveal);
