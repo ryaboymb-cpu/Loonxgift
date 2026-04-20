@@ -761,11 +761,20 @@ socket.on('crashBetsUpdate', bets => {
     if(bets.length === 0) $('cr-live-bets').innerHTML = '<div style="text-align:center; color:#555; padding:10px;">Ставок пока нет</div>';
     else {
         $('cr-live-bets').innerHTML = bets.map(b => {
-            const modeTag = b.mode === 'demo' ? '<span style="color:var(--neon-blue); font-size:9px;">[D]</span>' : '<span style="color:var(--neon); font-size:9px;">[R]</span>';
-            let statusHtml = `<span style="color:var(--text);">${b.bet} TON</span>`;
-            if (b.cashedOut) statusHtml = `<span style="color:var(--neon); font-weight:bold;">Вывел ${b.win.toFixed(2)}</span>`;
-            else if (curCrash.status === 'crashed') statusHtml = `<span style="color:var(--neon-red);">Проиграл</span>`;
-            return `<div class="live-bet-item"><div class="live-user"><img src="${b.avatar}" class="live-ava"> <span>${b.username} ${modeTag}</span></div>${statusHtml}</div>`
+            const tag = b.mode === 'demo' ? '[D]' : '[R]';
+            const tagClr = b.mode === 'demo' ? 'var(--neon-blue)' : 'var(--neon)';
+            let amt = b.bet + ' TON';
+            let amtClr = 'rgba(255,255,255,.7)';
+            if (b.cashedOut) { amt = '+' + b.win.toFixed(2) + ' TON'; amtClr = '#00e676'; }
+            else if (curCrash.status === 'crashed') { amt = '-' + b.bet + ' TON'; amtClr = '#ff4444'; }
+            return `<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);border-radius:12px;">
+                <img src="${b.avatar||'https://cdn-icons-png.flaticon.com/512/149/149071.png'}" style="width:28px;height:28px;border-radius:50%;object-fit:cover;flex-shrink:0;">
+                <div style="flex:1;min-width:0;">
+                    <div style="font-size:11px;font-weight:700;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${b.username} <span style="font-size:9px;color:${tagClr};">${tag}</span></div>
+                    <div style="font-size:10px;color:rgba(255,255,255,.4);">${b.bet} TON</div>
+                </div>
+                <div style="font-weight:800;font-size:12px;color:${amtClr};flex-shrink:0;">${amt}</div>
+            </div>`;
         }).join('');
     }
 });
@@ -2531,100 +2540,122 @@ function doBreakBlock(blkEl, blk, onFullyGone) {
 }
 
 // ── ВОРКЕР-КИРКА ──────────────────────────────────────────────
-// ФИНАЛЬНАЯ ВЕРСИЯ: убираем overflow:hidden у родителей на время анимации
-// чтобы position:fixed не обрезалось в Telegram WebView
+// Кирка рисуется как position:fixed на document.body.
+// Добавляем класс mine-anim на body чтобы CSS снял overflow:hidden со всех родителей.
 function spawnPickaxeWorker(blocks, pickType, startDelay, onAllDone, onBlockBroken, _u) {
     if (!blocks || !blocks.length) { if (onAllDone) setTimeout(onAllDone, 50); return; }
 
-    // Временно убираем overflow у всех контейнеров (это обходит баг Telegram WebView)
-    const overflowTargets = [
-        document.querySelector('.app-wrapper'),
-        document.querySelector('.content'),
-        document.getElementById('page-mine'),
-        document.querySelector('.mine-card'),
-    ].filter(Boolean);
-    const savedOverflow = overflowTargets.map(el => ({ el, ov: el.style.overflow }));
-    overflowTargets.forEach(el => { el.style.overflow = 'visible'; });
+    // Добавляем CSS класс на body → убирает overflow:hidden у всех контейнеров
+    document.body.classList.add('mine-anim');
 
     const img = document.createElement('img');
-    img.src   = getPickaxeImg(pickType || 'wooden');
-    img.style.cssText = 'position:fixed;z-index:2147483647;pointer-events:none;image-rendering:pixelated;width:28px;height:28px;display:block;left:-200px;top:-200px;';
+    img.src = getPickaxeImg(pickType || 'wooden');
+    img.style.cssText = [
+        'position:fixed',
+        'z-index:2147483647',
+        'pointer-events:none',
+        'image-rendering:pixelated',
+        'width:28px',
+        'height:28px',
+        'display:block',
+        'left:-100px',
+        'top:-100px',
+        'opacity:1',
+        'transform-origin:center bottom'
+    ].join(';') + ';';
     document.body.appendChild(img);
     _pickaxeEls.add(img);
 
-    function removePick() {
+    function done() {
         _pickaxeEls.delete(img);
         if (img.parentNode) img.remove();
-        // Восстанавливаем overflow
-        savedOverflow.forEach(function(o) { o.el.style.overflow = o.ov; });
+        // Убираем класс только если больше нет активных кирок
+        if (_pickaxeEls.size === 0) document.body.classList.remove('mine-anim');
         if (onAllDone) setTimeout(onAllDone, 30);
     }
 
     let qi = 0;
 
-    function goNext() {
-        if (!mineIsActive) { removePick(); return; }
-        if (qi >= blocks.length) { removePick(); return; }
+    function hitNext() {
+        if (!mineIsActive) { done(); return; }
+        if (qi >= blocks.length) { done(); return; }
 
-        const blk   = blocks[qi++];
-        const blkEl = document.getElementById('mc-blk-' + blk.r + '-' + blk.c);
+        const blk = blocks[qi++];
+        const el  = document.getElementById('mc-blk-' + blk.r + '-' + blk.c);
 
-        if (!blkEl || blkEl.dataset.revealed === '1') {
+        if (!el || el.dataset.revealed === '1') {
             if (onBlockBroken) onBlockBroken(blk.r, blk.c);
-            goNext();
+            hitNext();
             return;
         }
 
-        const rect = blkEl.getBoundingClientRect();
+        const rect = el.getBoundingClientRect();
         if (!rect || rect.width < 2) {
             if (onBlockBroken) onBlockBroken(blk.r, blk.c);
-            setTimeout(goNext, 60);
+            setTimeout(hitNext, 60);
             return;
         }
 
-        const lft     = rect.left + (rect.width - 28) / 2;
-        const fromTop = rect.top - 40;
-        const hoverY  = rect.top - 4;
-        const hitY    = rect.top + rect.height * 0.28;
-        const numHits = Math.max(1, blk.hits || 1);
+        // Координаты viewport — точно как dropTNT
+        const cx    = rect.left + rect.width / 2 - 14; // left edge: center - half width
+        const start = rect.top - rect.height - 10;     // старт: выше блока на один блок
+        const hover = rect.top - 2;                     // позиция парения
+        const hit   = rect.top + rect.height * 0.25;   // точка удара
 
-        // НАЧАЛЬНАЯ ПОЗИЦИЯ — точно как TNT
-        img.style.left      = lft + 'px';
-        img.style.top       = fromTop + 'px';
-        img.style.transform = 'rotate(-20deg)';
+        const nHits = Math.max(1, blk.hits || 1);
 
-        // ПАДЕНИЕ С ОТСКОКОМ — точно как TNT
-        _anim(img, 'top', fromTop, hoverY, 350, easeBounce, function() {
+        // Начальная позиция
+        img.style.left      = cx + 'px';
+        img.style.top       = start + 'px';
+        img.style.transform = 'rotate(-18deg)';
+
+        // Падение с отскоком — точно как dropTNT использует easeBounce
+        _anim(img, 'top', start, hover, 350, easeBounce, function() {
             img.style.transform = 'rotate(0deg)';
-            setTimeout(function() { doStrike(numHits, 0); }, 60);
+            setTimeout(function() { strike(nHits, 0); }, 50);
         });
 
-        function doStrike(rem, n) {
-            if (!mineIsActive) { removePick(); return; }
-            img.style.transform = 'rotate(' + (n % 2 === 0 ? 28 : -28) + 'deg)';
+        function strike(rem, n) {
+            if (!mineIsActive) { done(); return; }
+
+            // Замах
+            img.style.transform = 'rotate(' + (n % 2 === 0 ? 30 : -30) + 'deg)';
+
             setTimeout(function() {
-                _anim(img, 'top', hoverY, hitY, 120, easeIn, function() {
+                // Удар вниз
+                _anim(img, 'top', hover, hit, 110, easeIn, function() {
+                    if (!mineIsActive) { done(); return; }
+
+                    // Контакт с блоком
                     img.style.transform = 'rotate(0deg)';
                     playSound('hit');
-                    flashBlock(blkEl);
-                    blkEl.classList.remove('cracking-1','cracking-2','cracking-3');
-                    if (rem > 1) blkEl.classList.add((n+1)/numHits > 0.5 ? 'cracking-2' : 'cracking-1');
-                    else         blkEl.classList.add('cracking-3');
-                    _anim(img, 'top', hitY, hoverY, 160, easeOut, function() {
-                        if (!mineIsActive) { removePick(); return; }
+                    flashBlock(el);
+
+                    el.classList.remove('cracking-1', 'cracking-2', 'cracking-3');
+                    const prog = (n + 1) / nHits;
+                    if (rem > 1) el.classList.add(prog > 0.6 ? 'cracking-2' : 'cracking-1');
+                    else         el.classList.add('cracking-3');
+
+                    // Отскок вверх
+                    _anim(img, 'top', hit, hover, 150, easeOut, function() {
+                        if (!mineIsActive) { done(); return; }
+
                         if (rem <= 1) {
-                            doBreakBlock(blkEl, blk, function() { if (onBlockBroken) onBlockBroken(blk.r, blk.c); });
-                            setTimeout(goNext, 100);
+                            // Блок сломан
+                            doBreakBlock(el, blk, function() {
+                                if (onBlockBroken) onBlockBroken(blk.r, blk.c);
+                            });
+                            setTimeout(hitNext, 100);
                         } else {
-                            setTimeout(function() { doStrike(rem-1, n+1); }, 25);
+                            setTimeout(function() { strike(rem - 1, n + 1); }, 30);
                         }
                     });
                 });
-            }, 90);
+            }, 80);
         }
     }
 
-    setTimeout(goNext, startDelay || 0);
+    setTimeout(hitNext, startDelay || 0);
 }
 
 // ── Падение ТНТ с 2×2 взрывом ────────────────────────────────
