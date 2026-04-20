@@ -2539,38 +2539,60 @@ function doBreakBlock(blkEl, blk, onFullyGone) {
     }, 100);
 }
 
+// ════════════════════════════════════════════════════════════════
+// MINE ANIMATION ENGINE — полная перепись
+// 
+// Ключевое решение: используем ОДИН глобальный overlay div
+// position:fixed; inset:0; pointer-events:none
+// Кирки — position:absolute внутри overlay
+// Viewport-координаты из getBoundingClientRect() === absolute coords внутри fixed overlay
+// Никакой overflow:hidden не может обрезать содержимое fixed-overlay
+// ════════════════════════════════════════════════════════════════
+
+// ── Создаём глобальный overlay один раз ──────────────────────
+let _mineOverlay = null;
+function getMineOverlay() {
+    if (_mineOverlay && _mineOverlay.parentNode) return _mineOverlay;
+    _mineOverlay = document.createElement('div');
+    _mineOverlay.id = 'mine-anim-overlay';
+    _mineOverlay.style.cssText = [
+        'position:fixed',
+        'inset:0',
+        'width:100%',
+        'height:100%',
+        'pointer-events:none',
+        'z-index:2147483647',
+        'overflow:visible'
+    ].join(';') + ';';
+    document.body.appendChild(_mineOverlay);
+    return _mineOverlay;
+}
+
 // ── ВОРКЕР-КИРКА ──────────────────────────────────────────────
-// Кирка рисуется как position:fixed на document.body.
-// Добавляем класс mine-anim на body чтобы CSS снял overflow:hidden со всех родителей.
+// Рисует кирку ВНУТРИ fixed overlay используя абсолютные координаты
+// которые совпадают с viewport-координатами из getBoundingClientRect()
 function spawnPickaxeWorker(blocks, pickType, startDelay, onAllDone, onBlockBroken, _u) {
     if (!blocks || !blocks.length) { if (onAllDone) setTimeout(onAllDone, 50); return; }
 
-    // Добавляем CSS класс на body → убирает overflow:hidden у всех контейнеров
-    document.body.classList.add('mine-anim');
+    const overlay = getMineOverlay();
 
     const img = document.createElement('img');
     img.src = getPickaxeImg(pickType || 'wooden');
     img.style.cssText = [
-        'position:fixed',
-        'z-index:2147483647',
-        'pointer-events:none',
-        'image-rendering:pixelated',
+        'position:absolute',
         'width:28px',
         'height:28px',
+        'pointer-events:none',
+        'image-rendering:pixelated',
         'display:block',
-        'left:-100px',
-        'top:-100px',
-        'opacity:1',
         'transform-origin:center bottom'
     ].join(';') + ';';
-    document.body.appendChild(img);
+    overlay.appendChild(img);
     _pickaxeEls.add(img);
 
     function done() {
         _pickaxeEls.delete(img);
         if (img.parentNode) img.remove();
-        // Убираем класс только если больше нет активных кирок
-        if (_pickaxeEls.size === 0) document.body.classList.remove('mine-anim');
         if (onAllDone) setTimeout(onAllDone, 30);
     }
 
@@ -2596,21 +2618,21 @@ function spawnPickaxeWorker(blocks, pickType, startDelay, onAllDone, onBlockBrok
             return;
         }
 
-        // Координаты viewport — точно как dropTNT
-        const cx    = rect.left + rect.width / 2 - 14; // left edge: center - half width
-        const start = rect.top - rect.height - 10;     // старт: выше блока на один блок
-        const hover = rect.top - 2;                     // позиция парения
-        const hit   = rect.top + rect.height * 0.25;   // точка удара
+        // В fixed overlay: absolute coords = viewport coords из getBoundingClientRect
+        const cx    = rect.left + rect.width / 2 - 14;  // left edge кирки
+        const start = rect.top  - 40;                    // начало падения (выше блока)
+        const hover = rect.top  - 2;                     // позиция парения
+        const hitY  = rect.top  + rect.height * 0.28;   // точка удара
 
         const nHits = Math.max(1, blk.hits || 1);
 
-        // Начальная позиция
         img.style.left      = cx + 'px';
         img.style.top       = start + 'px';
+        img.style.opacity   = '1';
         img.style.transform = 'rotate(-18deg)';
 
-        // Падение с отскоком — точно как dropTNT использует easeBounce
-        _anim(img, 'top', start, hover, 350, easeBounce, function() {
+        // Падение с физическим отскоком (easeBounce — та же что в dropTNT)
+        _anim(img, 'top', start, hover, 340, easeBounce, function() {
             img.style.transform = 'rotate(0deg)';
             setTimeout(function() { strike(nHits, 0); }, 50);
         });
@@ -2618,46 +2640,46 @@ function spawnPickaxeWorker(blocks, pickType, startDelay, onAllDone, onBlockBrok
         function strike(rem, n) {
             if (!mineIsActive) { done(); return; }
 
-            // Замах
-            img.style.transform = 'rotate(' + (n % 2 === 0 ? 30 : -30) + 'deg)';
+            // Замах (чередуем стороны)
+            img.style.transform = 'rotate(' + (n % 2 === 0 ? 32 : -32) + 'deg)';
 
             setTimeout(function() {
-                // Удар вниз
-                _anim(img, 'top', hover, hit, 110, easeIn, function() {
+                // Удар вниз — быстрый (easeIn)
+                _anim(img, 'top', hover, hitY, 100, easeIn, function() {
                     if (!mineIsActive) { done(); return; }
 
-                    // Контакт с блоком
                     img.style.transform = 'rotate(0deg)';
                     playSound('hit');
                     flashBlock(el);
 
+                    // Трещины прогрессивно
                     el.classList.remove('cracking-1', 'cracking-2', 'cracking-3');
                     const prog = (n + 1) / nHits;
-                    if (rem > 1) el.classList.add(prog > 0.6 ? 'cracking-2' : 'cracking-1');
-                    else         el.classList.add('cracking-3');
+                    if      (rem > 1 && prog < 0.5) el.classList.add('cracking-1');
+                    else if (rem > 1)                el.classList.add('cracking-2');
+                    else                             el.classList.add('cracking-3');
 
-                    // Отскок вверх
-                    _anim(img, 'top', hit, hover, 150, easeOut, function() {
+                    // Отскок вверх — плавный (easeOut)
+                    _anim(img, 'top', hitY, hover, 160, easeOut, function() {
                         if (!mineIsActive) { done(); return; }
 
                         if (rem <= 1) {
-                            // Блок сломан
+                            // Блок сломан — запускаем анимацию разрушения
                             doBreakBlock(el, blk, function() {
                                 if (onBlockBroken) onBlockBroken(blk.r, blk.c);
                             });
-                            setTimeout(hitNext, 100);
+                            setTimeout(hitNext, 110);
                         } else {
-                            setTimeout(function() { strike(rem - 1, n + 1); }, 30);
+                            setTimeout(function() { strike(rem - 1, n + 1); }, 25);
                         }
                     });
                 });
-            }, 80);
+            }, 75);
         }
     }
 
     setTimeout(hitNext, startDelay || 0);
 }
-
 // ── Падение ТНТ с 2×2 взрывом ────────────────────────────────
 function dropTNT(col, blk, onDone) {
     const blkEl = $(`mc-blk-${blk.r}-${blk.c}`);
@@ -2909,79 +2931,81 @@ function revealMineShaft(grid, blockWins, serverWin, balanceBefore, chestMults, 
     const HITS = { grass:1, dirt:1, stone:1, redstone:2, gold:2, gold_block:2, diamond:3, diamond_block:3, obsidian:4 };
     grid_current = grid;
 
-    // ── Сбрасываем все блоки ──
+    // Инициализируем overlay
+    getMineOverlay();
+
+    // ── 1. Сбрасываем блоки ──────────────────────────────────
     for (let r = 0; r < MC_ROWS; r++) {
         for (let c = 0; c < MC_COLS; c++) {
             const el = document.getElementById('mc-blk-' + r + '-' + c);
             if (!el) continue;
             const type = grid[r] && grid[r][c];
-            if (!type) { el.dataset.revealed = '1'; el.style.visibility = 'hidden'; continue; }
+            if (!type) {
+                el.dataset.revealed = '1';
+                el.style.visibility = 'hidden';
+                continue;
+            }
             if (isAutoSpin && el.dataset.revealed === '1') continue;
-            el.className = 'mc-blk ' + (MINE_BLOCK_CLASS[type] || 'stone-blk');
-            el.dataset.revealed = '0';
+            el.className         = 'mc-blk ' + (MINE_BLOCK_CLASS[type] || 'stone-blk');
+            el.dataset.revealed  = '0';
             el.dataset.blockType = type;
-            el.dataset.tntDmg = '0';
-            el.style.cssText = '';
+            el.dataset.tntDmg   = '0';
+            el.style.cssText    = '';
             el.style.visibility = 'visible';
         }
     }
 
-    // ── Читаем hotbar ──
-    const hotbar = currentHotbar || [];
-    const RANK = { wooden:0, stone:1, iron:2, golden:3, diamond:4 };
-    const picks = []; // { col, idx, pType }
-    const tnts  = []; // { col, idx }
-    let bookCount = 0;
+    // ── 2. Читаем hotbar ─────────────────────────────────────
+    const hotbar   = currentHotbar || [];
+    const RANK     = { wooden:0, stone:1, iron:2, golden:3, diamond:4 };
+    const tntList  = [];  // { col, idx }
+    const bestPick = {};  // col → { pType, idx }
+    let bookCount  = 0;
+
     hotbar.forEach(function(slot, idx) {
-        if (!slot) return;
+        if (!slot || slot.type === 'empty') return;
         const col = idx % MC_COLS;
-        if (slot.type === 'pickaxe') {
-            picks.push({ col, idx, pType: slot.pickaxeType || 'wooden' });
-        } else if (slot.type === 'tnt') {
-            tnts.push({ col, idx });
+        if (slot.type === 'tnt') {
+            tntList.push({ col, idx });
+        } else if (slot.type === 'pickaxe') {
+            const pt  = slot.pickaxeType || 'wooden';
+            const cur = bestPick[col];
+            if (!cur || (RANK[pt] || 0) > (RANK[cur.pType] || 0)) {
+                bestPick[col] = { pType: pt, idx };
+            }
         } else if (slot.type === 'book') {
             bookCount++;
         }
     });
     if (bookCount > 0) mineBookCount += bookCount;
 
-    // ── Карта выигрышей от сервера ──
+    // ── 3. Карта выигрышей от сервера ────────────────────────
+    // blockWins[r][c] > 0 → этот блок сломан и принёс этот выигрыш
     const winMap = {};
     for (let r = 0; r < MC_ROWS; r++) {
         for (let c = 0; c < MC_COLS; c++) {
-            let bw = 0;
-            if (blockWins && blockWins[r] != null) {
-                bw = Number(blockWins[r][c]) || 0;
-            }
+            const bw = (blockWins && blockWins[r] != null) ? (Number(blockWins[r][c]) || 0) : 0;
             winMap[r + ',' + c] = bw;
         }
     }
 
-    // ── Для каждой кирки — список блоков которые сервер сломал ──
-    // Берём колонки пикакс, находим блоки с win > 0 в той колонке
-    const colWinBlocks = {}; // col -> blocks[]
-    // Сначала собираем все колонки где есть победные блоки
+    // ── 4. Группируем выигрышные блоки по колонкам ───────────
+    const tntCols = new Set(tntList.map(t => t.col));
+    const colBlocks = {}; // col → [{ r, c, type, win, hits }]
+
     for (let c = 0; c < MC_COLS; c++) {
         for (let r = 0; r < MC_ROWS; r++) {
-            if (winMap[r + ',' + c] > 0) {
-                if (!colWinBlocks[c]) colWinBlocks[c] = [];
+            const w = winMap[r + ',' + c];
+            if (w > 0) {
+                if (!colBlocks[c]) colBlocks[c] = [];
                 const type = (grid[r] && grid[r][c]) || 'stone';
-                colWinBlocks[c].push({ r, c, type, win: winMap[r + ',' + c], hits: HITS[type] || 1 });
+                colBlocks[c].push({ r, c, type, win: w, hits: HITS[type] || 1 });
             }
         }
     }
 
-    // Лучшая кирка для каждой колонки
-    const bestPick = {}; // col -> { pType, idx }
-    picks.forEach(function(p) {
-        const cur = bestPick[p.col];
-        if (!cur || (RANK[p.pType] || 0) > (RANK[cur.pType] || 0)) {
-            bestPick[p.col] = { pType: p.pType, idx: p.idx };
-        }
-    });
-
-    // ── Отслеживание сломанных блоков для сундуков ──
-    const colBroken = Array(MC_COLS).fill(0);
+    // ── 5. Отслеживание для сундуков ─────────────────────────
+    const colBroken = new Array(MC_COLS).fill(0);
     for (let c = 0; c < MC_COLS; c++) {
         for (let r = 0; r < MC_ROWS; r++) {
             const el = document.getElementById('mc-blk-' + r + '-' + c);
@@ -2996,135 +3020,153 @@ function revealMineShaft(grid, blockWins, serverWin, balanceBefore, chestMults, 
         colBroken[c]++;
         if (colBroken[c] >= MC_ROWS && !openedChests.has(c)) {
             openedChests.add(c);
-            setTimeout(function() { openChestWithAnim(c, colMults[c]||2, srvAct[c]===true, serverWin); }, 350);
+            setTimeout(function() {
+                openChestWithAnim(c, colMults[c] || 2, srvAct[c] === true, serverWin);
+            }, 350);
         }
     }
 
-    mineIsActive    = true;
+    mineIsActive     = true;
     mineRunningTotal = 0;
 
-    // ════════════════════════════════════
-    // ФАЗА 1: ТНТ (последовательно с паузами)
-    // ════════════════════════════════════
-    const tntColsSet = new Set(tnts.map(function(t) { return t.col; }));
-
-    // Убираем ТНТ из хотбара сразу
-    tnts.forEach(function(ts) {
+    // ── 6. Убираем инструменты из хотбара ────────────────────
+    // TNT
+    tntList.forEach(function(ts) {
         const ir = Math.floor(ts.idx / MC_COLS), ic = ts.idx % MC_COLS;
         const cell = document.getElementById('inv-' + ir + '-' + ic);
         if (cell) { cell.innerHTML = ''; cell.className = 'inv-cell'; delete cell.dataset.slotType; }
     });
 
-    // Запускаем ТНТ последовательно
-    let tntTotalTime = 0;
-    const TNT_DROP_MS = 480 + 5*55 + 50; // drop + blink + buffer ≈ 800ms
-    tnts.forEach(function(ts, i) {
-        const tntDelay = i * (TNT_DROP_MS + 100);
-        tntTotalTime = tntDelay + TNT_DROP_MS;
-        setTimeout(function() {
-            if (!mineIsActive) return;
-            // Найдём первый нетронутый блок в колонке
-            var targetBlk = null;
-            for (var r = 0; r < MC_ROWS; r++) {
-                var el = document.getElementById('mc-blk-' + r + '-' + ts.col);
-                if (el && el.dataset.revealed !== '1' && grid[r] && grid[r][ts.col]) {
-                    targetBlk = { r: r, c: ts.col, type: grid[r][ts.col], win: winMap[r+','+ts.col]||0, hits:1 };
-                    break;
-                }
+    // ── 7. ФАЗА ТНТ ──────────────────────────────────────────
+    // Каждый ТНТ запускается последовательно (одним после другого)
+    const TNT_ONE_MS = 800; // время одного ТНТ (падение + взрыв)
+    let   tntDone   = 0;
+
+    function runNextTNT() {
+        if (tntDone >= tntList.length) {
+            startPickPhase();
+            return;
+        }
+        const ts = tntList[tntDone++];
+
+        // Найти первый нетронутый блок в колонке
+        let targetBlk = null;
+        for (let r = 0; r < MC_ROWS; r++) {
+            const el = document.getElementById('mc-blk-' + r + '-' + ts.col);
+            if (el && el.dataset.revealed !== '1' && grid[r] && grid[r][ts.col]) {
+                targetBlk = { r, c: ts.col, type: grid[r][ts.col], win: winMap[r + ',' + ts.col] || 0, hits: 1 };
+                break;
             }
-            if (!targetBlk) return;
+        }
+        if (!targetBlk) { runNextTNT(); return; }
 
-            dropTNT(ts.col, targetBlk, function() {
-                // Взрываем 2×2 вокруг targetBlk — ВСЕ 4 блока
-                var blast = [
-                    [targetBlk.r,   targetBlk.c  ],
-                    [targetBlk.r,   targetBlk.c+1],
-                    [targetBlk.r+1, targetBlk.c  ],
-                    [targetBlk.r+1, targetBlk.c+1],
-                ];
-                blast.forEach(function(coord, bi) {
-                    var br = coord[0], bc = coord[1];
-                    if (br < 0 || br >= MC_ROWS || bc < 0 || bc >= MC_COLS) return;
-                    var blkEl = document.getElementById('mc-blk-' + br + '-' + bc);
-                    if (!blkEl || blkEl.dataset.revealed === '1' || !(grid[br] && grid[br][bc])) return;
-                    var bblk = { r:br, c:bc, type: grid[br][bc], win: winMap[br+','+bc]||0, hits:1 };
-                    setTimeout(function() {
-                        doBreakBlock(blkEl, bblk, function() { onBlockBroken(br, bc); });
-                    }, bi * 80);
-                });
+        dropTNT(ts.col, targetBlk, function() {
+            // Взрыв 2×2 вокруг блока
+            const blast = [
+                [targetBlk.r, targetBlk.c],
+                [targetBlk.r, targetBlk.c + 1],
+                [targetBlk.r + 1, targetBlk.c],
+                [targetBlk.r + 1, targetBlk.c + 1],
+            ];
+            let blastDone = 0;
+            blast.forEach(function(coord, bi) {
+                const br = coord[0], bc = coord[1];
+                if (br < 0 || br >= MC_ROWS || bc < 0 || bc >= MC_COLS) { blastDone++; return; }
+                const blkEl = document.getElementById('mc-blk-' + br + '-' + bc);
+                if (!blkEl || blkEl.dataset.revealed === '1' || !(grid[br] && grid[br][bc])) { blastDone++; return; }
+                const bblk = { r: br, c: bc, type: grid[br][bc], win: winMap[br + ',' + bc] || 0, hits: 1 };
+                setTimeout(function() {
+                    doBreakBlock(blkEl, bblk, function() {
+                        onBlockBroken(br, bc);
+                        blastDone++;
+                        if (blastDone >= blast.length) runNextTNT();
+                    });
+                }, bi * 80);
             });
-        }, tntDelay);
-    });
+        });
+    }
 
-    // ════════════════════════════════════
-    // ФАЗА 2: Кирки (после всех ТНТ)
-    // ════════════════════════════════════
-    const pickPhaseStart = tnts.length > 0 ? tntTotalTime + 200 : 0;
+    // ── 8. ФАЗА КИРОК ────────────────────────────────────────
+    function startPickPhase() {
+        const cols = Object.keys(colBlocks);
+        let colDelay = 0;
 
-    setTimeout(function() {
-        if (!mineIsActive) return;
-
-        var colDelay = 0;
-        Object.keys(colWinBlocks).forEach(function(colStr) {
-            var col = parseInt(colStr);
-            var winBlocks = colWinBlocks[col];
+        cols.forEach(function(colStr) {
+            const col = parseInt(colStr);
+            const winBlocks = colBlocks[col];
             if (!winBlocks || !winBlocks.length) return;
-            if (tntColsSet.has(col)) return; // ТНТ уже обработал
+            if (tntCols.has(col)) return; // ТНТ уже обработал
 
-            var pick = bestPick[col] || { pType: 'wooden', idx: -1 };
+            const pick = bestPick[col] || { pType: 'wooden', idx: -1 };
 
             // Убираем кирку из хотбара
             if (pick.idx >= 0) {
-                var ir = Math.floor(pick.idx / MC_COLS), ic = pick.idx % MC_COLS;
-                var cell = document.getElementById('inv-' + ir + '-' + ic);
-                if (cell) { cell.innerHTML=''; cell.className='inv-cell'; delete cell.dataset.slotType; delete cell.dataset.pickType; }
+                const ir = Math.floor(pick.idx / MC_COLS), ic = pick.idx % MC_COLS;
+                const cell = document.getElementById('inv-' + ir + '-' + ic);
+                if (cell) {
+                    cell.innerHTML = '';
+                    cell.className = 'inv-cell';
+                    delete cell.dataset.slotType;
+                    delete cell.dataset.pickType;
+                }
             }
 
             spawnPickaxeWorker(winBlocks, pick.pType, colDelay, null, onBlockBroken, 999);
-            colDelay += 100;
+            colDelay += 120; // небольшой стаггер для колонок
         });
-    }, pickPhaseStart);
+    }
 
-    // ════════════════════════════════════
-    // ФИНАЛ: синхронизация с сервером
-    // ════════════════════════════════════
-    // Оцениваем длину анимации
-    var maxPickMs = 0;
-    Object.values(colWinBlocks).forEach(function(winBlocks) {
-        var t = 0;
-        winBlocks.forEach(function(blk) { t += blk.hits * (110+150+95+25) + 320 + 100; });
-        if (t > maxPickMs) maxPickMs = t;
+    // ── 9. Запуск ─────────────────────────────────────────────
+    if (tntList.length > 0) {
+        runNextTNT();
+    } else {
+        startPickPhase();
+    }
+
+    // ── 10. Финал (синхронизируемся с сервером) ───────────────
+    // Оцениваем время всех анимаций
+    let maxPickTime = 0;
+    Object.values(colBlocks).forEach(function(winBlocks) {
+        let t = 350; // время падения
+        winBlocks.forEach(function(blk) {
+            t += blk.hits * (100 + 160 + 75 + 25) + 110 + 50;
+        });
+        if (t > maxPickTime) maxPickTime = t;
     });
-    var estReveal = pickPhaseStart + maxPickMs + 800;
+
+    const tntTotalTime = tntList.length * (TNT_ONE_MS + 100);
+    const estReveal    = tntTotalTime + maxPickTime + 600;
 
     setTimeout(function() {
         if (!mineIsActive) return;
+
+        // Принудительно синхронизируем с сервером
         mineRunningTotal = serverWin;
-        var rt = document.getElementById('mine-running-total');
+        const rt = document.getElementById('mine-running-total');
         if (rt) {
             if (serverWin > 0) { rt.classList.add('has-win'); rt.textContent = serverWin.toFixed(2); }
-            else { rt.textContent = '0.00'; rt.classList.remove('has-win'); }
+            else               { rt.textContent = '0.00'; rt.classList.remove('has-win'); }
         }
         if (serverWin > 0) {
             playSound('win');
-            var balSpan = document.getElementById('bal-val');
+            const balSpan = document.getElementById('bal-val');
             if (balSpan) animateCounter(balSpan, balanceBefore, balanceBefore + serverWin, 900);
             flyToBalance(serverWin);
             showToast('+' + serverWin.toFixed(2) + ' TON');
         }
         updateUI();
+
         if (mineBookCount >= 3 || mineAutoRemaining > 0) {
             if (mineBookCount >= 3) { mineBookCount -= 3; mineAutoRemaining = Math.max(mineAutoRemaining, 1); }
             showMineBonusOverlay(mineAutoRemaining, function() { autoSpinMine(); });
         } else {
-            var sEl = document.getElementById('mine-book-status');
+            const sEl = document.getElementById('mine-book-status');
             if (sEl) sEl.style.display = 'none';
         }
     }, estReveal);
 
     return estReveal + 400;
 }
-
 function setupMineTextures() {
     ['/sprites/block_grass.png','/sprites/block_dirt.png','/sprites/block_stone.png',
      '/sprites/block_redstone.png','/sprites/block_gold.png','/sprites/block_diamond.png',
