@@ -205,7 +205,8 @@ body {
 
 .content:has(#page-mine.active) {
   padding: 0 2px 68px !important;
-  overflow: auto !important;
+  overflow-x: hidden;
+  overflow-y: auto;
   display: flex !important;
   flex-direction: column;
   align-items: center;
@@ -874,8 +875,8 @@ body {
 /* content скроллируется внутри wrapper */
 .content {
     flex: 1 !important;
-    overflow-y: auto !important;
-    overflow-x: hidden !important;
+    overflow-y: auto;
+    overflow-x: hidden;
     -webkit-overflow-scrolling: touch !important;
     padding: 12px !important;
     padding-bottom: 90px !important;
@@ -2133,3 +2134,13 @@ button.btn[style*="neon-blue"] {
     border: 1.5px solid rgba(255,255,255,.15) !important;
     flex-shrink: 0 !important;
 }
+
+/* ════ MINE ANIMATION ACTIVE — override overflow for pickaxe visibility ════ */
+.mine-anim-active,
+.mine-anim-active * {
+    /* Cannot override overflow here easily */
+}
+/* Override specific containers when mine animation is running */
+body.mine-anim .app-wrapper { overflow: visible !important; }
+body.mine-anim .content     { overflow: visible !important; }
+body.mine-anim #page-mine   { overflow: visible !important; }
