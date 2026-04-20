@@ -2134,28 +2134,3 @@ button.btn[style*="neon-blue"] {
     border: 1.5px solid rgba(255,255,255,.15) !important;
     flex-shrink: 0 !important;
 }
-
-/* ════ MINE ANIMATION ACTIVE — override overflow for pickaxe visibility ════ */
-.mine-anim-active,
-.mine-anim-active * {
-    /* Cannot override overflow here easily */
-}
-/* Override specific containers when mine animation is running */
-body.mine-anim .app-wrapper { overflow: visible !important; }
-body.mine-anim .content     { overflow: visible !important; }
-body.mine-anim #page-mine   { overflow: visible !important; }
-
-/* ════ MINE ANIMATION OVERLAY ════ */
-#mine-anim-overlay {
-    position: fixed !important;
-    inset: 0 !important;
-    width: 100% !important;
-    height: 100% !important;
-    pointer-events: none !important;
-    z-index: 2147483647 !important;
-    overflow: visible !important;
-}
-#mine-anim-overlay img {
-    position: absolute !important;
-    pointer-events: none !important;
-}
