@@ -2569,30 +2569,62 @@ function getMineOverlay() {
 }
 
 // ── ВОРКЕР-КИРКА ──────────────────────────────────────────────
-// Рисует кирку ВНУТРИ fixed overlay используя абсолютные координаты
-// которые совпадают с viewport-координатами из getBoundingClientRect()
+// РЕШЕНИЕ backdrop-filter бага: инжектируем <style> в <head>
+// который снимает overflow со всех контейнеров через высокую специфичность.
+// Кирки: position:fixed на body (идентично dropTNT который работает).
+// Анимация через CSS transition (не requestAnimationFrame) — надёжнее в WebView.
+
+let _mineStyleTag = null;
+function _injectMineStyle() {
+    if (_mineStyleTag) return;
+    _mineStyleTag = document.createElement('style');
+    _mineStyleTag.id = 'mine-pick-style';
+    _mineStyleTag.textContent = [
+        'html body .app-wrapper{overflow:visible!important}',
+        'html body .content{overflow:visible!important}',
+        'html body #page-mine{overflow:visible!important}',
+        'html body .mine-card{overflow:visible!important}',
+        'html body .mc-shaft{overflow:visible!important}',
+        'html body .gc{backdrop-filter:none!important;-webkit-backdrop-filter:none!important}',
+        'html body .live-bet-item{backdrop-filter:none!important;-webkit-backdrop-filter:none!important}',
+    ].join('\n');
+    document.head.appendChild(_mineStyleTag);
+}
+function _removeMineStyle() {
+    if (_mineStyleTag && _mineStyleTag.parentNode) {
+        _mineStyleTag.remove();
+        _mineStyleTag = null;
+    }
+}
+
 function spawnPickaxeWorker(blocks, pickType, startDelay, onAllDone, onBlockBroken, _u) {
     if (!blocks || !blocks.length) { if (onAllDone) setTimeout(onAllDone, 50); return; }
 
-    const overlay = getMineOverlay();
+    _injectMineStyle();
 
+    // position:fixed на body — точно как dropTNT (он работает)
+    const PICK_SIZE = 28;
     const img = document.createElement('img');
     img.src = getPickaxeImg(pickType || 'wooden');
     img.style.cssText = [
-        'position:absolute',
-        'width:28px',
-        'height:28px',
+        'position:fixed',
+        'z-index:2147483647',
+        'width:' + PICK_SIZE + 'px',
+        'height:' + PICK_SIZE + 'px',
         'pointer-events:none',
         'image-rendering:pixelated',
         'display:block',
-        'transform-origin:center bottom'
+        'transform-origin:center bottom',
+        'left:-999px',
+        'top:-999px'
     ].join(';') + ';';
-    overlay.appendChild(img);
+    document.body.appendChild(img);
     _pickaxeEls.add(img);
 
     function done() {
         _pickaxeEls.delete(img);
         if (img.parentNode) img.remove();
+        if (_pickaxeEls.size === 0) _removeMineStyle();
         if (onAllDone) setTimeout(onAllDone, 30);
     }
 
@@ -2618,68 +2650,61 @@ function spawnPickaxeWorker(blocks, pickType, startDelay, onAllDone, onBlockBrok
             return;
         }
 
-        // В fixed overlay: absolute coords = viewport coords из getBoundingClientRect
-        const cx    = rect.left + rect.width / 2 - 14;  // left edge кирки
-        const start = rect.top  - 40;                    // начало падения (выше блока)
-        const hover = rect.top  - 2;                     // позиция парения
-        const hitY  = rect.top  + rect.height * 0.28;   // точка удара
+        // Viewport координаты — идентично dropTNT
+        const lft   = rect.left + rect.width / 2 - PICK_SIZE / 2;
+        const start = rect.top  - rect.height - 8;   // стартует выше блока
+        const hover = rect.top  - 4;                  // парение над блоком
+        const hitY  = rect.top  + rect.height * 0.28; // точка удара
 
         const nHits = Math.max(1, blk.hits || 1);
 
-        img.style.left      = cx + 'px';
+        // Позиционируем и начинаем падение (как TNT: _anim 'top' + easeBounce)
+        img.style.left      = lft + 'px';
         img.style.top       = start + 'px';
-        img.style.opacity   = '1';
         img.style.transform = 'rotate(-18deg)';
 
-        // Падение с физическим отскоком (easeBounce — та же что в dropTNT)
-        _anim(img, 'top', start, hover, 340, easeBounce, function() {
+        _anim(img, 'top', start, hover, 320, easeBounce, function() {
             img.style.transform = 'rotate(0deg)';
-            setTimeout(function() { strike(nHits, 0); }, 50);
+            setTimeout(function() { doStrike(nHits, 0); }, 60);
         });
 
-        function strike(rem, n) {
+        function doStrike(rem, n) {
             if (!mineIsActive) { done(); return; }
 
-            // Замах (чередуем стороны)
-            img.style.transform = 'rotate(' + (n % 2 === 0 ? 32 : -32) + 'deg)';
+            img.style.transform = 'rotate(' + (n % 2 === 0 ? 30 : -30) + 'deg)';
 
             setTimeout(function() {
-                // Удар вниз — быстрый (easeIn)
-                _anim(img, 'top', hover, hitY, 100, easeIn, function() {
+                _anim(img, 'top', hover, hitY, 110, easeIn, function() {
                     if (!mineIsActive) { done(); return; }
-
                     img.style.transform = 'rotate(0deg)';
                     playSound('hit');
                     flashBlock(el);
 
-                    // Трещины прогрессивно
                     el.classList.remove('cracking-1', 'cracking-2', 'cracking-3');
                     const prog = (n + 1) / nHits;
                     if      (rem > 1 && prog < 0.5) el.classList.add('cracking-1');
                     else if (rem > 1)                el.classList.add('cracking-2');
                     else                             el.classList.add('cracking-3');
 
-                    // Отскок вверх — плавный (easeOut)
-                    _anim(img, 'top', hitY, hover, 160, easeOut, function() {
+                    _anim(img, 'top', hitY, hover, 150, easeOut, function() {
                         if (!mineIsActive) { done(); return; }
-
                         if (rem <= 1) {
-                            // Блок сломан — запускаем анимацию разрушения
                             doBreakBlock(el, blk, function() {
                                 if (onBlockBroken) onBlockBroken(blk.r, blk.c);
                             });
                             setTimeout(hitNext, 110);
                         } else {
-                            setTimeout(function() { strike(rem - 1, n + 1); }, 25);
+                            setTimeout(function() { doStrike(rem - 1, n + 1); }, 28);
                         }
                     });
                 });
-            }, 75);
+            }, 80);
         }
     }
 
     setTimeout(hitNext, startDelay || 0);
 }
+
 // ── Падение ТНТ с 2×2 взрывом ────────────────────────────────
 function dropTNT(col, blk, onDone) {
     const blkEl = $(`mc-blk-${blk.r}-${blk.c}`);
