@@ -2144,3 +2144,18 @@ button.btn[style*="neon-blue"] {
 body.mine-anim .app-wrapper { overflow: visible !important; }
 body.mine-anim .content     { overflow: visible !important; }
 body.mine-anim #page-mine   { overflow: visible !important; }
+
+/* ════ MINE ANIMATION OVERLAY ════ */
+#mine-anim-overlay {
+    position: fixed !important;
+    inset: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    pointer-events: none !important;
+    z-index: 2147483647 !important;
+    overflow: visible !important;
+}
+#mine-anim-overlay img {
+    position: absolute !important;
+    pointer-events: none !important;
+}
