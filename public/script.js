@@ -2555,15 +2555,20 @@ function getMineOverlay() {
     if (_mineOverlay && _mineOverlay.parentNode) return _mineOverlay;
     _mineOverlay = document.createElement('div');
     _mineOverlay.id = 'mine-anim-overlay';
+    // Must be direct child of body, NOT inside any container with overflow/backdrop-filter
+    // position:fixed + top:0+left:0 means absolute coords inside this = viewport coords
     _mineOverlay.style.cssText = [
         'position:fixed',
-        'inset:0',
-        'width:100%',
-        'height:100%',
+        'top:0',
+        'left:0',
+        'width:100vw',
+        'height:100vh',
         'pointer-events:none',
         'z-index:2147483647',
-        'overflow:visible'
+        'overflow:visible',
+        'contain:none'
     ].join(';') + ';';
+    // Ensure overlay is last child of body to avoid stacking context issues
     document.body.appendChild(_mineOverlay);
     return _mineOverlay;
 }
@@ -2579,14 +2584,16 @@ function _injectMineStyle() {
     if (_mineStyleTag) return;
     _mineStyleTag = document.createElement('style');
     _mineStyleTag.id = 'mine-pick-style';
+    // Remove overflow AND backdrop-filter from ALL ancestors that could clip position:fixed
     _mineStyleTag.textContent = [
-        'html body .app-wrapper{overflow:visible!important}',
-        'html body .content{overflow:visible!important}',
-        'html body #page-mine{overflow:visible!important}',
-        'html body .mine-card{overflow:visible!important}',
+        'html,body{overflow:visible!important}',
+        'html body .app-wrapper{overflow:visible!important;contain:none!important}',
+        'html body .content{overflow:visible!important;contain:none!important}',
+        'html body #page-mine{overflow:visible!important;contain:none!important}',
+        'html body .mine-card{overflow:visible!important;contain:none!important}',
         'html body .mc-shaft{overflow:visible!important}',
-        'html body .gc{backdrop-filter:none!important;-webkit-backdrop-filter:none!important}',
-        'html body .live-bet-item{backdrop-filter:none!important;-webkit-backdrop-filter:none!important}',
+        // backdrop-filter creates stacking context that clips position:fixed children
+        'html body *{backdrop-filter:none!important;-webkit-backdrop-filter:none!important}',
     ].join('\n');
     document.head.appendChild(_mineStyleTag);
 }
@@ -2611,6 +2618,7 @@ function spawnPickaxeWorker(blocks, pickType, startDelay, onAllDone, onBlockBrok
         'z-index:2147483647',
         'width:' + PICK_SIZE + 'px',
         'height:' + PICK_SIZE + 'px',
+        'image-rendering:crisp-edges',
         'pointer-events:none',
         'image-rendering:pixelated',
         'display:block',
@@ -2618,7 +2626,7 @@ function spawnPickaxeWorker(blocks, pickType, startDelay, onAllDone, onBlockBrok
         'left:-999px',
         'top:-999px'
     ].join(';') + ';';
-    document.body.appendChild(img);
+    getMineOverlay().appendChild(img);
     _pickaxeEls.add(img);
 
     function done() {
@@ -2679,6 +2687,7 @@ function spawnPickaxeWorker(blocks, pickType, startDelay, onAllDone, onBlockBrok
                     img.style.transform = 'rotate(0deg)';
                     playSound('hit');
                     flashBlock(el);
+                    consumeDurability(1);
 
                     el.classList.remove('cracking-1', 'cracking-2', 'cracking-3');
                     const prog = (n + 1) / nHits;
@@ -3240,7 +3249,7 @@ async function playMine() {
     if (!betVal || betVal < 0.1) { showToast('Мин. ставка 0.1 TON'); return; }
     if (betVal > 25) { betVal = 25; if (betInput) betInput.value = 25; }
     mineLastBet = betVal;
-    mineBookCount = 0; minePersistGrid = null;
+    minePersistGrid = null;
     const sEl2 = $('mine-book-status');
     if (sEl2) sEl2.style.display = 'none';
     playSound('click');
