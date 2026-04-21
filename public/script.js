@@ -2369,14 +2369,16 @@ function updateSpinUI() {
 //  MINE GAME v3 — clean, minimal, beautiful
 // ══════════════════════════════════════════
 
-const MINE_BLOCK_CLASS = {
-    grass:'grass-blk', dirt:'dirt-blk', stone:'stone-blk',
-    redstone:'redstone-blk', gold_block:'gold-blk', gold:'gold-blk',
-    diamond_block:'diamond-blk', diamond:'diamond-blk',
-    obsidian:'obsidian-blk', tnt:'tnt-blk', book:'book-blk', unknown:'unknown-blk'
-};
+
+// ════════════════════════════════════════════════════════════
+//  MINE GAME — полная перепись v3
+//  Механика идентична Mineslot: кирки падают, бьют, блок рассыпается, 
+//  показывается выигрыш, заполняется шахта сверху вниз
+// ════════════════════════════════════════════════════════════
+
 const MC_ROWS = 6, MC_COLS = 5, INV_ROWS = 3, INV_COLS = 5;
 
+// ─── Состояние ───────────────────────────────────────────────
 let mineIsSpinning    = false;
 let mineBookCount     = 0;
 let mineAutoRemaining = 0;
@@ -2384,24 +2386,36 @@ let minePersistGrid   = null;
 let mineLastBet       = 1;
 let mineRunningTotal  = 0;
 let mineIsActive      = false;
-let grid_current      = null; // текущий grid для TNT 2x2
+let grid_current      = null;
 const _pickaxeEls     = new Set();
+let _mineOverlay      = null;
 
-// ── Прочность из adminSettings ──────────────────────────────
-function getPickDur(type) {
-    const g = gameSettings || {};
-    return {
-        wooden:  Number(g['game_mine_dur_wood'])    || 1,
-        stone:   Number(g['game_mine_dur_stone'])   || 2,
-        iron:    Number(g['game_mine_dur_iron'])    || 3,
-        golden:  Number(g['game_mine_dur_gold'])    || 4,
-        diamond: Number(g['game_mine_dur_diamond']) || 5,
-    }[type] || 1;
-}
+// ─── Константы блоков ────────────────────────────────────────
+const MINE_BLOCK_CLASS = {
+    grass:'grass-blk', dirt:'dirt-blk', stone:'stone-blk',
+    redstone:'redstone-blk', gold_block:'gold-blk', gold:'gold-blk',
+    diamond:'diamond-blk', diamond_block:'diamond-blk',
+    obsidian:'obsidian-blk', tnt:'tnt-blk', book:'book-blk'
+};
+const MINE_BLOCK_HITS = {
+    grass:1, dirt:1, stone:1, redstone:2,
+    gold:2, gold_block:2, diamond:3, diamond_block:3, obsidian:4
+};
+const _PART_CLR = {
+    grass:['#55aa44','#44dd22','#228800','#88cc44'],
+    dirt:['#8b5e3c','#a0693e','#d4935a','#7a4f2d'],
+    stone:['#888','#aaa','#666','#bbb'],
+    redstone:['#ff2200','#ff5500','#dd1100','#ff8800'],
+    gold:['#ffd700','#ffaa00','#ffee44','#cc9900'],
+    gold_block:['#ffd700','#ffaa00','#ffee44','#cc9900'],
+    diamond:['#44eeff','#00ccff','#88ffff','#0099cc'],
+    diamond_block:['#44eeff','#00ccff','#88ffff','#0099cc'],
+    obsidian:['#330066','#551188','#220044','#6600aa'],
+};
 
+// ─── Вспомогательные ─────────────────────────────────────────
 function getPickaxeImg(t) { return `/sprites/pick_${t||'wooden'}.png`; }
 
-// ── RAF-анимация одного свойства ────────────────────────────
 function _anim(el, prop, from, to, dur, ease, cb) {
     let t0 = null;
     const run = ts => {
@@ -2413,120 +2427,125 @@ function _anim(el, prop, from, to, dur, ease, cb) {
     };
     requestAnimationFrame(run);
 }
-const easeOut  = t => 1 - Math.pow(1 - t, 3);
-const easeIn   = t => t * t;
+const easeOut    = t => 1 - Math.pow(1 - t, 3);
+const easeIn     = t => t * t;
 const easeBounce = t => {
-    // небольшой отскок при приземлении
     if (t < 0.75) return easeIn(t / 0.75);
     const s = (t - 0.75) / 0.25;
     return 1 + Math.sin(s * Math.PI) * 0.09;
 };
 
-// ── Убить все летящие элементы ──────────────────────────────
+// ─── Overlay для кирок ───────────────────────────────────────
+// Overlay — position:fixed div поверх всего. Кирки внутри — position:absolute.
+// Viewport-координаты из getBoundingClientRect() совпадают с absolute coords внутри fixed overlay.
+// Это обходит ВСЕ overflow:hidden и backdrop-filter проблемы.
+function getMineOverlay() {
+    if (_mineOverlay && _mineOverlay.parentNode) return _mineOverlay;
+    _mineOverlay = document.createElement('div');
+    Object.assign(_mineOverlay.style, {
+        position: 'fixed', top: '0', left: '0',
+        width: '100vw', height: '100vh',
+        pointerEvents: 'none', zIndex: '999999',
+        overflow: 'visible', contain: 'none',
+    });
+    document.body.appendChild(_mineOverlay);
+    return _mineOverlay;
+}
+
 function killAllPickaxes() {
     _pickaxeEls.forEach(el => { try { el.remove(); } catch(e){} });
     _pickaxeEls.clear();
     mineIsActive = false;
+    if (_mineOverlay) _mineOverlay.innerHTML = '';
 }
 
-// ── Полоса прочности ────────────────────────────────────────
-let _durMax = 0, _durLeft = 0;
-function initDurabilityBar(type, count, override) {
-    const dur = override || getPickDur(type) * (count || 1);
-    _durMax = dur; _durLeft = dur;
-    const wrap = $('mine-dur-wrap'), bar = $('mine-dur-bar'), cnt = $('mine-dur-count');
-    if (wrap) wrap.style.display = 'flex';
-    if (bar)  { bar.style.width = '100%'; bar.className = 'mine-dur-bar-inner'; }
-    if (cnt)  cnt.textContent = `${dur} / ${dur}`;
-}
-function consumeDurability(hits) {
-    if (_durMax <= 0) return;
-    _durLeft = Math.max(0, _durLeft - hits);
-    const pct = _durLeft / _durMax;
-    const bar = $('mine-dur-bar'), cnt = $('mine-dur-count');
-    if (bar) { bar.style.width = (pct * 100).toFixed(1) + '%'; bar.className = 'mine-dur-bar-inner' + (pct < 0.25 ? ' dur-crit' : pct < 0.55 ? ' dur-low' : ''); }
-    if (cnt)  cnt.textContent = `${_durLeft} / ${_durMax}`;
-}
-function hideDurabilityBar() { const w = $('mine-dur-wrap'); if (w) w.style.display = 'none'; }
-
-// ── Счётчик с анимацией ─────────────────────────────────────
-function animateCounter(el, from, to, ms) {
-    if (!el) return;
-    const t0 = performance.now(), d = to - from;
-    const run = now => {
-        const p = Math.min((now - t0) / ms, 1), e = 1 - Math.pow(1 - p, 3);
-        el.innerText = (from + d * e).toFixed(2);
-        if (p < 1) requestAnimationFrame(run);
-    };
-    requestAnimationFrame(run);
+// ─── Прочность кирки (из настроек) ──────────────────────────
+function getPickDur(type) {
+    const g = gameSettings || {};
+    return ({
+        wooden: Number(g['game_mine_dur_wood'])    || 1,
+        stone:  Number(g['game_mine_dur_stone'])   || 2,
+        iron:   Number(g['game_mine_dur_iron'])    || 3,
+        golden: Number(g['game_mine_dur_gold'])    || 4,
+        diamond:Number(g['game_mine_dur_diamond']) || 5,
+    })[type] || 1;
 }
 
-// ── Частицы разбивки ────────────────────────────────────────
-const _PART_CLR = {
-    grass:['#4a8c2a','#6cb040','#3a7020'], dirt:['#8b6040','#a07050','#6b4a30'],
-    stone:['#777','#999','#666'], redstone:['#990000','#dd2020','#ff5555'],
-    gold_block:['#c8a000','#ffe060','#deb800'], gold:['#c8a000','#ffe060','#deb800'],
-    diamond_block:['#006b9a','#00e4ff','#4acce0'], diamond:['#006b9a','#00e4ff','#4acce0'],
-    obsidian:['#0e0420','#6030a0','#3010a0'],
-    tnt:['#cc1010','#ff4040','#ffaa00'], book:['#4c1090','#ffd700','#c080ff'],
-};
+function initDurabilityBar(type, total) {
+    const wrap = $('mine-dur-wrap');
+    if (wrap) { wrap.style.display = 'none'; } // hidden by design
+}
+function consumeDurability(n) {}
+function hideDurabilityBar() {}
+
+// ─── Частицы разрушения ──────────────────────────────────────
 function spawnBreakParticles(blockEl, type, count) {
     if (!blockEl) return;
     const rect = blockEl.getBoundingClientRect();
-    const cx = rect.left + rect.width / 2, cy = rect.top + rect.height / 2;
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top  + rect.height / 2;
     const clr = _PART_CLR[type] || _PART_CLR.stone;
-    const n = count || 10;
-    for (let i = 0; i < n; i++) {
-        const p = document.createElement('div');
-        const angle = (i / n) * Math.PI * 2 + Math.random() * 0.4;
-        const spd = 28 + Math.random() * 52;
-        const vx = Math.cos(angle) * spd, vy = Math.sin(angle) * spd - 18;
-        const sz = 2 + Math.random() * 3;
-        p.style.cssText = `position:fixed;width:${sz}px;height:${sz}px;background:${clr[i%clr.length]};left:${cx}px;top:${cy}px;border-radius:1px;z-index:9800;pointer-events:none;`;
-        document.body.appendChild(p);
+    const ov  = getMineOverlay();
+    for (let i = 0; i < (count || 8); i++) {
+        const p     = document.createElement('div');
+        const angle = (i / count) * Math.PI * 2 + Math.random() * 0.5;
+        const spd   = 24 + Math.random() * 44;
+        const vx    = Math.cos(angle) * spd;
+        const vy    = Math.sin(angle) * spd - 16;
+        const sz    = 2 + Math.random() * 3;
+        p.style.cssText = `position:absolute;width:${sz}px;height:${sz}px;background:${clr[i%clr.length]};` +
+            `left:${cx}px;top:${cy}px;border-radius:1px;pointer-events:none;`;
+        ov.appendChild(p);
         let ms = 0;
         const id = setInterval(() => {
             ms += 16; const t = ms / 1000;
-            p.style.transform = `translate(${vx*t}px,${vy*t+280*t*t}px) rotate(${ms*0.3}deg)`;
-            p.style.opacity = String(Math.max(0, 1 - ms / 460));
-            if (ms >= 460) { clearInterval(id); p.remove(); }
+            p.style.transform = `translate(${vx*t}px,${vy*t+280*t*t}px) rotate(${ms*.3}deg)`;
+            p.style.opacity   = String(Math.max(0, 1 - ms / 420));
+            if (ms >= 420) { clearInterval(id); p.remove(); }
         }, 16);
     }
 }
 
-// ── Вспышка при ударе (лёгкая) ─────────────────────────────
+// ─── Вспышка блока ───────────────────────────────────────────
 function flashBlock(blkEl) {
     if (!blkEl) return;
-    blkEl.style.filter = 'brightness(2)';
+    blkEl.style.filter = 'brightness(2.5)';
     setTimeout(() => { blkEl.style.filter = ''; }, 55);
 }
 
-// ── Разрушение блока ────────────────────────────────────────
-function doBreakBlock(blkEl, blk, onFullyGone) {
-    if (!blkEl) { if (onFullyGone) onFullyGone(); return; }
-    blkEl.classList.remove('cracking-1', 'cracking-2', 'cracking-3', 'crack-hit');
-    // Показываем цвет блока перед исчезновением
+// ─── Разрушение блока ────────────────────────────────────────
+function doBreakBlock(blkEl, blk, onDone) {
+    if (!blkEl) { if (onDone) onDone(); return; }
+    blkEl.classList.remove('cracking-1','cracking-2','cracking-3');
     blkEl.className = `mc-blk ${MINE_BLOCK_CLASS[blk.type] || 'stone-blk'}`;
+
     if (blk.win > 0) {
-        // Попап +X.XX над блоком
+        // Popup +X.XX
         const rect = blkEl.getBoundingClientRect();
-        const pop = document.createElement('div');
+        const pop  = document.createElement('div');
         pop.className = 'block-win-popup';
         pop.textContent = `+${blk.win.toFixed(2)}`;
-        pop.style.left = (rect.left + rect.width / 2) + 'px';
-        pop.style.top  = rect.top + 'px';
-        document.body.appendChild(pop);
-        pop.addEventListener('animationend', () => pop.remove());
-        // Обновляем счётчик
+        // Используем overlay для правильного позиционирования
+        const ov = getMineOverlay();
+        pop.style.cssText = `position:absolute;left:${rect.left + rect.width/2}px;top:${rect.top}px;` +
+            `transform:translateX(-50%);font-size:12px;font-weight:900;color:#00ff88;` +
+            `text-shadow:0 0 8px rgba(0,255,136,.8);pointer-events:none;z-index:1;` +
+            `animation:blockWinPopup .9s ease-out forwards;`;
+        ov.appendChild(pop);
+        setTimeout(() => pop.remove(), 950);
+
+        // Счётчик текущего выигрыша
         const prev = mineRunningTotal;
         mineRunningTotal = Number((mineRunningTotal + blk.win).toFixed(3));
         const rt = $('mine-running-total');
-        if (rt) { rt.classList.add('has-win'); animateCounter(rt, prev, mineRunningTotal, 420); }
+        if (rt) { rt.classList.add('has-win'); animateCounter(rt, prev, mineRunningTotal, 380); }
     }
-    spawnBreakParticles(blkEl, blk.type, 11);
+
+    spawnBreakParticles(blkEl, blk.type, 10);
     playSound('break');
+
     setTimeout(() => {
-        blkEl.style.transition = 'transform 0.16s ease-in, opacity 0.12s';
+        blkEl.style.transition = 'transform .14s ease-in, opacity .12s';
         blkEl.style.transform  = 'scale(0.05)';
         blkEl.style.opacity    = '0';
         blkEl.dataset.revealed = '1';
@@ -2534,237 +2553,219 @@ function doBreakBlock(blkEl, blk, onFullyGone) {
             blkEl.style.visibility = 'hidden';
             blkEl.style.transform  = '';
             blkEl.style.opacity    = '';
-            if (onFullyGone) onFullyGone();
-        }, 180);
-    }, 100);
+            if (onDone) onDone();
+        }, 160);
+    }, 80);
 }
 
-// ════════════════════════════════════════════════════════════════
-// MINE ANIMATION ENGINE — полная перепись
-// 
-// Ключевое решение: используем ОДИН глобальный overlay div
-// position:fixed; inset:0; pointer-events:none
-// Кирки — position:absolute внутри overlay
-// Viewport-координаты из getBoundingClientRect() === absolute coords внутри fixed overlay
-// Никакой overflow:hidden не может обрезать содержимое fixed-overlay
-// ════════════════════════════════════════════════════════════════
-
-// ── Создаём глобальный overlay один раз ──────────────────────
-let _mineOverlay = null;
-function getMineOverlay() {
-    if (_mineOverlay && _mineOverlay.parentNode) return _mineOverlay;
-    _mineOverlay = document.createElement('div');
-    _mineOverlay.id = 'mine-anim-overlay';
-    // Must be direct child of body, NOT inside any container with overflow/backdrop-filter
-    // position:fixed + top:0+left:0 means absolute coords inside this = viewport coords
-    _mineOverlay.style.cssText = [
-        'position:fixed',
-        'top:0',
-        'left:0',
-        'width:100vw',
-        'height:100vh',
-        'pointer-events:none',
-        'z-index:2147483647',
-        'overflow:visible',
-        'contain:none'
-    ].join(';') + ';';
-    // Ensure overlay is last child of body to avoid stacking context issues
-    document.body.appendChild(_mineOverlay);
-    return _mineOverlay;
-}
-
-// ── ВОРКЕР-КИРКА ──────────────────────────────────────────────
-// РЕШЕНИЕ backdrop-filter бага: инжектируем <style> в <head>
-// который снимает overflow со всех контейнеров через высокую специфичность.
-// Кирки: position:fixed на body (идентично dropTNT который работает).
-// Анимация через CSS transition (не requestAnimationFrame) — надёжнее в WebView.
-
-let _mineStyleTag = null;
-function _injectMineStyle() {
-    if (_mineStyleTag) return;
-    _mineStyleTag = document.createElement('style');
-    _mineStyleTag.id = 'mine-pick-style';
-    // Remove overflow AND backdrop-filter from ALL ancestors that could clip position:fixed
-    _mineStyleTag.textContent = [
-        'html,body{overflow:visible!important}',
-        'html body .app-wrapper{overflow:visible!important;contain:none!important}',
-        'html body .content{overflow:visible!important;contain:none!important}',
-        'html body #page-mine{overflow:visible!important;contain:none!important}',
-        'html body .mine-card{overflow:visible!important;contain:none!important}',
-        'html body .mc-shaft{overflow:visible!important}',
-        // backdrop-filter creates stacking context that clips position:fixed children
-        'html body *{backdrop-filter:none!important;-webkit-backdrop-filter:none!important}',
-    ].join('\n');
-    document.head.appendChild(_mineStyleTag);
-}
-function _removeMineStyle() {
-    if (_mineStyleTag && _mineStyleTag.parentNode) {
-        _mineStyleTag.remove();
-        _mineStyleTag = null;
+// ─── Взрыв ТНТ ───────────────────────────────────────────────
+function tntExplode(r, c) {
+    const shaft = $('mc-shaft');
+    if (shaft) {
+        const flash = document.createElement('div');
+        flash.style.cssText = 'position:absolute;inset:0;background:rgba(255,140,0,.5);z-index:9;pointer-events:none;border-radius:3px;transition:background .07s;';
+        shaft.appendChild(flash);
+        setTimeout(() => { flash.style.background = 'rgba(255,255,180,.65)'; }, 65);
+        setTimeout(() => { flash.style.background = 'rgba(255,80,0,.15)'; }, 145);
+        setTimeout(() => flash.remove(), 320);
     }
-}
-
-function spawnPickaxeWorker(blocks, pickType, startDelay, onAllDone, onBlockBroken, _u) {
-    if (!blocks || !blocks.length) { if (onAllDone) setTimeout(onAllDone, 50); return; }
-
-    _injectMineStyle();
-
-    // position:fixed на body — точно как dropTNT (он работает)
-    const PICK_SIZE = 28;
-    const img = document.createElement('img');
-    img.src = getPickaxeImg(pickType || 'wooden');
-    img.style.cssText = [
-        'position:fixed',
-        'z-index:2147483647',
-        'width:' + PICK_SIZE + 'px',
-        'height:' + PICK_SIZE + 'px',
-        'image-rendering:crisp-edges',
-        'pointer-events:none',
-        'image-rendering:pixelated',
-        'display:block',
-        'transform-origin:center bottom',
-        'left:-999px',
-        'top:-999px'
-    ].join(';') + ';';
-    getMineOverlay().appendChild(img);
-    _pickaxeEls.add(img);
-
-    function done() {
-        _pickaxeEls.delete(img);
-        if (img.parentNode) img.remove();
-        if (_pickaxeEls.size === 0) _removeMineStyle();
-        if (onAllDone) setTimeout(onAllDone, 30);
-    }
-
-    let qi = 0;
-
-    function hitNext() {
-        if (!mineIsActive) { done(); return; }
-        if (qi >= blocks.length) { done(); return; }
-
-        const blk = blocks[qi++];
-        const el  = document.getElementById('mc-blk-' + blk.r + '-' + blk.c);
-
-        if (!el || el.dataset.revealed === '1') {
-            if (onBlockBroken) onBlockBroken(blk.r, blk.c);
-            hitNext();
-            return;
-        }
-
-        const rect = el.getBoundingClientRect();
-        if (!rect || rect.width < 2) {
-            if (onBlockBroken) onBlockBroken(blk.r, blk.c);
-            setTimeout(hitNext, 60);
-            return;
-        }
-
-        // Viewport координаты — идентично dropTNT
-        const lft   = rect.left + rect.width / 2 - PICK_SIZE / 2;
-        const start = rect.top  - rect.height - 8;   // стартует выше блока
-        const hover = rect.top  - 4;                  // парение над блоком
-        const hitY  = rect.top  + rect.height * 0.28; // точка удара
-
-        const nHits = Math.max(1, blk.hits || 1);
-
-        // Позиционируем и начинаем падение (как TNT: _anim 'top' + easeBounce)
-        img.style.left      = lft + 'px';
-        img.style.top       = start + 'px';
-        img.style.transform = 'rotate(-18deg)';
-
-        _anim(img, 'top', start, hover, 320, easeBounce, function() {
-            img.style.transform = 'rotate(0deg)';
-            setTimeout(function() { doStrike(nHits, 0); }, 60);
-        });
-
-        function doStrike(rem, n) {
-            if (!mineIsActive) { done(); return; }
-
-            img.style.transform = 'rotate(' + (n % 2 === 0 ? 30 : -30) + 'deg)';
-
-            setTimeout(function() {
-                _anim(img, 'top', hover, hitY, 110, easeIn, function() {
-                    if (!mineIsActive) { done(); return; }
-                    img.style.transform = 'rotate(0deg)';
-                    playSound('hit');
-                    flashBlock(el);
-                    consumeDurability(1);
-
-                    el.classList.remove('cracking-1', 'cracking-2', 'cracking-3');
-                    const prog = (n + 1) / nHits;
-                    if      (rem > 1 && prog < 0.5) el.classList.add('cracking-1');
-                    else if (rem > 1)                el.classList.add('cracking-2');
-                    else                             el.classList.add('cracking-3');
-
-                    _anim(img, 'top', hitY, hover, 150, easeOut, function() {
-                        if (!mineIsActive) { done(); return; }
-                        if (rem <= 1) {
-                            doBreakBlock(el, blk, function() {
-                                if (onBlockBroken) onBlockBroken(blk.r, blk.c);
-                            });
-                            setTimeout(hitNext, 110);
-                        } else {
-                            setTimeout(function() { doStrike(rem - 1, n + 1); }, 28);
-                        }
-                    });
-                });
-            }, 80);
+    const ov = getMineOverlay();
+    const blkEl = $(`mc-blk-${r}-${c}`);
+    if (blkEl) {
+        const rect = blkEl.getBoundingClientRect();
+        const cx = rect.left + rect.width/2, cy = rect.top + rect.height/2;
+        for (let i = 0; i < 22; i++) {
+            const p = document.createElement('div');
+            const angle = (i/22)*Math.PI*2;
+            const spd   = 50 + Math.random()*90;
+            const vx = Math.cos(angle)*spd, vy = Math.sin(angle)*spd - 30;
+            const sz = 3 + Math.random()*6;
+            const clr = i%3===0?'#ff8800':i%3===1?'#ffdd00':'#ff3300';
+            p.style.cssText = `position:absolute;width:${sz}px;height:${sz}px;background:${clr};border-radius:50%;left:${cx}px;top:${cy}px;pointer-events:none;`;
+            ov.appendChild(p);
+            let ms = 0;
+            const id = setInterval(() => {
+                ms += 16; const t = ms/1000;
+                p.style.transform = `translate(${vx*t}px,${vy*t+310*t*t}px)`;
+                p.style.opacity   = String(Math.max(0, 1 - ms/580));
+                if (ms >= 580) { clearInterval(id); p.remove(); }
+            }, 16);
         }
     }
-
-    setTimeout(hitNext, startDelay || 0);
 }
 
-// ── Падение ТНТ с 2×2 взрывом ────────────────────────────────
+// ─── Падение ТНТ-блока ───────────────────────────────────────
 function dropTNT(col, blk, onDone) {
     const blkEl = $(`mc-blk-${blk.r}-${blk.c}`);
-    if (!blkEl || blkEl.dataset.revealed === '1') { if (onDone) onDone(); return; }
+    if (!blkEl || blkEl.dataset.revealed==='1') { if (onDone) onDone(); return; }
     const rect = blkEl.getBoundingClientRect();
-    if (rect.width === 0) { setTimeout(() => dropTNT(col, blk, onDone), 80); return; }
+    if (rect.width===0) { setTimeout(() => dropTNT(col, blk, onDone), 80); return; }
 
-    const tntEl = document.createElement('img');
-    tntEl.src = '/sprites/block_tnt.png';
-    const startTop = rect.top - rect.height - 24;
-    tntEl.style.cssText = `position:fixed;width:${rect.width}px;height:${rect.height}px;z-index:99999;pointer-events:none;image-rendering:pixelated;left:${rect.left}px;top:${startTop}px;`;
-    document.body.appendChild(tntEl);
-    _pickaxeEls.add(tntEl);
+    const ov  = getMineOverlay();
+    const tnt = document.createElement('img');
+    tnt.src   = '/sprites/block_tnt.png';
+    const startTop = rect.top - rect.height - 20;
+    tnt.style.cssText = `position:absolute;width:${rect.width}px;height:${rect.height}px;` +
+        `left:${rect.left}px;top:${startTop}px;pointer-events:none;image-rendering:pixelated;z-index:2;`;
+    ov.appendChild(tnt);
+    _pickaxeEls.add(tnt);
 
-    // Падение с отскоком
-    _anim(tntEl, 'top', startTop, rect.top, 480, easeBounce, () => {
-        // Быстрое мигание перед взрывом
+    _anim(tnt, 'top', startTop, rect.top, 460, easeBounce, () => {
         let blink = 0;
         const blinkId = setInterval(() => {
             blink++;
-            tntEl.style.filter = blink % 2 === 0 ? 'brightness(4)' : '';
+            tnt.style.filter = blink%2===0 ? 'brightness(4)' : '';
             if (blink >= 5) {
                 clearInterval(blinkId);
-                _pickaxeEls.delete(tntEl); tntEl.remove();
+                _pickaxeEls.delete(tnt); tnt.remove();
                 playSound('explode');
-                // 2×2 взрыв: ломаем блок [r,c] и [r,c+1] если есть
-                const blks2x2 = [blk];
-                // Добавляем второй блок (правый) если есть
-                const blkRight = blk.c + 1 < MC_COLS ? 
-                    { r: blk.r, c: blk.c + 1, type: grid_current ? (grid_current[blk.r]||[])[blk.c+1] : 'stone', win: 0, hits: 1 } : null;
                 tntExplode(blk.r, blk.c);
-                // Ломаем главный блок
-                doBreakBlock(blkEl, blk, () => {
-                    if (onDone) onDone();
-                });
+                doBreakBlock(blkEl, blk, () => { if (onDone) onDone(); });
             }
         }, 55);
     });
 }
 
-// ── Хотбар: рендер ──────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════
+//  КИРКА — ВОРКЕР
+//  Кирка живёт внутри getMineOverlay() (position:fixed на body).
+//  Абсолютные координаты внутри overlay = viewport-координаты getBoundingClientRect().
+//  Анимация через _anim() с RAF — надёжно в любом WebView.
+// ═══════════════════════════════════════════════════════════════
+function spawnPickaxeWorker(blocks, pickType, startDelay, onAllDone, onBlockBroken, _u) {
+    if (!blocks || !blocks.length) { if (onAllDone) setTimeout(onAllDone, 50); return; }
+
+    const ov  = getMineOverlay();
+    const img = document.createElement('img');
+    img.src   = getPickaxeImg(pickType || 'wooden');
+    img.style.cssText = [
+        'position:absolute',
+        'width:30px',
+        'height:30px',
+        'pointer-events:none',
+        'image-rendering:pixelated',
+        'image-rendering:crisp-edges',
+        'transform-origin:center bottom',
+        'z-index:3',
+    ].join(';') + ';';
+    ov.appendChild(img);
+    _pickaxeEls.add(img);
+
+    function done() {
+        _pickaxeEls.delete(img);
+        if (img.parentNode) img.remove();
+        if (onAllDone) setTimeout(onAllDone, 30);
+    }
+
+    let qi = 0;
+
+    function nextBlock() {
+        if (!mineIsActive) { done(); return; }
+        if (qi >= blocks.length) { done(); return; }
+
+        const blk  = blocks[qi++];
+        const blkEl = document.getElementById('mc-blk-' + blk.r + '-' + blk.c);
+
+        if (!blkEl || blkEl.dataset.revealed === '1') {
+            if (onBlockBroken) onBlockBroken(blk.r, blk.c);
+            nextBlock();
+            return;
+        }
+
+        const rect = blkEl.getBoundingClientRect();
+        if (!rect || rect.width < 2) {
+            if (onBlockBroken) onBlockBroken(blk.r, blk.c);
+            setTimeout(nextBlock, 60);
+            return;
+        }
+
+        // Координаты внутри overlay = viewport coords из getBoundingClientRect
+        const PICK_W  = 30;
+        const lft     = rect.left + rect.width / 2 - PICK_W / 2;
+        const dropTop = rect.top - rect.height * 1.2 - 10;
+        const hoverY  = rect.top - 3;
+        const hitY    = rect.top + rect.height * 0.25;
+        const nHits   = Math.max(1, blk.hits || 1);
+
+        // Начальная позиция — выше блока
+        img.style.left      = lft + 'px';
+        img.style.top       = dropTop + 'px';
+        img.style.opacity   = '0';
+        img.style.transform = 'rotate(-20deg)';
+
+        // Плавное появление + падение с отскоком
+        const showStart = performance.now();
+        const showDur   = 80;
+        (function fadeIn(ts) {
+            const p = Math.min((ts - showStart) / showDur, 1);
+            img.style.opacity = String(p);
+            if (p < 1) requestAnimationFrame(fadeIn);
+        })(performance.now());
+
+        _anim(img, 'top', dropTop, hoverY, 300, easeBounce, function() {
+            img.style.transform = 'rotate(0deg)';
+            img.style.opacity   = '1';
+            setTimeout(function() { doHit(nHits, 0); }, 50);
+        });
+
+        function doHit(rem, n) {
+            if (!mineIsActive) { done(); return; }
+
+            // Замах
+            img.style.transform = 'rotate(' + (n%2===0 ? 28 : -28) + 'deg)';
+
+            // Небольшая пауза — визуальный замах
+            setTimeout(function() {
+                // Удар вниз
+                _anim(img, 'top', hoverY, hitY, 100, easeIn, function() {
+                    if (!mineIsActive) { done(); return; }
+
+                    // Контакт
+                    img.style.transform = 'rotate(0deg)';
+                    playSound('hit');
+                    flashBlock(blkEl);
+
+                    // Прогрессивные трещины
+                    blkEl.classList.remove('cracking-1','cracking-2','cracking-3');
+                    const prog = (n+1) / nHits;
+                    if      (rem > 1 && prog < 0.45) blkEl.classList.add('cracking-1');
+                    else if (rem > 1)                 blkEl.classList.add('cracking-2');
+                    else                              blkEl.classList.add('cracking-3');
+
+                    // Отскок вверх
+                    _anim(img, 'top', hitY, hoverY, 140, easeOut, function() {
+                        if (!mineIsActive) { done(); return; }
+
+                        if (rem <= 1) {
+                            // Последний удар — разрушаем блок
+                            doBreakBlock(blkEl, blk, function() {
+                                if (onBlockBroken) onBlockBroken(blk.r, blk.c);
+                            });
+                            setTimeout(nextBlock, 100);
+                        } else {
+                            // Ещё удары
+                            setTimeout(function() { doHit(rem-1, n+1); }, 28);
+                        }
+                    });
+                });
+            }, 75);
+        }
+    }
+
+    setTimeout(nextBlock, startDelay || 0);
+}
+
+// ─── Рендер хотбара ─────────────────────────────────────────
 let currentHotbar = null;
 
 function renderMineHotbar(hotbar) {
-    currentHotbar = hotbar || Array(INV_ROWS * INV_COLS).fill(null).map(() => ({ type: 'empty' }));
+    currentHotbar = hotbar || Array(INV_ROWS * INV_COLS).fill(null).map(() => ({ type:'empty' }));
     const inv = $('mc-inventory');
     if (!inv) return;
     inv.innerHTML = '';
     for (let r = 0; r < INV_ROWS; r++) {
         for (let c = 0; c < INV_COLS; c++) {
-            const idx = r * INV_COLS + c;
+            const idx  = r * INV_COLS + c;
             const cell = document.createElement('div');
             cell.className = 'inv-cell';
             cell.id = `inv-${r}-${c}`;
@@ -2782,27 +2783,26 @@ function renderMineHotbar(hotbar) {
                 img.style.cssText = 'width:76%;height:76%;object-fit:contain;image-rendering:pixelated;';
                 cell.appendChild(img);
                 cell.dataset.slotType = 'book';
-                cell.className += ' inv-book';
+                cell.classList.add('inv-book');
             } else if (slot && slot.type === 'tnt') {
                 const img = document.createElement('img');
                 img.src = '/sprites/block_tnt.png';
                 img.style.cssText = 'width:76%;height:76%;object-fit:contain;image-rendering:pixelated;';
                 cell.appendChild(img);
                 cell.dataset.slotType = 'tnt';
-                cell.className += ' inv-tnt';
+                cell.classList.add('inv-tnt');
             }
             inv.appendChild(cell);
         }
     }
 }
 
-// ── Хотбар: slot-machine reveal (быстрая смена → стоп) ─────
+// Slot-machine reveal хотбара
 function revealMineHotbar(hotbar, onDone) {
-    currentHotbar = hotbar || Array(INV_ROWS * INV_COLS).fill(null).map(() => ({ type: 'empty' }));
+    currentHotbar = hotbar || Array(INV_ROWS * INV_COLS).fill(null).map(() => ({ type:'empty' }));
     const inv = $('mc-inventory');
     if (!inv) { renderMineHotbar(hotbar); if (onDone) onDone(); return; }
 
-    // Сначала все ячейки — пустые
     inv.innerHTML = '';
     for (let r = 0; r < INV_ROWS; r++) {
         for (let c = 0; c < INV_COLS; c++) {
@@ -2813,88 +2813,69 @@ function revealMineHotbar(hotbar, onDone) {
         }
     }
 
-    // Типы для рандомной прокрутки
     const SPIN_TYPES = ['pickaxe_wooden','pickaxe_stone','pickaxe_iron','pickaxe_golden','pickaxe_diamond','tnt','book','empty'];
-    const SPIN_IMGS = {
-        pickaxe_wooden:  '/sprites/pick_wooden.png',
-        pickaxe_stone:   '/sprites/pick_stone.png',
-        pickaxe_iron:    '/sprites/pick_iron.png',
-        pickaxe_golden:  '/sprites/pick_golden.png',
-        pickaxe_diamond: '/sprites/pick_diamond.png',
-        tnt:             '/sprites/block_tnt.png',
-        book:            '/sprites/block_book.png',
-        empty:           null,
+    const SPIN_IMGS  = {
+        pickaxe_wooden:'/sprites/pick_wooden.png', pickaxe_stone:'/sprites/pick_stone.png',
+        pickaxe_iron:'/sprites/pick_iron.png',     pickaxe_golden:'/sprites/pick_golden.png',
+        pickaxe_diamond:'/sprites/pick_diamond.png',
+        tnt:'/sprites/block_tnt.png', book:'/sprites/block_book.png', empty:null,
     };
 
     function slotTypeOf(slot) {
-        if (!slot || slot.type === 'empty') return 'empty';
-        if (slot.type === 'pickaxe') return 'pickaxe_' + (slot.pickaxeType || 'wooden');
+        if (!slot || slot.type==='empty') return 'empty';
+        if (slot.type==='pickaxe') return 'pickaxe_' + (slot.pickaxeType||'wooden');
         return slot.type;
     }
-
-    function renderCellType(cell, typeStr) {
+    function renderCell(cell, typeStr) {
         cell.innerHTML = '';
         cell.className = 'inv-cell';
-        const imgSrc = SPIN_IMGS[typeStr];
-        if (imgSrc) {
+        const src = SPIN_IMGS[typeStr];
+        if (src) {
             const img = document.createElement('img');
-            img.src = imgSrc;
+            img.src = src;
             img.style.cssText = 'width:70%;height:70%;object-fit:contain;image-rendering:pixelated;';
             cell.appendChild(img);
         }
     }
 
-    // Крутим все ячейки одновременно с быстрой сменой
-    const SPIN_DURATION = 700;   // мс суммарной прокрутки
-    const FRAME_MS      = 80;    // мс между сменой символа
+    // Быстрое вращение
+    const SPIN_DUR = 700, FRAME = 80;
     let elapsed = 0;
     const spinId = setInterval(() => {
-        elapsed += FRAME_MS;
-        // В каждом кадре — рандомный символ в каждой ячейке
+        elapsed += FRAME;
         for (let r = 0; r < INV_ROWS; r++) {
             for (let c = 0; c < INV_COLS; c++) {
                 const cell = $(`inv-${r}-${c}`);
                 if (!cell) continue;
-                const rndType = SPIN_TYPES[Math.floor(Math.random() * SPIN_TYPES.length)];
-                renderCellType(cell, rndType);
+                renderCell(cell, SPIN_TYPES[Math.floor(Math.random()*SPIN_TYPES.length)]);
             }
         }
-        if (elapsed >= SPIN_DURATION) {
+        if (elapsed >= SPIN_DUR) {
             clearInterval(spinId);
-            // Стоп: показываем финальный результат столбец за столбцом
+            // Останавливаем колонка за колонкой
             for (let c = 0; c < MC_COLS; c++) {
                 setTimeout(() => {
                     for (let r = 0; r < INV_ROWS; r++) {
-                        const idx = r * INV_COLS + c;
+                        const idx  = r * INV_COLS + c;
                         const cell = $(`inv-${r}-${c}`);
                         if (!cell) continue;
                         const slot = currentHotbar[idx];
-                        const finalType = slotTypeOf(slot);
-                        renderCellType(cell, finalType);
-                        // Проставляем data-атрибуты для последующей логики
-                        if (slot && slot.type === 'pickaxe') {
-                            cell.dataset.slotType = 'pickaxe';
-                            cell.dataset.pickType = slot.pickaxeType || 'wooden';
-                        } else if (slot && slot.type === 'tnt') {
-                            cell.dataset.slotType = 'tnt';
-                            cell.className += ' inv-tnt';
-                        } else if (slot && slot.type === 'book') {
-                            cell.dataset.slotType = 'book';
-                            cell.className += ' inv-book';
-                        }
-                        // Короткий flash при остановке
-                        cell.style.background = 'rgba(255,255,255,0.06)';
-                        setTimeout(() => { cell.style.background = ''; }, 120);
+                        const ft   = slotTypeOf(slot);
+                        renderCell(cell, ft);
+                        if (slot && slot.type==='pickaxe') { cell.dataset.slotType='pickaxe'; cell.dataset.pickType=slot.pickaxeType||'wooden'; }
+                        else if (slot && slot.type==='tnt')  { cell.dataset.slotType='tnt'; cell.classList.add('inv-tnt'); }
+                        else if (slot && slot.type==='book') { cell.dataset.slotType='book'; cell.classList.add('inv-book'); }
+                        cell.style.background='rgba(255,255,255,.06)';
+                        setTimeout(() => { cell.style.background=''; }, 120);
                     }
                 }, c * 60);
             }
-            const stopTime = MC_COLS * 60 + 150;
-            setTimeout(() => { if (onDone) onDone(); }, stopTime);
+            setTimeout(() => { if (onDone) onDone(); }, MC_COLS*60 + 150);
         }
-    }, FRAME_MS);
+    }, FRAME);
 }
 
-// ── Шахта: инициализация ────────────────────────────────────
+// ─── Инициализация шахты ────────────────────────────────────
 function initMineShaft(keepPersist, idlePreview) {
     const shaft = $('mc-shaft');
     if (!shaft) return;
@@ -2910,142 +2891,109 @@ function initMineShaft(keepPersist, idlePreview) {
     for (let r = 0; r < MC_ROWS; r++) {
         for (let c = 0; c < MC_COLS; c++) {
             const blk = document.createElement('div');
-            blk.id = `mc-blk-${r}-${c}`;
-            const pt = keepPersist && minePersistGrid ? minePersistGrid[r][c] : null;
+            blk.id    = `mc-blk-${r}-${c}`;
+            const pt  = keepPersist && minePersistGrid ? minePersistGrid[r][c] : null;
             if (pt) {
-                blk.className = `mc-blk ${MINE_BLOCK_CLASS[pt] || 'stone-blk'}`;
+                blk.className       = `mc-blk ${MINE_BLOCK_CLASS[pt]||'stone-blk'}`;
                 blk.dataset.revealed = '1';
             } else {
-                const pool = IDLE[r];
-                blk.className = `mc-blk ${MINE_BLOCK_CLASS[pool[Math.floor(Math.random() * pool.length)]] || 'stone-blk'}`;
+                const pool    = IDLE[r];
+                const typeKey = pool[Math.floor(Math.random()*pool.length)];
+                blk.className = `mc-blk ${MINE_BLOCK_CLASS[typeKey]||'stone-blk'}`;
             }
             shaft.appendChild(blk);
         }
     }
     for (let i = 0; i < MC_COLS; i++) {
         const ch = $(`mc-chest-${i}`);
-        if (ch) ch.classList.remove('open', 'open-anim');
+        if (ch) ch.classList.remove('open','open-anim');
     }
     const rt = $('mine-running-total');
-    if (rt) { rt.textContent = '0.00'; rt.classList.remove('has-win'); }
+    if (rt) { rt.textContent='0.00'; rt.classList.remove('has-win'); }
     mineRunningTotal = 0;
 }
 
-// ── Сундук ──────────────────────────────────────────────────
-function openChest(col, mult, isActivated) {
-    openChestWithAnim(col, mult, isActivated, 0);
-}
-function openChestWithAnim(col, mult, isActivated, baseWin) {
-    const ch = $(`mc-chest-${col}`);
-    playSound('chest');
-    if (ch) { ch.classList.add('open', 'open-anim'); setTimeout(() => ch.classList.remove('open-anim'), 600); }
-
-    if (isActivated && ch) {
-        const tag = document.createElement('div');
-        tag.className = 'mine-chest-mult-popup';
-        tag.innerHTML = `<div class="cmp-label">БАЛАНС</div><div class="cmp-mult">×${mult}</div>`;
-        ch.appendChild(tag);
-        setTimeout(() => { if (tag.parentNode) tag.parentNode.removeChild(tag); }, 3000);
-        showToast(`x${mult}`, 2500);
-    } else if (ch) {
-        const tag = document.createElement('div');
-        tag.className = 'chest-mult-tag';
-        tag.textContent = `×${mult}`;
-        ch.appendChild(tag);
-        setTimeout(() => { if (tag.parentNode) tag.parentNode.removeChild(tag); }, 2800);
-    }
-}
-
-// ── ОСНОВНОЕ РАСКРЫТИЕ шахты ────────────────────────────────
-// Простая надёжная логика: доверяем серверу полностью.
-// blockWins[r][c] > 0 → этот блок сломан и имеет выигрыш.
-// Кирки назначаются по столбцам согласно hotbar.
-// Stagger 200ms между кирками в одном столбце.
+// ═══════════════════════════════════════════════════════════════
+//  ГЛАВНАЯ ФУНКЦИЯ: revealMineShaft
+//  Получает ответ сервера → анимирует ТНТ → анимирует кирки → показывает итог
+// ═══════════════════════════════════════════════════════════════
 function revealMineShaft(grid, blockWins, serverWin, balanceBefore, chestMults, isAutoSpin, chestActivated, blockWinSum) {
-    const HITS = { grass:1, dirt:1, stone:1, redstone:2, gold:2, gold_block:2, diamond:3, diamond_block:3, obsidian:4 };
-    grid_current = grid;
+    grid_current     = grid;
+    mineIsActive     = true;
+    mineRunningTotal = 0;
 
     // Инициализируем overlay
     getMineOverlay();
 
-    // ── 1. Сбрасываем блоки ──────────────────────────────────
+    // 1. Сбрасываем блоки к типам из grid
     for (let r = 0; r < MC_ROWS; r++) {
         for (let c = 0; c < MC_COLS; c++) {
-            const el = document.getElementById('mc-blk-' + r + '-' + c);
+            const el   = document.getElementById(`mc-blk-${r}-${c}`);
             if (!el) continue;
             const type = grid[r] && grid[r][c];
             if (!type) {
-                el.dataset.revealed = '1';
-                el.style.visibility = 'hidden';
-                continue;
+                el.dataset.revealed = '1'; el.style.visibility = 'hidden'; continue;
             }
-            if (isAutoSpin && el.dataset.revealed === '1') continue;
-            el.className         = 'mc-blk ' + (MINE_BLOCK_CLASS[type] || 'stone-blk');
-            el.dataset.revealed  = '0';
-            el.dataset.blockType = type;
+            if (isAutoSpin && el.dataset.revealed==='1') continue;
+            el.className        = `mc-blk ${MINE_BLOCK_CLASS[type]||'stone-blk'}`;
+            el.dataset.revealed = '0';
+            el.dataset.blockType= type;
             el.dataset.tntDmg   = '0';
             el.style.cssText    = '';
             el.style.visibility = 'visible';
         }
     }
 
-    // ── 2. Читаем hotbar ─────────────────────────────────────
-    const hotbar   = currentHotbar || [];
-    const RANK     = { wooden:0, stone:1, iron:2, golden:3, diamond:4 };
-    const tntList  = [];  // { col, idx }
-    const bestPick = {};  // col → { pType, idx }
-    let bookCount  = 0;
+    // 2. Читаем хотбар
+    const hotbar = currentHotbar || [];
+    const RANK   = { wooden:0, stone:1, iron:2, golden:3, diamond:4 };
+    const tntList  = [];
+    const bestPick = {};
+    let   bookCount = 0;
 
-    hotbar.forEach(function(slot, idx) {
-        if (!slot || slot.type === 'empty') return;
+    hotbar.forEach((slot, idx) => {
+        if (!slot || slot.type==='empty') return;
         const col = idx % MC_COLS;
-        if (slot.type === 'tnt') {
+        if (slot.type==='tnt') {
             tntList.push({ col, idx });
-        } else if (slot.type === 'pickaxe') {
+        } else if (slot.type==='pickaxe') {
             const pt  = slot.pickaxeType || 'wooden';
             const cur = bestPick[col];
-            if (!cur || (RANK[pt] || 0) > (RANK[cur.pType] || 0)) {
-                bestPick[col] = { pType: pt, idx };
-            }
-        } else if (slot.type === 'book') {
+            if (!cur || (RANK[pt]||0) > (RANK[cur.pType]||0)) bestPick[col] = { pType:pt, idx };
+        } else if (slot.type==='book') {
             bookCount++;
         }
     });
     if (bookCount > 0) mineBookCount += bookCount;
 
-    // ── 3. Карта выигрышей от сервера ────────────────────────
-    // blockWins[r][c] > 0 → этот блок сломан и принёс этот выигрыш
+    // 3. Карта выигрышей от сервера
+    // blockWins[r][c] > 0 → сервер сломал этот блок и он приносит этот выигрыш
     const winMap = {};
-    for (let r = 0; r < MC_ROWS; r++) {
-        for (let c = 0; c < MC_COLS; c++) {
-            const bw = (blockWins && blockWins[r] != null) ? (Number(blockWins[r][c]) || 0) : 0;
-            winMap[r + ',' + c] = bw;
-        }
-    }
+    for (let r = 0; r < MC_ROWS; r++)
+        for (let c = 0; c < MC_COLS; c++)
+            winMap[`${r},${c}`] = (blockWins && blockWins[r] != null) ? (Number(blockWins[r][c]) || 0) : 0;
 
-    // ── 4. Группируем выигрышные блоки по колонкам ───────────
-    const tntCols = new Set(tntList.map(t => t.col));
-    const colBlocks = {}; // col → [{ r, c, type, win, hits }]
-
+    // 4. Группируем победные блоки по колонкам
+    const tntCols   = new Set(tntList.map(t => t.col));
+    const colBlocks  = {};   // col → [{r,c,type,win,hits}]
     for (let c = 0; c < MC_COLS; c++) {
         for (let r = 0; r < MC_ROWS; r++) {
-            const w = winMap[r + ',' + c];
+            const w = winMap[`${r},${c}`];
             if (w > 0) {
                 if (!colBlocks[c]) colBlocks[c] = [];
                 const type = (grid[r] && grid[r][c]) || 'stone';
-                colBlocks[c].push({ r, c, type, win: w, hits: HITS[type] || 1 });
+                colBlocks[c].push({ r, c, type, win:w, hits: MINE_BLOCK_HITS[type]||1 });
             }
         }
     }
 
-    // ── 5. Отслеживание для сундуков ─────────────────────────
+    // 5. Счётчик сломанных блоков для сундуков
     const colBroken = new Array(MC_COLS).fill(0);
-    for (let c = 0; c < MC_COLS; c++) {
+    for (let c = 0; c < MC_COLS; c++)
         for (let r = 0; r < MC_ROWS; r++) {
-            const el = document.getElementById('mc-blk-' + r + '-' + c);
-            if (el && el.dataset.revealed === '1') colBroken[c]++;
+            const el = document.getElementById(`mc-blk-${r}-${c}`);
+            if (el && el.dataset.revealed==='1') colBroken[c]++;
         }
-    }
     const openedChests = new Set();
     const colMults = chestMults || [2,2,2,2,2];
     const srvAct   = chestActivated || [];
@@ -3054,164 +3002,153 @@ function revealMineShaft(grid, blockWins, serverWin, balanceBefore, chestMults, 
         colBroken[c]++;
         if (colBroken[c] >= MC_ROWS && !openedChests.has(c)) {
             openedChests.add(c);
-            setTimeout(function() {
-                openChestWithAnim(c, colMults[c] || 2, srvAct[c] === true, serverWin);
-            }, 350);
+            setTimeout(() => openChestWithAnim(c, colMults[c]||2, srvAct[c]===true, serverWin), 350);
         }
     }
 
-    mineIsActive     = true;
-    mineRunningTotal = 0;
-
-    // ── 6. Убираем инструменты из хотбара ────────────────────
-    // TNT
-    tntList.forEach(function(ts) {
-        const ir = Math.floor(ts.idx / MC_COLS), ic = ts.idx % MC_COLS;
-        const cell = document.getElementById('inv-' + ir + '-' + ic);
-        if (cell) { cell.innerHTML = ''; cell.className = 'inv-cell'; delete cell.dataset.slotType; }
+    // 6. Убираем инструменты из хотбара сразу
+    tntList.forEach(ts => {
+        const ir = Math.floor(ts.idx/MC_COLS), ic = ts.idx%MC_COLS;
+        const cell = document.getElementById(`inv-${ir}-${ic}`);
+        if (cell) { cell.innerHTML=''; cell.className='inv-cell'; delete cell.dataset.slotType; }
     });
 
-    // ── 7. ФАЗА ТНТ ──────────────────────────────────────────
-    // Каждый ТНТ запускается последовательно (одним после другого)
-    const TNT_ONE_MS = 800; // время одного ТНТ (падение + взрыв)
-    let   tntDone   = 0;
+    // 7. Фаза ТНТ — строго последовательно
+    const TNT_ONE_MS = 820;  // время одного ТНТ
+    let tntIdx = 0;
 
-    function runNextTNT() {
-        if (tntDone >= tntList.length) {
-            startPickPhase();
-            return;
-        }
-        const ts = tntList[tntDone++];
+    function runTNT() {
+        if (tntIdx >= tntList.length) { startPickaxePhase(); return; }
+        const ts = tntList[tntIdx++];
 
-        // Найти первый нетронутый блок в колонке
         let targetBlk = null;
         for (let r = 0; r < MC_ROWS; r++) {
-            const el = document.getElementById('mc-blk-' + r + '-' + ts.col);
-            if (el && el.dataset.revealed !== '1' && grid[r] && grid[r][ts.col]) {
-                targetBlk = { r, c: ts.col, type: grid[r][ts.col], win: winMap[r + ',' + ts.col] || 0, hits: 1 };
+            const el = document.getElementById(`mc-blk-${r}-${ts.col}`);
+            if (el && el.dataset.revealed!=='1' && grid[r] && grid[r][ts.col]) {
+                targetBlk = { r, c:ts.col, type:grid[r][ts.col], win:winMap[`${r},${ts.col}`]||0, hits:1 };
                 break;
             }
         }
-        if (!targetBlk) { runNextTNT(); return; }
+        if (!targetBlk) { runTNT(); return; }
 
-        dropTNT(ts.col, targetBlk, function() {
-            // Взрыв 2×2 вокруг блока
+        dropTNT(ts.col, targetBlk, () => {
+            // Взрыв 2×2
             const blast = [
-                [targetBlk.r, targetBlk.c],
-                [targetBlk.r, targetBlk.c + 1],
-                [targetBlk.r + 1, targetBlk.c],
-                [targetBlk.r + 1, targetBlk.c + 1],
+                [targetBlk.r,   targetBlk.c],
+                [targetBlk.r,   targetBlk.c+1],
+                [targetBlk.r+1, targetBlk.c],
+                [targetBlk.r+1, targetBlk.c+1],
             ];
-            let blastDone = 0;
-            blast.forEach(function(coord, bi) {
-                const br = coord[0], bc = coord[1];
-                if (br < 0 || br >= MC_ROWS || bc < 0 || bc >= MC_COLS) { blastDone++; return; }
-                const blkEl = document.getElementById('mc-blk-' + br + '-' + bc);
-                if (!blkEl || blkEl.dataset.revealed === '1' || !(grid[br] && grid[br][bc])) { blastDone++; return; }
-                const bblk = { r: br, c: bc, type: grid[br][bc], win: winMap[br + ',' + bc] || 0, hits: 1 };
-                setTimeout(function() {
-                    doBreakBlock(blkEl, bblk, function() {
+            let done = 0;
+            const total = blast.filter(([br,bc]) =>
+                br>=0 && br<MC_ROWS && bc>=0 && bc<MC_COLS
+            ).length || 1;
+
+            blast.forEach(([br,bc], bi) => {
+                if (br<0||br>=MC_ROWS||bc<0||bc>=MC_COLS) { done++; if(done>=total) runTNT(); return; }
+                const blkEl = document.getElementById(`mc-blk-${br}-${bc}`);
+                if (!blkEl || blkEl.dataset.revealed==='1' || !(grid[br]&&grid[br][bc])) {
+                    done++; if(done>=total) runTNT(); return;
+                }
+                const bblk = { r:br, c:bc, type:grid[br][bc], win:winMap[`${br},${bc}`]||0, hits:1 };
+                setTimeout(() => {
+                    doBreakBlock(blkEl, bblk, () => {
                         onBlockBroken(br, bc);
-                        blastDone++;
-                        if (blastDone >= blast.length) runNextTNT();
+                        done++; if (done >= total) setTimeout(runTNT, 100);
                     });
-                }, bi * 80);
+                }, bi * 85);
             });
         });
     }
 
-    // ── 8. ФАЗА КИРОК ────────────────────────────────────────
-    function startPickPhase() {
+    // 8. Фаза кирок — все колонки параллельно со stagger 120ms
+    function startPickaxePhase() {
         const cols = Object.keys(colBlocks);
-        let colDelay = 0;
+        let delay  = 0;
 
-        cols.forEach(function(colStr) {
-            const col = parseInt(colStr);
+        cols.forEach(colStr => {
+            const col       = parseInt(colStr);
             const winBlocks = colBlocks[col];
             if (!winBlocks || !winBlocks.length) return;
-            if (tntCols.has(col)) return; // ТНТ уже обработал
+            if (tntCols.has(col)) return;
 
-            const pick = bestPick[col] || { pType: 'wooden', idx: -1 };
+            const pick = bestPick[col] || { pType:'wooden', idx:-1 };
 
             // Убираем кирку из хотбара
             if (pick.idx >= 0) {
-                const ir = Math.floor(pick.idx / MC_COLS), ic = pick.idx % MC_COLS;
-                const cell = document.getElementById('inv-' + ir + '-' + ic);
-                if (cell) {
-                    cell.innerHTML = '';
-                    cell.className = 'inv-cell';
-                    delete cell.dataset.slotType;
-                    delete cell.dataset.pickType;
-                }
+                const ir = Math.floor(pick.idx/MC_COLS), ic = pick.idx%MC_COLS;
+                const cell = document.getElementById(`inv-${ir}-${ic}`);
+                if (cell) { cell.innerHTML=''; cell.className='inv-cell'; delete cell.dataset.slotType; delete cell.dataset.pickType; }
             }
 
-            spawnPickaxeWorker(winBlocks, pick.pType, colDelay, null, onBlockBroken, 999);
-            colDelay += 120; // небольшой стаггер для колонок
+            spawnPickaxeWorker(winBlocks, pick.pType, delay, null, onBlockBroken, 999);
+            delay += 120;
         });
     }
 
-    // ── 9. Запуск ─────────────────────────────────────────────
-    if (tntList.length > 0) {
-        runNextTNT();
-    } else {
-        startPickPhase();
-    }
+    // 9. Запуск
+    if (tntList.length > 0) runTNT();
+    else startPickaxePhase();
 
-    // ── 10. Финал (синхронизируемся с сервером) ───────────────
-    // Оцениваем время всех анимаций
-    let maxPickTime = 0;
-    Object.values(colBlocks).forEach(function(winBlocks) {
-        let t = 350; // время падения
-        winBlocks.forEach(function(blk) {
-            t += blk.hits * (100 + 160 + 75 + 25) + 110 + 50;
-        });
-        if (t > maxPickTime) maxPickTime = t;
+    // 10. Оценка времени и финал
+    let maxPick = 0;
+    Object.values(colBlocks).forEach(winBlocks => {
+        let t = 320 + 50; // падение + пауза
+        winBlocks.forEach(blk => { t += blk.hits * (100+140+75+28) + 100; });
+        if (t > maxPick) maxPick = t;
     });
 
-    const tntTotalTime = tntList.length * (TNT_ONE_MS + 100);
-    const estReveal    = tntTotalTime + maxPickTime + 600;
+    const tntTime  = tntList.length * (TNT_ONE_MS + 120);
+    const estReveal = tntTime + maxPick + 700;
 
-    setTimeout(function() {
+    setTimeout(() => {
         if (!mineIsActive) return;
 
-        // Принудительно синхронизируем с сервером
+        // Принудительная синхронизация с сервером
         mineRunningTotal = serverWin;
-        const rt = document.getElementById('mine-running-total');
+        const rt = $('mine-running-total');
         if (rt) {
             if (serverWin > 0) { rt.classList.add('has-win'); rt.textContent = serverWin.toFixed(2); }
-            else               { rt.textContent = '0.00'; rt.classList.remove('has-win'); }
+            else { rt.textContent = '0.00'; rt.classList.remove('has-win'); }
         }
         if (serverWin > 0) {
             playSound('win');
-            const balSpan = document.getElementById('bal-val');
+            const balSpan = $('bal-val');
             if (balSpan) animateCounter(balSpan, balanceBefore, balanceBefore + serverWin, 900);
             flyToBalance(serverWin);
             showToast('+' + serverWin.toFixed(2) + ' TON');
         }
         updateUI();
 
+        // Книги / бонус
         if (mineBookCount >= 3 || mineAutoRemaining > 0) {
             if (mineBookCount >= 3) { mineBookCount -= 3; mineAutoRemaining = Math.max(mineAutoRemaining, 1); }
-            showMineBonusOverlay(mineAutoRemaining, function() { autoSpinMine(); });
+            showMineBonusOverlay(mineAutoRemaining, () => autoSpinMine());
         } else {
-            const sEl = document.getElementById('mine-book-status');
+            const sEl = $('mine-book-status');
             if (sEl) sEl.style.display = 'none';
         }
     }, estReveal);
 
     return estReveal + 400;
 }
+
+// ─── Текстуры ────────────────────────────────────────────────
 function setupMineTextures() {
-    ['/sprites/block_grass.png','/sprites/block_dirt.png','/sprites/block_stone.png',
-     '/sprites/block_redstone.png','/sprites/block_gold.png','/sprites/block_diamond.png',
-     '/sprites/block_obsidian.png','/sprites/block_tnt.png','/sprites/block_book.png',
-     '/sprites/chest_closed.png','/sprites/chest_open.png',
-     '/sprites/crack_1.png','/sprites/crack_2.png','/sprites/crack_3.png'
+    [
+        '/sprites/block_grass.png','/sprites/block_dirt.png','/sprites/block_stone.png',
+        '/sprites/block_redstone.png','/sprites/block_gold.png','/sprites/block_diamond.png',
+        '/sprites/block_obsidian.png','/sprites/block_tnt.png','/sprites/block_book.png',
+        '/sprites/chest_closed.png','/sprites/chest_open.png',
+        '/sprites/crack_1.png','/sprites/crack_2.png','/sprites/crack_3.png',
+        '/sprites/pick_wooden.png','/sprites/pick_stone.png','/sprites/pick_iron.png',
+        '/sprites/pick_golden.png','/sprites/pick_diamond.png',
     ].forEach(src => { const i = new Image(); i.src = src; });
 }
 
 function initMineGrid() { setupMineTextures(); renderMineHotbar(null); initMineShaft(false, true); }
 
+// ─── Авто-спин (книги) ───────────────────────────────────────
 async function autoSpinMine() {
     if (mineIsSpinning || !user) return;
     const btn = $('mn-btn');
@@ -3223,23 +3160,27 @@ async function autoSpinMine() {
         const row = [];
         for (let c = 0; c < MC_COLS; c++) {
             const el = $(`mc-blk-${r}-${c}`);
-            row.push(el && el.dataset.revealed === '1' ? null : (el && el.dataset.blockType ? el.dataset.blockType : null));
+            row.push(el && el.dataset.revealed==='1' ? null : (el && el.dataset.blockType ? el.dataset.blockType : null));
         }
         currentGrid.push(row);
     }
     try {
-        const resp = await fetch('/api/mine', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ id: user.id, bet: 0, mode, autoSpin: true, persistGrid: currentGrid }) });
+        const resp = await fetch('/api/mine', {
+            method:'POST', headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({ id:user.id, bet:0, mode, autoSpin:true, persistGrid:currentGrid })
+        });
         const data = await resp.json();
-        if (!resp.ok) { mineIsSpinning = false; if (btn) btn.disabled = false; return; }
+        if (!resp.ok) { mineIsSpinning=false; if(btn) btn.disabled=false; return; }
         user = data.user;
-        if (typeof data.freeSpinsLeft === 'number') mineAutoRemaining = data.freeSpinsLeft;
+        if (typeof data.freeSpinsLeft==='number') mineAutoRemaining = data.freeSpinsLeft;
         revealMineHotbar(data.hotbar, () => {
             const t = revealMineShaft(data.grid, data.blockWins, data.win, balBefore, data.chestMults, true, data.chestActivated, data.blockWinSum);
-            setTimeout(() => { mineIsSpinning = false; if (btn) btn.disabled = false; }, t + 100);
+            setTimeout(() => { mineIsSpinning=false; if(btn) btn.disabled=false; }, t + 100);
         });
-    } catch(e) { mineIsSpinning = false; if (btn) btn.disabled = false; }
+    } catch(e) { mineIsSpinning=false; if(btn) btn.disabled=false; }
 }
 
+// ─── Основная игра ───────────────────────────────────────────
 async function playMine() {
     if (!user) return showToast('Загрузка...');
     if (mineIsSpinning) return;
@@ -3248,10 +3189,9 @@ async function playMine() {
     let betVal = parseFloat(betInput ? betInput.value : 0);
     if (!betVal || betVal < 0.1) { showToast('Мин. ставка 0.1 TON'); return; }
     if (betVal > 25) { betVal = 25; if (betInput) betInput.value = 25; }
-    mineLastBet = betVal;
+    mineLastBet     = betVal;
     minePersistGrid = null;
-    const sEl2 = $('mine-book-status');
-    if (sEl2) sEl2.style.display = 'none';
+    $('mine-book-status') && ($('mine-book-status').style.display = 'none');
     playSound('click');
     mineIsSpinning = true;
     if (btn) btn.disabled = true;
@@ -3259,54 +3199,39 @@ async function playMine() {
     renderMineHotbar(null);
     initMineShaft(false, true);
     try {
-        const resp = await fetch('/api/mine', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ id: user.id, bet: betVal, mode }) });
+        const resp = await fetch('/api/mine', {
+            method:'POST', headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({ id:user.id, bet:betVal, mode })
+        });
         const data = await resp.json();
-        if (!resp.ok) { showToast(data.error || 'Ошибка'); mineIsSpinning = false; if (btn) btn.disabled = false; return; }
+        if (!resp.ok) { showToast(data.error||'Ошибка'); mineIsSpinning=false; if(btn) btn.disabled=false; return; }
         user = data.user;
-        if (typeof data.freeSpinsLeft === 'number') mineAutoRemaining = data.freeSpinsLeft;
+        if (typeof data.freeSpinsLeft==='number') mineAutoRemaining = data.freeSpinsLeft;
         revealMineHotbar(data.hotbar, () => {
             const t = revealMineShaft(data.grid, data.blockWins, data.win, balBefore, data.chestMults, false, data.chestActivated, data.blockWinSum);
-            setTimeout(() => { mineIsSpinning = false; if (btn) btn.disabled = false; }, t + 100);
+            setTimeout(() => { mineIsSpinning=false; if(btn) btn.disabled=false; }, t + 100);
         });
-    } catch(e) { showToast('Ошибка соединения'); mineIsSpinning = false; if (btn) btn.disabled = false; }
+    } catch(e) { showToast('Ошибка соединения'); mineIsSpinning=false; if(btn) btn.disabled=false; }
 }
 
-// Mine bonus overlay — показывает на весь экран как в спинах
+// ─── Бонус-оверлей книг ─────────────────────────────────────
 function showMineBonusOverlay(count, onDone) {
-    // Убираем надпись книг
     const sEl = $('mine-book-status');
     if (sEl) sEl.style.display = 'none';
-
     const ov = document.createElement('div');
-    ov.style.cssText = `
-        position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,0.82);
-        display:flex;flex-direction:column;align-items:center;justify-content:center;
-        backdrop-filter:blur(4px);pointer-events:all;opacity:0;transition:opacity 0.25s;
-    `;
-    ov.innerHTML = `
-        <div style="text-align:center;">
-            <div style="font-size:52px;font-weight:900;color:#00ff88;letter-spacing:2px;line-height:1;">${count}</div>
-            <div style="font-size:15px;font-weight:700;color:rgba(255,255,255,.55);letter-spacing:3px;margin-top:8px;text-transform:uppercase;">Бесплатный спин</div>
-        </div>
-    `;
+    ov.style.cssText = 'position:fixed;inset:0;z-index:999999;background:rgba(0,0,0,.82);' +
+        'display:flex;flex-direction:column;align-items:center;justify-content:center;' +
+        'pointer-events:all;opacity:0;transition:opacity .25s;';
+    ov.innerHTML = `<div style="text-align:center;">
+        <div style="font-size:52px;font-weight:900;color:#00ff88;letter-spacing:2px;line-height:1;">${count}</div>
+        <div style="font-size:15px;font-weight:700;color:rgba(255,255,255,.55);letter-spacing:3px;margin-top:8px;text-transform:uppercase;">Бесплатный спин</div>
+    </div>`;
     document.body.appendChild(ov);
     requestAnimationFrame(() => { ov.style.opacity = '1'; });
     setTimeout(() => {
         ov.style.opacity = '0';
         setTimeout(() => { ov.remove(); if (onDone) onDone(); }, 260);
     }, 1600);
-}
-
-// showFreeSpinActivation — для спинов (без изменений)
-function showFreeSpinActivation(count) {
-    const overlay = $('freespin-overlay'), countEl = $('freespin-overlay-count');
-    if (!overlay) return;
-    if (countEl) countEl.innerText = count;
-    overlay.style.display = 'flex';
-    setTimeout(() => {
-        overlay.style.opacity = '0'; overlay.style.transition = 'opacity 0.4s';
-        setTimeout(() => { overlay.style.display = 'none'; overlay.style.opacity = '1'; overlay.style.transition = ''; }, 400);
-    }, 2100);
 }
 
 
