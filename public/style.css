@@ -204,7 +204,7 @@ body {
 /* === MINE GAME === */
 
 .content:has(#page-mine.active) {
-  padding: 4px 6px 80px !important;
+  padding: 0 2px 68px !important;
   overflow-x: hidden;
   overflow-y: auto;
   display: flex !important;
@@ -224,8 +224,8 @@ body {
 .mine-card {
   flex: 0 0 auto !important;
   width: 100%;
-  max-width: 320px;
-  padding: 4px 4px;
+  max-width: 190px;
+  padding: 2px 2px;
   display: flex !important;
   flex-direction: column;
   gap: 0px;
@@ -2149,31 +2149,31 @@ button.btn[style*="neon-blue"] {
 
 .mine-pick-img,.mine-tnt-img{border:none!important;outline:none!important;box-shadow:none!important;background:transparent!important;}
 
-/* ════ MINE ANIMATION ACTIVE ════ */
-body.mine-playing .content {
-    overflow: visible !important;
-}
-body.mine-playing .app-wrapper {
-    overflow: visible !important;
-}
-body.mine-playing .gc,
-body.mine-playing .live-bet-item,
-body.mine-playing .card {
-    backdrop-filter: none !important;
-    -webkit-backdrop-filter: none !important;
-}
+
+/* ════ MINE ANIMATION ════ */
+/* When mine-playing class on body, remove overflow clipping from ancestors */
+body.mine-playing .content     { overflow: visible !important; }
+body.mine-playing .app-wrapper { overflow: visible !important; }
+body.mine-playing .gc          { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
+body.mine-playing .live-bet-item { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
+
+/* mc-shaft: position:relative so pickaxes (absolute) are relative to it */
+/* overflow:visible so pickaxes CAN appear above shaft boundaries */
 .mc-shaft {
     position: relative !important;
     overflow: visible !important;
 }
-.mine-pick-img, .mine-tnt-img {
-    border: none !important;
-    outline: none !important;
-    box-shadow: none !important;
-    background: transparent !important;
-}
+
+/* Mine animation elements — no default img borders */
+.mc-pick, .mc-tnt { border: none !important; outline: none !important; box-shadow: none !important; background: transparent !important; }
+
+/* Win popup animation */
 @keyframes mineWinPop {
-    0%   { opacity: 1; transform: translateX(-50%) translateY(0px); }
-    80%  { opacity: 1; }
-    100% { opacity: 0; transform: translateX(-50%) translateY(-32px); }
+    0%   { opacity: 1; transform: translateX(-50%) translateY(0); }
+    70%  { opacity: 1; }
+    100% { opacity: 0; transform: translateX(-50%) translateY(-30px); }
+}
+@keyframes blockWinPopup {
+    0%   { opacity: 1; transform: translateX(-50%) translateY(0); }
+    100% { opacity: 0; transform: translateX(-50%) translateY(-30px); }
 }
