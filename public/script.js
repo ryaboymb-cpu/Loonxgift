@@ -2396,9 +2396,21 @@ function updateSpinUI() {
 //  - Nav bar not affected because pick-layer has pointer-events:none
 // ════════════════════════════════════════════════════════════════════
 
+// ═══════════════════════════════════════════════════════════════
+//  MINE GAME v5 — Final definitive implementation
+//
+//  PICKAXE RENDERING STRATEGY:
+//  Pickaxes live inside #mc-shaft as position:absolute children.
+//  mc-shaft has position:relative + overflow:visible.
+//  Coords = block.getBoundingClientRect() - shaft.getBoundingClientRect()
+//  This CANNOT be clipped by anything — the shaft is the container.
+//
+//  TNT also renders inside shaft for same reason.
+// ═══════════════════════════════════════════════════════════════
+
 const MC_ROWS = 6, MC_COLS = 5, INV_ROWS = 3, INV_COLS = 5;
 
-// ── State ────────────────────────────────────────────────────────────
+// ── State ────────────────────────────────────────────────────────
 let mineIsSpinning    = false;
 let mineBookCount     = 0;
 let mineAutoRemaining = 0;
@@ -2409,7 +2421,7 @@ let mineIsActive      = false;
 let grid_current      = null;
 const _pickaxeEls     = new Set();
 
-// ── Block metadata ───────────────────────────────────────────────────
+// ── Block metadata ───────────────────────────────────────────────
 const MINE_BLOCK_CLASS = {
     grass:'grass-blk', dirt:'dirt-blk', stone:'stone-blk',
     redstone:'redstone-blk', gold_block:'gold-blk', gold:'gold-blk',
@@ -2420,155 +2432,146 @@ const MINE_BLOCK_HITS = {
     grass:1, dirt:1, stone:1, redstone:2,
     gold:2, gold_block:2, diamond:3, diamond_block:3, obsidian:4
 };
-const MINE_PART_CLR = {
-    grass:['#55aa44','#44dd22','#228800'],
-    dirt:['#8b5e3c','#a0693e','#d4935a'],
-    stone:['#888','#aaa','#666'],
-    redstone:['#ff2200','#ff5500','#dd1100'],
-    gold:['#ffd700','#ffaa00','#ffee44'],
+const _PART_CLR = {
+    grass:    ['#55aa44','#44dd22','#228800'],
+    dirt:     ['#8b5e3c','#a0693e','#d4935a'],
+    stone:    ['#888','#aaa','#666'],
+    redstone: ['#ff2200','#ff5500','#dd1100'],
+    gold:     ['#ffd700','#ffaa00','#ffee44'],
     gold_block:['#ffd700','#ffaa00','#ffee44'],
-    diamond:['#44eeff','#00ccff','#88ffff'],
+    diamond:  ['#44eeff','#00ccff','#88ffff'],
     diamond_block:['#44eeff','#00ccff','#88ffff'],
-    obsidian:['#330066','#551188','#6600aa'],
-    default:['#888','#aaa','#666']
+    obsidian: ['#330066','#551188','#6600aa'],
 };
 
-// ── Helpers ──────────────────────────────────────────────────────────
-function getPickaxeImg(t) { return `/sprites/pick_${t || 'wooden'}.png`; }
-
+// ── Helpers ──────────────────────────────────────────────────────
+function getPickaxeImg(t) { return `/sprites/pick_${t||'wooden'}.png`; }
 function getPickDur(type) {
     const g = gameSettings || {};
-    return ({
-        wooden:  Number(g.game_mine_dur_wood)    || 1,
-        stone:   Number(g.game_mine_dur_stone)   || 2,
-        iron:    Number(g.game_mine_dur_iron)     || 3,
-        golden:  Number(g.game_mine_dur_gold)    || 4,
-        diamond: Number(g.game_mine_dur_diamond) || 5,
-    })[type] || 1;
+    return ({wooden:Number(g.game_mine_dur_wood)||1, stone:Number(g.game_mine_dur_stone)||2,
+              iron:Number(g.game_mine_dur_iron)||3, golden:Number(g.game_mine_dur_gold)||4,
+              diamond:Number(g.game_mine_dur_diamond)||5})[type]||1;
 }
+function initDurabilityBar(){}
+function consumeDurability(){}
+function hideDurabilityBar(){}
 
-// Stubs (durability bar hidden by design)
-function initDurabilityBar() {}
-function consumeDurability() {}
-function hideDurabilityBar() {}
-
-// ── RAF animation helper ─────────────────────────────────────────────
+// ── RAF animation ─────────────────────────────────────────────────
 function _anim(el, prop, from, to, dur, ease, cb) {
-    const start = performance.now();
-    function run(now) {
-        const t = Math.min((now - start) / dur, 1);
-        el.style[prop] = (from + (to - from) * ease(t)) + 'px';
-        if (t < 1) requestAnimationFrame(run);
+    const t0 = performance.now();
+    function tick(now) {
+        const p = Math.min((now - t0) / dur, 1);
+        el.style[prop] = (from + (to - from) * ease(p)) + 'px';
+        if (p < 1) requestAnimationFrame(tick);
         else if (cb) cb();
     }
-    requestAnimationFrame(run);
+    requestAnimationFrame(tick);
 }
-const easeOut    = t => 1 - Math.pow(1 - t, 3);
-const easeIn     = t => t * t;
+const easeOut    = t => 1 - Math.pow(1-t, 3);
+const easeIn     = t => t*t;
 const easeBounce = t => {
-    if (t < 0.75) return easeIn(t / 0.75);
-    return 1 + Math.sin(((t - 0.75) / 0.25) * Math.PI) * 0.09;
+    if (t < 0.75) return easeIn(t/0.75);
+    return 1 + Math.sin(((t-0.75)/0.25)*Math.PI)*0.09;
 };
 
-// ── Pick layer (full-screen fixed overlay) ───────────────────────────
-// Pickaxes render here — absolute coords = viewport coords from getBoundingClientRect
-// pointer-events:none so it doesn't block clicks
-let _pickLayer = null;
-function getPickLayer() {
-    if (_pickLayer && _pickLayer.isConnected) return _pickLayer;
-    _pickLayer = document.getElementById('mine-pick-layer');
-    if (!_pickLayer) {
-        _pickLayer = document.createElement('div');
-        _pickLayer.id = 'mine-pick-layer';
-        _pickLayer.style.cssText = [
-            'position:fixed', 'top:0', 'left:0', 'width:100%', 'height:100%',
-            'pointer-events:none', 'z-index:9999', 'overflow:visible'
-        ].join(';') + ';';
-        document.body.appendChild(_pickLayer);
-    }
-    return _pickLayer;
-}
+// ── Shaft access ─────────────────────────────────────────────────
+function getShaft() { return document.getElementById('mc-shaft'); }
 
 function killAllPickaxes() {
-    _pickaxeEls.forEach(el => { try { el.remove(); } catch(e) {} });
+    _pickaxeEls.forEach(el => { try { el.remove(); } catch(e){} });
     _pickaxeEls.clear();
-    if (_pickLayer) _pickLayer.innerHTML = '';
+    // Remove all absolute-positioned pickaxes/TNTs from shaft
+    const shaft = getShaft();
+    if (shaft) {
+        shaft.querySelectorAll('.mine-pick-img, .mine-tnt-img, .mine-popup, .mine-particle-host')
+             .forEach(el => el.remove());
+    }
     mineIsActive = false;
 }
 
-// ── Particles ────────────────────────────────────────────────────────
-// Render particles inside pick-layer (viewport coords)
-function spawnBreakParticles(blockEl, type, count) {
-    if (!blockEl) return;
-    const layer = getPickLayer();
-    const rect  = blockEl.getBoundingClientRect();
-    const cx = rect.left + rect.width  / 2;
-    const cy = rect.top  + rect.height / 2;
-    const colors = MINE_PART_CLR[type] || MINE_PART_CLR.default;
-    const n = count || 8;
+// ── Shaft-relative coordinates ───────────────────────────────────
+// Returns {left, top} of a block relative to the shaft
+function blockRelToShaft(blkEl) {
+    const shaft = getShaft();
+    if (!shaft || !blkEl) return null;
+    const b = blkEl.getBoundingClientRect();
+    const s = shaft.getBoundingClientRect();
+    return {
+        left:   b.left   - s.left,
+        top:    b.top    - s.top,
+        width:  b.width,
+        height: b.height,
+    };
+}
+
+// ── Particles ─────────────────────────────────────────────────────
+function spawnBreakParticles(blkEl, type, count) {
+    const shaft = getShaft(); if (!shaft || !blkEl) return;
+    const pos   = blockRelToShaft(blkEl);  if (!pos) return;
+    const cx    = pos.left + pos.width  / 2;
+    const cy    = pos.top  + pos.height / 2;
+    const clrs  = _PART_CLR[type] || _PART_CLR.stone;
+    const n     = count || 8;
     for (let i = 0; i < n; i++) {
         const p     = document.createElement('div');
-        const angle = (i / n) * Math.PI * 2 + Math.random() * 0.5;
-        const spd   = 24 + Math.random() * 40;
-        const vx    = Math.cos(angle) * spd;
-        const vy    = Math.sin(angle) * spd - 16;
-        const sz    = 2 + Math.random() * 3;
-        p.style.cssText = [
-            `position:absolute`, `width:${sz}px`, `height:${sz}px`,
-            `background:${colors[i % colors.length]}`,
-            `left:${cx}px`, `top:${cy}px`,
-            `border-radius:1px`, `pointer-events:none`
-        ].join(';') + ';';
-        layer.appendChild(p);
+        const angle = (i/n)*Math.PI*2 + Math.random()*0.5;
+        const spd   = 22 + Math.random()*38;
+        const vx    = Math.cos(angle)*spd, vy = Math.sin(angle)*spd - 14;
+        const sz    = 2 + Math.random()*3;
+        p.className = 'mine-particle-host';
+        p.style.cssText = `position:absolute;width:${sz}px;height:${sz}px;`+
+            `background:${clrs[i%clrs.length]};left:${cx}px;top:${cy}px;`+
+            `border-radius:1px;pointer-events:none;z-index:10;`;
+        shaft.appendChild(p);
         let ms = 0;
         const id = setInterval(() => {
-            ms += 16;
-            const t = ms / 1000;
-            p.style.transform = `translate(${vx*t}px,${vy*t + 260*t*t}px) rotate(${ms * 0.3}deg)`;
-            p.style.opacity   = String(Math.max(0, 1 - ms / 400));
+            ms += 16; const t = ms/1000;
+            p.style.transform = `translate(${vx*t}px,${vy*t+260*t*t}px) rotate(${ms*.3}deg)`;
+            p.style.opacity   = String(Math.max(0, 1-ms/400));
             if (ms >= 400) { clearInterval(id); p.remove(); }
         }, 16);
     }
 }
 
-// ── Flash block on hit ───────────────────────────────────────────────
 function flashBlock(el) {
     if (!el) return;
     el.style.filter = 'brightness(2.5)';
     setTimeout(() => { el.style.filter = ''; }, 60);
 }
 
-// ── Break block with animation + win popup ───────────────────────────
+// ── Break block ───────────────────────────────────────────────────
 function doBreakBlock(blkEl, blk, onDone) {
     if (!blkEl) { if (onDone) onDone(); return; }
-    blkEl.classList.remove('cracking-1', 'cracking-2', 'cracking-3');
-    blkEl.className = `mc-blk ${MINE_BLOCK_CLASS[blk.type] || 'stone-blk'}`;
+    blkEl.classList.remove('cracking-1','cracking-2','cracking-3');
+    blkEl.className = `mc-blk ${MINE_BLOCK_CLASS[blk.type]||'stone-blk'}`;
 
     if (blk.win > 0) {
-        // Win popup — inside pick-layer at viewport position
-        const layer = getPickLayer();
-        const rect  = blkEl.getBoundingClientRect();
-        const pop   = document.createElement('div');
-        pop.textContent = `+${blk.win.toFixed(2)}`;
-        pop.style.cssText = [
-            'position:absolute',
-            `left:${rect.left + rect.width / 2}px`,
-            `top:${rect.top}px`,
-            'transform:translateX(-50%)',
-            'font-size:13px', 'font-weight:900', 'color:#00ff88',
-            'text-shadow:0 0 10px rgba(0,255,136,.9)',
-            'pointer-events:none',
-            'animation:mineWinPop .85s ease-out forwards',
-            'white-space:nowrap'
-        ].join(';') + ';';
-        layer.appendChild(pop);
-        setTimeout(() => pop.remove(), 900);
-
-        // Animate running total
+        // Win popup above the block (shaft-relative)
+        const shaft = getShaft();
+        const pos   = blockRelToShaft(blkEl);
+        if (shaft && pos) {
+            const pop = document.createElement('div');
+            pop.className   = 'mine-popup block-win-popup';
+            pop.textContent = `+${blk.win.toFixed(2)}`;
+            pop.style.cssText = [
+                'position:absolute',
+                `left:${pos.left + pos.width/2}px`,
+                `top:${pos.top}px`,
+                'transform:translateX(-50%)',
+                'font-size:12px','font-weight:900','color:#00ff88',
+                'text-shadow:0 0 8px rgba(0,255,136,.9)',
+                'pointer-events:none','z-index:20',
+                'animation:mineWinPop .85s ease-out forwards',
+                'white-space:nowrap',
+            ].join(';') + ';';
+            shaft.appendChild(pop);
+            setTimeout(() => pop.remove(), 920);
+        }
+        // Running total
         const prev = mineRunningTotal;
         mineRunningTotal = Number((mineRunningTotal + blk.win).toFixed(3));
         const rt = document.getElementById('mine-running-total');
-        if (rt) { rt.classList.add('has-win'); animateCounter(rt, prev, mineRunningTotal, 380); }
+        if (rt) { rt.classList.add('has-win'); animateCounter(rt, prev, mineRunningTotal, 360); }
     }
 
     spawnBreakParticles(blkEl, blk.type, 10);
@@ -2589,80 +2592,74 @@ function doBreakBlock(blkEl, blk, onDone) {
     }, 80);
 }
 
-// ── TNT explosion flash + particles ──────────────────────────────────
+// ── TNT explosion ─────────────────────────────────────────────────
 function tntExplode(r, c) {
-    // Shaft flash
-    const shaft = document.getElementById('mc-shaft');
-    if (shaft) {
-        const fl = document.createElement('div');
-        fl.style.cssText = 'position:absolute;inset:0;background:rgba(255,140,0,.55);'+
-            'z-index:5;pointer-events:none;border-radius:3px;';
-        shaft.appendChild(fl);
-        setTimeout(() => { fl.style.background = 'rgba(255,220,80,.6)'; }, 70);
-        setTimeout(() => { fl.style.background = 'rgba(255,60,0,.1)'; }, 150);
-        setTimeout(() => fl.remove(), 300);
-    }
-    // Explosion particles
+    const shaft = getShaft(); if (!shaft) return;
+    // Flash
+    const fl = document.createElement('div');
+    fl.style.cssText = 'position:absolute;inset:0;background:rgba(255,140,0,.55);'+
+        'z-index:8;pointer-events:none;border-radius:3px;';
+    shaft.appendChild(fl);
+    setTimeout(() => { fl.style.background='rgba(255,220,80,.6)'; }, 70);
+    setTimeout(() => { fl.style.background='rgba(255,60,0,.1)';   }, 150);
+    setTimeout(() => fl.remove(), 300);
+
+    // Particles
     const blkEl = document.getElementById(`mc-blk-${r}-${c}`);
     if (!blkEl) return;
-    const layer  = getPickLayer();
-    const rect   = blkEl.getBoundingClientRect();
-    const cx     = rect.left + rect.width  / 2;
-    const cy     = rect.top  + rect.height / 2;
-    const colors = ['#ff8800','#ffdd00','#ff3300','#ffffff'];
-    for (let i = 0; i < 22; i++) {
+    const pos = blockRelToShaft(blkEl); if (!pos) return;
+    const cx = pos.left + pos.width/2, cy = pos.top + pos.height/2;
+    const clrs = ['#ff8800','#ffdd00','#ff3300','#ffffff'];
+    for (let i = 0; i < 20; i++) {
         const p     = document.createElement('div');
-        const angle = (i / 22) * Math.PI * 2;
-        const spd   = 50 + Math.random() * 90;
-        const vx    = Math.cos(angle) * spd;
-        const vy    = Math.sin(angle) * spd - 32;
-        const sz    = 3 + Math.random() * 6;
-        p.style.cssText = [
-            'position:absolute', `width:${sz}px`, `height:${sz}px`,
-            `background:${colors[i % colors.length]}`,
-            `left:${cx}px`, `top:${cy}px`,
-            'border-radius:50%', 'pointer-events:none'
-        ].join(';') + ';';
-        layer.appendChild(p);
+        const angle = (i/20)*Math.PI*2;
+        const spd   = 45+Math.random()*80;
+        const vx    = Math.cos(angle)*spd, vy = Math.sin(angle)*spd-28;
+        const sz    = 3+Math.random()*5;
+        p.className = 'mine-particle-host';
+        p.style.cssText = `position:absolute;width:${sz}px;height:${sz}px;`+
+            `background:${clrs[i%4]};border-radius:50%;`+
+            `left:${cx}px;top:${cy}px;pointer-events:none;z-index:10;`;
+        shaft.appendChild(p);
         let ms = 0;
         const id = setInterval(() => {
-            ms += 16;
-            const t = ms / 1000;
-            p.style.transform = `translate(${vx*t}px,${vy*t + 300*t*t}px)`;
-            p.style.opacity   = String(Math.max(0, 1 - ms / 560));
-            if (ms >= 560) { clearInterval(id); p.remove(); }
+            ms += 16; const t = ms/1000;
+            p.style.transform = `translate(${vx*t}px,${vy*t+290*t*t}px)`;
+            p.style.opacity   = String(Math.max(0, 1-ms/540));
+            if (ms >= 540) { clearInterval(id); p.remove(); }
         }, 16);
     }
 }
 
-// ── Drop TNT ─────────────────────────────────────────────────────────
+// ── Drop TNT ──────────────────────────────────────────────────────
 function dropTNT(col, blk, onDone) {
+    const shaft = getShaft();
     const blkEl = document.getElementById(`mc-blk-${blk.r}-${blk.c}`);
-    if (!blkEl || blkEl.dataset.revealed === '1') { if (onDone) onDone(); return; }
-    const rect = blkEl.getBoundingClientRect();
-    if (rect.width === 0) { setTimeout(() => dropTNT(col, blk, onDone), 80); return; }
+    if (!shaft || !blkEl || blkEl.dataset.revealed==='1') { if(onDone) onDone(); return; }
+    const pos = blockRelToShaft(blkEl);
+    if (!pos || pos.width < 2) { setTimeout(() => dropTNT(col,blk,onDone), 80); return; }
 
-    const layer  = getPickLayer();
-    const tnt    = document.createElement('img');
-    tnt.src      = '/sprites/block_tnt.png';
-    const startY = rect.top - rect.height * 2;
+    const tnt = document.createElement('img');
+    tnt.className = 'mine-tnt-img';
+    tnt.src       = '/sprites/block_tnt.png';
+    const startY  = pos.top - pos.height*2 - 10;
     tnt.style.cssText = [
-        'position:absolute', 'pointer-events:none', 'image-rendering:pixelated',
-        `width:${rect.width}px`, `height:${rect.height}px`,
-        `left:${rect.left}px`, `top:${startY}px`, 'z-index:3', 'border:none', 'outline:none'
+        'position:absolute','pointer-events:none','image-rendering:pixelated',
+        `width:${pos.width}px`,`height:${pos.height}px`,
+        `left:${pos.left}px`,`top:${startY}px`,
+        'z-index:15','border:none','outline:none','box-shadow:none',
     ].join(';') + ';';
-    layer.appendChild(tnt);
+    shaft.appendChild(tnt);
     _pickaxeEls.add(tnt);
 
-    _anim(tnt, 'top', startY, rect.top, 460, easeBounce, () => {
+    _anim(tnt, 'top', startY, pos.top, 460, easeBounce, () => {
         let blink = 0;
         const id = setInterval(() => {
             blink++;
-            tnt.style.filter = blink % 2 === 0 ? 'brightness(4)' : 'none';
+            tnt.style.filter = blink%2===0 ? 'brightness(4)' : '';
             if (blink >= 6) {
                 clearInterval(id);
-                _pickaxeEls.delete(tnt);
-                tnt.remove();
+                _pickaxeEls.delete(tnt); tnt.remove();
                 playSound('explode');
                 tntExplode(blk.r, blk.c);
                 doBreakBlock(blkEl, blk, onDone);
@@ -2671,29 +2668,33 @@ function dropTNT(col, blk, onDone) {
     });
 }
 
-// ════════════════════════════════════════════════════════════════════
-//  PICKAXE WORKER
-//  One pickaxe per column. Hits each winning block sequentially.
-//  Renders inside full-screen pick-layer (no overflow issues).
-// ════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════
+//  PICKAXE WORKER — renders inside #mc-shaft (position:absolute)
+//  shaft-relative coords via getBoundingClientRect diff
+// ═══════════════════════════════════════════════════════════════
 function spawnPickaxeWorker(blocks, pickType, startDelay, onAllDone, onBlockBroken) {
-    if (!blocks || !blocks.length) { if (onAllDone) setTimeout(onAllDone, 50); return; }
+    if (!blocks || !blocks.length) { if (onAllDone) setTimeout(onAllDone,50); return; }
 
-    const layer  = getPickLayer();
-    const PICK_W = 28, PICK_H = 28;
+    const shaft = getShaft();
+    if (!shaft) {
+        blocks.forEach(b => { if(onBlockBroken) onBlockBroken(b.r,b.c); });
+        if (onAllDone) setTimeout(onAllDone,50);
+        return;
+    }
 
+    const PICK_W = 26, PICK_H = 26;
     const img = document.createElement('img');
-    img.src   = getPickaxeImg(pickType || 'wooden');
-    // No border/outline — clean image only
+    img.className = 'mine-pick-img';
+    img.src       = getPickaxeImg(pickType || 'wooden');
     img.style.cssText = [
-        'position:absolute', 'pointer-events:none',
-        'image-rendering:pixelated', 'image-rendering:crisp-edges',
-        `width:${PICK_W}px`, `height:${PICK_H}px`,
-        'transform-origin:center bottom', 'z-index:4',
-        'border:none', 'outline:none', 'box-shadow:none',
-        'left:-999px', 'top:-999px'
+        'position:absolute','pointer-events:none',
+        'image-rendering:pixelated','image-rendering:crisp-edges',
+        `width:${PICK_W}px`,`height:${PICK_H}px`,
+        'transform-origin:center bottom','z-index:16',
+        'border:none','outline:none','box-shadow:none','background:transparent',
+        'left:-999px','top:-999px',
     ].join(';') + ';';
-    layer.appendChild(img);
+    shaft.appendChild(img);
     _pickaxeEls.add(img);
 
     function removePick() {
@@ -2709,62 +2710,59 @@ function spawnPickaxeWorker(blocks, pickType, startDelay, onAllDone, onBlockBrok
         if (qi >= blocks.length) { removePick(); return; }
 
         const blk   = blocks[qi++];
-        const blkEl = document.getElementById('mc-blk-' + blk.r + '-' + blk.c);
+        const blkEl = document.getElementById(`mc-blk-${blk.r}-${blk.c}`);
 
-        // Skip already revealed blocks
         if (!blkEl || blkEl.dataset.revealed === '1') {
             if (onBlockBroken) onBlockBroken(blk.r, blk.c);
             processNext();
             return;
         }
 
-        const rect = blkEl.getBoundingClientRect();
-        if (!rect || rect.width < 2) {
-            // Block not visible — still count win
+        const pos = blockRelToShaft(blkEl);
+        if (!pos || pos.width < 2) {
             if (onBlockBroken) onBlockBroken(blk.r, blk.c);
             setTimeout(processNext, 60);
             return;
         }
 
-        // ── Position pickaxe above block (viewport coords → absolute in pick-layer) ──
-        const lft     = rect.left + rect.width / 2 - PICK_W / 2;
-        const dropTop = rect.top  - rect.height * 1.8;   // start above (1.8 blocks height)
-        const hoverY  = rect.top  - PICK_H * 0.2;        // hover just above block top
-        const hitY    = rect.top  + rect.height * 0.28;  // impact: upper 28% of block
+        // Shaft-relative coordinates
+        const lft     = pos.left + pos.width/2 - PICK_W/2;   // center horizontally
+        const dropTop = pos.top  - pos.height*1.6 - 6;       // start above block
+        const hoverY  = pos.top  - PICK_H*0.15;              // hover just above block top
+        const hitY    = pos.top  + pos.height*0.28;          // impact point
 
         const nHits = Math.max(1, blk.hits || 1);
 
-        // Set initial position (off-screen left/top until first frame)
+        // ── Position & fade in ──
         img.style.left      = lft + 'px';
         img.style.top       = dropTop + 'px';
         img.style.opacity   = '0';
-        img.style.transform = 'rotate(-20deg)';
+        img.style.transform = 'rotate(-18deg)';
 
-        // Fade in
-        const fadeStart = performance.now();
+        const t0fade = performance.now();
         (function fadeIn(now) {
-            const p = Math.min((now - fadeStart) / 130, 1);
+            const p = Math.min((now - t0fade)/140, 1);
             img.style.opacity = String(p);
             if (p < 1) requestAnimationFrame(fadeIn);
         })(performance.now());
 
-        // ── Phase 1: Drop with bounce ──────────────────────────────
-        _anim(img, 'top', dropTop, hoverY, 300, easeBounce, () => {
-            img.style.opacity   = '1';
+        // ── Drop with bounce ──
+        _anim(img, 'top', dropTop, hoverY, 310, easeBounce, () => {
             img.style.transform = 'rotate(0deg)';
-            setTimeout(() => doStrike(nHits, 0), 55);
+            img.style.opacity   = '1';
+            setTimeout(() => strike(nHits, 0), 55);
         });
 
-        // ── Phase 2: Strike loop ───────────────────────────────────
-        function doStrike(rem, n) {
+        // ── Strike loop ──
+        function strike(rem, n) {
             if (!mineIsActive) { removePick(); return; }
 
-            // Swing back before strike
-            img.style.transform = `rotate(${n % 2 === 0 ? 28 : -28}deg)`;
+            // Swing back (alternate sides)
+            img.style.transform = `rotate(${n%2===0 ? 28 : -28}deg)`;
 
             setTimeout(() => {
-                // Drive down — easeIn (fast)
-                _anim(img, 'top', hoverY, hitY, 105, easeIn, () => {
+                // Drive down — fast easeIn
+                _anim(img, 'top', hoverY, hitY, 100, easeIn, () => {
                     if (!mineIsActive) { removePick(); return; }
 
                     img.style.transform = 'rotate(0deg)';
@@ -2772,25 +2770,23 @@ function spawnPickaxeWorker(blocks, pickType, startDelay, onAllDone, onBlockBrok
                     flashBlock(blkEl);
 
                     // Progressive cracks
-                    blkEl.classList.remove('cracking-1', 'cracking-2', 'cracking-3');
-                    const prog = (n + 1) / nHits;
-                    if      (rem > 1 && prog < 0.45) blkEl.classList.add('cracking-1');
-                    else if (rem > 1)                 blkEl.classList.add('cracking-2');
-                    else                              blkEl.classList.add('cracking-3');
+                    blkEl.classList.remove('cracking-1','cracking-2','cracking-3');
+                    const prog = (n+1)/nHits;
+                    if      (rem>1 && prog<0.45) blkEl.classList.add('cracking-1');
+                    else if (rem>1)              blkEl.classList.add('cracking-2');
+                    else                         blkEl.classList.add('cracking-3');
 
-                    // Bounce up — easeOut (smooth)
+                    // Bounce up — smooth easeOut
                     _anim(img, 'top', hitY, hoverY, 145, easeOut, () => {
                         if (!mineIsActive) { removePick(); return; }
 
                         if (rem <= 1) {
-                            // Final hit → break block
                             doBreakBlock(blkEl, blk, () => {
                                 if (onBlockBroken) onBlockBroken(blk.r, blk.c);
                             });
-                            setTimeout(processNext, 100);
+                            setTimeout(processNext, 110);
                         } else {
-                            // More hits remaining
-                            setTimeout(() => doStrike(rem - 1, n + 1), 28);
+                            setTimeout(() => strike(rem-1, n+1), 28);
                         }
                     });
                 });
@@ -2801,143 +2797,91 @@ function spawnPickaxeWorker(blocks, pickType, startDelay, onAllDone, onBlockBrok
     setTimeout(processNext, startDelay || 0);
 }
 
-// ── Hotbar render ─────────────────────────────────────────────────────
+// ── Hotbar ───────────────────────────────────────────────────────
 let currentHotbar = null;
 
 function renderMineHotbar(hotbar) {
-    currentHotbar = hotbar || Array(INV_ROWS * INV_COLS).fill(null).map(() => ({ type: 'empty' }));
+    currentHotbar = hotbar || Array(INV_ROWS*INV_COLS).fill(null).map(()=>({type:'empty'}));
     const inv = document.getElementById('mc-inventory');
     if (!inv) return;
     inv.innerHTML = '';
-    for (let r = 0; r < INV_ROWS; r++) {
-        for (let c = 0; c < INV_COLS; c++) {
-            const idx  = r * INV_COLS + c;
-            const cell = document.createElement('div');
-            cell.className = 'inv-cell';
-            cell.id        = `inv-${r}-${c}`;
-            const slot = currentHotbar[idx];
-            const imgSrc = slot && slot.type === 'pickaxe' ? getPickaxeImg(slot.pickaxeType || 'wooden')
-                         : slot && slot.type === 'tnt'     ? '/sprites/block_tnt.png'
-                         : slot && slot.type === 'book'    ? '/sprites/block_book.png'
-                         : null;
-            if (imgSrc) {
-                const img = document.createElement('img');
-                img.src = imgSrc;
-                img.style.cssText = 'width:70%;height:70%;object-fit:contain;image-rendering:pixelated;border:none;outline:none;';
-                cell.appendChild(img);
-                cell.dataset.slotType = slot.type;
-                if (slot.type === 'pickaxe') {
-                    cell.dataset.pickType = slot.pickaxeType || 'wooden';
-                } else if (slot.type === 'tnt') {
-                    cell.classList.add('inv-tnt');
-                } else if (slot.type === 'book') {
-                    cell.classList.add('inv-book');
-                }
-            }
-            inv.appendChild(cell);
+    for (let r=0; r<INV_ROWS; r++) for (let c=0; c<INV_COLS; c++) {
+        const idx  = r*INV_COLS+c;
+        const cell = document.createElement('div');
+        cell.className = 'inv-cell'; cell.id = `inv-${r}-${c}`;
+        const slot = currentHotbar[idx];
+        const src  = !slot||slot.type==='empty' ? null
+            : slot.type==='pickaxe' ? getPickaxeImg(slot.pickaxeType||'wooden')
+            : slot.type==='tnt'     ? '/sprites/block_tnt.png'
+            : slot.type==='book'    ? '/sprites/block_book.png' : null;
+        if (src) {
+            const img = document.createElement('img');
+            img.src = src;
+            img.style.cssText = 'width:70%;height:70%;object-fit:contain;image-rendering:pixelated;border:none;outline:none;';
+            cell.appendChild(img);
+            cell.dataset.slotType = slot.type;
+            if (slot.type==='pickaxe') { cell.dataset.pickType=slot.pickaxeType||'wooden'; }
+            else if (slot.type==='tnt')  cell.classList.add('inv-tnt');
+            else if (slot.type==='book') cell.classList.add('inv-book');
         }
+        inv.appendChild(cell);
     }
 }
 
-// ── Hotbar slot-machine reveal ────────────────────────────────────────
 function revealMineHotbar(hotbar, onDone) {
-    currentHotbar = hotbar || Array(INV_ROWS * INV_COLS).fill(null).map(() => ({ type: 'empty' }));
+    currentHotbar = hotbar || Array(INV_ROWS*INV_COLS).fill(null).map(()=>({type:'empty'}));
     const inv = document.getElementById('mc-inventory');
-    if (!inv) { renderMineHotbar(hotbar); if (onDone) onDone(); return; }
-
-    // Clear and create cells
+    if (!inv) { renderMineHotbar(hotbar); if(onDone) onDone(); return; }
     inv.innerHTML = '';
-    for (let r = 0; r < INV_ROWS; r++) {
-        for (let c = 0; c < INV_COLS; c++) {
-            const cell = document.createElement('div');
-            cell.className = 'inv-cell';
-            cell.id = `inv-${r}-${c}`;
-            inv.appendChild(cell);
-        }
+    for (let r=0; r<INV_ROWS; r++) for (let c=0; c<INV_COLS; c++) {
+        const cell=document.createElement('div'); cell.className='inv-cell'; cell.id=`inv-${r}-${c}`; inv.appendChild(cell);
     }
-
-    const ALL_SRCS = [
-        '/sprites/pick_wooden.png', '/sprites/pick_stone.png', '/sprites/pick_iron.png',
-        '/sprites/pick_golden.png', '/sprites/pick_diamond.png',
-        '/sprites/block_tnt.png',  '/sprites/block_book.png',
+    const SRCS = [
+        '/sprites/pick_wooden.png','/sprites/pick_stone.png','/sprites/pick_iron.png',
+        '/sprites/pick_golden.png','/sprites/pick_diamond.png',
+        '/sprites/block_tnt.png','/sprites/block_book.png',null,null,null,
     ];
-    const EMPTY_SLOTS = [null];
-    const ALL = [...ALL_SRCS, ...EMPTY_SLOTS];
-
-    function fillRandom(cell) {
-        cell.innerHTML = '';
-        cell.className = 'inv-cell';
-        const src = ALL[Math.floor(Math.random() * ALL.length)];
-        if (src) {
-            const img = document.createElement('img');
-            img.src = src;
-            img.style.cssText = 'width:70%;height:70%;object-fit:contain;image-rendering:pixelated;border:none;outline:none;';
-            cell.appendChild(img);
-        }
+    function fillRnd(cell) {
+        cell.innerHTML=''; cell.className='inv-cell';
+        const src=SRCS[Math.floor(Math.random()*SRCS.length)];
+        if(src){const i=document.createElement('img');i.src=src;i.style.cssText='width:70%;height:70%;object-fit:contain;image-rendering:pixelated;border:none;outline:none;';cell.appendChild(i);}
     }
-
-    function fillFinal(cell, slot) {
-        cell.innerHTML = '';
-        cell.className = 'inv-cell';
-        cell.removeAttribute('data-slot-type');
-        cell.removeAttribute('data-pick-type');
-        cell.classList.remove('inv-tnt', 'inv-book');
-        if (!slot || slot.type === 'empty') return;
-        const src = slot.type === 'pickaxe' ? getPickaxeImg(slot.pickaxeType || 'wooden')
-                  : slot.type === 'tnt'     ? '/sprites/block_tnt.png'
-                  : slot.type === 'book'    ? '/sprites/block_book.png'
-                  : null;
-        if (src) {
-            const img = document.createElement('img');
-            img.src = src;
-            img.style.cssText = 'width:70%;height:70%;object-fit:contain;image-rendering:pixelated;border:none;outline:none;';
-            cell.appendChild(img);
-        }
-        cell.dataset.slotType = slot.type;
-        if (slot.type === 'pickaxe') cell.dataset.pickType = slot.pickaxeType || 'wooden';
-        if (slot.type === 'tnt')  cell.classList.add('inv-tnt');
-        if (slot.type === 'book') cell.classList.add('inv-book');
+    function fillFinal(cell,slot) {
+        cell.innerHTML=''; cell.className='inv-cell';
+        cell.removeAttribute('data-slot-type'); cell.removeAttribute('data-pick-type');
+        cell.classList.remove('inv-tnt','inv-book');
+        if(!slot||slot.type==='empty') return;
+        const src=slot.type==='pickaxe'?getPickaxeImg(slot.pickaxeType||'wooden')
+            :slot.type==='tnt'?'/sprites/block_tnt.png':slot.type==='book'?'/sprites/block_book.png':null;
+        if(src){const i=document.createElement('img');i.src=src;i.style.cssText='width:70%;height:70%;object-fit:contain;image-rendering:pixelated;border:none;outline:none;';cell.appendChild(i);}
+        cell.dataset.slotType=slot.type;
+        if(slot.type==='pickaxe') cell.dataset.pickType=slot.pickaxeType||'wooden';
+        if(slot.type==='tnt')  cell.classList.add('inv-tnt');
+        if(slot.type==='book') cell.classList.add('inv-book');
+        cell.style.background='rgba(255,255,255,.07)';
+        setTimeout(()=>{cell.style.background='';},130);
     }
-
-    // Spin phase: randomize all cells every 80ms for 700ms
-    let elapsed = 0;
-    const spinId = setInterval(() => {
-        elapsed += 80;
-        for (let r = 0; r < INV_ROWS; r++) {
-            for (let c = 0; c < INV_COLS; c++) {
-                const cell = document.getElementById(`inv-${r}-${c}`);
-                if (cell) fillRandom(cell);
-            }
+    let elapsed=0;
+    const id=setInterval(()=>{
+        elapsed+=80;
+        for(let r=0;r<INV_ROWS;r++) for(let c=0;c<INV_COLS;c++){const cell=document.getElementById(`inv-${r}-${c}`);if(cell)fillRnd(cell);}
+        if(elapsed>=700){
+            clearInterval(id);
+            for(let c=0;c<MC_COLS;c++) setTimeout(()=>{
+                for(let r=0;r<INV_ROWS;r++){const cell=document.getElementById(`inv-${r}-${c}`);if(cell)fillFinal(cell,currentHotbar[r*INV_COLS+c]);}
+            },c*65);
+            setTimeout(()=>{if(onDone)onDone();},MC_COLS*65+160);
         }
-        if (elapsed >= 700) {
-            clearInterval(spinId);
-            // Stop column by column (left to right)
-            for (let c = 0; c < MC_COLS; c++) {
-                const col = c;
-                setTimeout(() => {
-                    for (let r = 0; r < INV_ROWS; r++) {
-                        const idx  = r * INV_COLS + col;
-                        const cell = document.getElementById(`inv-${r}-${col}`);
-                        if (!cell) continue;
-                        fillFinal(cell, currentHotbar[idx]);
-                        // Flash effect
-                        cell.style.background = 'rgba(255,255,255,.08)';
-                        setTimeout(() => { cell.style.background = ''; }, 120);
-                    }
-                }, col * 65);
-            }
-            // All columns done → call onDone
-            setTimeout(() => { if (onDone) onDone(); }, MC_COLS * 65 + 160);
-        }
-    }, 80);
+    },80);
 }
 
-// ── Shaft initialization ──────────────────────────────────────────────
+// ── Shaft init ────────────────────────────────────────────────────
 function initMineShaft(keepPersist) {
-    const shaft = document.getElementById('mc-shaft');
-    if (!shaft) return;
-    shaft.innerHTML = '';
-    const IDLE_GRID = [
+    const shaft=document.getElementById('mc-shaft'); if(!shaft) return;
+    shaft.innerHTML='';
+    // shaft must be position:relative for absolute children
+    shaft.style.position='relative';
+    const IDLE=[
         ['grass','grass','grass','grass','grass'],
         ['dirt','stone','stone','stone','redstone'],
         ['stone','stone','redstone','redstone','redstone'],
@@ -2945,431 +2889,254 @@ function initMineShaft(keepPersist) {
         ['redstone','gold','gold','diamond','diamond'],
         ['gold','diamond','diamond','obsidian','obsidian'],
     ];
-    for (let r = 0; r < MC_ROWS; r++) {
-        for (let c = 0; c < MC_COLS; c++) {
-            const blk = document.createElement('div');
-            blk.id    = `mc-blk-${r}-${c}`;
-            let type;
-            if (keepPersist && minePersistGrid && minePersistGrid[r] && minePersistGrid[r][c]) {
-                type = minePersistGrid[r][c];
-                blk.dataset.revealed = '1';
-            } else {
-                const pool = IDLE_GRID[r];
-                type = pool[Math.floor(Math.random() * pool.length)];
-            }
-            blk.className = `mc-blk ${MINE_BLOCK_CLASS[type] || 'stone-blk'}`;
-            blk.dataset.blockType = type;
-            shaft.appendChild(blk);
-        }
+    for(let r=0;r<MC_ROWS;r++) for(let c=0;c<MC_COLS;c++){
+        const blk=document.createElement('div');
+        blk.id=`mc-blk-${r}-${c}`;
+        const pt=keepPersist&&minePersistGrid&&minePersistGrid[r]?minePersistGrid[r][c]:null;
+        let type;
+        if(pt){type=pt;blk.dataset.revealed='1';}
+        else{type=IDLE[r][Math.floor(Math.random()*IDLE[r].length)];}
+        blk.className=`mc-blk ${MINE_BLOCK_CLASS[type]||'stone-blk'}`;
+        blk.dataset.blockType=type;
+        shaft.appendChild(blk);
     }
-    for (let i = 0; i < MC_COLS; i++) {
-        const ch = document.getElementById(`mc-chest-${i}`);
-        if (ch) ch.classList.remove('open', 'open-anim');
-    }
-    const rt = document.getElementById('mine-running-total');
-    if (rt) { rt.textContent = '0.00'; rt.classList.remove('has-win'); }
-    mineRunningTotal = 0;
+    for(let i=0;i<MC_COLS;i++){const ch=document.getElementById(`mc-chest-${i}`);if(ch)ch.classList.remove('open','open-anim');}
+    const rt=document.getElementById('mine-running-total');
+    if(rt){rt.textContent='0.00';rt.classList.remove('has-win');}
+    mineRunningTotal=0;
 }
 
-// ════════════════════════════════════════════════════════════════════
-//  revealMineShaft — orchestrates the full animation sequence
-// ════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════
+//  revealMineShaft — main animation orchestrator
+// ═══════════════════════════════════════════════════════════════
 function revealMineShaft(grid, blockWins, serverWin, balanceBefore, chestMults, isAutoSpin, chestActivated, blockWinSum) {
     grid_current     = grid;
     mineIsActive     = true;
     mineRunningTotal = 0;
 
-    // Ensure pick-layer exists
-    getPickLayer();
+    const shaft = getShaft();
+    if (shaft) shaft.style.position = 'relative';
 
-    // ── Step 1: Reset block visuals ──────────────────────────────
-    for (let r = 0; r < MC_ROWS; r++) {
-        for (let c = 0; c < MC_COLS; c++) {
-            const el   = document.getElementById(`mc-blk-${r}-${c}`);
-            if (!el) continue;
-            const type = grid[r] && grid[r][c];
-            if (!type) {
-                el.dataset.revealed = '1';
-                el.style.visibility = 'hidden';
-                continue;
-            }
-            if (isAutoSpin && el.dataset.revealed === '1') continue;
-            el.className         = `mc-blk ${MINE_BLOCK_CLASS[type] || 'stone-blk'}`;
-            el.dataset.revealed  = '0';
-            el.dataset.blockType = type;
-            el.dataset.tntDmg    = '0';
-            el.style.cssText     = '';
-            el.style.visibility  = 'visible';
-        }
+    // 1. Reset blocks
+    for(let r=0;r<MC_ROWS;r++) for(let c=0;c<MC_COLS;c++){
+        const el=document.getElementById(`mc-blk-${r}-${c}`); if(!el) continue;
+        const type=grid[r]&&grid[r][c];
+        if(!type){el.dataset.revealed='1';el.style.visibility='hidden';continue;}
+        if(isAutoSpin&&el.dataset.revealed==='1') continue;
+        el.className=`mc-blk ${MINE_BLOCK_CLASS[type]||'stone-blk'}`;
+        el.dataset.revealed='0'; el.dataset.blockType=type; el.dataset.tntDmg='0';
+        el.style.cssText=''; el.style.visibility='visible';
     }
 
-    // ── Step 2: Parse hotbar ─────────────────────────────────────
-    const hotbar   = currentHotbar || [];
-    const RANK     = { wooden:0, stone:1, iron:2, golden:3, diamond:4 };
-    const tntList  = [];   // [{ col, idx }]
-    const bestPick = {};   // col → { pType, idx }
-    let   bookCount = 0;
-
-    hotbar.forEach((slot, idx) => {
-        if (!slot || slot.type === 'empty') return;
-        const col = idx % MC_COLS;
-        if (slot.type === 'tnt') {
-            tntList.push({ col, idx });
-        } else if (slot.type === 'pickaxe') {
-            const pt  = slot.pickaxeType || 'wooden';
-            const cur = bestPick[col];
-            if (!cur || (RANK[pt] || 0) > (RANK[cur.pType] || 0)) {
-                bestPick[col] = { pType: pt, idx };
-            }
-        } else if (slot.type === 'book') {
-            bookCount++;
-        }
+    // 2. Parse hotbar
+    const hotbar=currentHotbar||[], RANK={wooden:0,stone:1,iron:2,golden:3,diamond:4};
+    const tntList=[], bestPick={};
+    let bookCount=0;
+    hotbar.forEach((slot,idx)=>{
+        if(!slot||slot.type==='empty') return;
+        const col=idx%MC_COLS;
+        if(slot.type==='tnt') tntList.push({col,idx});
+        else if(slot.type==='pickaxe'){
+            const pt=slot.pickaxeType||'wooden', cur=bestPick[col];
+            if(!cur||(RANK[pt]||0)>(RANK[cur.pType]||0)) bestPick[col]={pType:pt,idx};
+        } else if(slot.type==='book') bookCount++;
     });
-    if (bookCount > 0) mineBookCount += bookCount;
+    if(bookCount>0) mineBookCount+=bookCount;
 
-    // ── Step 3: Build win map from server data ───────────────────
-    // blockWins[r][c] > 0 means server broke that block and it earns that amount
-    const winMap = {};
-    for (let r = 0; r < MC_ROWS; r++) {
-        for (let c = 0; c < MC_COLS; c++) {
-            const bw = blockWins && blockWins[r] != null ? (Number(blockWins[r][c]) || 0) : 0;
-            winMap[`${r},${c}`] = bw;
+    // 3. Win map
+    const winMap={};
+    for(let r=0;r<MC_ROWS;r++) for(let c=0;c<MC_COLS;c++)
+        winMap[`${r},${c}`]=(blockWins&&blockWins[r]!=null)?(Number(blockWins[r][c])||0):0;
+
+    // 4. Group winning blocks by column
+    const tntCols=new Set(tntList.map(t=>t.col)), colWins={};
+    for(let c=0;c<MC_COLS;c++) for(let r=0;r<MC_ROWS;r++){
+        const w=winMap[`${r},${c}`];
+        if(w>0){
+            if(!colWins[c]) colWins[c]=[];
+            const type=(grid[r]&&grid[r][c])||'stone';
+            colWins[c].push({r,c,type,win:w,hits:MINE_BLOCK_HITS[type]||1});
         }
     }
 
-    // ── Step 4: Group winning blocks by column ───────────────────
-    const tntCols  = new Set(tntList.map(t => t.col));
-    const colWins  = {};  // col → [{ r, c, type, win, hits }]
-
-    for (let c = 0; c < MC_COLS; c++) {
-        for (let r = 0; r < MC_ROWS; r++) {
-            const w = winMap[`${r},${c}`];
-            if (w > 0) {
-                if (!colWins[c]) colWins[c] = [];
-                const type = (grid[r] && grid[r][c]) || 'stone';
-                colWins[c].push({ r, c, type, win: w, hits: MINE_BLOCK_HITS[type] || 1 });
-            }
-        }
+    // 5. Chest tracking
+    const colBroken=new Array(MC_COLS).fill(0);
+    for(let c=0;c<MC_COLS;c++) for(let r=0;r<MC_ROWS;r++){
+        const el=document.getElementById(`mc-blk-${r}-${c}`);
+        if(el&&el.dataset.revealed==='1') colBroken[c]++;
     }
-
-    // ── Step 5: Chest tracking ───────────────────────────────────
-    const colBroken = new Array(MC_COLS).fill(0);
-    for (let c = 0; c < MC_COLS; c++) {
-        for (let r = 0; r < MC_ROWS; r++) {
-            const el = document.getElementById(`mc-blk-${r}-${c}`);
-            if (el && el.dataset.revealed === '1') colBroken[c]++;
-        }
-    }
-    const openedChests = new Set();
-    const colMults     = chestMults || [2,2,2,2,2];
-    const srvAct       = chestActivated || [];
-
-    function onBlockBroken(r, c) {
+    const openedChests=new Set(), colMults=chestMults||[2,2,2,2,2], srvAct=chestActivated||[];
+    function onBlockBroken(r,c){
         colBroken[c]++;
-        if (colBroken[c] >= MC_ROWS && !openedChests.has(c)) {
+        if(colBroken[c]>=MC_ROWS&&!openedChests.has(c)){
             openedChests.add(c);
-            setTimeout(() => openChestWithAnim(c, colMults[c] || 2, srvAct[c] === true, serverWin), 350);
+            setTimeout(()=>openChestWithAnim(c,colMults[c]||2,srvAct[c]===true,serverWin),350);
         }
     }
 
-    // ── Step 6: Remove tools from hotbar display ─────────────────
-    tntList.forEach(ts => {
-        const ir = Math.floor(ts.idx / MC_COLS), ic = ts.idx % MC_COLS;
-        const cell = document.getElementById(`inv-${ir}-${ic}`);
-        if (cell) { cell.innerHTML = ''; cell.className = 'inv-cell'; delete cell.dataset.slotType; }
+    // 6. Remove tools from hotbar
+    tntList.forEach(ts=>{
+        const ir=Math.floor(ts.idx/MC_COLS),ic=ts.idx%MC_COLS;
+        const cell=document.getElementById(`inv-${ir}-${ic}`);
+        if(cell){cell.innerHTML='';cell.className='inv-cell';delete cell.dataset.slotType;}
     });
 
-    // ── Step 7: TNT phase — strictly sequential ───────────────────
-    // Each TNT waits for the previous one to fully finish before starting
-    let tntIdx = 0;
-
-    function runNextTNT() {
-        if (!mineIsActive) return;
-        if (tntIdx >= tntList.length) {
-            // All TNTs done → start pickaxes
-            startPickaxePhase();
-            return;
-        }
-
-        const ts = tntList[tntIdx++];
-
-        // Find first unrevealed block in this column
-        let target = null;
-        for (let r = 0; r < MC_ROWS; r++) {
-            const el = document.getElementById(`mc-blk-${r}-${ts.col}`);
-            if (el && el.dataset.revealed !== '1' && grid[r] && grid[r][ts.col]) {
-                target = {
-                    r, c: ts.col,
-                    type: grid[r][ts.col],
-                    win:  winMap[`${r},${ts.col}`] || 0,
-                    hits: 1
-                };
+    // 7. TNT phase — sequential, each waits for previous to finish
+    let tntIdx=0;
+    function runNextTNT(){
+        if(!mineIsActive) return;
+        if(tntIdx>=tntList.length){startPickPhase();return;}
+        const ts=tntList[tntIdx++];
+        // Find first unrevealed block in column
+        let target=null;
+        for(let r=0;r<MC_ROWS;r++){
+            const el=document.getElementById(`mc-blk-${r}-${ts.col}`);
+            if(el&&el.dataset.revealed!=='1'&&grid[r]&&grid[r][ts.col]){
+                target={r,c:ts.col,type:grid[r][ts.col],win:winMap[`${r},${ts.col}`]||0,hits:1};
                 break;
             }
         }
+        if(!target){runNextTNT();return;}
 
-        if (!target) { runNextTNT(); return; }
-
-        // Drop TNT, then on landing break 2×2 area
-        dropTNT(ts.col, target, () => {
-            if (!mineIsActive) return;
-
-            const blast = [
-                [target.r,     target.c    ],
-                [target.r,     target.c + 1],
-                [target.r + 1, target.c    ],
-                [target.r + 1, target.c + 1],
-            ].filter(([br, bc]) => br >= 0 && br < MC_ROWS && bc >= 0 && bc < MC_COLS);
-
-            let pending = blast.length;
-            if (pending === 0) { setTimeout(runNextTNT, 100); return; }
-
-            blast.forEach(([br, bc], bi) => {
-                const blkEl = document.getElementById(`mc-blk-${br}-${bc}`);
-                if (!blkEl || blkEl.dataset.revealed === '1' || !(grid[br] && grid[br][bc])) {
-                    pending--;
-                    if (pending === 0) setTimeout(runNextTNT, 100);
-                    return;
+        dropTNT(ts.col, target, ()=>{
+            if(!mineIsActive) return;
+            // 2×2 blast
+            const blast=[[target.r,target.c],[target.r,target.c+1],[target.r+1,target.c],[target.r+1,target.c+1]]
+                .filter(([br,bc])=>br>=0&&br<MC_ROWS&&bc>=0&&bc<MC_COLS);
+            let pending=blast.length;
+            if(!pending){setTimeout(runNextTNT,100);return;}
+            blast.forEach(([br,bc],bi)=>{
+                const blkEl=document.getElementById(`mc-blk-${br}-${bc}`);
+                if(!blkEl||blkEl.dataset.revealed==='1'||!(grid[br]&&grid[br][bc])){
+                    pending--; if(!pending) setTimeout(runNextTNT,100); return;
                 }
-                const bblk = {
-                    r: br, c: bc,
-                    type: grid[br][bc],
-                    win:  winMap[`${br},${bc}`] || 0,
-                    hits: 1
-                };
-                setTimeout(() => {
-                    doBreakBlock(blkEl, bblk, () => {
-                        onBlockBroken(br, bc);
-                        pending--;
-                        if (pending === 0) setTimeout(runNextTNT, 120);
-                    });
-                }, bi * 80);
+                const bblk={r:br,c:bc,type:grid[br][bc],win:winMap[`${br},${bc}`]||0,hits:1};
+                setTimeout(()=>doBreakBlock(blkEl,bblk,()=>{
+                    onBlockBroken(br,bc); pending--; if(!pending) setTimeout(runNextTNT,120);
+                }),bi*80);
             });
         });
     }
 
-    // ── Step 8: Pickaxe phase — columns run in parallel ───────────
-    function startPickaxePhase() {
-        const cols   = Object.keys(colWins);
-        let   delay  = 0;
-
-        cols.forEach(colStr => {
-            const col       = parseInt(colStr, 10);
-            const winBlocks = colWins[col];
-            if (!winBlocks || winBlocks.length === 0) return;
-            if (tntCols.has(col)) return;  // TNT handled this column
-
-            const pick = bestPick[col] || { pType: 'wooden', idx: -1 };
-
-            // Remove pickaxe from hotbar
-            if (pick.idx >= 0) {
-                const ir = Math.floor(pick.idx / MC_COLS), ic = pick.idx % MC_COLS;
-                const cell = document.getElementById(`inv-${ir}-${ic}`);
-                if (cell) {
-                    cell.innerHTML = '';
-                    cell.className = 'inv-cell';
-                    delete cell.dataset.slotType;
-                    delete cell.dataset.pickType;
-                }
+    // 8. Pickaxe phase
+    function startPickPhase(){
+        let delay=0;
+        Object.keys(colWins).forEach(colStr=>{
+            const col=parseInt(colStr), wb=colWins[col];
+            if(!wb||!wb.length||tntCols.has(col)) return;
+            const pick=bestPick[col]||{pType:'wooden',idx:-1};
+            if(pick.idx>=0){
+                const ir=Math.floor(pick.idx/MC_COLS),ic=pick.idx%MC_COLS;
+                const cell=document.getElementById(`inv-${ir}-${ic}`);
+                if(cell){cell.innerHTML='';cell.className='inv-cell';delete cell.dataset.slotType;delete cell.dataset.pickType;}
             }
-
-            spawnPickaxeWorker(winBlocks, pick.pType, delay, null, onBlockBroken);
-            delay += 120;  // stagger columns for natural feel
+            spawnPickaxeWorker(wb, pick.pType, delay, null, onBlockBroken);
+            delay+=120;
         });
     }
 
-    // ── Step 9: Kick off sequence ─────────────────────────────────
-    if (tntList.length > 0) {
-        runNextTNT();
-    } else {
-        startPickaxePhase();
-    }
+    // 9. Start
+    if(tntList.length>0) runNextTNT(); else startPickPhase();
 
-    // ── Step 10: Estimate total animation time → show final result ─
-    // TNT: each takes ~900ms + gap
-    // Pickaxes: drop(300) + per-hit(105+145+75+28) + post(100)
-    const PER_HIT = 105 + 145 + 75 + 28;
-    let maxPickMs = 0;
-    Object.values(colWins).forEach(winBlocks => {
-        let t = 300 + 55;  // drop + initial pause
-        winBlocks.forEach(blk => { t += blk.hits * PER_HIT + 100; });
-        if (t > maxPickMs) maxPickMs = t;
+    // 10. Estimate finish time
+    const PER_HIT=100+145+75+28;
+    let maxPick=0;
+    Object.values(colWins).forEach(wb=>{
+        let t=310+55; wb.forEach(b=>{t+=b.hits*PER_HIT+110;}); if(t>maxPick)maxPick=t;
     });
+    const estReveal=tntList.length*920+maxPick+700;
 
-    const tntTotalMs = tntList.length * 920;
-    const estReveal  = tntTotalMs + maxPickMs + 700;
-
-    setTimeout(() => {
-        if (!mineIsActive) return;
-
-        // Force-sync with server win
-        mineRunningTotal = serverWin;
-        const rt = document.getElementById('mine-running-total');
-        if (rt) {
-            if (serverWin > 0) { rt.classList.add('has-win'); rt.textContent = serverWin.toFixed(2); }
-            else               { rt.textContent = '0.00'; rt.classList.remove('has-win'); }
+    setTimeout(()=>{
+        if(!mineIsActive) return;
+        mineRunningTotal=serverWin;
+        const rt=document.getElementById('mine-running-total');
+        if(rt){
+            if(serverWin>0){rt.classList.add('has-win');rt.textContent=serverWin.toFixed(2);}
+            else{rt.textContent='0.00';rt.classList.remove('has-win');}
         }
-        if (serverWin > 0) {
+        if(serverWin>0){
             playSound('win');
-            const balSpan = document.getElementById('bal-val');
-            if (balSpan) animateCounter(balSpan, balanceBefore, balanceBefore + serverWin, 900);
-            flyToBalance(serverWin);
-            showToast('+' + serverWin.toFixed(2) + ' TON');
+            const bs=document.getElementById('bal-val');
+            if(bs) animateCounter(bs,balanceBefore,balanceBefore+serverWin,900);
+            flyToBalance(serverWin); showToast('+'+serverWin.toFixed(2)+' TON');
         }
         updateUI();
-
-        // Books / free spins
-        if (mineBookCount >= 3 || mineAutoRemaining > 0) {
-            if (mineBookCount >= 3) {
-                mineBookCount    -= 3;
-                mineAutoRemaining = Math.max(mineAutoRemaining, 1);
-            }
-            showMineBonusOverlay(mineAutoRemaining, () => autoSpinMine());
+        if(mineBookCount>=3||mineAutoRemaining>0){
+            if(mineBookCount>=3){mineBookCount-=3;mineAutoRemaining=Math.max(mineAutoRemaining,1);}
+            showMineBonusOverlay(mineAutoRemaining,()=>autoSpinMine());
         } else {
-            const sEl = document.getElementById('mine-book-status');
-            if (sEl) sEl.style.display = 'none';
+            const sEl=document.getElementById('mine-book-status'); if(sEl)sEl.style.display='none';
         }
-    }, estReveal);
+    },estReveal);
 
-    return estReveal + 400;
+    return estReveal+400;
 }
 
-// ── Preload textures ──────────────────────────────────────────────────
-function setupMineTextures() {
-    [
-        '/sprites/block_grass.png', '/sprites/block_dirt.png', '/sprites/block_stone.png',
-        '/sprites/block_redstone.png', '/sprites/block_gold.png', '/sprites/block_diamond.png',
-        '/sprites/block_obsidian.png', '/sprites/block_tnt.png', '/sprites/block_book.png',
-        '/sprites/chest_closed.png', '/sprites/chest_open.png',
-        '/sprites/crack_1.png', '/sprites/crack_2.png', '/sprites/crack_3.png',
-        '/sprites/pick_wooden.png', '/sprites/pick_stone.png', '/sprites/pick_iron.png',
-        '/sprites/pick_golden.png', '/sprites/pick_diamond.png',
-    ].forEach(src => { const img = new Image(); img.src = src; });
+function setupMineTextures(){
+    ['/sprites/block_grass.png','/sprites/block_dirt.png','/sprites/block_stone.png',
+     '/sprites/block_redstone.png','/sprites/block_gold.png','/sprites/block_diamond.png',
+     '/sprites/block_obsidian.png','/sprites/block_tnt.png','/sprites/block_book.png',
+     '/sprites/chest_closed.png','/sprites/chest_open.png',
+     '/sprites/crack_1.png','/sprites/crack_2.png','/sprites/crack_3.png',
+     '/sprites/pick_wooden.png','/sprites/pick_stone.png','/sprites/pick_iron.png',
+     '/sprites/pick_golden.png','/sprites/pick_diamond.png',
+    ].forEach(src=>{const i=new Image();i.src=src;});
 }
+function initMineGrid(){setupMineTextures();renderMineHotbar(null);initMineShaft(false);}
 
-function initMineGrid() {
-    setupMineTextures();
-    renderMineHotbar(null);
-    initMineShaft(false);
-}
-
-// ── Auto-spin (triggered by books) ───────────────────────────────────
-async function autoSpinMine() {
-    if (mineIsSpinning || !user) return;
-    const btn = document.getElementById('mn-btn');
-    mineIsSpinning = true;
-    if (btn) btn.disabled = true;
-    const balBefore = user.balance || 0;
-
-    // Capture current grid state (keep revealed blocks)
-    const currentGrid = [];
-    for (let r = 0; r < MC_ROWS; r++) {
-        const row = [];
-        for (let c = 0; c < MC_COLS; c++) {
-            const el = document.getElementById(`mc-blk-${r}-${c}`);
-            row.push(el && el.dataset.revealed === '1'
-                ? null
-                : (el && el.dataset.blockType ? el.dataset.blockType : null));
-        }
-        currentGrid.push(row);
-    }
-
-    try {
-        const resp = await fetch('/api/mine', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ id: user.id, bet: 0, mode, autoSpin: true, persistGrid: currentGrid })
+async function autoSpinMine(){
+    if(mineIsSpinning||!user) return;
+    const btn=document.getElementById('mn-btn'); mineIsSpinning=true; if(btn)btn.disabled=true;
+    const balBefore=user.balance||0;
+    const cg=[];
+    for(let r=0;r<MC_ROWS;r++){const row=[];for(let c=0;c<MC_COLS;c++){const el=document.getElementById(`mc-blk-${r}-${c}`);row.push(el&&el.dataset.revealed==='1'?null:(el&&el.dataset.blockType?el.dataset.blockType:null));}cg.push(row);}
+    try{
+        const resp=await fetch('/api/mine',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:user.id,bet:0,mode,autoSpin:true,persistGrid:cg})});
+        const data=await resp.json();
+        if(!resp.ok){mineIsSpinning=false;if(btn)btn.disabled=false;return;}
+        user=data.user;
+        if(typeof data.freeSpinsLeft==='number') mineAutoRemaining=data.freeSpinsLeft;
+        revealMineHotbar(data.hotbar,()=>{
+            const t=revealMineShaft(data.grid,data.blockWins,data.win,balBefore,data.chestMults,true,data.chestActivated,data.blockWinSum);
+            setTimeout(()=>{mineIsSpinning=false;if(btn)btn.disabled=false;},t+100);
         });
-        const data = await resp.json();
-        if (!resp.ok) { mineIsSpinning = false; if (btn) btn.disabled = false; return; }
-        user = data.user;
-        if (typeof data.freeSpinsLeft === 'number') mineAutoRemaining = data.freeSpinsLeft;
-        revealMineHotbar(data.hotbar, () => {
-            const t = revealMineShaft(data.grid, data.blockWins, data.win, balBefore,
-                                       data.chestMults, true, data.chestActivated, data.blockWinSum);
-            setTimeout(() => { mineIsSpinning = false; if (btn) btn.disabled = false; }, t + 100);
-        });
-    } catch (e) {
-        mineIsSpinning = false;
-        if (btn) btn.disabled = false;
-    }
+    }catch(e){mineIsSpinning=false;if(btn)btn.disabled=false;}
 }
 
-// ── Main play function ────────────────────────────────────────────────
-async function playMine() {
-    if (!user) return showToast('Загрузка...');
-    if (mineIsSpinning) return;
-    if (maintenance.mine) return showToast('Тех. обслуживание');
-
-    const betInput = document.getElementById('mn-bet');
-    const btn      = document.getElementById('mn-btn');
-    let   betVal   = parseFloat(betInput ? betInput.value : 0);
-    if (!betVal || betVal < 0.1) { showToast('Мин. ставка 0.1 TON'); return; }
-    if (betVal > 25) { betVal = 25; if (betInput) betInput.value = 25; }
-
-    mineLastBet     = betVal;
-    minePersistGrid = null;
-    const sEl2 = document.getElementById('mine-book-status');
-    if (sEl2) sEl2.style.display = 'none';
-
-    playSound('click');
-    mineIsSpinning = true;
-    if (btn) btn.disabled = true;
-    const balBefore = user.balance || 0;
-
-    renderMineHotbar(null);
-    initMineShaft(false);
-
-    try {
-        const resp = await fetch('/api/mine', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ id: user.id, bet: betVal, mode })
+async function playMine(){
+    if(!user) return showToast('Загрузка...');
+    if(mineIsSpinning) return;
+    if(maintenance.mine) return showToast('Тех. обслуживание');
+    const betInput=document.getElementById('mn-bet'),btn=document.getElementById('mn-btn');
+    let betVal=parseFloat(betInput?betInput.value:0);
+    if(!betVal||betVal<0.1){showToast('Мин. ставка 0.1 TON');return;}
+    if(betVal>25){betVal=25;if(betInput)betInput.value=25;}
+    mineLastBet=betVal; minePersistGrid=null;
+    const sEl2=document.getElementById('mine-book-status');if(sEl2)sEl2.style.display='none';
+    playSound('click'); mineIsSpinning=true; if(btn)btn.disabled=true;
+    const balBefore=user.balance||0;
+    renderMineHotbar(null); initMineShaft(false);
+    try{
+        const resp=await fetch('/api/mine',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:user.id,bet:betVal,mode})});
+        const data=await resp.json();
+        if(!resp.ok){showToast(data.error||'Ошибка');mineIsSpinning=false;if(btn)btn.disabled=false;return;}
+        user=data.user;
+        if(typeof data.freeSpinsLeft==='number') mineAutoRemaining=data.freeSpinsLeft;
+        revealMineHotbar(data.hotbar,()=>{
+            const t=revealMineShaft(data.grid,data.blockWins,data.win,balBefore,data.chestMults,false,data.chestActivated,data.blockWinSum);
+            setTimeout(()=>{mineIsSpinning=false;if(btn)btn.disabled=false;},t+100);
         });
-        const data = await resp.json();
-        if (!resp.ok) {
-            showToast(data.error || 'Ошибка');
-            mineIsSpinning = false;
-            if (btn) btn.disabled = false;
-            return;
-        }
-        user = data.user;
-        if (typeof data.freeSpinsLeft === 'number') mineAutoRemaining = data.freeSpinsLeft;
-        revealMineHotbar(data.hotbar, () => {
-            const t = revealMineShaft(data.grid, data.blockWins, data.win, balBefore,
-                                       data.chestMults, false, data.chestActivated, data.blockWinSum);
-            setTimeout(() => { mineIsSpinning = false; if (btn) btn.disabled = false; }, t + 100);
-        });
-    } catch (e) {
-        showToast('Ошибка соединения');
-        mineIsSpinning = false;
-        if (btn) btn.disabled = false;
-    }
+    }catch(e){showToast('Ошибка соединения');mineIsSpinning=false;if(btn)btn.disabled=false;}
 }
 
-// ── Book bonus overlay ────────────────────────────────────────────────
-function showMineBonusOverlay(count, onDone) {
-    const sEl = document.getElementById('mine-book-status');
-    if (sEl) sEl.style.display = 'none';
-
-    const ov = document.createElement('div');
-    ov.style.cssText = [
-        'position:fixed', 'inset:0', 'z-index:999999',
-        'background:rgba(0,0,0,.85)',
-        'display:flex', 'flex-direction:column', 'align-items:center', 'justify-content:center',
-        'pointer-events:all', 'opacity:0', 'transition:opacity .25s'
-    ].join(';') + ';';
-    ov.innerHTML = `
-        <div style="text-align:center;">
-            <div style="font-size:54px;font-weight:900;color:#00ff88;letter-spacing:2px;line-height:1;">${count}</div>
-            <div style="font-size:14px;font-weight:700;color:rgba(255,255,255,.5);letter-spacing:3px;margin-top:10px;text-transform:uppercase;">Бесплатный спин</div>
-        </div>`;
+function showMineBonusOverlay(count,onDone){
+    const sEl=document.getElementById('mine-book-status');if(sEl)sEl.style.display='none';
+    const ov=document.createElement('div');
+    ov.style.cssText='position:fixed;inset:0;z-index:999999;background:rgba(0,0,0,.85);display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:all;opacity:0;transition:opacity .25s;';
+    ov.innerHTML=`<div style="text-align:center;"><div style="font-size:54px;font-weight:900;color:#00ff88;letter-spacing:2px;line-height:1;">${count}</div><div style="font-size:14px;font-weight:700;color:rgba(255,255,255,.5);letter-spacing:3px;margin-top:10px;text-transform:uppercase;">Бесплатный спин</div></div>`;
     document.body.appendChild(ov);
-    requestAnimationFrame(() => { ov.style.opacity = '1'; });
-    setTimeout(() => {
-        ov.style.opacity = '0';
-        setTimeout(() => { ov.remove(); if (onDone) onDone(); }, 260);
-    }, 1600);
+    requestAnimationFrame(()=>{ov.style.opacity='1';});
+    setTimeout(()=>{ov.style.opacity='0';setTimeout(()=>{ov.remove();if(onDone)onDone();},260);},1600);
 }
 
 
