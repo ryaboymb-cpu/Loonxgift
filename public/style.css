@@ -204,7 +204,7 @@ body {
 /* === MINE GAME === */
 
 .content:has(#page-mine.active) {
-  padding: 0 2px 68px !important;
+  padding: 4px 6px 80px !important;
   overflow-x: hidden;
   overflow-y: auto;
   display: flex !important;
@@ -224,8 +224,8 @@ body {
 .mine-card {
   flex: 0 0 auto !important;
   width: 100%;
-  max-width: 190px;
-  padding: 2px 2px;
+  max-width: 320px;
+  padding: 4px 4px;
   display: flex !important;
   flex-direction: column;
   gap: 0px;
@@ -752,7 +752,7 @@ body { display:flex;flex-direction:column;height:calc(100dvh - var(--sa-top) - v
 .hotbar { flex-shrink:0;height:auto;padding-top:8px;padding-bottom:calc(8px + var(--sa-bot,0px));background:rgba(5,5,10,.98);border-top:1px solid rgba(255,255,255,.08);z-index:50; }
 /* Mine квадратные блоки — НЕ добавляем min-height */
 .mc-shaft { overflow:visible; }
-.mine-bet-row { position:sticky;bottom:0;background:rgba(10,10,10,.97);z-index:20;padding:3px 0; }
+.mine-bet-row { background:rgba(10,10,10,.97);padding:3px 0;flex-shrink:0; }
 .upg-disk { border-radius:50%;transform-origin:center;will-change:transform; }
 #upg-slider::-webkit-slider-thumb { -webkit-appearance:none;width:22px;height:22px;border-radius:50%;background:#fff;border:3px solid #00e5ff;cursor:pointer; }
 
@@ -784,7 +784,7 @@ body { display:flex;flex-direction:column;height:calc(100dvh - var(--sa-top) - v
 .live-section-title { font-size:10px;letter-spacing:2px;text-transform:uppercase;color:rgba(255,255,255,.3);font-weight:700;margin:12px 0 7px; }
 .hotbar { flex-shrink:0;height:auto;padding-top:8px;padding-bottom:calc(8px + var(--sa-bot,0px));background:rgba(5,5,10,.98);border-top:1px solid rgba(255,255,255,.08);z-index:50; }
 .mc-shaft { overflow:visible; }
-.mine-bet-row { position:sticky;bottom:0;background:rgba(10,10,10,.97);z-index:20;padding:3px 0; }
+.mine-bet-row { background:rgba(10,10,10,.97);padding:3px 0;flex-shrink:0; }
 .upg-disk { border-radius:50%;transform-origin:center;will-change:transform; }
 #upg-slider::-webkit-slider-thumb { -webkit-appearance:none;width:22px;height:22px;border-radius:50%;background:#fff;border:3px solid #00e5ff;cursor:pointer; }
 
@@ -822,7 +822,7 @@ svg.ton-icon { display:none !important; }
 .hotbar { flex-shrink:0;height:auto;padding-top:8px;padding-bottom:calc(8px + var(--sa-bot,0px));background:rgba(5,5,10,.98);border-top:1px solid rgba(255,255,255,.08);z-index:50; }
 /* Mine квадратные (aspect-ratio:1 из оригинала) */
 .mc-shaft { overflow:visible; }
-.mine-bet-row { position:sticky;bottom:0;background:rgba(10,10,10,.97);z-index:20;padding:3px 0; }
+.mine-bet-row { background:rgba(10,10,10,.97);padding:3px 0;flex-shrink:0; }
 .upg-disk { border-radius:50%;transform-origin:center;will-change:transform; }
 #upg-slider::-webkit-slider-thumb { -webkit-appearance:none;width:22px;height:22px;border-radius:50%;background:#fff;border:3px solid #00e5ff;cursor:pointer; }
 .spin-cell.sym-N { color:#ff2255!important;opacity:.65;font-weight:700; }
@@ -2148,3 +2148,32 @@ button.btn[style*="neon-blue"] {
 }
 
 .mine-pick-img,.mine-tnt-img{border:none!important;outline:none!important;box-shadow:none!important;background:transparent!important;}
+
+/* ════ MINE ANIMATION ACTIVE ════ */
+body.mine-playing .content {
+    overflow: visible !important;
+}
+body.mine-playing .app-wrapper {
+    overflow: visible !important;
+}
+body.mine-playing .gc,
+body.mine-playing .live-bet-item,
+body.mine-playing .card {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+}
+.mc-shaft {
+    position: relative !important;
+    overflow: visible !important;
+}
+.mine-pick-img, .mine-tnt-img {
+    border: none !important;
+    outline: none !important;
+    box-shadow: none !important;
+    background: transparent !important;
+}
+@keyframes mineWinPop {
+    0%   { opacity: 1; transform: translateX(-50%) translateY(0px); }
+    80%  { opacity: 1; }
+    100% { opacity: 0; transform: translateX(-50%) translateY(-32px); }
+}
