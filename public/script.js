@@ -2472,6 +2472,8 @@ function killAllPickaxes() {
     _pickaxeEls.forEach(el => { try { el.remove(); } catch(e){} });
     _pickaxeEls.clear();
     document.body.classList.remove('mine-anim');
+    const st = document.getElementById('mine-pick-style');
+    if (st) st.remove();
     mineIsActive = false;
 }
 
@@ -2592,11 +2594,25 @@ function doBreakBlock(blkEl, blk, onFullyGone) {
 function spawnPickaxeWorker(blocks, pickType, delay, onDone, onBreak, _u) {
     if (!blocks || !blocks.length) { if (onDone) setTimeout(onDone, delay || 0); return; }
 
-    // Exactly like dropTNT: position:fixed on document.body, viewport coords
+    // Inject <style> tag to force remove overflow:hidden from all ancestors
+    // This is the only reliable way in Telegram WebView
+    let _styleTag = document.getElementById('mine-pick-style');
+    if (!_styleTag) {
+        _styleTag = document.createElement('style');
+        _styleTag.id = 'mine-pick-style';
+        _styleTag.textContent = [
+            'html body .app-wrapper{overflow:visible!important}',
+            'html body .content{overflow:visible!important}',
+            'html body #page-mine{overflow:visible!important}',
+            'html body .mine-card{overflow:visible!important}',
+            'html body .gc{backdrop-filter:none!important;-webkit-backdrop-filter:none!important}',
+        ].join('');
+        document.head.appendChild(_styleTag);
+    }
+
     const img = document.createElement('img');
     img.src = getPickaxeImg(pickType || 'wooden');
     img.style.cssText = 'position:fixed;z-index:99998;pointer-events:none;image-rendering:pixelated;width:26px;height:26px;opacity:0;transform-origin:bottom center;transform:translate(-50%,-100%) rotate(-18deg);display:block;';
-    document.body.classList.add('mine-anim');
     document.body.appendChild(img);
     _pickaxeEls.add(img);
 
@@ -2605,7 +2621,11 @@ function spawnPickaxeWorker(blocks, pickType, delay, onDone, onBreak, _u) {
     function cleanup() {
         _pickaxeEls.delete(img);
         if (img.parentNode) img.remove();
-        if (_pickaxeEls.size === 0) document.body.classList.remove('mine-anim');
+        if (_pickaxeEls.size === 0) {
+            document.body.classList.remove('mine-anim');
+            const st = document.getElementById('mine-pick-style');
+            if (st) st.remove();
+        }
         if (onDone) setTimeout(onDone, 30);
     }
 
