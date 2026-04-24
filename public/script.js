@@ -2414,6 +2414,12 @@ function updateSpinUI() {
 //  body.mine-playing removes overflow clipping from .content
 // ══════════════════════════════════════════════════════
 
+const MINE_BLOCK_CLASS = {
+    grass:'grass-blk', dirt:'dirt-blk', stone:'stone-blk',
+    redstone:'redstone-blk', gold_block:'gold-blk', gold:'gold-blk',
+    diamond_block:'diamond-blk', diamond:'diamond-blk',
+    obsidian:'obsidian-blk', tnt:'tnt-blk', book:'book-blk', unknown:'unknown-blk'
+};
 const MC_ROWS = 6, MC_COLS = 5, INV_ROWS = 3, INV_COLS = 5;
 
 let mineIsSpinning    = false;
