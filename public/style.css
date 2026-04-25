@@ -850,7 +850,7 @@ body {
     display: flex !important;
     flex-direction: column !important;
     height: 100dvh !important;
-    overflow: hidden !important;
+    overflow: hidden;
     width: 100% !important;
     background: #050508;
 }
