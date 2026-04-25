@@ -2469,11 +2469,17 @@ const easeBounce = t => {
 
 // ── Убить все летящие элементы ──────────────────────────────
 function killAllPickaxes() {
-    _pickaxeEls.forEach(el => { try { el.remove(); } catch(e){} });
+    _pickaxeEls.forEach(function(el) { try { el.remove(); } catch(e){} });
     _pickaxeEls.clear();
-    document.body.classList.remove('mine-anim');
-    const st = document.getElementById('mine-pick-style');
-    if (st) st.remove();
+    // Restore any overridden overflow
+    ['.app-wrapper','.content','#page-mine','.mine-card'].forEach(function(sel) {
+        var el = document.querySelector(sel);
+        if (el) {
+            el.style.removeProperty('overflow');
+            el.style.removeProperty('backdrop-filter');
+            el.style.removeProperty('-webkit-backdrop-filter');
+        }
+    });
     mineIsActive = false;
 }
 
@@ -2594,47 +2600,55 @@ function doBreakBlock(blkEl, blk, onFullyGone) {
 function spawnPickaxeWorker(blocks, pickType, delay, onDone, onBreak, _u) {
     if (!blocks || !blocks.length) { if (onDone) setTimeout(onDone, delay || 0); return; }
 
-    // Inject <style> tag to force remove overflow:hidden from all ancestors
-    // This is the only reliable way in Telegram WebView
-    let _styleTag = document.getElementById('mine-pick-style');
-    if (!_styleTag) {
-        _styleTag = document.createElement('style');
-        _styleTag.id = 'mine-pick-style';
-        _styleTag.textContent = [
-            'html body .app-wrapper{overflow:visible!important}',
-            'html body .content{overflow:visible!important}',
-            'html body #page-mine{overflow:visible!important}',
-            'html body .mine-card{overflow:visible!important}',
-            'html body .gc{backdrop-filter:none!important;-webkit-backdrop-filter:none!important}',
-        ].join('');
-        document.head.appendChild(_styleTag);
-    }
+    // Override overflow on all ancestors using inline !important
+    // inline !important beats any stylesheet !important — highest CSS priority
+    var _targets = ['.app-wrapper','.content','#page-mine','.mine-card'];
+    _targets.forEach(function(sel) {
+        var el = sel[0]==='#' ? document.getElementById(sel.slice(1)) : document.querySelector(sel);
+        if (el) el.style.setProperty('overflow', 'visible', 'important');
+    });
 
-    const img = document.createElement('img');
+    var PW = 26, PH = 26;
+
+    var img = document.createElement('img');
     img.src = getPickaxeImg(pickType || 'wooden');
-    img.style.cssText = 'position:fixed;z-index:99998;pointer-events:none;image-rendering:pixelated;width:26px;height:26px;opacity:0;transform-origin:bottom center;transform:translate(-50%,-100%) rotate(-18deg);display:block;';
+    // NO transform — use direct left/top coordinates like TNT does
+    // transform on position:fixed can break containment in some WebViews
+    img.style.cssText = [
+        'position:fixed',
+        'z-index:99999',
+        'width:' + PW + 'px',
+        'height:' + PH + 'px',
+        'pointer-events:none',
+        'image-rendering:pixelated',
+        'display:block',
+        'opacity:0',
+        'left:0px',
+        'top:0px'
+    ].join(';') + ';';
     document.body.appendChild(img);
     _pickaxeEls.add(img);
-
-    let qi = 0;
 
     function cleanup() {
         _pickaxeEls.delete(img);
         if (img.parentNode) img.remove();
         if (_pickaxeEls.size === 0) {
-            document.body.classList.remove('mine-anim');
-            const st = document.getElementById('mine-pick-style');
-            if (st) st.remove();
+            _targets.forEach(function(sel) {
+                var el = sel[0]==='#' ? document.getElementById(sel.slice(1)) : document.querySelector(sel);
+                if (el) el.style.removeProperty('overflow');
+            });
         }
         if (onDone) setTimeout(onDone, 30);
     }
+
+    var qi = 0;
 
     function processBlock() {
         if (!mineIsActive) { cleanup(); return; }
         if (qi >= blocks.length) { cleanup(); return; }
 
-        const blk = blocks[qi++];
-        const el = $('mc-blk-' + blk.r + '-' + blk.c);
+        var blk = blocks[qi++];
+        var el  = $('mc-blk-' + blk.r + '-' + blk.c);
 
         if (!el || el.dataset.revealed === '1') {
             if (onBreak) onBreak(blk.r, blk.c);
@@ -2642,55 +2656,52 @@ function spawnPickaxeWorker(blocks, pickType, delay, onDone, onBreak, _u) {
             return;
         }
 
-        // Use viewport coords (same as TNT)
-        const rect = el.getBoundingClientRect();
+        var rect = el.getBoundingClientRect();
         if (!rect || rect.width < 2) {
             if (onBreak) onBreak(blk.r, blk.c);
             setTimeout(processBlock, 60);
             return;
         }
 
-        const cx    = rect.left + rect.width / 2;   // horizontal center of block
-        const above = rect.top - 8;                  // just above block top
-        const hit   = rect.top + rect.height * 0.3; // impact point in block
+        // Direct coordinates — NO transform (like TNT: left:rect.left, top:startTop)
+        var lft   = Math.round(rect.left + rect.width/2 - PW/2); // centered on block
+        var start = Math.round(rect.top - PH - rect.height);      // one block-height above
+        var hover = Math.round(rect.top - PH/2);                  // hover above block
+        var hit   = Math.round(rect.top + rect.height * 0.28);    // impact point
+        var numHits = Math.max(1, blk.hits || 1);
 
-        const numHits = Math.max(1, blk.hits || 1);
-
-        // Snap pickaxe into position (no transition)
+        // Place pickaxe above block
         img.style.transition = 'none';
-        img.style.left    = cx + 'px';
-        img.style.top     = (above - 18) + 'px';
-        img.style.opacity = '0';
-        img.style.transform = 'translate(-50%,-100%) rotate(-18deg)';
+        img.style.left    = lft + 'px';
+        img.style.top     = start + 'px';
+        img.style.opacity = '1';
+        img.style.transform = 'rotate(-20deg)';
 
-        // Slide + fade in
+        // Slide down to hover position
         setTimeout(function() {
-            img.style.transition = 'top 0.15s ease-out, opacity 0.12s linear';
-            img.style.top     = above + 'px';
-            img.style.opacity = '1';
-
-            // Begin hitting after slide-in
+            img.style.transition = 'top 0.18s ease-out';
+            img.style.top = hover + 'px';
             setTimeout(function() {
-                swing(numHits, 0);
+                img.style.transform = 'rotate(0deg)';
+                setTimeout(function() { swing(numHits, 0); }, 60);
             }, 180);
         }, 16);
 
         function swing(rem, n) {
             if (!mineIsActive) { cleanup(); return; }
 
-            // Pre-swing rotation
-            img.style.transition = 'transform 0.09s ease-in';
-            img.style.transform  = 'translate(-50%,-100%) rotate(' + (n%2===0 ? 24 : -24) + 'deg)';
+            // Swing back
+            img.style.transition = 'transform 0.08s ease-in';
+            img.style.transform  = 'rotate(' + (n%2===0 ? 28 : -28) + 'deg)';
 
             setTimeout(function() {
-                // Drive DOWN
-                img.style.transition = 'top 0.11s ease-in, transform 0.07s ease-out';
-                img.style.top        = hit + 'px';
-                img.style.transform  = 'translate(-50%,-100%) rotate(0deg)';
-
+                // Drive DOWN — fast
+                img.style.transition = 'top 0.10s ease-in';
+                img.style.top = hit + 'px';
                 setTimeout(function() {
-                    // IMPACT
                     if (!mineIsActive) { cleanup(); return; }
+                    // IMPACT
+                    img.style.transform = 'rotate(0deg)';
                     playSound('hit');
                     flashBlock(el);
                     el.classList.remove('cracking-1','cracking-2','cracking-3');
@@ -2699,24 +2710,22 @@ function spawnPickaxeWorker(blocks, pickType, delay, onDone, onBreak, _u) {
                     } else {
                         el.classList.add('cracking-3');
                     }
-
-                    // Bounce UP
-                    img.style.transition = 'top 0.14s ease-out';
-                    img.style.top        = above + 'px';
-
+                    // Bounce UP — smooth
+                    img.style.transition = 'top 0.13s ease-out';
+                    img.style.top = hover + 'px';
                     setTimeout(function() {
                         if (!mineIsActive) { cleanup(); return; }
                         if (rem <= 1) {
                             doBreakBlock(el, blk, function() {
                                 if (onBreak) onBreak(blk.r, blk.c);
                             });
-                            setTimeout(processBlock, 90);
+                            setTimeout(processBlock, 100);
                         } else {
-                            setTimeout(function() { swing(rem - 1, n + 1); }, 20);
+                            setTimeout(function() { swing(rem-1, n+1); }, 20);
                         }
-                    }, 145);
-                }, 115);
-            }, 95);
+                    }, 140);
+                }, 110);
+            }, 80);
         }
     }
 
