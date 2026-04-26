@@ -54,8 +54,47 @@
                 <div id="feed-list" style="display:inline-flex;gap:8px;padding:2px 0;"></div>
             </div>
             <div class="games-grid">
-                <div class="gc" data-game="crash" onclick="navGame('crash')">
-                    <div class="gc-bg"></div>
+                <div class="gc" onclick="navGame('crash')" data-game="crash">
+                    <div class="gc-bg" style="background:linear-gradient(135deg,#1a0030,#3d0070);"></div>
+                    <img class="gc-logo" src="/img/Crashlogo.png" alt="" onerror="this.style.display='none'">
+                    <div class="gc-info"><span class="gc-name">Crash</span><span class="gc-desc">Множитель растёт</span></div>
+                </div>
+                <div class="gc" onclick="navGame('mines')" data-game="mines">
+                    <div class="gc-bg" style="background:linear-gradient(135deg,#001a10,#004428);"></div>
+                    <img class="gc-logo" src="/img/Mineslogo.png" alt="" onerror="this.style.display='none'">
+                    <div class="gc-info"><span class="gc-name">Mines</span><span class="gc-desc">Найди кристаллы</span></div>
+                </div>
+                <div class="gc" onclick="navGame('coinflip')" data-game="coinflip">
+                    <div class="gc-bg" style="background:linear-gradient(135deg,#1a1200,#3d2c00);"></div>
+                    <img class="gc-logo" src="/img/Coinfliplogo.png" alt="" onerror="this.style.display='none'">
+                    <div class="gc-info"><span class="gc-name">Coinflip</span><span class="gc-desc">50/50 шанс</span></div>
+                </div>
+                <div class="gc" onclick="navGame('cases')" data-game="cases">
+                    <div class="gc-bg" style="background:linear-gradient(135deg,#1a0020,#440050);"></div>
+                    <img class="gc-logo" src="/img/Caselogo.png" alt="" onerror="this.style.display='none'">
+                    <div class="gc-info"><span class="gc-name">Cases</span><span class="gc-desc">Открой кейс</span></div>
+                </div>
+                <div class="gc" onclick="navGame('battle')" data-game="battle">
+                    <div class="gc-bg" style="background:linear-gradient(135deg,#0a001a,#200045);"></div>
+                    <img class="gc-logo" src="/img/Battlelogo.png" alt="" onerror="this.style.display='none'">
+                    <div class="gc-info"><span class="gc-name">Battle</span><span class="gc-desc">Битва игроков</span></div>
+                </div>
+                <div class="gc" onclick="navGame('spin')" data-game="spin">
+                    <div class="gc-bg" style="background:linear-gradient(135deg,#1a0800,#402000);"></div>
+                    <img class="gc-logo" src="/img/Spinlogo.png" alt="" onerror="this.style.display='none'">
+                    <div class="gc-info"><span class="gc-name">Spin</span><span class="gc-desc">Слот-машина</span></div>
+                </div>
+                <div class="gc" onclick="navGame('mine')" data-game="mine">
+                    <div class="gc-bg" style="background:linear-gradient(135deg,#061206,#102810);"></div>
+                    <img class="gc-logo" src="/img/Minelogo.png" alt="" onerror="this.style.display='none'">
+                    <div class="gc-info"><span class="gc-name">Mine</span><span class="gc-desc">Шахта сокровищ</span></div>
+                </div>
+                <div class="gc" onclick="navGame('upgrade')" data-game="upgrade">
+                    <div class="gc-bg" style="background:linear-gradient(135deg,#001020,#002848);"></div>
+                    <img class="gc-logo" src="/img/Upgradelogo.png" alt="" onerror="this.style.display='none'">
+                    <div class="gc-info"><span class="gc-name">Upgrade</span><span class="gc-desc">Удвой ставку</span></div>
+                </div>
+            </div>
                     <div class="gc-icon-wrap" style="font-size:28px;">🚀</div>
                     <div class="gc-info"><span class="gc-name">Crash</span><span class="gc-desc">Успей забрать множитель</span></div>
                 </div>
