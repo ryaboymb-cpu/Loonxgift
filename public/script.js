@@ -199,14 +199,33 @@ try {
 
 const $ = id => document.getElementById(id);
 
-function showToast(msg, dur = 3000) {
-    if(!msg) return;
-    const container = $('toast-container');
-    const t = document.createElement('div'); 
-    t.className = 'toast'; 
-    t.innerText = msg;
-    container.appendChild(t); 
-    setTimeout(() => t.remove(), dur);
+function showToast(msg, dur) {
+    const MAX = 3;
+    let wrap = document.getElementById('toast-wrap');
+    if (!wrap) {
+        wrap = document.createElement('div');
+        wrap.id = 'toast-wrap';
+        wrap.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);' +
+            'display:flex;flex-direction:column;align-items:center;gap:6px;z-index:99999;pointer-events:none;' +
+            'min-width:160px;max-width:80vw;';
+        document.body.appendChild(wrap);
+    }
+    // Keep max 3 toasts
+    while (wrap.children.length >= MAX) wrap.removeChild(wrap.firstChild);
+
+    const t = document.createElement('div');
+    t.textContent = msg;
+    t.style.cssText = 'background:rgba(20,20,30,.92);color:#fff;font-size:13px;font-weight:700;' +
+        'padding:8px 16px;border-radius:20px;border:1px solid rgba(255,255,255,.1);' +
+        'box-shadow:0 4px 16px rgba(0,0,0,.4);opacity:0;transition:opacity .18s;' +
+        'text-align:center;white-space:nowrap;backdrop-filter:blur(8px);';
+    wrap.appendChild(t);
+    requestAnimationFrame(() => { t.style.opacity = '1'; });
+    const d = dur || 2200;
+    setTimeout(() => {
+        t.style.opacity = '0';
+        setTimeout(() => { if (t.parentNode) t.remove(); }, 200);
+    }, d);
 }
 
 // Анимация улетающего баланса
@@ -459,8 +478,8 @@ async function claimRefBonus() {
         const r = await fetch('/api/ref/claim',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:user.id})});
         const d = await r.json();
         if(r.ok){user=d.user;updateUI();playSound('win');flyToBalance(d.claimed);showToast('Получено +'+d.claimed+' TON');}
-        else showToast('❌ '+(d.error||'Ошибка'));
-    }catch(e){showToast('❌ Ошибка');}
+        else showToast(' '+(d.error||'Ошибка'));
+    }catch(e){showToast(' Ошибка');}
     if(btn){btn.disabled=false;btn.innerText='Забрать кэш';}
 }
 
@@ -1554,7 +1573,7 @@ async function adminChangeBal(userId, type) {
                 updateUI();
             }
         } else {
-            showToast(`❌ Ошибка: ${result.error || 'Сервер отклонил запрос'}`);
+            showToast(` Ошибка: ${result.error || 'Сервер отклонил запрос'}`);
         }
     } catch (e) {
         console.error('Ошибка баланса:', e);
@@ -1865,8 +1884,8 @@ async function submitAdminGift(userId) {
         body:JSON.stringify({pass:adminPass, userId, giftUrl, name: name||undefined, imageUrl: imageUrl||undefined, price})});
     const d = await r.json();
     if (form) form.remove();
-    if(r.ok) showToast('✅ Подарок выдан: '+d.gift?.name);
-    else showToast('❌ '+(d.error||'Ошибка'));
+    if(r.ok) showToast(' Подарок выдан: '+d.gift?.name);
+    else showToast(' '+(d.error||'Ошибка'));
 }
 async function adminViewGifts() {
     const c = $('admin-content');
@@ -1906,8 +1925,8 @@ async function adminAdjustStat(type) {
             body: JSON.stringify({ pass: adminPass, type, action, amount })
         });
         const d = await r.json();
-        if (r.ok) { showToast('✅ Обновлено'); loadAdminData(); }
-        else showToast('❌ ' + (d.error||'Ошибка'));
+        if (r.ok) { showToast(' Обновлено'); loadAdminData(); }
+        else showToast(' ' + (d.error||'Ошибка'));
     } catch(e) { showToast('Ошибка'); }
 }
 
@@ -1917,7 +1936,7 @@ async function clearLiveBetsAdmin() {
         const r = await fetch('/api/admin/clear_live_bets', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pass:adminPass})});
         if(r.ok) {
             if($('feed-list')) $('feed-list').innerHTML = '';
-            showToast('✅ Лайв ставки очищены');
+            showToast(' Лайв ставки очищены');
         }
     } catch(e) { showToast('Ошибка'); }
 }
@@ -1930,8 +1949,8 @@ async function showAdminBalanceAdjust() {
     if (isNaN(amount) || amount <= 0) return showToast('Неверная сумма');
     const r = await fetch('/api/admin/edit_balance', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pass:adminPass,userId:uid,action,amount})});
     const d = await r.json();
-    if(r.ok) showToast('✅ ' + (action==='add'?'+':'-') + amount + ' TON → ' + uid);
-    else showToast('❌ ' + (d.error||'Ошибка'));
+    if(r.ok) showToast(' ' + (action==='add'?'+':'-') + amount + ' TON → ' + uid);
+    else showToast(' ' + (d.error||'Ошибка'));
 }
 
 async function adminW(wId, action) {
@@ -1982,7 +2001,7 @@ async function adminMaint(game, state) {
 async function adminSetMinWithdraw(){
     const val=parseFloat($('min-wd-val')?.value);if(isNaN(val)||val<0.5)return showToast('Мин 0.5 TON');
     const r=await fetch('/api/admin/set_min_withdraw',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pass:adminPass,value:val})});
-    if(r.ok)showToast('✅ Мин вывод: '+val+' TON');else showToast('Ошибка');
+    if(r.ok)showToast(' Мин вывод: '+val+' TON');else showToast('Ошибка');
 }
 async function adminSetWager() {
     const value = $('wager-mult').value;
@@ -2216,7 +2235,7 @@ async function adminSaveGS(key){const el=document.getElementById('gs_'+key);if(!
     try{const r=await fetch('/api/admin/set_game_setting',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pass:adminPass,key:'game_'+key,value:val})});
         const d=await r.json();showToast(r.ok?'✅ '+key+' = '+val:'❌ '+(d.error||'?'));
         if(r.ok) loadGameSettings(); // Обновляем настройки механик на клиенте
-    }catch(e){showToast('❌ Ошибка');}
+    }catch(e){showToast(' Ошибка');}
 }
 async function adminShowGameUsers(game){
     const c=$('admin-content');if(!c)return;
@@ -2447,17 +2466,20 @@ function getPickDur(type) {
 function getPickaxeImg(t) { return `/sprites/pick_${t||'wooden'}.png`; }
 
 // ── RAF-анимация одного свойства ────────────────────────────
-function _anim(el, prop, from, to, dur, ease, cb) {
+function _animProp(el, prop, from, to, dur, easeFn, cb) {
     let t0 = null;
-    const run = ts => {
+    function frame(ts) {
         if (!t0) t0 = ts;
         const t = Math.min((ts - t0) / dur, 1);
-        el.style[prop] = (from + (to - from) * ease(t)) + 'px';
-        if (t < 1) requestAnimationFrame(run);
+        el.style[prop] = (from + (to - from) * easeFn(t)) + 'px';
+        if (t < 1) requestAnimationFrame(frame);
         else if (cb) cb();
-    };
-    requestAnimationFrame(run);
+    }
+    requestAnimationFrame(frame);
 }
+// Keep _anim as alias for compatibility
+function _anim(el, prop, from, to, dur, ease, cb) { _animProp(el, prop, from, to, dur, ease, cb); }
+
 const easeOut  = t => 1 - Math.pow(1 - t, 3);
 const easeIn   = t => t * t;
 const easeBounce = t => {
@@ -2591,218 +2613,112 @@ function doBreakBlock(blkEl, blk, onFullyGone) {
     }, 100);
 }
 
-// ── ВОРКЕР-КИРКА (Canvas-based — не зависит от overflow/backdrop-filter) ────────
-// Рисуем пикаксы на <canvas position:fixed> поверх всего.
-// Canvas не clip-ается overflow:hidden и не создаёт stacking context.
-// Работает гарантированно в любом WebView.
+// ── ВОРКЕР-КИРКА ─────────────────────────────────────────────────────────
+// position:absolute внутри mc-shaft (position:relative, overflow:visible)
+// координаты через offsetLeft/offsetTop — НЕ getBoundingClientRect
+// Точная копия старой рабочей механики
 
-let _pickCanvas = null;
-let _pickCtx    = null;
-let _pickItems  = []; // массив активных анимаций
-let _pickRAF    = null;
-let _pickImgCache = {}; // кэш загруженных Image объектов
+function spawnPickaxeWorker(blockQueue, pickaxeType, workerIdx, onWorkerDone, onBlockBroken, maxDur) {
+    if (!blockQueue || !blockQueue.length) { if (onWorkerDone) onWorkerDone(); return; }
 
-function _getPickCanvas() {
-    if (_pickCanvas && _pickCanvas.isConnected) return _pickCanvas;
-    _pickCanvas = document.getElementById('mine-pick-canvas');
-    if (!_pickCanvas) {
-        _pickCanvas = document.createElement('canvas');
-        _pickCanvas.id = 'mine-pick-canvas';
-        _pickCanvas.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:2147483647;';
-        document.body.appendChild(_pickCanvas);
-    }
-    _pickCanvas.width  = window.innerWidth;
-    _pickCanvas.height = window.innerHeight;
-    _pickCtx = _pickCanvas.getContext('2d');
-    return _pickCanvas;
-}
+    let qi = 0;
+    let remainDur = (maxDur && maxDur > 0) ? maxDur : 999;
 
-function _loadPickImg(src) {
-    if (_pickImgCache[src]) return _pickImgCache[src];
-    const img = new Image();
-    img.src = src;
-    _pickImgCache[src] = img;
-    return img;
-}
+    function processNext() {
+        if (!mineIsActive) return;
+        if (qi >= blockQueue.length) { if (onWorkerDone) onWorkerDone(); return; }
 
-function _pickLoop() {
-    _pickCanvas.width = window.innerWidth; // clears canvas each frame
-    if (!_pickCtx) { _pickCtx = _pickCanvas.getContext('2d'); }
-    const ctx = _pickCtx;
+        const blk   = blockQueue[qi];
+        const blkEl = $('mc-blk-' + blk.r + '-' + blk.c);
+        if (!blkEl || blkEl.dataset.revealed === '1') { qi++; processNext(); return; }
 
-    const alive = _pickItems.filter(p => p.active);
-    if (!alive.length) {
-        _pickRAF = null;
-        return;
-    }
-    alive.forEach(p => {
-        if (!p.active) return;
-        ctx.save();
-        // Translate to center of pickaxe, rotate, then draw
-        ctx.translate(p.x + p.w/2, p.y + p.h/2);
-        ctx.rotate(p.angle * Math.PI / 180);
-        ctx.globalAlpha = p.alpha;
-        ctx.imageSmoothingEnabled = false;
-        ctx.drawImage(p.img, -p.w/2, -p.h/2, p.w, p.h);
-        ctx.restore();
-    });
+        const tntDmg = parseInt(blkEl.dataset.tntDmg || '0');
+        blk.hits = Math.max(1, blk.hits - tntDmg);
+        const hitsCanDo   = Math.min(blk.hits, remainDur);
+        const blockWillBreak = hitsCanDo >= blk.hits;
 
-    _pickRAF = requestAnimationFrame(_pickLoop);
-}
-
-function _startPickLoop() {
-    _getPickCanvas();
-    if (!_pickRAF) _pickRAF = requestAnimationFrame(_pickLoop);
-}
-
-function killAllPickaxes() {
-    _pickaxeEls.forEach(el => { try { if(el && el.remove) el.remove(); } catch(e){} });
-    _pickaxeEls.clear();
-    _pickItems.forEach(p => { p.active = false; });
-    _pickItems = [];
-    if (_pickCanvas) { _pickCanvas.width = window.innerWidth; } // clear canvas
-    mineIsActive = false;
-}
-
-function spawnPickaxeWorker(blocks, pickType, delay, onDone, onBreak, _u) {
-    if (!blocks || !blocks.length) { if (onDone) setTimeout(onDone, delay || 0); return; }
-
-    _startPickLoop();
-
-    const SZ  = 28; // pickaxe size px
-    const src = getPickaxeImg(pickType || 'wooden');
-    const img = _loadPickImg(src);
-
-    // State object for this pickaxe
-    const pick = {
-        img, w: SZ, h: SZ,
-        x: -999, y: -999,
-        angle: -20, alpha: 0,
-        active: true
-    };
-    _pickItems.push(pick);
-    _pickaxeEls.add(pick);
-
-    function cleanup() {
-        pick.active = false;
-        _pickaxeEls.delete(pick);
-        if (_pickaxeEls.size === 0) {
-            _pickItems = [];
-        }
-        if (onDone) setTimeout(onDone, 30);
-    }
-
-    var qi = 0;
-
-    function processBlock() {
-        if (!mineIsActive) { cleanup(); return; }
-        if (qi >= blocks.length) { cleanup(); return; }
-
-        var blk = blocks[qi++];
-        var el  = $('mc-blk-' + blk.r + '-' + blk.c);
-
-        if (!el || el.dataset.revealed === '1') {
-            if (onBreak) onBreak(blk.r, blk.c);
-            processBlock();
+        if (hitsCanDo <= 0) {
+            if (onWorkerDone) onWorkerDone();
             return;
         }
 
-        var rect = el.getBoundingClientRect();
-        if (!rect || rect.width < 2) {
-            if (onBreak) onBreak(blk.r, blk.c);
-            setTimeout(processBlock, 60);
-            return;
+        qi++;
+        remainDur -= hitsCanDo;
+
+        const shaft = $('mc-shaft');
+        if (!shaft) { processNext(); return; }
+
+        // shaft-relative coordinates via offsetLeft/offsetTop
+        const bx      = blkEl.offsetLeft + blkEl.offsetWidth / 2;
+        const blockTop = blkEl.offsetTop;
+        const startY  = blockTop - 28;
+        const hoverY  = blockTop - 10;
+        const hitY    = blockTop + 4;
+
+        const el = document.createElement('img');
+        el.src = getPickaxeImg(pickaxeType || 'wooden');
+        el.style.cssText = 'position:absolute;width:22px;height:22px;z-index:9999;' +
+            'pointer-events:none;image-rendering:pixelated;' +
+            'left:' + bx + 'px;top:' + startY + 'px;' +
+            'transform:translate(-50%,-100%);';
+        shaft.appendChild(el);
+        _pickaxeEls.add(el);
+
+        function removeEl() {
+            _pickaxeEls.delete(el);
+            if (el.parentNode) el.parentNode.removeChild(el);
         }
 
-        // Canvas coords = viewport coords = getBoundingClientRect coords
-        var cx    = rect.left + rect.width / 2 - SZ / 2;
-        var start = rect.top  - SZ - rect.height;      // 1 block above
-        var hover = rect.top  - SZ * 0.2;              // just above top of block
-        var hitY  = rect.top  + rect.height * 0.28;    // impact
+        // Drop into hover position
+        _animProp(el, 'top', startY, hoverY, 180, t => t*t, () => {
+            if (!mineIsActive) { removeEl(); return; }
+            blkEl.classList.add('cracking-1');
+            doHits(hitsCanDo, 0);
+        });
 
-        var numHits = Math.max(1, blk.hits || 1);
-        var animStart = performance.now();
+        function doHits(hitsLeft, hitNum) {
+            if (!mineIsActive) { removeEl(); return; }
+            const swingAngle = hitNum % 2 === 0 ? -25 : 25;
+            el.style.transform = 'translate(-50%,-100%) rotate(' + swingAngle + 'deg)';
 
-        // Phase 1: drop down to hover (300ms easeBounce)
-        pick.x = cx; pick.y = start; pick.angle = -20; pick.alpha = 0;
+            _animProp(el, 'top', hoverY, hitY, 120, t => t*t, () => {
+                if (!mineIsActive) { removeEl(); return; }
+                el.style.transform = 'translate(-50%,-100%) rotate(0deg)';
+                playSound('hit');
+                flashBlock(blkEl);
 
-        function animDrop(now) {
-            if (!pick.active || !mineIsActive) { cleanup(); return; }
-            var p = Math.min((now - animStart) / 300, 1);
-            // easeBounce
-            var ease = p < 0.75 ? p*p/(0.75*0.75) : 1 + Math.sin(((p-0.75)/0.25)*Math.PI)*0.09;
-            pick.y = start + (hover - start) * ease;
-            pick.alpha = Math.min(p * 3, 1);
-            pick.angle = -20 * (1 - p);
-            if (p < 1) { requestAnimationFrame(animDrop); }
-            else {
-                pick.y = hover; pick.alpha = 1; pick.angle = 0;
-                setTimeout(() => swing(numHits, 0), 50);
-            }
-        }
-        requestAnimationFrame(animDrop);
+                blkEl.classList.remove('cracking-1','cracking-2','cracking-3');
+                const progress = (hitNum + 1) / blk.hits;
+                if (progress >= 0.9 && blockWillBreak) blkEl.classList.add('cracking-3');
+                else if (progress >= 0.5)              blkEl.classList.add('cracking-2');
+                else                                   blkEl.classList.add('cracking-1');
 
-        function swing(rem, n) {
-            if (!pick.active || !mineIsActive) { cleanup(); return; }
-
-            var swingAngle = n % 2 === 0 ? 28 : -28;
-            var t0 = performance.now();
-
-            // Sub-phase A: swing back (80ms)
-            function animSwingBack(now) {
-                var p = Math.min((now - t0) / 80, 1);
-                pick.angle = swingAngle * p;
-                if (p < 1) requestAnimationFrame(animSwingBack);
-                else {
-                    pick.angle = swingAngle;
-                    var t1 = performance.now();
-                    // Sub-phase B: drive down (100ms easeIn)
-                    function animDown(now2) {
-                        var p2 = Math.min((now2 - t1) / 100, 1);
-                        pick.y = hover + (hitY - hover) * (p2 * p2);
-                        if (p2 < 1) requestAnimationFrame(animDown);
-                        else {
-                            // IMPACT
-                            pick.y = hitY; pick.angle = 0;
-                            playSound('hit');
-                            flashBlock(el);
-                            el.classList.remove('cracking-1','cracking-2','cracking-3');
-                            if (rem > 1) {
-                                el.classList.add((n+1)/numHits > 0.5 ? 'cracking-2' : 'cracking-1');
-                            } else {
-                                el.classList.add('cracking-3');
-                            }
-                            var t2 = performance.now();
-                            // Sub-phase C: bounce up (140ms easeOut)
-                            function animUp(now3) {
-                                var p3 = Math.min((now3 - t2) / 140, 1);
-                                var ease3 = 1 - Math.pow(1 - p3, 3);
-                                pick.y = hitY + (hover - hitY) * ease3;
-                                if (p3 < 1) requestAnimationFrame(animUp);
-                                else {
-                                    pick.y = hover;
-                                    if (rem <= 1) {
-                                        doBreakBlock(el, blk, () => {
-                                            if (onBreak) onBreak(blk.r, blk.c);
-                                        });
-                                        setTimeout(processBlock, 100);
-                                    } else {
-                                        setTimeout(() => swing(rem-1, n+1), 20);
-                                    }
-                                }
-                            }
-                            requestAnimationFrame(animUp);
-                        }
+                if (hitsLeft <= 1) {
+                    if (blockWillBreak) {
+                        doBreakBlock(blkEl, blk, null, () => {
+                            if (onBlockBroken) onBlockBroken(blk.r, blk.c);
+                        });
+                        _animProp(el, 'top', hitY, startY, 200, t => 1-(1-t)*(1-t), () => {
+                            removeEl();
+                            setTimeout(processNext, 100);
+                        });
+                    } else {
+                        removeEl();
+                        if (onWorkerDone) onWorkerDone();
                     }
-                    requestAnimationFrame(animDown);
+                } else {
+                    _animProp(el, 'top', hitY, hoverY, 140, t => 1 - Math.pow(1-t, 2), () => {
+                        if (!mineIsActive) { removeEl(); return; }
+                        setTimeout(() => doHits(hitsLeft - 1, hitNum + 1), 50);
+                    });
                 }
-            }
-            requestAnimationFrame(animSwingBack);
+            });
         }
     }
 
-    setTimeout(processBlock, delay || 0);
+    setTimeout(processNext, (workerIdx || 0) * 90);
 }
+
 
 // ── Взрыв ТНТ (область 2×2 от позиции) ─────────────────────
 function tntExplode(r, c) {
@@ -3258,8 +3174,8 @@ function revealMineShaft(grid, blockWins, serverWin, balanceBefore, chestMults, 
             }
 
             // Spawn pickaxe for this column - hits all winning blocks in sequence
-            spawnPickaxeWorker(winBlocks, pType, colDelay, null, onBlockBroken, 999);
-            colDelay += 80; // stagger columns slightly for visual variety
+            spawnPickaxeWorker(winBlocks, pType, colIdx, null, onBlockBroken, 999);
+            colIdx++;
         });
     }, tntPhase);
 
@@ -3755,7 +3671,7 @@ async function doGiftAction(giftId, action) {
             return showToast(d.error || 'Ошибка');
         }
         user = d.user; updateUI();
-        showToast('✅ Заявка на вывод создана!');
+        showToast(' Заявка на вывод создана!');
         if (ov) ov.remove();
         loadGiftsPage();
     } catch(e) {
@@ -3811,7 +3727,7 @@ async function showSellConfirmDialog(giftId, parentOv) {
             dlg.remove();
             if (!r.ok) return showToast(d.error || 'Ошибка');
             user = d.user; updateUI();
-            showToast('✅ Продано! +' + priceStr);
+            showToast(' Продано! +' + priceStr);
             flyToBalance(gift.price || 0);
             if (parentOv) parentOv.remove();
             loadGiftsPage();
@@ -4019,16 +3935,16 @@ async function addNFTToCatalog() {
         const r = await fetch('/api/admin/nft_catalog_add', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pass:adminPass, giftUrl:url, modelName, price})});
         const d = await r.json();
         document.getElementById('add-nft-form')?.remove();
-        if (r.ok) { showToast('✅ ' + (d.gift?.name||'Добавлено')); loadAdminNFTGifts(); }
-        else showToast('❌ ' + (d.error||'Ошибка'));
+        if (r.ok) { showToast(' ' + (d.gift?.name||'Добавлено')); loadAdminNFTGifts(); }
+        else showToast(' ' + (d.error||'Ошибка'));
     } catch(e) { showToast('Ошибка'); }
 }
 
 async function updateNFTGiftPrice(giftId, newPrice) {
     try {
         const r = await fetch('/api/admin/nft_catalog_price', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pass:adminPass, giftId, price: parseFloat(newPrice)||0})});
-        if (r.ok) showToast('✅ Цена обновлена');
-        else showToast('❌ Ошибка сохранения');
+        if (r.ok) showToast(' Цена обновлена');
+        else showToast(' Ошибка сохранения');
     } catch(e) {}
 }
 
