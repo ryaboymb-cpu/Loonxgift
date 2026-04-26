@@ -2469,17 +2469,15 @@ const easeBounce = t => {
 
 // ── Убить все летящие элементы ──────────────────────────────
 function killAllPickaxes() {
-    _pickaxeEls.forEach(function(el) { try { el.remove(); } catch(e){} });
+    _pickaxeEls.forEach(function(el) { try { if(el && el.remove) el.remove(); } catch(e){} });
     _pickaxeEls.clear();
-    // Restore any overridden overflow
-    ['.app-wrapper','.content','#page-mine','.mine-card'].forEach(function(sel) {
-        var el = document.querySelector(sel);
-        if (el) {
-            el.style.removeProperty('overflow');
-            el.style.removeProperty('backdrop-filter');
-            el.style.removeProperty('-webkit-backdrop-filter');
-        }
-    });
+    if (typeof _pickItems !== 'undefined') {
+        _pickItems.forEach(function(p){ p.active = false; });
+        _pickItems = [];
+    }
+    if (typeof _pickCanvas !== 'undefined' && _pickCanvas) {
+        _pickCanvas.width = window.innerWidth; // clears canvas
+    }
     mineIsActive = false;
 }
 
@@ -2593,50 +2591,103 @@ function doBreakBlock(blkEl, blk, onFullyGone) {
     }, 100);
 }
 
-// ── ВОРКЕР-КИРКА ─────────────────────────────────────────────
-// Каждая кирка — отдельный элемент, отдельный воркер.
-// Несколько кирок в одном столбце падают с задержкой (stagger).
-// Нет дедупликации — каждая кирка работает независимо.
+// ── ВОРКЕР-КИРКА (Canvas-based — не зависит от overflow/backdrop-filter) ────────
+// Рисуем пикаксы на <canvas position:fixed> поверх всего.
+// Canvas не clip-ается overflow:hidden и не создаёт stacking context.
+// Работает гарантированно в любом WebView.
+
+let _pickCanvas = null;
+let _pickCtx    = null;
+let _pickItems  = []; // массив активных анимаций
+let _pickRAF    = null;
+let _pickImgCache = {}; // кэш загруженных Image объектов
+
+function _getPickCanvas() {
+    if (_pickCanvas && _pickCanvas.isConnected) return _pickCanvas;
+    _pickCanvas = document.getElementById('mine-pick-canvas');
+    if (!_pickCanvas) {
+        _pickCanvas = document.createElement('canvas');
+        _pickCanvas.id = 'mine-pick-canvas';
+        _pickCanvas.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:2147483647;';
+        document.body.appendChild(_pickCanvas);
+    }
+    _pickCanvas.width  = window.innerWidth;
+    _pickCanvas.height = window.innerHeight;
+    _pickCtx = _pickCanvas.getContext('2d');
+    return _pickCanvas;
+}
+
+function _loadPickImg(src) {
+    if (_pickImgCache[src]) return _pickImgCache[src];
+    const img = new Image();
+    img.src = src;
+    _pickImgCache[src] = img;
+    return img;
+}
+
+function _pickLoop() {
+    _pickCanvas.width = window.innerWidth; // clears canvas each frame
+    if (!_pickCtx) { _pickCtx = _pickCanvas.getContext('2d'); }
+    const ctx = _pickCtx;
+
+    const alive = _pickItems.filter(p => p.active);
+    if (!alive.length) {
+        _pickRAF = null;
+        return;
+    }
+    alive.forEach(p => {
+        if (!p.active) return;
+        ctx.save();
+        // Translate to center of pickaxe, rotate, then draw
+        ctx.translate(p.x + p.w/2, p.y + p.h/2);
+        ctx.rotate(p.angle * Math.PI / 180);
+        ctx.globalAlpha = p.alpha;
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(p.img, -p.w/2, -p.h/2, p.w, p.h);
+        ctx.restore();
+    });
+
+    _pickRAF = requestAnimationFrame(_pickLoop);
+}
+
+function _startPickLoop() {
+    _getPickCanvas();
+    if (!_pickRAF) _pickRAF = requestAnimationFrame(_pickLoop);
+}
+
+function killAllPickaxes() {
+    _pickaxeEls.forEach(el => { try { if(el && el.remove) el.remove(); } catch(e){} });
+    _pickaxeEls.clear();
+    _pickItems.forEach(p => { p.active = false; });
+    _pickItems = [];
+    if (_pickCanvas) { _pickCanvas.width = window.innerWidth; } // clear canvas
+    mineIsActive = false;
+}
+
 function spawnPickaxeWorker(blocks, pickType, delay, onDone, onBreak, _u) {
     if (!blocks || !blocks.length) { if (onDone) setTimeout(onDone, delay || 0); return; }
 
-    // Override overflow on all ancestors using inline !important
-    // inline !important beats any stylesheet !important — highest CSS priority
-    var _targets = ['.app-wrapper','.content','#page-mine','.mine-card'];
-    _targets.forEach(function(sel) {
-        var el = sel[0]==='#' ? document.getElementById(sel.slice(1)) : document.querySelector(sel);
-        if (el) el.style.setProperty('overflow', 'visible', 'important');
-    });
+    _startPickLoop();
 
-    var PW = 26, PH = 26;
+    const SZ  = 28; // pickaxe size px
+    const src = getPickaxeImg(pickType || 'wooden');
+    const img = _loadPickImg(src);
 
-    var img = document.createElement('img');
-    img.src = getPickaxeImg(pickType || 'wooden');
-    // NO transform — use direct left/top coordinates like TNT does
-    // transform on position:fixed can break containment in some WebViews
-    img.style.cssText = [
-        'position:fixed',
-        'z-index:99999',
-        'width:' + PW + 'px',
-        'height:' + PH + 'px',
-        'pointer-events:none',
-        'image-rendering:pixelated',
-        'display:block',
-        'opacity:0',
-        'left:0px',
-        'top:0px'
-    ].join(';') + ';';
-    document.body.appendChild(img);
-    _pickaxeEls.add(img);
+    // State object for this pickaxe
+    const pick = {
+        img, w: SZ, h: SZ,
+        x: -999, y: -999,
+        angle: -20, alpha: 0,
+        active: true
+    };
+    _pickItems.push(pick);
+    _pickaxeEls.add(pick);
 
     function cleanup() {
-        _pickaxeEls.delete(img);
-        if (img.parentNode) img.remove();
+        pick.active = false;
+        _pickaxeEls.delete(pick);
         if (_pickaxeEls.size === 0) {
-            _targets.forEach(function(sel) {
-                var el = sel[0]==='#' ? document.getElementById(sel.slice(1)) : document.querySelector(sel);
-                if (el) el.style.removeProperty('overflow');
-            });
+            _pickItems = [];
         }
         if (onDone) setTimeout(onDone, 30);
     }
@@ -2663,69 +2714,90 @@ function spawnPickaxeWorker(blocks, pickType, delay, onDone, onBreak, _u) {
             return;
         }
 
-        // Direct coordinates — NO transform (like TNT: left:rect.left, top:startTop)
-        var lft   = Math.round(rect.left + rect.width/2 - PW/2); // centered on block
-        var start = Math.round(rect.top - PH - rect.height);      // one block-height above
-        var hover = Math.round(rect.top - PH/2);                  // hover above block
-        var hit   = Math.round(rect.top + rect.height * 0.28);    // impact point
+        // Canvas coords = viewport coords = getBoundingClientRect coords
+        var cx    = rect.left + rect.width / 2 - SZ / 2;
+        var start = rect.top  - SZ - rect.height;      // 1 block above
+        var hover = rect.top  - SZ * 0.2;              // just above top of block
+        var hitY  = rect.top  + rect.height * 0.28;    // impact
+
         var numHits = Math.max(1, blk.hits || 1);
+        var animStart = performance.now();
 
-        // Place pickaxe above block
-        img.style.transition = 'none';
-        img.style.left    = lft + 'px';
-        img.style.top     = start + 'px';
-        img.style.opacity = '1';
-        img.style.transform = 'rotate(-20deg)';
+        // Phase 1: drop down to hover (300ms easeBounce)
+        pick.x = cx; pick.y = start; pick.angle = -20; pick.alpha = 0;
 
-        // Slide down to hover position
-        setTimeout(function() {
-            img.style.transition = 'top 0.18s ease-out';
-            img.style.top = hover + 'px';
-            setTimeout(function() {
-                img.style.transform = 'rotate(0deg)';
-                setTimeout(function() { swing(numHits, 0); }, 60);
-            }, 180);
-        }, 16);
+        function animDrop(now) {
+            if (!pick.active || !mineIsActive) { cleanup(); return; }
+            var p = Math.min((now - animStart) / 300, 1);
+            // easeBounce
+            var ease = p < 0.75 ? p*p/(0.75*0.75) : 1 + Math.sin(((p-0.75)/0.25)*Math.PI)*0.09;
+            pick.y = start + (hover - start) * ease;
+            pick.alpha = Math.min(p * 3, 1);
+            pick.angle = -20 * (1 - p);
+            if (p < 1) { requestAnimationFrame(animDrop); }
+            else {
+                pick.y = hover; pick.alpha = 1; pick.angle = 0;
+                setTimeout(() => swing(numHits, 0), 50);
+            }
+        }
+        requestAnimationFrame(animDrop);
 
         function swing(rem, n) {
-            if (!mineIsActive) { cleanup(); return; }
+            if (!pick.active || !mineIsActive) { cleanup(); return; }
 
-            // Swing back
-            img.style.transition = 'transform 0.08s ease-in';
-            img.style.transform  = 'rotate(' + (n%2===0 ? 28 : -28) + 'deg)';
+            var swingAngle = n % 2 === 0 ? 28 : -28;
+            var t0 = performance.now();
 
-            setTimeout(function() {
-                // Drive DOWN — fast
-                img.style.transition = 'top 0.10s ease-in';
-                img.style.top = hit + 'px';
-                setTimeout(function() {
-                    if (!mineIsActive) { cleanup(); return; }
-                    // IMPACT
-                    img.style.transform = 'rotate(0deg)';
-                    playSound('hit');
-                    flashBlock(el);
-                    el.classList.remove('cracking-1','cracking-2','cracking-3');
-                    if (rem > 1) {
-                        el.classList.add((n+1)/numHits > 0.5 ? 'cracking-2' : 'cracking-1');
-                    } else {
-                        el.classList.add('cracking-3');
-                    }
-                    // Bounce UP — smooth
-                    img.style.transition = 'top 0.13s ease-out';
-                    img.style.top = hover + 'px';
-                    setTimeout(function() {
-                        if (!mineIsActive) { cleanup(); return; }
-                        if (rem <= 1) {
-                            doBreakBlock(el, blk, function() {
-                                if (onBreak) onBreak(blk.r, blk.c);
-                            });
-                            setTimeout(processBlock, 100);
-                        } else {
-                            setTimeout(function() { swing(rem-1, n+1); }, 20);
+            // Sub-phase A: swing back (80ms)
+            function animSwingBack(now) {
+                var p = Math.min((now - t0) / 80, 1);
+                pick.angle = swingAngle * p;
+                if (p < 1) requestAnimationFrame(animSwingBack);
+                else {
+                    pick.angle = swingAngle;
+                    var t1 = performance.now();
+                    // Sub-phase B: drive down (100ms easeIn)
+                    function animDown(now2) {
+                        var p2 = Math.min((now2 - t1) / 100, 1);
+                        pick.y = hover + (hitY - hover) * (p2 * p2);
+                        if (p2 < 1) requestAnimationFrame(animDown);
+                        else {
+                            // IMPACT
+                            pick.y = hitY; pick.angle = 0;
+                            playSound('hit');
+                            flashBlock(el);
+                            el.classList.remove('cracking-1','cracking-2','cracking-3');
+                            if (rem > 1) {
+                                el.classList.add((n+1)/numHits > 0.5 ? 'cracking-2' : 'cracking-1');
+                            } else {
+                                el.classList.add('cracking-3');
+                            }
+                            var t2 = performance.now();
+                            // Sub-phase C: bounce up (140ms easeOut)
+                            function animUp(now3) {
+                                var p3 = Math.min((now3 - t2) / 140, 1);
+                                var ease3 = 1 - Math.pow(1 - p3, 3);
+                                pick.y = hitY + (hover - hitY) * ease3;
+                                if (p3 < 1) requestAnimationFrame(animUp);
+                                else {
+                                    pick.y = hover;
+                                    if (rem <= 1) {
+                                        doBreakBlock(el, blk, () => {
+                                            if (onBreak) onBreak(blk.r, blk.c);
+                                        });
+                                        setTimeout(processBlock, 100);
+                                    } else {
+                                        setTimeout(() => swing(rem-1, n+1), 20);
+                                    }
+                                }
+                            }
+                            requestAnimationFrame(animUp);
                         }
-                    }, 140);
-                }, 110);
-            }, 80);
+                    }
+                    requestAnimationFrame(animDown);
+                }
+            }
+            requestAnimationFrame(animSwingBack);
         }
     }
 
