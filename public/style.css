@@ -300,7 +300,7 @@ body {
   border-radius: 0 0 3px 3px;
   padding: 1px;
   position: relative;
-  overflow: hidden;
+  overflow: visible;
 }
 .mc-blk {
   width: 100%;
@@ -2004,95 +2004,6 @@ button.btn[style*="neon-blue"] {
 /* Pickaxe animation — allow overflow when active */
 .mc-shaft.pick-active { overflow: visible !important; }
 
-/* ════ GAME CARDS REDESIGN ════ */
-.games-grid {
-    display: grid !important;
-    grid-template-columns: 1fr 1fr !important;
-    gap: 8px !important;
-    margin-bottom: 6px;
-}
-.gc {
-    position: relative;
-    border-radius: 14px !important;
-    overflow: hidden !important;
-    cursor: pointer;
-    height: 80px !important;
-    padding: 0 !important;
-    -webkit-tap-highlight-color: transparent;
-    transition: transform .1s ease;
-    border: 1px solid rgba(255,255,255,.07) !important;
-    display: block !important;
-}
-.gc:active { transform: scale(.95); }
-
-.gc[data-game="crash"]    { background: linear-gradient(135deg,#1a0a2e,#2d1250); }
-.gc[data-game="mines"]    { background: linear-gradient(135deg,#061a0e,#0d3020); }
-.gc[data-game="coinflip"] { background: linear-gradient(135deg,#1a1206,#2e2010); }
-.gc[data-game="case"]     { background: linear-gradient(135deg,#160a24,#28123e); }
-.gc[data-game="battle"]   { background: linear-gradient(135deg,#0a0618,#16082e); }
-.gc[data-game="spin"]     { background: linear-gradient(135deg,#1a0c04,#2e1606); }
-.gc[data-game="mine"]     { background: linear-gradient(135deg,#071408,#0e2410); }
-.gc[data-game="upgrade"]  { background: linear-gradient(135deg,#040e1a,#081a2e); }
-
-/* Glass shimmer top-left */
-.gc::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(135deg, rgba(255,255,255,.055) 0%, transparent 50%);
-    z-index: 1;
-    pointer-events: none;
-}
-/* Bottom fade for text readability */
-.gc::after {
-    content: '';
-    position: absolute;
-    bottom: 0; left: 0; right: 0;
-    height: 65%;
-    background: linear-gradient(to top, rgba(0,0,0,.6) 0%, transparent 100%);
-    z-index: 1;
-    pointer-events: none;
-}
-.gc-bg {
-    position: absolute !important;
-    inset: 0 !important;
-    opacity: .15;
-    z-index: 0;
-}
-.gc-icon-wrap {
-    position: absolute !important;
-    top: 10px !important;
-    right: 10px !important;
-    z-index: 2 !important;
-    font-size: 24px !important;
-    line-height: 1;
-    filter: drop-shadow(0 2px 6px rgba(0,0,0,.7));
-}
-.gc-info {
-    position: absolute !important;
-    bottom: 10px !important;
-    left: 11px !important;
-    right: 8px;
-    z-index: 2 !important;
-}
-.gc-name {
-    font-size: 12px !important;
-    font-weight: 800 !important;
-    color: #fff !important;
-    text-shadow: 0 1px 5px rgba(0,0,0,.9);
-    display: block;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-.gc-desc {
-    font-size: 9.5px !important;
-    color: rgba(255,255,255,.45) !important;
-    margin-top: 1px !important;
-    display: block;
-}
-.gc-emoji { font-size: 24px !important; }
-
 /* ════ LIVE RIBBON ════ */
 #live-ribbon {
     overflow-x: auto;
@@ -2172,4 +2083,114 @@ body.mine-anim .live-bet-item,
 body.mine-anim .glass-card {
     backdrop-filter: none !important;
     -webkit-backdrop-filter: none !important;
+}
+
+/* ════ GAME CARDS ════ */
+.games-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    padding: 0 0 8px;
+}
+.gc {
+    position: relative;
+    border-radius: 16px;
+    overflow: hidden;
+    cursor: pointer;
+    height: 90px;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    padding: 0;
+    -webkit-tap-highlight-color: transparent;
+    border: 1px solid rgba(255,255,255,.07);
+    transition: transform .1s ease;
+    background: #0d0d1a;
+}
+.gc:active { transform: scale(.95); }
+.gc-bg-img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    opacity: .35;
+    z-index: 0;
+}
+.gc-logo {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    width: 36px;
+    height: 36px;
+    object-fit: contain;
+    z-index: 2;
+    filter: drop-shadow(0 2px 6px rgba(0,0,0,.6));
+}
+.gc::after {
+    content: '';
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 70%;
+    background: linear-gradient(to top, rgba(0,0,0,.8) 0%, transparent 100%);
+    z-index: 1;
+}
+.gc-info {
+    position: relative;
+    z-index: 2;
+    padding: 0 10px 10px;
+}
+.gc-name {
+    font-size: 13px;
+    font-weight: 800;
+    color: #fff;
+    display: block;
+    text-shadow: 0 1px 4px rgba(0,0,0,.8);
+}
+.gc-desc {
+    font-size: 9.5px;
+    color: rgba(255,255,255,.45);
+    display: block;
+    margin-top: 1px;
+}
+
+/* ════ PARTICLES ════ */
+@keyframes particleFly {
+    to { transform: translate(var(--px), var(--py)) scale(0); opacity: 0; }
+}
+.mine-particle {
+    position: absolute;
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 9998;
+    animation: particleFly .5s ease-out forwards;
+}
+@keyframes coinSpin {
+    0% { transform: rotateY(0deg) scale(1); }
+    50% { transform: rotateY(180deg) scale(1.2); }
+    100% { transform: rotateY(360deg) scale(1); }
+}
+@keyframes winPulse {
+    0%,100% { box-shadow: 0 0 0 0 rgba(0,255,136,0); }
+    50% { box-shadow: 0 0 0 8px rgba(0,255,136,.2); }
+}
+@keyframes chipFloat {
+    0% { transform: translateX(-50%) translateY(0); opacity:1; }
+    100% { transform: translateX(-50%) translateY(-40px); opacity:0; }
+}
+
+/* ════ TOASTS ════ */
+#toast-wrap {
+    position: fixed;
+    bottom: 80px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    z-index: 99999;
+    pointer-events: none;
 }
