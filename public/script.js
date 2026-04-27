@@ -219,7 +219,7 @@ function showToast(msg, dur) {
     setTimeout(function() {
         t.style.opacity = "0";
         setTimeout(function() { if (t.parentNode) t.remove(); }, 200);
-    }, dur || 2200);
+    }, dur || 1800);
 }
 
 // Анимация улетающего баланса
