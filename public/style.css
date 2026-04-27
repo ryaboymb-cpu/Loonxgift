@@ -2049,148 +2049,105 @@ button.btn[style*="neon-blue"] {
 
 
 
-/* ════ MINE POPUP ════ */
+
+
+/* ════ MINE ANIMATION ════ */
+.mc-shaft { overflow: visible !important; position: relative !important; }
+@keyframes mineWinPop {
+    0%   { opacity:1; transform:translateX(-50%) translateY(0); }
+    100% { opacity:0; transform:translateX(-50%) translateY(-32px); }
+}
 .block-win-popup {
-    position: fixed;
-    transform: translateX(-50%);
-    font-size: 13px;
+    position: absolute;
+    font-size: 12px;
     font-weight: 900;
     color: #00ff88;
-    text-shadow: 0 0 10px rgba(0,255,136,.8);
+    text-shadow: 0 0 8px rgba(0,255,136,.8);
     pointer-events: none;
-    z-index: 99999;
-    animation: mineWinPop 0.9s ease-out forwards;
+    z-index: 9999;
+    animation: mineWinPop .85s ease-out forwards;
     white-space: nowrap;
-}
-@keyframes mineWinPop {
-    0%   { opacity:1; transform:translateX(-50%) translateY(0px);   }
-    70%  { opacity:1; }
-    100% { opacity:0; transform:translateX(-50%) translateY(-34px); }
-}
-@keyframes blockWinPopup {
-    0%   { opacity:1; transform:translateX(-50%) translateY(0px);   }
-    100% { opacity:0; transform:translateX(-50%) translateY(-34px); }
+    transform: translateX(-50%);
 }
 
-/* ════ MINE ANIM LAYER FIX ════ */
-/* When animation runs, allow fixed elements to escape overflow clipping */
-body.mine-anim .content,
-body.mine-anim .app-wrapper {
-    overflow: visible !important;
-}
-body.mine-anim .gc,
-body.mine-anim .live-bet-item,
-body.mine-anim .glass-card {
-    backdrop-filter: none !important;
-    -webkit-backdrop-filter: none !important;
-}
-
-/* ════ GAME CARDS ════ */
-.games-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 10px;
-    padding: 0 0 8px;
-}
-.gc {
-    position: relative;
-    border-radius: 16px;
-    overflow: hidden;
-    cursor: pointer;
-    height: 90px;
-    display: flex;
-    flex-direction: column;
-    justify-content: flex-end;
-    padding: 0;
-    -webkit-tap-highlight-color: transparent;
-    border: 1px solid rgba(255,255,255,.07);
-    transition: transform .1s ease;
-    background: #0d0d1a;
-}
-.gc:active { transform: scale(.95); }
-.gc-bg-img {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    opacity: .35;
-    z-index: 0;
-}
-.gc-logo {
-    position: absolute;
-    top: 10px;
-    right: 10px;
-    width: 36px;
-    height: 36px;
-    object-fit: contain;
-    z-index: 2;
-    filter: drop-shadow(0 2px 6px rgba(0,0,0,.6));
-}
-.gc::after {
-    content: '';
-    position: absolute;
-    bottom: 0; left: 0; right: 0;
-    height: 70%;
-    background: linear-gradient(to top, rgba(0,0,0,.8) 0%, transparent 100%);
-    z-index: 1;
-}
-.gc-info {
-    position: relative;
-    z-index: 2;
-    padding: 0 10px 10px;
-}
-.gc-name {
-    font-size: 13px;
-    font-weight: 800;
-    color: #fff;
-    display: block;
-    text-shadow: 0 1px 4px rgba(0,0,0,.8);
-}
-.gc-desc {
-    font-size: 9.5px;
-    color: rgba(255,255,255,.45);
-    display: block;
-    margin-top: 1px;
-}
-
-/* ════ PARTICLES ════ */
-@keyframes particleFly {
-    to { transform: translate(var(--px), var(--py)) scale(0); opacity: 0; }
-}
-.mine-particle {
-    position: absolute;
-    width: 4px;
-    height: 4px;
-    border-radius: 50%;
-    pointer-events: none;
-    z-index: 9998;
-    animation: particleFly .5s ease-out forwards;
-}
-@keyframes coinSpin {
-    0% { transform: rotateY(0deg) scale(1); }
-    50% { transform: rotateY(180deg) scale(1.2); }
-    100% { transform: rotateY(360deg) scale(1); }
-}
-@keyframes winPulse {
-    0%,100% { box-shadow: 0 0 0 0 rgba(0,255,136,0); }
-    50% { box-shadow: 0 0 0 8px rgba(0,255,136,.2); }
-}
-@keyframes chipFloat {
-    0% { transform: translateX(-50%) translateY(0); opacity:1; }
-    100% { transform: translateX(-50%) translateY(-40px); opacity:0; }
-}
-
-/* ════ TOASTS ════ */
+/* ════ TOAST SYSTEM ════ */
 #toast-wrap {
     position: fixed;
     bottom: 80px;
     left: 50%;
     transform: translateX(-50%);
     display: flex;
-    flex-direction: column;
+    flex-direction: column-reverse;
     align-items: center;
     gap: 6px;
     z-index: 99999;
     pointer-events: none;
+    width: max-content;
+    max-width: 80vw;
 }
+
+/* ════ GAME CARDS — clean glass cards ════ */
+.games-grid {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 10px !important;
+    padding: 0 0 8px;
+}
+.gc {
+    position: relative !important;
+    border-radius: 16px !important;
+    overflow: hidden !important;
+    cursor: pointer !important;
+    height: 88px !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: flex-end !important;
+    padding: 0 !important;
+    border: 1px solid rgba(255,255,255,.07) !important;
+    transition: transform .12s ease !important;
+    -webkit-tap-highlight-color: transparent !important;
+}
+.gc:active { transform: scale(.94) !important; }
+.gc::after {
+    content: '' !important;
+    position: absolute !important;
+    bottom: 0; left: 0; right: 0 !important;
+    height: 65% !important;
+    background: linear-gradient(to top, rgba(0,0,0,.8) 0%, transparent 100%) !important;
+    z-index: 1 !important;
+}
+.gc .gc-bg {
+    position: absolute !important;
+    inset: 0 !important;
+    z-index: 0 !important;
+}
+.gc .gc-logo {
+    position: absolute !important;
+    top: 10px !important;
+    right: 10px !important;
+    width: 34px !important;
+    height: 34px !important;
+    object-fit: contain !important;
+    z-index: 2 !important;
+    filter: drop-shadow(0 2px 8px rgba(0,0,0,.7)) !important;
+}
+.gc .gc-info {
+    position: relative !important;
+    z-index: 2 !important;
+    padding: 0 10px 10px !important;
+}
+.gc .gc-name {
+    font-size: 13px !important;
+    font-weight: 800 !important;
+    color: #fff !important;
+    display: block !important;
+    text-shadow: 0 1px 5px rgba(0,0,0,.9) !important;
+}
+.gc .gc-desc {
+    font-size: 9px !important;
+    color: rgba(255,255,255,.45) !important;
+    display: block !important;
+    margin-top: 1px !important;
+}
+
+.mc-shaft { overflow: visible !important; position: relative !important; }
