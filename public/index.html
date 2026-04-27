@@ -25,7 +25,7 @@
 <body>
     <div id="loader"><div class="spinner"></div><h3 style="color:var(--neon); font-weight:800; letter-spacing:2px;">LOONXGIFT</h3></div>
     <canvas id="stars-bg"></canvas>
-    <div id="toast-container"></div>
+    
 
     <div class="app-wrapper">
     <header class="app-header">
@@ -54,8 +54,47 @@
                 <div id="feed-list" style="display:inline-flex;gap:8px;padding:2px 0;"></div>
             </div>
             <div class="games-grid">
-                <div class="gc" onclick="navGame('crash')" data-game="crash">
-                    <div class="gc-bg" style="background:linear-gradient(135deg,#1a0030,#3d0070);"></div>
+                <div class="gc" onclick="navGame('crash')" data-game="crash" style="background:linear-gradient(135deg,#150028,#300060);">
+                    <div class="gc-bg" style="background:linear-gradient(135deg,#150028,#300060);"></div>
+                    <img class="gc-logo" src="/img/Crashlogo.png" alt="" onerror="this.style.display='none'">
+                    <div class="gc-info"><span class="gc-name">Crash</span><span class="gc-desc">Множитель растёт</span></div>
+                </div>
+                <div class="gc" onclick="navGame('mines')" data-game="mines" style="background:linear-gradient(135deg,#001810,#003820);">
+                    <div class="gc-bg" style="background:linear-gradient(135deg,#001810,#003820);"></div>
+                    <img class="gc-logo" src="/img/Mineslogo.png" alt="" onerror="this.style.display='none'">
+                    <div class="gc-info"><span class="gc-name">Mines</span><span class="gc-desc">Найди кристаллы</span></div>
+                </div>
+                <div class="gc" onclick="navGame('coinflip')" data-game="coinflip" style="background:linear-gradient(135deg,#181000,#382800);">
+                    <div class="gc-bg" style="background:linear-gradient(135deg,#181000,#382800);"></div>
+                    <img class="gc-logo" src="/img/Coinfliplogo.png" alt="" onerror="this.style.display='none'">
+                    <div class="gc-info"><span class="gc-name">Coinflip</span><span class="gc-desc">50/50 шанс</span></div>
+                </div>
+                <div class="gc" onclick="navGame('cases')" data-game="cases" style="background:linear-gradient(135deg,#180020,#3c0050);">
+                    <div class="gc-bg" style="background:linear-gradient(135deg,#180020,#3c0050);"></div>
+                    <img class="gc-logo" src="/img/Caselogo.png" alt="" onerror="this.style.display='none'">
+                    <div class="gc-info"><span class="gc-name">Cases</span><span class="gc-desc">Открой кейс</span></div>
+                </div>
+                <div class="gc" onclick="navGame('battle')" data-game="battle" style="background:linear-gradient(135deg,#080018,#1c0040);">
+                    <div class="gc-bg" style="background:linear-gradient(135deg,#080018,#1c0040);"></div>
+                    <img class="gc-logo" src="/img/Battlelogo.png" alt="" onerror="this.style.display='none'">
+                    <div class="gc-info"><span class="gc-name">Battle</span><span class="gc-desc">Битва игроков</span></div>
+                </div>
+                <div class="gc" onclick="navGame('spin')" data-game="spin" style="background:linear-gradient(135deg,#180800,#3a1800);">
+                    <div class="gc-bg" style="background:linear-gradient(135deg,#180800,#3a1800);"></div>
+                    <img class="gc-logo" src="/img/Spinlogo.png" alt="" onerror="this.style.display='none'">
+                    <div class="gc-info"><span class="gc-name">Spin</span><span class="gc-desc">Слот-машина</span></div>
+                </div>
+                <div class="gc" onclick="navGame('mine')" data-game="mine" style="background:linear-gradient(135deg,#041004,#0c2410);">
+                    <div class="gc-bg" style="background:linear-gradient(135deg,#041004,#0c2410);"></div>
+                    <img class="gc-logo" src="/img/Minelogo.png" alt="" onerror="this.style.display='none'">
+                    <div class="gc-info"><span class="gc-name">Mine</span><span class="gc-desc">Шахта сокровищ</span></div>
+                </div>
+                <div class="gc" onclick="navGame('upgrade')" data-game="upgrade" style="background:linear-gradient(135deg,#00101e,#002444);">
+                    <div class="gc-bg" style="background:linear-gradient(135deg,#00101e,#002444);"></div>
+                    <img class="gc-logo" src="/img/Upgradelogo.png" alt="" onerror="this.style.display='none'">
+                    <div class="gc-info"><span class="gc-name">Upgrade</span><span class="gc-desc">Удвой ставку</span></div>
+                </div>
+            </div>
                     <img class="gc-logo" src="/img/Crashlogo.png" alt="" onerror="this.style.display='none'">
                     <div class="gc-info"><span class="gc-name">Crash</span><span class="gc-desc">Множитель растёт</span></div>
                 </div>
