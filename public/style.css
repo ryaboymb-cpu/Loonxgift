@@ -2070,6 +2070,68 @@ button.btn[style*="neon-blue"] {
     transform: translateX(-50%);
 }
 
+
+/* ════ GAME CARDS ════ */
+.games-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    padding: 0 0 8px;
+}
+.gc {
+    position: relative;
+    border-radius: 16px;
+    overflow: hidden;
+    cursor: pointer;
+    height: 90px;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    padding: 0;
+    border: 1px solid rgba(255,255,255,.07);
+    transition: transform .12s ease;
+    -webkit-tap-highlight-color: transparent;
+}
+.gc:active { transform: scale(.94); }
+.gc::after {
+    content: '';
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 60%;
+    background: linear-gradient(to top, rgba(0,0,0,.85) 0%, transparent 100%);
+    z-index: 1;
+    pointer-events: none;
+}
+.gc .gc-logo {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    width: 36px;
+    height: 36px;
+    object-fit: contain;
+    z-index: 2;
+    filter: drop-shadow(0 2px 8px rgba(0,0,0,.6));
+}
+.gc .gc-info {
+    position: relative;
+    z-index: 2;
+    padding: 0 11px 10px;
+}
+.gc .gc-name {
+    font-size: 14px;
+    font-weight: 800;
+    color: #fff;
+    display: block;
+    text-shadow: 0 1px 4px rgba(0,0,0,.9);
+    letter-spacing: .2px;
+}
+.gc .gc-desc {
+    font-size: 10px;
+    color: rgba(255,255,255,.5);
+    display: block;
+    margin-top: 1px;
+}
+
 /* ════ TOAST SYSTEM ════ */
 #toast-wrap {
     position: fixed;
@@ -2085,69 +2147,3 @@ button.btn[style*="neon-blue"] {
     width: max-content;
     max-width: 80vw;
 }
-
-/* ════ GAME CARDS — clean glass cards ════ */
-.games-grid {
-    display: grid !important;
-    grid-template-columns: 1fr 1fr !important;
-    gap: 10px !important;
-    padding: 0 0 8px;
-}
-.gc {
-    position: relative !important;
-    border-radius: 16px !important;
-    overflow: hidden !important;
-    cursor: pointer !important;
-    height: 88px !important;
-    display: flex !important;
-    flex-direction: column !important;
-    justify-content: flex-end !important;
-    padding: 0 !important;
-    border: 1px solid rgba(255,255,255,.07) !important;
-    transition: transform .12s ease !important;
-    -webkit-tap-highlight-color: transparent !important;
-}
-.gc:active { transform: scale(.94) !important; }
-.gc::after {
-    content: '' !important;
-    position: absolute !important;
-    bottom: 0; left: 0; right: 0 !important;
-    height: 65% !important;
-    background: linear-gradient(to top, rgba(0,0,0,.8) 0%, transparent 100%) !important;
-    z-index: 1 !important;
-}
-.gc .gc-bg {
-    position: absolute !important;
-    inset: 0 !important;
-    z-index: 0 !important;
-}
-.gc .gc-logo {
-    position: absolute !important;
-    top: 10px !important;
-    right: 10px !important;
-    width: 34px !important;
-    height: 34px !important;
-    object-fit: contain !important;
-    z-index: 2 !important;
-    filter: drop-shadow(0 2px 8px rgba(0,0,0,.7)) !important;
-}
-.gc .gc-info {
-    position: relative !important;
-    z-index: 2 !important;
-    padding: 0 10px 10px !important;
-}
-.gc .gc-name {
-    font-size: 13px !important;
-    font-weight: 800 !important;
-    color: #fff !important;
-    display: block !important;
-    text-shadow: 0 1px 5px rgba(0,0,0,.9) !important;
-}
-.gc .gc-desc {
-    font-size: 9px !important;
-    color: rgba(255,255,255,.45) !important;
-    display: block !important;
-    margin-top: 1px !important;
-}
-
-.mc-shaft { overflow: visible !important; position: relative !important; }
