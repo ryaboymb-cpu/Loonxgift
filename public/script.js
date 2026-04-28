@@ -2628,12 +2628,9 @@ function doBreakBlock(blkEl, blk, onDone, onBlockFullyGone) {
 function spawnPickaxeWorker(blockQueue, pickaxeType, workerIdx, onWorkerDone, onBlockBroken, maxDur) {
     if (!blockQueue || !blockQueue.length) { if (onWorkerDone) onWorkerDone(); return; }
 
+    const SZ = 24; // единый размер всех кирок
     let qi        = 0;
     let remainDur = (maxDur && maxDur > 0) ? maxDur : 999;
-
-    // ── Размеры по типу кирки ──
-    const PICK_SIZE = { wooden:22, stone:24, iron:26, golden:26, diamond:28 };
-    const SZ = PICK_SIZE[pickaxeType] || 22;
 
     function processNext() {
         if (!mineIsActive) return;
@@ -2643,37 +2640,39 @@ function spawnPickaxeWorker(blockQueue, pickaxeType, workerIdx, onWorkerDone, on
         const blkEl = $('mc-blk-' + blk.r + '-' + blk.c);
         if (!blkEl || blkEl.dataset.revealed === '1') { qi++; processNext(); return; }
 
-        const tntDmg       = parseInt(blkEl.dataset.tntDmg || '0');
-        blk.hits           = Math.max(1, blk.hits - tntDmg);
-        const hitsCanDo    = Math.min(blk.hits, remainDur);
-        const blockWillBreak = hitsCanDo >= blk.hits;
-
+        const tntDmg     = parseInt(blkEl.dataset.tntDmg || '0');
+        blk.hits         = Math.max(1, blk.hits - tntDmg);
+        const hitsCanDo  = Math.min(blk.hits, remainDur);
+        const willBreak  = hitsCanDo >= blk.hits;
         if (hitsCanDo <= 0) { if (onWorkerDone) onWorkerDone(); return; }
-
         qi++;
         remainDur -= hitsCanDo;
 
         const shaft = $('mc-shaft');
         if (!shaft) { processNext(); return; }
 
-        // ── Координаты (shaft-relative через offset) ──
-        const bx       = blkEl.offsetLeft + blkEl.offsetWidth  / 2;
-        const blockTop = blkEl.offsetTop;
-        const startY   = blockTop - SZ * 2.2;   // начало падения сверху
-        const hoverY   = blockTop - SZ * 0.6;   // зависает чуть выше блока
-        const hitY     = blockTop + 2;           // точка удара
+        // Координаты: left = центр блока, top = над шахтой
+        const bCenterX = blkEl.offsetLeft + blkEl.offsetWidth / 2;
+        const bTop     = blkEl.offsetTop;
+        const bH       = blkEl.offsetHeight;
 
-        // ── Создаём кирку ──
+        // Кирка: left = bCenterX - SZ/2 (без transform!)
+        const pickLeft = bCenterX - SZ / 2;
+        const startTop = Math.max(-SZ, bTop - bH * 2); // стартует 2 блока выше
+        const hoverTop = bTop - SZ + 4;                 // чуть выше верха блока
+        const hitTop   = bTop + 2;                      // точка удара
+
         const el = document.createElement('img');
         el.src = getPickaxeImg(pickaxeType);
         el.style.cssText = (
             'position:absolute;' +
             'width:' + SZ + 'px;height:' + SZ + 'px;' +
-            'z-index:9999;pointer-events:none;image-rendering:pixelated;' +
-            'border:none;outline:none;box-shadow:none;' +
-            'left:' + bx + 'px;top:' + startY + 'px;' +
-            'transform:translate(-50%,-50%) rotate(-45deg);' +
-            'opacity:0;will-change:top,transform,opacity;'
+            'left:' + pickLeft + 'px;' +
+            'top:' + startTop + 'px;' +
+            'z-index:9999;pointer-events:none;' +
+            'image-rendering:pixelated;image-rendering:crisp-edges;' +
+            'border:none;outline:none;box-shadow:none;background:transparent;' +
+            'opacity:0;'
         );
         shaft.appendChild(el);
         _pickaxeEls.add(el);
@@ -2683,109 +2682,76 @@ function spawnPickaxeWorker(blockQueue, pickaxeType, workerIdx, onWorkerDone, on
             if (el.parentNode) el.parentNode.removeChild(el);
         }
 
-        // ── Фаза 1: красивое ПАДЕНИЕ с вращением ──
-        // Кирка крутится на 360° пока летит сверху вниз
-        const dropDur = 320;
-        const t0drop  = performance.now();
-        const easeDrop = t => { // easeOutBounce
-            if (t < 0.75) return (t / 0.75) * (t / 0.75);
-            const s = (t - 0.75) / 0.25;
-            return 1 + Math.sin(s * Math.PI) * 0.08;
-        };
-        (function dropFrame(now) {
-            const t = Math.min((now - t0drop) / dropDur, 1);
-            const e = easeDrop(t);
-            el.style.top     = (startY + (hoverY - startY) * e) + 'px';
-            el.style.opacity = String(Math.min(t * 4, 1));
-            // Rotate from -45deg to 0deg during drop
-            const angle = -45 * (1 - t);
-            el.style.transform = 'translate(-50%,-50%) rotate(' + angle + 'deg)';
-            if (t < 1) requestAnimationFrame(dropFrame);
+        // ФАЗА 1: Падение сверху с rotation
+        // Используем только top + transform(rotate) — НЕ translate
+        const t0 = performance.now();
+        const dropDur = 280;
+        (function dropAnim(now) {
+            const p = Math.min((now - t0) / dropDur, 1);
+            // easeOutQuad
+            const e = 1 - (1-p)*(1-p);
+            el.style.top     = (startTop + (hoverTop - startTop) * e) + 'px';
+            el.style.opacity = String(Math.min(p * 3, 1));
+            el.style.transform = 'rotate(' + (-35 + 35*p) + 'deg)';
+            if (p < 1) requestAnimationFrame(dropAnim);
             else {
-                el.style.top = hoverY + 'px';
-                el.style.opacity = '1';
-                el.style.transform = 'translate(-50%,-50%) rotate(0deg)';
-                // Small pause then start hitting
-                setTimeout(function() { doHits(hitsCanDo, 0); }, 60);
+                el.style.top       = hoverTop + 'px';
+                el.style.opacity   = '1';
+                el.style.transform = 'rotate(0deg)';
+                setTimeout(() => doHits(hitsCanDo, 0), 50);
             }
         })(performance.now());
 
-        // ── Фаза 2: удары ──
-        function doHits(hitsLeft, hitNum) {
+        // ФАЗА 2: Удары
+        function doHits(left, n) {
             if (!mineIsActive) { removeEl(); return; }
 
-            // Замах назад
-            const swingAngle = hitNum % 2 === 0 ? -30 : 30;
-            const t0swing = performance.now();
-            (function swingBack(now) {
-                const t = Math.min((now - t0swing) / 90, 1);
-                el.style.transform = 'translate(-50%,-50%) rotate(' + (swingAngle * t) + 'deg)';
-                if (t < 1) requestAnimationFrame(swingBack);
+            // Замах
+            const swingAng = n % 2 === 0 ? -28 : 28;
+            const t1 = performance.now();
+            (function swingAnim(now) {
+                const p = Math.min((now - t1) / 80, 1);
+                el.style.transform = 'rotate(' + (swingAng * p) + 'deg)';
+                if (p < 1) requestAnimationFrame(swingAnim);
                 else {
-                    // Удар вниз — быстро
-                    _animProp(el, 'top', hoverY, hitY, 100, t => t * t, function() {
+                    // Удар вниз
+                    _animProp(el, 'top', hoverTop, hitTop, 95, t => t*t, function() {
                         if (!mineIsActive) { removeEl(); return; }
-                        // КОНТАКТ
-                        el.style.transform = 'translate(-50%,-50%) rotate(0deg)';
+                        el.style.transform = 'rotate(0deg)';
                         playSound('hit');
 
                         // Вспышка блока
-                        blkEl.style.filter = 'brightness(2.2)';
-                        setTimeout(function() { blkEl.style.filter = ''; }, 55);
+                        blkEl.style.filter = 'brightness(2.5)';
+                        setTimeout(() => { blkEl.style.filter = ''; }, 55);
 
                         // Прогрессивные трещины
                         blkEl.classList.remove('cracking-1','cracking-2','cracking-3');
-                        const prog = (hitNum + 1) / blk.hits;
-                        if      (blockWillBreak && prog >= 0.85) blkEl.classList.add('cracking-3');
-                        else if (prog >= 0.5)                    blkEl.classList.add('cracking-2');
-                        else                                     blkEl.classList.add('cracking-1');
+                        const prog = (n + 1) / blk.hits;
+                        if      (left === 1)  blkEl.classList.add('cracking-3');
+                        else if (prog >= 0.5) blkEl.classList.add('cracking-2');
+                        else                  blkEl.classList.add('cracking-1');
 
-                        if (hitsLeft <= 1) {
-                            if (blockWillBreak) {
-                                // Последний удар → разбиваем блок
-                                playSound('break');
+                        if (left <= 1) {
+                            if (willBreak) {
                                 doBreakBlock(blkEl, blk, null, function() {
                                     if (onBlockBroken) onBlockBroken(blk.r, blk.c);
                                 });
-                                // Кирка красиво отскакивает вверх и исчезает
-                                _animProp(el, 'top', hitY, startY, 280, function(t) {
-                                    return 1 - Math.pow(1 - t, 2);
-                                }, function() {
-                                    removeEl();
-                                    setTimeout(processNext, 80);
-                                });
-                            } else {
-                                // Прочность кончилась — анимация поломки кирки
-                                blkEl.classList.add('cracking-2');
-                                _animProp(el, 'top', hitY, hoverY, 100, function(t) { return 1-(1-t)*(1-t); }, function() {
-                                    if (!mineIsActive) { removeEl(); return; }
-                                    // Тряска и исчезновение
-                                    el.style.filter = 'hue-rotate(100deg) saturate(3) brightness(1.8)';
-                                    let shk = 0;
-                                    const baseL = parseFloat(el.style.left);
-                                    const shakeId = setInterval(function() {
-                                        shk++;
-                                        el.style.left = (baseL + (shk % 2 === 0 ? 4 : -4)) + 'px';
-                                        if (shk >= 6) {
-                                            clearInterval(shakeId);
-                                            el.style.transition = 'opacity 0.18s, transform 0.18s';
-                                            el.style.opacity = '0';
-                                            el.style.transform = 'translate(-50%,-50%) rotate(200deg) scale(0.1)';
-                                            setTimeout(function() {
-                                                removeEl();
-                                                if (onWorkerDone) onWorkerDone();
-                                            }, 200);
-                                        }
-                                    }, 35);
-                                });
                             }
-                        } else {
-                            // Ещё удары — плавный отскок вверх
-                            _animProp(el, 'top', hitY, hoverY, 130, function(t) {
-                                return 1 - Math.pow(1 - t, 2);
-                            }, function() {
+                            // Кирка ОСТАЁТСЯ — отскакивает вверх и ждёт следующего блока
+                            _animProp(el, 'top', hitTop, hoverTop, 130, t => 1-(1-t)*(1-t), function() {
                                 if (!mineIsActive) { removeEl(); return; }
-                                setTimeout(function() { doHits(hitsLeft - 1, hitNum + 1); }, 40);
+                                if (willBreak) {
+                                    setTimeout(processNext, 80);
+                                } else {
+                                    // Прочность кончилась — кирка улетает
+                                    _animProp(el, 'top', hoverTop, startTop, 220, t => t*t, removeEl);
+                                }
+                            });
+                        } else {
+                            // Отскок вверх → следующий удар
+                            _animProp(el, 'top', hitTop, hoverTop, 120, t => 1-(1-t)*(1-t), function() {
+                                if (!mineIsActive) { removeEl(); return; }
+                                setTimeout(() => doHits(left - 1, n + 1), 35);
                             });
                         }
                     });
@@ -2794,7 +2760,7 @@ function spawnPickaxeWorker(blockQueue, pickaxeType, workerIdx, onWorkerDone, on
         }
     }
 
-    setTimeout(processNext, (workerIdx || 0) * 90);
+    setTimeout(processNext, (workerIdx || 0) * 100);
 }
 
 // ──── Сбор книжки ────
@@ -3035,11 +3001,6 @@ function revealMineShaft(grid, blockWins, win, balanceBefore, chestMults, isAuto
 
     if (bookCount > 0) {
         mineBookCount += bookCount;
-        const statusEl = $('mine-book-status');
-        if (statusEl) {
-            statusEl.style.display = 'block';
-            statusEl.innerHTML = `📚 Книги: ${mineBookCount}/3${mineBookCount >= 3 ? ' — АВТО-СПИН!' : ''}`;
-        }
     }
 
     const allBlocks = [];
@@ -3105,23 +3066,22 @@ function revealMineShaft(grid, blockWins, win, balanceBefore, chestMults, isAuto
                 playSound('chest');
                 const ch = $(`mc-chest-${c}`);
                 if (!ch) return;
+                // Open animation
                 ch.classList.add('open', 'open-anim');
                 setTimeout(() => ch.classList.remove('open-anim'), 600);
-                if (isActivated) {
-                    // Chest multiplied ENTIRE balance!
-                    const pop = document.createElement('div');
-                    pop.className = 'mine-chest-mult-popup';
-                    pop.innerHTML = `<div class="cmp-label">БАЛАНС</div><div class="cmp-mult">×${thisChestMult}</div>`;
-                    ch.appendChild(pop);
-                    setTimeout(() => { if (pop.parentNode) pop.parentNode.removeChild(pop); }, 3000);
-                    showToast(`💎 СУНДУК ×${thisChestMult}! Баланс умножен!`, 4000);
-                } else {
-                    const pop = document.createElement('div');
-                    pop.className = 'chest-mult-tag';
-                    pop.textContent = `×${thisChestMult}`;
-                    ch.appendChild(pop);
-                    setTimeout(() => { if (pop.parentNode) pop.parentNode.removeChild(pop); }, 3000);
-                }
+                // Always show multiplier popup — white text floating up
+                const pop = document.createElement('div');
+                pop.style.cssText = (
+                    'position:absolute;bottom:100%;left:50%;transform:translateX(-50%);' +
+                    'color:#fff;font-size:22px;font-weight:900;text-align:center;' +
+                    'text-shadow:0 0 12px rgba(255,220,0,.9),0 2px 4px rgba(0,0,0,.8);' +
+                    'pointer-events:none;z-index:100;white-space:nowrap;' +
+                    'animation:chestMultPop 2.2s ease-out forwards;'
+                );
+                pop.textContent = '×' + thisChestMult;
+                ch.appendChild(pop);
+                setTimeout(() => { if (pop.parentNode) pop.parentNode.removeChild(pop); }, 2300);
+                showToast('×' + thisChestMult + ' к выигрышу!', 2500);
             }, 250);
         }
     }
@@ -3198,14 +3158,7 @@ function revealMineShaft(grid, blockWins, win, balanceBefore, chestMults, isAuto
                 const invIdx = ps.idx;
                 const invRow = Math.floor(invIdx / MC_COLS);
                 const invCol = invIdx % MC_COLS;
-                const invCell = $(`inv-${invRow}-${invCol}`);
-                if (invCell) {
-                    invCell.innerHTML = '';
-                    invCell.className = 'inv-cell';
-                    delete invCell.dataset.slotType;
-                    delete invCell.dataset.pickType;
-                    delete invCell.dataset.hasPick;
-                }
+                // Pickaxes stay in hotbar — don't remove
                 spawnPickaxeWorker(colBlocks[ps.col] || [], ps.pType, wi, null, onBlockBroken, dur);
             }, wi * 150);
         });
@@ -3219,7 +3172,7 @@ function revealMineShaft(grid, blockWins, win, balanceBefore, chestMults, isAuto
             const balSpan = $('bal-val');
             if (balSpan) animateCounter(balSpan, balanceBefore, newBal, 900, '', '');
             flyToBalance(win);
-            if (win > mineLastBet) showToast(`💰 +${win.toFixed(2)} TON!`);
+            if (win > 0) showToast(`+${win.toFixed(2)} TON`);
         }
         updateUI();
 
@@ -3237,14 +3190,11 @@ function revealMineShaft(grid, blockWins, win, balanceBefore, chestMults, isAuto
                 statusEl.style.display = 'block';
                 statusEl.innerHTML = `🎁 АВТО-СПИН! Блоки сохранены...`;
             }
-            showToast('📚 БОНУС! Бесплатный спин!', 2500);
+            showToast('БОНУС: Бесплатный спин!', 2500);
             setTimeout(() => autoSpinMine(), 1500);
         } else {
             const statusEl = $('mine-book-status');
-            if (statusEl && statusEl.style.display !== 'none') {
-                statusEl.innerHTML = '✅ Серия завершена!';
-                setTimeout(() => statusEl.style.display = 'none', 2000);
-            }
+            if (statusEl) statusEl.style.display = 'none';
         }
     }, afterReveal);
 
