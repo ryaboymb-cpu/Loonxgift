@@ -2147,3 +2147,17 @@ button.btn[style*="neon-blue"] {
     width: max-content;
     max-width: 80vw;
 }
+
+/* Кирки — без обводки */
+#mc-shaft img {
+    border: none !important;
+    outline: none !important;
+    box-shadow: none !important;
+    background: transparent !important;
+}
+/* Золотая/алмазная кирки — убрать свечение если есть */
+.inv-cell img {
+    border: none !important;
+    outline: none !important;
+    box-shadow: none !important;
+}
