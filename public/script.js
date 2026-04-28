@@ -2626,45 +2626,55 @@ function doBreakBlock(blkEl, blk, onDone, onBlockFullyGone) {
 // maxDur   — хит-пойнты этой кирки; когда заканчиваются — кирка ломается
 // onBlockBroken(r,c) — вызывается после того как конкретный блок полностью исчез
 function spawnPickaxeWorker(blockQueue, pickaxeType, workerIdx, onWorkerDone, onBlockBroken, maxDur) {
-    if (!blockQueue.length) { if (onWorkerDone) onWorkerDone(); return; }
+    if (!blockQueue || !blockQueue.length) { if (onWorkerDone) onWorkerDone(); return; }
 
-    let qi = 0;
+    let qi        = 0;
     let remainDur = (maxDur && maxDur > 0) ? maxDur : 999;
+
+    // ── Размеры по типу кирки ──
+    const PICK_SIZE = { wooden:22, stone:24, iron:26, golden:26, diamond:28 };
+    const SZ = PICK_SIZE[pickaxeType] || 22;
 
     function processNext() {
         if (!mineIsActive) return;
         if (qi >= blockQueue.length) { if (onWorkerDone) onWorkerDone(); return; }
 
-        const blk = blockQueue[qi];
-        const blkEl = $(`mc-blk-${blk.r}-${blk.c}`);
+        const blk   = blockQueue[qi];
+        const blkEl = $('mc-blk-' + blk.r + '-' + blk.c);
         if (!blkEl || blkEl.dataset.revealed === '1') { qi++; processNext(); return; }
 
-        const tntDmg = parseInt(blkEl.dataset.tntDmg || '0');
-        blk.hits = Math.max(1, blk.hits - tntDmg);
-        const hitsCanDo = Math.min(blk.hits, remainDur);
-        const willBreak = hitsCanDo < blk.hits;
+        const tntDmg       = parseInt(blkEl.dataset.tntDmg || '0');
+        blk.hits           = Math.max(1, blk.hits - tntDmg);
+        const hitsCanDo    = Math.min(blk.hits, remainDur);
         const blockWillBreak = hitsCanDo >= blk.hits;
 
-        if (hitsCanDo <= 0) {
-            // Прочность ноль — кирка ломается не начиная
-            doPickaxeBreak(blkEl, () => { if (onWorkerDone) onWorkerDone(); }, false);
-            return;
-        }
+        if (hitsCanDo <= 0) { if (onWorkerDone) onWorkerDone(); return; }
 
         qi++;
         remainDur -= hitsCanDo;
 
         const shaft = $('mc-shaft');
-        const bx = blkEl.offsetLeft + blkEl.offsetWidth / 2;
-        const blockTop = blkEl.offsetTop;
-        const startY = blockTop - 26;
-        const hoverY = blockTop - 12;
-        const hitY   = blockTop + 2;
+        if (!shaft) { processNext(); return; }
 
-        const pUrl = getPickaxeImg(pickaxeType);
+        // ── Координаты (shaft-relative через offset) ──
+        const bx       = blkEl.offsetLeft + blkEl.offsetWidth  / 2;
+        const blockTop = blkEl.offsetTop;
+        const startY   = blockTop - SZ * 2.2;   // начало падения сверху
+        const hoverY   = blockTop - SZ * 0.6;   // зависает чуть выше блока
+        const hitY     = blockTop + 2;           // точка удара
+
+        // ── Создаём кирку ──
         const el = document.createElement('img');
-        el.src = pUrl;
-        el.style.cssText = `position:absolute;width:20px;height:20px;z-index:9999;pointer-events:none;image-rendering:pixelated;left:${bx}px;top:${startY}px;transform:translate(-50%,-100%);`;
+        el.src = getPickaxeImg(pickaxeType);
+        el.style.cssText = (
+            'position:absolute;' +
+            'width:' + SZ + 'px;height:' + SZ + 'px;' +
+            'z-index:9999;pointer-events:none;image-rendering:pixelated;' +
+            'border:none;outline:none;box-shadow:none;' +
+            'left:' + bx + 'px;top:' + startY + 'px;' +
+            'transform:translate(-50%,-50%) rotate(-45deg);' +
+            'opacity:0;will-change:top,transform,opacity;'
+        );
         shaft.appendChild(el);
         _pickaxeEls.add(el);
 
@@ -2673,116 +2683,119 @@ function spawnPickaxeWorker(blockQueue, pickaxeType, workerIdx, onWorkerDone, on
             if (el.parentNode) el.parentNode.removeChild(el);
         }
 
-        _animProp(el, 'top', startY, hoverY, 180, t => t*t, () => {
-            if (!mineIsActive) { removeEl(); return; }
-            blkEl.classList.add('cracking-1');
-            doHits(hitsCanDo, 0);
-        });
+        // ── Фаза 1: красивое ПАДЕНИЕ с вращением ──
+        // Кирка крутится на 360° пока летит сверху вниз
+        const dropDur = 320;
+        const t0drop  = performance.now();
+        const easeDrop = t => { // easeOutBounce
+            if (t < 0.75) return (t / 0.75) * (t / 0.75);
+            const s = (t - 0.75) / 0.25;
+            return 1 + Math.sin(s * Math.PI) * 0.08;
+        };
+        (function dropFrame(now) {
+            const t = Math.min((now - t0drop) / dropDur, 1);
+            const e = easeDrop(t);
+            el.style.top     = (startY + (hoverY - startY) * e) + 'px';
+            el.style.opacity = String(Math.min(t * 4, 1));
+            // Rotate from -45deg to 0deg during drop
+            const angle = -45 * (1 - t);
+            el.style.transform = 'translate(-50%,-50%) rotate(' + angle + 'deg)';
+            if (t < 1) requestAnimationFrame(dropFrame);
+            else {
+                el.style.top = hoverY + 'px';
+                el.style.opacity = '1';
+                el.style.transform = 'translate(-50%,-50%) rotate(0deg)';
+                // Small pause then start hitting
+                setTimeout(function() { doHits(hitsCanDo, 0); }, 60);
+            }
+        })(performance.now());
 
+        // ── Фаза 2: удары ──
         function doHits(hitsLeft, hitNum) {
             if (!mineIsActive) { removeEl(); return; }
-            const swingAngle = hitNum % 2 === 0 ? -25 : 25;
-            el.style.transform = `translate(-50%,-100%) rotate(${swingAngle}deg)`;
 
-            _animProp(el, 'top', hoverY, hitY, 120, t => t*t, () => {
-                if (!mineIsActive) { removeEl(); return; }
-                el.style.transform = `translate(-50%,-100%) rotate(0deg)`;
-                playSound('hit');
-                blkEl.classList.add('crack-hit');
-                setTimeout(() => blkEl.classList.remove('crack-hit'), 80);
-
-                blkEl.classList.remove('cracking-1','cracking-2','cracking-3');
-                const progress = (hitNum + 1) / blk.hits;
-                if (progress >= 0.9 && blockWillBreak) blkEl.classList.add('cracking-3');
-                else if (progress >= 0.5)              blkEl.classList.add('cracking-2');
-                else                                    blkEl.classList.add('cracking-1');
-
-                if (hitsLeft <= 1) {
-                    if (blockWillBreak) {
-                        playSound('break');
-                        doBreakBlock(blkEl, blk, null, () => {
-                            if (onBlockBroken) onBlockBroken(blk.r, blk.c);
-                        });
-                        _animProp(el, 'top', hitY, startY, 200, t => 1-(1-t)*(1-t), () => {
-                            removeEl();
-                            setTimeout(processNext, 100);
-                        });
-                    } else {
-                        blkEl.classList.add('cracking-2');
-                        _animProp(el, 'top', hitY, hoverY, 100, t => 1-(1-t)*(1-t), () => {
-                            if (!mineIsActive) { removeEl(); return; }
-                            doPickaxeBreak(null, () => { removeEl(); if (onWorkerDone) onWorkerDone(); }, true, el, bx, hoverY);
-                        });
-                    }
-                } else {
-                    _animProp(el, 'top', hitY, hoverY, 140, t => {
-                        const bounce = 1 - Math.pow(1-t, 2);
-                        return bounce;
-                    }, () => {
+            // Замах назад
+            const swingAngle = hitNum % 2 === 0 ? -30 : 30;
+            const t0swing = performance.now();
+            (function swingBack(now) {
+                const t = Math.min((now - t0swing) / 90, 1);
+                el.style.transform = 'translate(-50%,-50%) rotate(' + (swingAngle * t) + 'deg)';
+                if (t < 1) requestAnimationFrame(swingBack);
+                else {
+                    // Удар вниз — быстро
+                    _animProp(el, 'top', hoverY, hitY, 100, t => t * t, function() {
                         if (!mineIsActive) { removeEl(); return; }
-                        setTimeout(() => doHits(hitsLeft - 1, hitNum + 1), 50);
+                        // КОНТАКТ
+                        el.style.transform = 'translate(-50%,-50%) rotate(0deg)';
+                        playSound('hit');
+
+                        // Вспышка блока
+                        blkEl.style.filter = 'brightness(2.2)';
+                        setTimeout(function() { blkEl.style.filter = ''; }, 55);
+
+                        // Прогрессивные трещины
+                        blkEl.classList.remove('cracking-1','cracking-2','cracking-3');
+                        const prog = (hitNum + 1) / blk.hits;
+                        if      (blockWillBreak && prog >= 0.85) blkEl.classList.add('cracking-3');
+                        else if (prog >= 0.5)                    blkEl.classList.add('cracking-2');
+                        else                                     blkEl.classList.add('cracking-1');
+
+                        if (hitsLeft <= 1) {
+                            if (blockWillBreak) {
+                                // Последний удар → разбиваем блок
+                                playSound('break');
+                                doBreakBlock(blkEl, blk, null, function() {
+                                    if (onBlockBroken) onBlockBroken(blk.r, blk.c);
+                                });
+                                // Кирка красиво отскакивает вверх и исчезает
+                                _animProp(el, 'top', hitY, startY, 280, function(t) {
+                                    return 1 - Math.pow(1 - t, 2);
+                                }, function() {
+                                    removeEl();
+                                    setTimeout(processNext, 80);
+                                });
+                            } else {
+                                // Прочность кончилась — анимация поломки кирки
+                                blkEl.classList.add('cracking-2');
+                                _animProp(el, 'top', hitY, hoverY, 100, function(t) { return 1-(1-t)*(1-t); }, function() {
+                                    if (!mineIsActive) { removeEl(); return; }
+                                    // Тряска и исчезновение
+                                    el.style.filter = 'hue-rotate(100deg) saturate(3) brightness(1.8)';
+                                    let shk = 0;
+                                    const baseL = parseFloat(el.style.left);
+                                    const shakeId = setInterval(function() {
+                                        shk++;
+                                        el.style.left = (baseL + (shk % 2 === 0 ? 4 : -4)) + 'px';
+                                        if (shk >= 6) {
+                                            clearInterval(shakeId);
+                                            el.style.transition = 'opacity 0.18s, transform 0.18s';
+                                            el.style.opacity = '0';
+                                            el.style.transform = 'translate(-50%,-50%) rotate(200deg) scale(0.1)';
+                                            setTimeout(function() {
+                                                removeEl();
+                                                if (onWorkerDone) onWorkerDone();
+                                            }, 200);
+                                        }
+                                    }, 35);
+                                });
+                            }
+                        } else {
+                            // Ещё удары — плавный отскок вверх
+                            _animProp(el, 'top', hitY, hoverY, 130, function(t) {
+                                return 1 - Math.pow(1 - t, 2);
+                            }, function() {
+                                if (!mineIsActive) { removeEl(); return; }
+                                setTimeout(function() { doHits(hitsLeft - 1, hitNum + 1); }, 40);
+                            });
+                        }
                     });
                 }
-            });
+            })(performance.now());
         }
     }
 
-    // Анимация излома кирки: вибрация → покраснение → исчезновение
-    // useExisting=true → анимируем уже существующий элемент `existingEl`
-    function doPickaxeBreak(blkEl, cb, useExisting, existingEl, bx, hoverY) {
-        let el = existingEl;
-
-        function removeEl() {
-            if (!el) return;
-            _pickaxeEls.delete(el);
-            if (el.parentNode) el.parentNode.removeChild(el);
-        }
-
-        function shakeAndBreak(el) {
-            el.style.filter = 'hue-rotate(100deg) saturate(2) brightness(1.6)';
-            let shakeN = 0;
-            const baseL = parseFloat(el.style.left);
-            const shakeId = setInterval(() => {
-                shakeN++;
-                el.style.left = (baseL + (shakeN % 2 === 0 ? 5 : -5)) + 'px';
-                if (shakeN >= 6) {
-                    clearInterval(shakeId);
-                    el.style.transition = 'opacity 0.2s, transform 0.2s';
-                    el.style.opacity = '0';
-                    el.style.transform = 'translate(-50%,-50%) rotate(200deg) scale(0.15)';
-                    setTimeout(() => { removeEl(); if (cb) cb(); }, 220);
-                }
-            }, 35);
-        }
-
-        if (useExisting && el) {
-            shakeAndBreak(el);
-            return;
-        }
-
-        if (!blkEl) { if (cb) cb(); return; }
-        const shaft = $('mc-shaft');
-        const bxx   = blkEl.offsetLeft + blkEl.offsetWidth / 2;
-        const byy   = blkEl.offsetTop;
-        const sY    = byy - 30;
-        const hov   = byy - 12;
-
-        const pUrl = getPickaxeImg(pickaxeType);
-        el = document.createElement('img');
-        el.src = pUrl;
-        el.style.cssText = `position:absolute;width:20px;height:20px;z-index:9999;pointer-events:none;image-rendering:pixelated;transform:translate(-50%,-100%);left:${bxx}px;top:${sY}px;`;
-        shaft.appendChild(el);
-        _pickaxeEls.add(el);
-
-        _animProp(el, 'top', sY, hov, 140, t => t*t, () => {
-            if (!mineIsActive) { removeEl(); if(cb)cb(); return; }
-            shakeAndBreak(el);
-        });
-    }
-
-    setTimeout(processNext, workerIdx * 90);
+    setTimeout(processNext, (workerIdx || 0) * 90);
 }
-
 
 // ──── Сбор книжки ────
 function collectBook(blockEl) {
